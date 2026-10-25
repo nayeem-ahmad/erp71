@@ -1370,9 +1370,25 @@ export const crmHrMessages = {
             linkDescription: 'اربط هذا الموظف بحساب مستخدم في النظام ليتمكن من تسجيل الدخول.',
             linkTip: 'نصيحة: احصل على معرّف المستخدم من الإعدادات > المستخدمون، ثم الصقه هنا.',
         },
-        filterPresets: {
-            active: 'نشط',
-            inactive: 'غير نشط',
+        editEmployee: 'تعديل الموظف',
+        statuses: {
+            ACTIVE: 'نشط',
+            PROBATION: 'تحت التجربة',
+            RESIGNED: 'مستقيل',
+            TERMINATED: 'مفصول',
+            CONTRACT_ENDED: 'انتهى العقد',
+            INACTIVE: 'غير نشط',
+        },
+        statusChange: {
+            activate: 'تفعيل',
+            deactivate: 'إلغاء التفعيل',
+            activateTitle: 'تفعيل هذا الموظف؟',
+            deactivateTitle: 'إلغاء تفعيل هذا الموظف؟',
+            activatePrompt: 'يعود {name} إلى مسيرات الرواتب، وإلى بوابة الموظفين إن كان لديه وصول.',
+            deactivatePrompt: 'يبقى {name} في السجلات بكامل تاريخه، لكن مسيرات الرواتب وبوابة الموظفين تستبعده حتى يُعاد تفعيله.',
+            activated: '{name} نشط من جديد.',
+            deactivated: '{name} غير نشط الآن.',
+            failed: 'تعذّر تغيير حالة الموظف.',
         },
     },
     attendance: {

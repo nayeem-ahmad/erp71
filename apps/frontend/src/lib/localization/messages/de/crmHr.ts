@@ -1370,9 +1370,25 @@ export const crmHrMessages = {
             "linkDescription": "Verknüpfen Sie diesen Mitarbeiter mit einem Systembenutzerkonto, damit er sich anmelden kann.",
             "linkTip": "Tipp: Die Benutzer-ID finden Sie unter Einstellungen > Benutzer; fügen Sie sie dann hier ein."
         },
-        "filterPresets": {
-            "active": "Aktiv",
-            "inactive": "Inaktiv"
+        "editEmployee": "Mitarbeiter bearbeiten",
+        "statuses": {
+            "ACTIVE": "Aktiv",
+            "PROBATION": "In Probezeit",
+            "RESIGNED": "Selbst gekündigt",
+            "TERMINATED": "Entlassen",
+            "CONTRACT_ENDED": "Vertrag beendet",
+            "INACTIVE": "Inaktiv"
+        },
+        "statusChange": {
+            "activate": "Aktivieren",
+            "deactivate": "Deaktivieren",
+            "activateTitle": "Diesen Mitarbeiter aktivieren?",
+            "deactivateTitle": "Diesen Mitarbeiter deaktivieren?",
+            "activatePrompt": "{name} wird wieder in Gehaltsläufe aufgenommen und, sofern Zugriff besteht, ins Mitarbeiterportal.",
+            "deactivatePrompt": "{name} bleibt mit der gesamten Historie gespeichert, wird aber bis zur erneuten Aktivierung von Gehaltsläufen und dem Mitarbeiterportal ausgenommen.",
+            "activated": "{name} ist wieder aktiv.",
+            "deactivated": "{name} ist jetzt inaktiv.",
+            "failed": "Der Status des Mitarbeiters konnte nicht geändert werden."
         }
     },
     "attendance": {

@@ -1934,13 +1934,30 @@ describe('CustomersService', () => {
     const DAY_MS = 24 * 60 * 60 * 1000;
     const daysAgo = (days: number) => new Date(Date.now() - days * DAY_MS);
     const alice = { id: 'cust-1', name: 'Alice Corp', phone: '01700000001' };
+    const bob = { id: 'cust-2', name: 'Bob Traders', phone: '01700000002' };
 
     const row = (type: string, amount: number, days: number, customer = alice) => ({
       customer_id: customer.id,
       type,
       amount,
       created_at: daysAgo(days),
-      customer,
+    });
+
+    // The customer records the report looks up for whoever still owes.
+    const details = (customer: { id: string; name: string; phone: string }, over: Record<string, unknown> = {}) => ({
+      ...customer,
+      customer_code: `CODE-${customer.id}`,
+      store: { id: 'branch-a', name: 'Branch A' },
+      salesRep: { id: 'emp-1', name: 'Karim' },
+      customerGroup: { id: 'grp-1', name: 'Wholesale' },
+      territory: { id: 'ter-1', name: 'Mirpur' },
+      ...over,
+    });
+
+    beforeEach(() => {
+      const directory = [details(alice), details(bob)];
+      db.customer.findMany.mockImplementation(({ where }: any) =>
+        Promise.resolve(directory.filter((c) => where.id.in.includes(c.id))));
     });
 
     // The bug: the report read CREDIT_SALE rows and nothing else, so a customer
@@ -1952,7 +1969,7 @@ describe('CustomersService', () => {
         row('PAYMENT', 100000, 30),
       ]);
 
-      await expect(service.getDueAgingReport('tenant-1')).resolves.toEqual([]);
+      await expect(service.getDueAgingReport('tenant-1')).resolves.toMatchObject({ rows: [] });
     });
 
     it('reads every transaction type, not just credit sales', async () => {
@@ -1971,7 +1988,7 @@ describe('CustomersService', () => {
         row('PAYMENT', 4000, 10),
       ]);
 
-      const [result] = await service.getDueAgingReport('tenant-1');
+      const { rows: [result] } = await service.getDueAgingReport('tenant-1');
 
       expect(result.total).toBe(6000);
       expect(result.bucket_90_plus).toBe(6000);
@@ -1985,7 +2002,7 @@ describe('CustomersService', () => {
         row('PAYMENT', 5000, 1),
       ]);
 
-      const [result] = await service.getDueAgingReport('tenant-1');
+      const { rows: [result] } = await service.getDueAgingReport('tenant-1');
 
       expect(result.bucket_90_plus).toBe(0);
       expect(result.bucket_0_30).toBe(3000);
@@ -1997,7 +2014,7 @@ describe('CustomersService', () => {
         row('PAYOUT', 2500, 45),
       ]);
 
-      const [result] = await service.getDueAgingReport('tenant-1');
+      const { rows: [result] } = await service.getDueAgingReport('tenant-1');
 
       expect(result.bucket_31_60).toBe(2500);
       expect(result.total).toBe(2500);
@@ -2010,26 +2027,25 @@ describe('CustomersService', () => {
         row('ADJUSTMENT', -2000, 20),
       ]);
 
-      const [result] = await service.getDueAgingReport('tenant-1');
+      const { rows: [result] } = await service.getDueAgingReport('tenant-1');
 
       expect(result.total).toBe(5000);
       expect(result.bucket_90_plus).toBe(5000);
     });
 
     it('keeps each customer on its own FIFO queue', async () => {
-      const bob = { id: 'cust-2', name: 'Bob Traders', phone: '01700000002' };
       db.customerCreditTransaction.findMany.mockResolvedValue([
         row('CREDIT_SALE', 1000, 200),
         row('PAYMENT', 1000, 5),
         row('CREDIT_SALE', 4000, 200, bob),
       ]);
 
-      const results = await service.getDueAgingReport('tenant-1');
+      const { rows } = await service.getDueAgingReport('tenant-1');
 
       // Alice is square; Bob's payment is not hers to spend.
-      expect(results).toHaveLength(1);
-      expect(results[0].customer.id).toBe('cust-2');
-      expect(results[0].total).toBe(4000);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].customer.id).toBe('cust-2');
+      expect(rows[0].total).toBe(4000);
     });
 
     it('omits a customer who is in credit rather than showing a negative due', async () => {
@@ -2038,7 +2054,7 @@ describe('CustomersService', () => {
         row('PAYMENT', 2500, 5),
       ]);
 
-      await expect(service.getDueAgingReport('tenant-1')).resolves.toEqual([]);
+      await expect(service.getDueAgingReport('tenant-1')).resolves.toMatchObject({ rows: [] });
     });
 
     it('keeps the four buckets summing to the total it reports', async () => {
@@ -2051,11 +2067,149 @@ describe('CustomersService', () => {
         row('CREDIT_SALE', 2500, 20),
       ]);
 
-      const [result] = await service.getDueAgingReport('tenant-1');
+      const { rows: [result] } = await service.getDueAgingReport('tenant-1');
 
       const summed = result.bucket_0_30 + result.bucket_31_60 + result.bucket_61_90 + result.bucket_90_plus;
       expect(Math.round(summed * 100) / 100).toBe(result.total);
       expect(result.total).toBe(14000);
+    });
+
+    it("carries each customer's branch, sales rep, group and territory, so the page can filter on them", async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([
+        row('CREDIT_SALE', 4000, 10),
+        row('CREDIT_SALE', 2500, 10, bob),
+      ]);
+      db.customer.findMany.mockResolvedValue([
+        details(alice),
+        details(bob, { salesRep: null, customerGroup: null, territory: null }),
+      ]);
+
+      const { rows } = await service.getDueAgingReport('tenant-1');
+
+      // Looked up once, for the customers who owe, not joined onto every ledger row.
+      expect(db.customer.findMany).toHaveBeenCalledTimes(1);
+      expect(db.customer.findMany.mock.calls[0][0].where).toEqual({ tenant_id: 'tenant-1', id: { in: ['cust-1', 'cust-2'] } });
+      const byId = Object.fromEntries(rows.map((r: any) => [r.customer.id, r]));
+      expect(byId['cust-1']).toMatchObject({
+        customer: { id: 'cust-1', name: 'Alice Corp', phone: '01700000001', customer_code: 'CODE-cust-1' },
+        store: { id: 'branch-a', name: 'Branch A' },
+        sales_rep: { id: 'emp-1', name: 'Karim' },
+        customer_group: { id: 'grp-1', name: 'Wholesale' },
+        territory: { id: 'ter-1', name: 'Mirpur' },
+      });
+      expect(byId['cust-2']).toMatchObject({ sales_rep: null, customer_group: null, territory: null });
+    });
+
+    it('does not look customers up when nobody owes anything', async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([
+        row('CREDIT_SALE', 1000, 60),
+        row('PAYMENT', 1000, 5),
+      ]);
+
+      await service.getDueAgingReport('tenant-1');
+
+      expect(db.customer.findMany).not.toHaveBeenCalled();
+    });
+
+    it('lists the largest dues first', async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([
+        row('CREDIT_SALE', 1000, 10),
+        row('CREDIT_SALE', 9000, 10, bob),
+      ]);
+
+      const { rows } = await service.getDueAgingReport('tenant-1');
+
+      expect(rows.map((r: any) => r.customer.id)).toEqual(['cust-2', 'cust-1']);
+    });
+
+    it("names the customer's last payment, and how much it was", async () => {
+      const paid = row('PAYMENT', 1500, 47);
+      db.customerCreditTransaction.findMany.mockResolvedValue([
+        row('CREDIT_SALE', 9000, 120),
+        row('PAYMENT', 2000, 90),
+        paid,
+        // A write-off settles a due but is not money in: not a payment.
+        row('WRITE_OFF', 500, 3),
+      ]);
+
+      const { rows: [result] } = await service.getDueAgingReport('tenant-1');
+
+      expect(result.last_payment).toEqual({ date: paid.created_at, amount: 1500, days_ago: 47 });
+    });
+
+    it('has no last payment for a customer who has never paid', async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([row('CREDIT_SALE', 9000, 120)]);
+
+      const { rows: [result] } = await service.getDueAgingReport('tenant-1');
+
+      expect(result.last_payment).toBeNull();
+    });
+
+    it("names the caller's own employee record, so the page can offer their customers", async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([]);
+      db.employee.findFirst.mockResolvedValue({ id: 'emp-1', name: 'Karim' });
+
+      const result = await service.getDueAgingReport('tenant-1', null, { userId: 'user-1' });
+
+      expect(db.employee.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+        where: { tenant_id: 'tenant-1', user_id: 'user-1', deleted_at: null },
+      }));
+      expect(result.me).toEqual({ id: 'emp-1', name: 'Karim' });
+    });
+
+    it('does not look an employee up without a user', async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([]);
+
+      await expect(service.getDueAgingReport('tenant-1')).resolves.toMatchObject({ me: null });
+      expect(db.employee.findFirst).not.toHaveBeenCalled();
+    });
+
+    describe('as of a past date', () => {
+      // 30 Sep 2026 in Dhaka (UTC+6) ends at 17:59:59.999 UTC.
+      const SEP_30_END = new Date('2026-09-30T17:59:59.999Z');
+      const before = (days: number) => new Date(SEP_30_END.getTime() - days * DAY_MS);
+
+      it("reads only the ledger up to the end of that day in the tenant's zone", async () => {
+        db.customerCreditTransaction.findMany.mockResolvedValue([]);
+
+        await service.getDueAgingReport('tenant-1', null, { asOf: '2026-09-30', timezone: 'Asia/Dhaka' });
+
+        expect(db.customerCreditTransaction.findMany.mock.calls[0][0].where).toEqual({
+          tenant_id: 'tenant-1',
+          created_at: { lte: SEP_30_END },
+        });
+      });
+
+      it('ages each charge from that day, not from today', async () => {
+        db.customerCreditTransaction.findMany.mockResolvedValue([
+          { customer_id: alice.id, type: 'CREDIT_SALE', amount: 3000, created_at: before(10) },
+          { customer_id: alice.id, type: 'CREDIT_SALE', amount: 2000, created_at: before(45) },
+        ]);
+
+        const { rows: [result] } = await service.getDueAgingReport('tenant-1', null, { asOf: '2026-09-30', timezone: 'Asia/Dhaka' });
+
+        expect(result.bucket_0_30).toBe(3000);
+        expect(result.bucket_31_60).toBe(2000);
+      });
+
+      it('counts the days since the last payment from that day', async () => {
+        db.customerCreditTransaction.findMany.mockResolvedValue([
+          { customer_id: alice.id, type: 'CREDIT_SALE', amount: 3000, created_at: before(40) },
+          { customer_id: alice.id, type: 'PAYMENT', amount: 1000, created_at: before(12) },
+        ]);
+
+        const { rows: [result] } = await service.getDueAgingReport('tenant-1', null, { asOf: '2026-09-30', timezone: 'Asia/Dhaka' });
+
+        expect(result.last_payment.days_ago).toBe(12);
+      });
+
+      it('ignores a date that is not a calendar day', async () => {
+        db.customerCreditTransaction.findMany.mockResolvedValue([]);
+
+        await service.getDueAgingReport('tenant-1', null, { asOf: 'yesterday', timezone: 'Asia/Dhaka' });
+
+        expect(db.customerCreditTransaction.findMany.mock.calls[0][0].where).toEqual({ tenant_id: 'tenant-1' });
+      });
     });
   });
 

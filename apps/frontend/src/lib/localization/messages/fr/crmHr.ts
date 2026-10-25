@@ -1370,9 +1370,25 @@ export const crmHrMessages = {
             "linkDescription": "Associez cet employé à un compte utilisateur du système pour qu'il puisse se connecter.",
             "linkTip": "Astuce : trouvez l'ID utilisateur dans Paramètres > Utilisateurs, puis collez-le ici."
         },
-        "filterPresets": {
-            "active": "Actifs",
-            "inactive": "Inactifs"
+        "editEmployee": "Modifier l'employé",
+        "statuses": {
+            "ACTIVE": "Actif",
+            "PROBATION": "En période d'essai",
+            "RESIGNED": "Démissionnaire",
+            "TERMINATED": "Licencié",
+            "CONTRACT_ENDED": "Contrat terminé",
+            "INACTIVE": "Inactif"
+        },
+        "statusChange": {
+            "activate": "Activer",
+            "deactivate": "Désactiver",
+            "activateTitle": "Activer cet employé ?",
+            "deactivateTitle": "Désactiver cet employé ?",
+            "activatePrompt": "{name} réintègre les cycles de paie et, s'il y a accès, le portail employé.",
+            "deactivatePrompt": "{name} reste enregistré avec tout son historique, mais les cycles de paie et le portail employé l'excluent jusqu'à sa réactivation.",
+            "activated": "{name} est de nouveau actif.",
+            "deactivated": "{name} est désormais inactif.",
+            "failed": "Impossible de modifier le statut de l'employé."
         }
     },
     "attendance": {

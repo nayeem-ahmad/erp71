@@ -1370,9 +1370,25 @@ export const crmHrMessages = {
                 linkDescription: "লগইন করতে এই কর্মচারীকে সিস্টেম ব্যবহারকারী অ্যাকাউন্টের সাথে লিংক করুন।",
                 linkTip: "টিপ: সেটিংস > ইউজার থেকে ইউজার ID খুঁজে এখানে পেস্ট করুন।",
             },
-            filterPresets: {
-                active: "সক্রিয়",
-                inactive: "নিষ্ক্রিয়",
+            editEmployee: "কর্মচারী সম্পাদনা",
+            statuses: {
+                ACTIVE: "সক্রিয়",
+                PROBATION: "প্রবেশনে",
+                RESIGNED: "পদত্যাগ করেছেন",
+                TERMINATED: "বরখাস্ত",
+                CONTRACT_ENDED: "চুক্তি শেষ",
+                INACTIVE: "নিষ্ক্রিয়",
+            },
+            statusChange: {
+                activate: "সক্রিয় করুন",
+                deactivate: "নিষ্ক্রিয় করুন",
+                activateTitle: "এই কর্মচারীকে সক্রিয় করবেন?",
+                deactivateTitle: "এই কর্মচারীকে নিষ্ক্রিয় করবেন?",
+                activatePrompt: "{name} আবার বেতন রানে যুক্ত হবেন, এবং অ্যাক্সেস থাকলে কর্মচারী পোর্টালেও।",
+                deactivatePrompt: "{name}-এর রেকর্ড ও সব ইতিহাস থেকে যাবে, তবে আবার সক্রিয় না করা পর্যন্ত বেতন রান ও কর্মচারী পোর্টাল তাঁকে বাদ রাখবে।",
+                activated: "{name} আবার সক্রিয়।",
+                deactivated: "{name} এখন নিষ্ক্রিয়।",
+                failed: "কর্মচারীর স্ট্যাটাস পরিবর্তন করা যায়নি।",
             },
         },
         attendance: {

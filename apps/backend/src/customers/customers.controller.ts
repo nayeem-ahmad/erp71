@@ -318,10 +318,19 @@ export class CustomersController {
         );
     }
 
+    /** Customer dues aged by bucket, for the page's branch, as of `asOf` (default today) — see `getDueAgingReport`. */
     @RequireAnyStorePermission(...CUSTOMER_CREDIT_READ)
     @Get('reports/due-aging')
-    async getDueAgingReport(@Tenant() tenant: TenantContext) {
-        return this.customersService.getDueAgingReport(tenant.tenantId, await this.scope(tenant));
+    async getDueAgingReport(
+        @Tenant() tenant: TenantContext,
+        @Query('storeId') storeId?: string,
+        @Query('asOf') asOf?: string,
+    ) {
+        return this.customersService.getDueAgingReport(tenant.tenantId, await this.scope(tenant, storeId), {
+            userId: tenant.userId,
+            asOf,
+            timezone: tenant.timezone,
+        });
     }
 
     /** Every customer of the page's branch with their current due — see `getDuesSummary`. */
