@@ -51,9 +51,11 @@ import {
     type ColumnFilters,
     containsInsensitive,
     type FilterableMap,
+    NO_MATCH,
     numberEquals,
 } from '../common/column-filter.util';
 import { createdAtRange } from '../common/created-range.util';
+import { numberConditionFilter, type NumberCondition } from '../common/number-condition.util';
 import { zonedDayRange } from '../common/tenant-time.util';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
@@ -157,6 +159,62 @@ async function mapWithConcurrency<T, R>(
 }
 
 /**
+ * What narrows the sales list. The stats strip above it is counted from the
+ * same filters, so the two always describe the same rows.
+ */
+export interface SaleListFilters {
+    createdBy?: string;
+    search?: string;
+    /** One status or a comma-separated set. */
+    status?: string;
+    /** Every status but those in `status`. */
+    statusExclude?: boolean;
+    createdFrom?: string;
+    createdTo?: string;
+    /** The sale's own date, which a backdated or synced sale holds apart from created_at. */
+    dateFrom?: string;
+    dateTo?: string;
+    /** One branch (already resolved by the controller); omitted, every branch. */
+    storeId?: string;
+    /** IANA zone the calendar-day bounds above are measured in. */
+    timezone: string;
+    /** The table's advanced column filters — see SALE_FILTERABLE. */
+    filters?: ColumnFilters;
+    /** Customers; `none` is a walk-in sale, which has no customer. */
+    customerIds?: string[];
+    /** Sales reps; `none` is a sale with nobody named. */
+    salesRepIds?: string[];
+    /** Tenant payment methods, any one of which paid part of the sale. */
+    paymentMethodIds?: string[];
+    paymentStatus?: SalePaymentStatus[];
+    total?: NumberCondition;
+    paid?: NumberCondition;
+}
+
+export const SALE_PAYMENT_STATUSES = ['paid', 'partial', 'unpaid'] as const;
+export type SalePaymentStatus = (typeof SALE_PAYMENT_STATUSES)[number];
+
+/** The stats strip above the sales list — see `SalesService.summary`. */
+export interface SaleListSummary {
+    /** Every sale the filters match, as the list's own total counts them. */
+    count: number;
+    cancelledCount: number;
+    /** Sales that count as takings — neither cancelled nor a draft. */
+    revenueCount: number;
+    gross: number;
+    collected: number;
+    due: number;
+    average: number;
+    returns: { count: number; amount: number };
+}
+
+/**
+ * A cancelled sale has been reversed and a draft has not happened yet; neither
+ * is money taken, so the strip's amounts leave both out.
+ */
+const NON_REVENUE_STATUSES = ['CANCELLED', 'DRAFT'];
+
+/**
  * Columns the sales list may sort on. An allowlist rather than passing the
  * client's string through, so a sort parameter cannot reach an arbitrary field.
  */
@@ -180,6 +238,19 @@ const SALE_FILTERABLE: FilterableMap<Prisma.SaleWhereInput> = {
     status: (v) => ({ status: containsInsensitive(v) }),
     payments: (v) => ({ payments: { some: { payment_method: containsInsensitive(v) } } }),
 };
+
+/**
+ * `field` in `ids`, where `none` stands for a sale with nothing set — a walk-in
+ * customer, no sales rep. `undefined` when nothing is asked for.
+ */
+function idsOrNone(field: 'customer_id' | 'sales_rep_id', ids: string[] | undefined): Prisma.SaleWhereInput | undefined {
+    if (!ids?.length) return undefined;
+    const named = ids.filter((id) => id !== 'none');
+    const clauses: Prisma.SaleWhereInput[] = [];
+    if (named.length) clauses.push({ [field]: { in: named } });
+    if (named.length !== ids.length) clauses.push({ [field]: null });
+    return clauses.length === 1 ? clauses[0] : { OR: clauses };
+}
 
 function extraOrZero(value: unknown): number {
     const parsed = Number(value);
@@ -1575,31 +1646,12 @@ export class SalesService {
             .catch((e) => this.logger.warn(`Failed to send receipt notifications for customer ${customerId}: ${e}`));
     }
 
-    async findAll(
-        tenantId: string,
-        opts?: {
-            page?: number;
-            limit?: number;
-            createdBy?: string;
-            search?: string;
-            status?: string;
-            sortBy?: string;
-            sortDir?: string;
-            createdFrom?: string;
-            createdTo?: string;
-            /** The sale's own date, which a backdated or synced sale holds apart from created_at. */
-            dateFrom?: string;
-            dateTo?: string;
-            /** One branch (already resolved by the controller); omitted, every branch. */
-            storeId?: string;
-            /** IANA zone the calendar-day bounds above are measured in. */
-            timezone: string;
-            /** The table's advanced column filters — see SALE_FILTERABLE. */
-            filters?: ColumnFilters;
-        },
-    ): Promise<PaginatedResult<any>> {
-        const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
-        const page = Math.max(opts?.page ?? 1, 1);
+    /**
+     * The `where` behind the sales list and its stats strip. Clauses that carry
+     * their own OR (search, a walk-in customer, payment state) go into `AND`,
+     * so none of them overwrites another.
+     */
+    private async listWhere(tenantId: string, opts?: SaleListFilters): Promise<Prisma.SaleWhereInput> {
         const search = opts?.search?.trim();
         const statuses = (opts?.status ?? '')
             .split(',')
@@ -1608,17 +1660,23 @@ export class SalesService {
 
         const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         const saleDate = zonedDayRange(opts?.dateFrom, opts?.dateTo, opts?.timezone);
+        const statusWhere = opts?.statusExclude
+            ? statuses.length ? { status: { notIn: statuses } } : {}
+            // Accepts one status or a comma-separated set, so a caller can ask
+            // for a count across several (the dashboard's delivery-pending tile)
+            // without a request per status.
+            : statuses.length === 1 ? { status: statuses[0] }
+            : statuses.length > 1 ? { status: { in: statuses } }
+            : {};
         const baseWhere: any = {
             tenant_id: tenantId,
             ...(opts?.storeId ? { store_id: opts.storeId } : {}),
             ...(created ? { created_at: created } : {}),
             ...(saleDate ? { sale_date: saleDate } : {}),
             ...(opts?.createdBy ? { created_by: opts.createdBy } : {}),
-            // Accepts one status or a comma-separated set, so a caller can ask
-            // for a count across several (the dashboard's delivery-pending tile)
-            // without a request per status.
-            ...(statuses.length === 1 ? { status: statuses[0] } : {}),
-            ...(statuses.length > 1 ? { status: { in: statuses } } : {}),
+            ...statusWhere,
+            ...(opts?.total ? { total_amount: numberConditionFilter(opts.total) } : {}),
+            ...(opts?.paid ? { amount_paid: numberConditionFilter(opts.paid) } : {}),
             // Mirrors the list page's placeholder: serial, customer, status.
             // The imported reference is included too, since that is the number
             // the business knows a migrated sale by.
@@ -1633,7 +1691,66 @@ export class SalesService {
                   }
                 : {}),
         };
-        const where = applyColumnFilters(baseWhere, opts?.filters, SALE_FILTERABLE);
+
+        const and: Prisma.SaleWhereInput[] = [];
+        const customerClause = idsOrNone('customer_id', opts?.customerIds);
+        if (customerClause) and.push(customerClause);
+        const repClause = idsOrNone('sales_rep_id', opts?.salesRepIds);
+        if (repClause) and.push(repClause);
+        if (opts?.paymentMethodIds?.length) and.push(await this.paidWithClause(tenantId, opts.paymentMethodIds));
+        if (opts?.paymentStatus?.length) and.push(this.paymentStatusClause(opts.paymentStatus));
+        if (and.length) baseWhere.AND = and;
+
+        return applyColumnFilters(baseWhere, opts?.filters, SALE_FILTERABLE);
+    }
+
+    /**
+     * A sale any tender of which went through one of these methods. A tender
+     * written before payments carried the method's id still names it, so the
+     * name matches too.
+     */
+    private async paidWithClause(tenantId: string, methodIds: string[]): Promise<Prisma.SaleWhereInput> {
+        const methods = await this.db.paymentMethod.findMany({
+            where: { tenant_id: tenantId, id: { in: methodIds } },
+            select: { id: true, name: true },
+        });
+        if (!methods.length) return NO_MATCH;
+        return {
+            payments: {
+                some: {
+                    OR: [
+                        { payment_method_id: { in: methods.map((m) => m.id) } },
+                        { payment_method_name: { in: methods.map((m) => m.name) } },
+                    ],
+                },
+            },
+        };
+    }
+
+    /** Paid in full, part paid or not paid at all — `amount_paid` against the sale's own total. */
+    private paymentStatusClause(statuses: SalePaymentStatus[]): Prisma.SaleWhereInput {
+        const total = this.db.sale.fields.total_amount;
+        const byStatus: Record<SalePaymentStatus, Prisma.SaleWhereInput> = {
+            paid: { amount_paid: { gte: total } },
+            partial: { amount_paid: { gt: 0, lt: total } },
+            unpaid: { amount_paid: { lte: 0 }, total_amount: { gt: 0 } },
+        };
+        const clauses = [...new Set(statuses)].map((status) => byStatus[status]);
+        return clauses.length === 1 ? clauses[0] : { OR: clauses };
+    }
+
+    async findAll(
+        tenantId: string,
+        opts?: SaleListFilters & {
+            page?: number;
+            limit?: number;
+            sortBy?: string;
+            sortDir?: string;
+        },
+    ): Promise<PaginatedResult<any>> {
+        const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
+        const page = Math.max(opts?.page ?? 1, 1);
+        const where = await this.listWhere(tenantId, opts);
 
         const [sales, total] = await Promise.all([
             this.db.sale.findMany({
@@ -1664,6 +1781,43 @@ export class SalesService {
         }));
 
         return paginate(enriched, total, page, limit);
+    }
+
+    /**
+     * The stats strip above the sales list, over exactly the rows the list
+     * shows. The count is every matching sale; the amounts leave out cancelled
+     * and draft sales, which took no money. Due is what those sales still owe.
+     */
+    async summary(tenantId: string, opts: SaleListFilters): Promise<SaleListSummary> {
+        const where = await this.listWhere(tenantId, opts);
+        const revenueWhere: Prisma.SaleWhereInput = { AND: [where, { status: { notIn: NON_REVENUE_STATUSES } }] };
+        const [count, cancelledCount, takings, returns] = await Promise.all([
+            this.db.sale.count({ where }),
+            this.db.sale.count({ where: { AND: [where, { status: 'CANCELLED' }] } }),
+            this.db.sale.aggregate({
+                where: revenueWhere,
+                _count: { _all: true },
+                _sum: { total_amount: true, amount_paid: true },
+            }),
+            this.db.salesReturn.aggregate({
+                where: { tenant_id: tenantId, status: { not: 'CANCELLED' }, sale: revenueWhere },
+                _count: { _all: true },
+                _sum: { total_refund: true },
+            }),
+        ]);
+        const revenueCount = takings._count._all;
+        const gross = roundMoney(Number(takings._sum.total_amount ?? 0));
+        const collected = roundMoney(Number(takings._sum.amount_paid ?? 0));
+        return {
+            count,
+            cancelledCount,
+            revenueCount,
+            gross,
+            collected,
+            due: roundMoney(Math.max(gross - collected, 0)),
+            average: revenueCount ? roundMoney(gross / revenueCount) : 0,
+            returns: { count: returns._count._all, amount: roundMoney(Number(returns._sum.total_refund ?? 0)) },
+        };
     }
 
     async findOne(tenantId: string, id: string) {

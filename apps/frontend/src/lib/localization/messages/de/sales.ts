@@ -260,6 +260,27 @@ export const salesMessages = {
             title: "Verkäufe",
             subtitle: "Alle Vorgänge",
             printInvoice: "Rechnung drucken",
+            statsLabel: 'Verkaufsübersicht',
+            stats: {
+                sales: 'Verkäufe',
+                cancelled: '{count} storniert',
+                gross: 'Bruttoumsatz',
+                collected: 'Eingenommen',
+                due: 'Offen',
+                average: 'Ø Verkauf',
+                returns: 'Retouren',
+                returnsCount: '{count, plural, one {# Retoure} other {# Retouren}}',
+            },
+            filters: {
+                paymentStatus: 'Zahlungsstatus',
+                paymentStatuses: {
+                    paid: 'Vollständig bezahlt',
+                    partial: 'Teilweise bezahlt',
+                    unpaid: 'Unbezahlt',
+                },
+                salesRep: 'Vertreter',
+                noSalesRep: 'Kein Vertreter',
+            },
         },
         hub: {
             moduleLabel: "Verkaufsmodul",

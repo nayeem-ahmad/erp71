@@ -1,12 +1,21 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
-import { Settings2 } from 'lucide-react';
+import { Plus, Settings2 } from 'lucide-react';
 import { Switch } from '@/components/ui/Switch';
 import { useDismissable } from '@/hooks/useDismissable';
 import { useI18n } from '@/lib/i18n';
 import { useTableViewSettings } from './useTableViewSettings';
-import { TABLE_DENSITIES, TABLE_FONT_SIZES, type TableDensity, type TableFontSize } from './view-settings';
+import {
+    TABLE_DENSITIES,
+    TABLE_FONT_SIZES,
+    TABLE_STRIPE_FILLS,
+    TABLE_STRIPE_PRESETS,
+    type TableDensity,
+    type TableFontSize,
+    type TableStripeColor,
+    type TableStripePreset,
+} from './view-settings';
 
 /**
  * A row of mutually exclusive choices, each a pressed/unpressed button. Also
@@ -47,6 +56,73 @@ export function Segmented<K extends string>({
     );
 }
 
+/** What the custom swatch's colour picker opens on before one is chosen: a pale violet, so it reads as "pick your own". */
+const CUSTOM_STRIPE_START = '#f3f0ff';
+
+/**
+ * The stripe colour: five tints and a custom colour. Also drawn by the
+ * preference profile editor, so a profile's list look is set with the same
+ * control a member uses.
+ */
+export function StripeColorPicker({
+    value,
+    onChange,
+    disabled = false,
+}: {
+    value: TableStripeColor;
+    onChange: (next: TableStripeColor) => void;
+    /** Striping is off: the colour is kept, but there is nothing to colour. */
+    disabled?: boolean;
+}) {
+    const { t } = useI18n();
+    const copy = t.common.dataTable.view;
+    const labelId = useId();
+    const isCustom = !(TABLE_STRIPE_PRESETS as readonly string[]).includes(value);
+    const ring = (selected: boolean) =>
+        `relative inline-flex h-7 w-7 items-center justify-center rounded-full border-2 transition-colors max-md:min-h-touch max-md:min-w-touch ${
+            selected ? 'border-blue-600' : 'border-transparent hover:border-gray-300'
+        } ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`;
+    return (
+        <div className={`space-y-1.5 ${disabled ? 'opacity-50' : ''}`}>
+            <p id={labelId} className="text-xs font-medium text-gray-500">{copy.stripeColor}</p>
+            <div role="radiogroup" aria-labelledby={labelId} className="flex flex-wrap items-center gap-1">
+                {TABLE_STRIPE_PRESETS.map((preset: TableStripePreset) => (
+                    <button
+                        key={preset}
+                        type="button"
+                        role="radio"
+                        aria-checked={value === preset}
+                        aria-label={copy.stripeColors[preset]}
+                        title={copy.stripeColors[preset]}
+                        disabled={disabled}
+                        onClick={() => onChange(preset)}
+                        className={ring(value === preset)}
+                    >
+                        <span aria-hidden className="h-5 w-5 rounded-full border border-gray-300" style={{ backgroundColor: TABLE_STRIPE_FILLS[preset] }} />
+                    </button>
+                ))}
+                <label title={copy.stripeColors.custom} className={ring(isCustom)}>
+                    <span
+                        aria-hidden
+                        className={`flex h-5 w-5 items-center justify-center rounded-full border text-gray-400 ${isCustom ? 'border-gray-300' : 'border-dashed border-gray-300'}`}
+                        style={isCustom ? { backgroundColor: value } : undefined}
+                    >
+                        {isCustom ? null : <Plus className="h-3 w-3" />}
+                    </span>
+                    <input
+                        type="color"
+                        aria-label={copy.stripeColors.custom}
+                        value={isCustom ? value : CUSTOM_STRIPE_START}
+                        disabled={disabled}
+                        onChange={(e) => onChange(e.target.value.toLowerCase() as TableStripeColor)}
+                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                    />
+                </label>
+            </div>
+        </div>
+    );
+}
+
 function ToggleRow({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (next: boolean) => void }) {
     const id = useId();
     return (
@@ -74,7 +150,7 @@ export interface TableViewLayout {
 
 /**
  * The toolbar button that opens a list's view settings: row spacing, text
- * size, striping and fit-to-width. Changes apply to every list unless the
+ * size, striping and its colour, and fit-to-width. Changes apply to every list unless the
  * person sets this one apart with "This list only".
  */
 export function TableViewOptions({
@@ -134,6 +210,11 @@ export function TableViewOptions({
                             <Segmented label={copy.fontSize} options={fontOptions} value={settings.fontSize} onChange={(fontSize) => update({ fontSize })} />
                             <div className="space-y-2.5 border-t border-gray-100 pt-3">
                                 <ToggleRow label={copy.striped} checked={settings.striped} onChange={(striped) => update({ striped })} />
+                                <StripeColorPicker
+                                    value={settings.stripeColor}
+                                    onChange={(stripeColor) => update({ stripeColor })}
+                                    disabled={!settings.striped}
+                                />
                                 <ToggleRow
                                     label={copy.fitWidth}
                                     hint={copy.fitWidthHint}

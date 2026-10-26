@@ -694,7 +694,7 @@ describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => 
         expect(screen.getByRole('combobox', { name: 'Lead Owner' })).toBeInTheDocument();
 
         const row = screen.getByText('Call about pricing').closest('tr');
-        expect(row?.className).toContain('even:bg-gray-100/70');
+        expect(row?.className).toContain('even:bg-[color:var(--dt-stripe)]');
         expect(row?.className).toContain('hover:bg-blue-50');
         expect(screen.getByRole('button', { name: 'View activities' }).className).toContain('h-7');
     });

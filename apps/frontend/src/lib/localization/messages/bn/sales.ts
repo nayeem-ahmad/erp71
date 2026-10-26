@@ -260,6 +260,27 @@ export const salesMessages = {
                 title: "বিক্রয়",
                 subtitle: "সব transactions",
                 printInvoice: "ইনভয়েস প্রিন্ট",
+                statsLabel: 'বিক্রয়ের সারাংশ',
+                stats: {
+                    sales: 'বিক্রয়',
+                    cancelled: '{count}টি বাতিল',
+                    gross: 'মোট বিক্রয়',
+                    collected: 'আদায়',
+                    due: 'বাকি',
+                    average: 'গড় বিক্রয়',
+                    returns: 'ফেরত',
+                    returnsCount: '{count}টি ফেরত',
+                },
+                filters: {
+                    paymentStatus: 'পরিশোধের অবস্থা',
+                    paymentStatuses: {
+                        paid: 'সম্পূর্ণ পরিশোধিত',
+                        partial: 'আংশিক পরিশোধিত',
+                        unpaid: 'অপরিশোধিত',
+                    },
+                    salesRep: 'বিক্রয় প্রতিনিধি',
+                    noSalesRep: 'প্রতিনিধি নেই',
+                },
             },
             hub: {
                 moduleLabel: "বিক্রয় মডিউল",

@@ -10,6 +10,8 @@ export type E2ESession = {
     tenantId: string;
     storeId: string;
     planCode?: string;
+    /** Branches on the signed-in tenant. The header branch picker renders only when this is > 1. */
+    storeCount: number;
 };
 
 const ACCOUNTING_PLAN_CODES = new Set(['ACCOUNTING', 'STANDARD', 'PREMIUM']);
@@ -67,8 +69,48 @@ export async function fetchE2ESession(force = false): Promise<E2ESession> {
         tenantId: tenant.id,
         storeId: tenant.stores[0].id,
         planCode: tenant.subscription?.plan?.code,
+        storeCount: Array.isArray(tenant.stores) ? tenant.stores.length : 1,
     };
     return cachedSession;
+}
+
+let cachedPlatformAdmin: { token: string; value: boolean } | null = null;
+
+/**
+ * Whether the smoke account may open the platform console.
+ *
+ * Read from `GET /auth/me`, which is what the app shell gates `/admin` on.
+ * `null` means the check itself was refused or unreachable (401/429/5xx) —
+ * the caller should wait for the page to leave `/admin` rather than treat a
+ * rate limit as "not an admin".
+ */
+export async function e2eAccountIsPlatformAdmin(session: E2ESession): Promise<boolean | null> {
+    if (cachedPlatformAdmin?.token === session.accessToken) return cachedPlatformAdmin.value;
+
+    let res: Response;
+    try {
+        res = await fetch(`${E2E_API_URL}/api/v1/auth/me`, {
+            headers: {
+                Authorization: `Bearer ${session.accessToken}`,
+                'x-tenant-id': session.tenantId,
+                'x-store-id': session.storeId,
+            },
+            signal: AbortSignal.timeout(15_000),
+        });
+    } catch {
+        return null;
+    }
+
+    if (res.status === 401 || res.status === 429 || res.status >= 500) return null;
+    if (!res.ok) return false;
+
+    const body = await res.json().catch(() => null);
+    const me = body && typeof body === 'object' && 'data' in body ? body.data : body;
+    const isPlatformAdmin = Boolean(
+        me && typeof me === 'object' && (me as { is_platform_admin?: unknown }).is_platform_admin === true,
+    );
+    cachedPlatformAdmin = { token: session.accessToken, value: isPlatformAdmin };
+    return isPlatformAdmin;
 }
 
 /**

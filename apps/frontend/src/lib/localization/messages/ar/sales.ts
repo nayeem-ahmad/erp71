@@ -260,6 +260,27 @@ export const salesMessages = {
             title: 'المبيعات',
             subtitle: 'جميع المعاملات',
             printInvoice: 'طباعة الفاتورة',
+            statsLabel: 'ملخص المبيعات',
+            stats: {
+                sales: 'المبيعات',
+                cancelled: '{count} ملغاة',
+                gross: 'إجمالي المبيعات',
+                collected: 'المحصَّل',
+                due: 'المستحق',
+                average: 'متوسط البيع',
+                returns: 'المرتجعات',
+                returnsCount: '{count} مرتجعات',
+            },
+            filters: {
+                paymentStatus: 'حالة الدفع',
+                paymentStatuses: {
+                    paid: 'مدفوع بالكامل',
+                    partial: 'مدفوع جزئيًا',
+                    unpaid: 'غير مدفوع',
+                },
+                salesRep: 'مندوب المبيعات',
+                noSalesRep: 'بلا مندوب',
+            },
         },
         hub: {
             moduleLabel: 'وحدة المبيعات',

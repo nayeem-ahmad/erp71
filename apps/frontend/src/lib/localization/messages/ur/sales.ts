@@ -260,6 +260,27 @@ export const salesMessages = {
             title: 'فروخت',
             subtitle: 'تمام لین دین',
             printInvoice: 'انوائس چھاپیں',
+            statsLabel: 'فروخت کا خلاصہ',
+            stats: {
+                sales: 'فروخت',
+                cancelled: '{count} منسوخ',
+                gross: 'کل فروخت',
+                collected: 'وصول شدہ',
+                due: 'واجب الادا',
+                average: 'اوسط فروخت',
+                returns: 'واپسی',
+                returnsCount: '{count} واپسیاں',
+            },
+            filters: {
+                paymentStatus: 'ادائیگی کی حالت',
+                paymentStatuses: {
+                    paid: 'مکمل ادا شدہ',
+                    partial: 'جزوی ادا شدہ',
+                    unpaid: 'غیر ادا شدہ',
+                },
+                salesRep: 'سیلز نمائندہ',
+                noSalesRep: 'کوئی نمائندہ نہیں',
+            },
         },
         hub: {
             moduleLabel: 'سیلز ماڈیول',

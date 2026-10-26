@@ -27,6 +27,8 @@ export interface TablePreferences {
     columnOrder?: string[];
     columnWidths?: Record<string, number>;
     pageSize?: number;
+    /** The stats strip above the list is folded away. This browser's, like widths. */
+    statsHidden?: boolean;
 }
 
 interface TablePreferencesState {
@@ -47,6 +49,8 @@ interface TablePreferencesState {
     setColumnOrder: (tableId: string, order: string[]) => void;
     setColumnWidth: (tableId: string, columnId: string, width: number) => void;
     setPageSize: (tableId: string, pageSize: number) => void;
+    isStatsHidden: (tableId: string) => boolean;
+    setStatsHidden: (tableId: string, hidden: boolean) => void;
 }
 
 const STORAGE_KEY = 'data-table-preferences';
@@ -151,6 +155,10 @@ export const useTablePreferences = create<TablePreferencesState>((set, get) => {
             if (person) saveEntry(person, tableId, { pageSize });
             else setLocal(tableId, { pageSize });
         },
+
+        isStatsHidden: (tableId) => get().tables[tableId]?.statsHidden === true,
+
+        setStatsHidden: (tableId, hidden) => setLocal(tableId, { statsHidden: hidden }),
     };
 });
 

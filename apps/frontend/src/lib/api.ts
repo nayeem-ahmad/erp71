@@ -36,6 +36,7 @@ import type {
     MessagingCreditSummary,
 } from './messaging-credits';
 import type { DailyReport } from '@/lib/daily-report';
+import { numberConditionParam, type NumberCondition } from '@/lib/number-condition';
 import { browserApiBase } from './api-base';
 import { getQueryClient, ME_QUERY_KEY, readMe } from './query-client';
 import { readSseFrames, type SseFrame } from './sse';
@@ -1435,6 +1436,70 @@ function dashboardWindowFetcher(path: string) {
     };
 }
 
+/** What narrows the sales list — sent alike to the list and to its stats strip. */
+export interface SalesListFilterParams {
+    search?: string;
+    /** One status or a comma-separated set. */
+    status?: string;
+    /** Every status but those in `status`. */
+    statusExclude?: boolean;
+    mine?: boolean;
+    createdFrom?: string;
+    createdTo?: string;
+    /** The sale's own date (`sale_date`), `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm`. */
+    dateFrom?: string;
+    dateTo?: string;
+    /** A branch or `'all'`, from the page's branch filter. */
+    storeId?: string;
+    filters?: Record<string, string>;
+    /** Customer ids; `none` is a walk-in sale. */
+    customerIds?: readonly string[];
+    /** Sales rep ids; `none` is a sale with no rep. */
+    salesRepIds?: readonly string[];
+    paymentMethodIds?: readonly string[];
+    paymentStatus?: readonly SalePaymentStatus[];
+    total?: NumberCondition | null;
+    paid?: NumberCondition | null;
+}
+
+export type SalePaymentStatus = 'paid' | 'partial' | 'unpaid';
+
+/** `GET /sales/summary`: every matching sale counted, amounts over those that took money. */
+export interface SalesListSummary {
+    count: number;
+    cancelledCount: number;
+    revenueCount: number;
+    gross: number;
+    collected: number;
+    due: number;
+    average: number;
+    returns: { count: number; amount: number };
+}
+
+function setSalesListFilterParams(query: URLSearchParams, params: SalesListFilterParams): void {
+    const list = (key: string, values: readonly string[] | undefined) => {
+        if (values?.length) query.set(key, values.join(','));
+    };
+    if (params.search) query.set('search', params.search);
+    if (params.status) query.set('status', params.status);
+    if (params.status && params.statusExclude) query.set('statusExclude', 'true');
+    if (params.mine) query.set('mine', 'true');
+    if (params.createdFrom) query.set('createdFrom', params.createdFrom);
+    if (params.createdTo) query.set('createdTo', params.createdTo);
+    if (params.dateFrom) query.set('dateFrom', params.dateFrom);
+    if (params.dateTo) query.set('dateTo', params.dateTo);
+    if (params.storeId) query.set('storeId', params.storeId);
+    list('customerId', params.customerIds);
+    list('salesRepId', params.salesRepIds);
+    list('paymentMethodId', params.paymentMethodIds);
+    list('paymentStatus', params.paymentStatus);
+    const total = numberConditionParam(params.total);
+    if (total) query.set('total', total);
+    const paid = numberConditionParam(params.paid);
+    if (paid) query.set('paid', paid);
+    setColumnFilterParam(query, params.filters);
+}
+
 /** A payment method as `/payment-methods` and its layout routes return it. */
 export interface PaymentMethodRow {
     id: string;
@@ -2058,38 +2123,25 @@ export const api = {
     getSales: (params?: { mine?: boolean }) =>
         fetchAllPages(`/sales${params?.mine ? '?mine=true' : ''}`),
     /** One server-paginated page, for `useServerList`. */
-    getSalesList: (params: {
+    getSalesList: (params: SalesListFilterParams & {
         page?: number;
         limit?: number;
-        search?: string;
-        status?: string;
         sortBy?: string;
         sortDir?: 'asc' | 'desc';
-        mine?: boolean;
-        createdFrom?: string;
-        createdTo?: string;
-        /** The sale's own date (`sale_date`), `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm`. */
-        dateFrom?: string;
-        dateTo?: string;
-        /** A branch or `'all'`, from the page's branch filter. */
-        storeId?: string;
-        filters?: Record<string, string>;
     }) => {
         const query = new URLSearchParams();
         if (params.page) query.set('page', String(params.page));
         if (params.limit) query.set('limit', String(params.limit));
-        if (params.search) query.set('search', params.search);
-        if (params.status) query.set('status', params.status);
         if (params.sortBy) query.set('sortBy', params.sortBy);
         if (params.sortDir) query.set('sortDir', params.sortDir);
-        if (params.mine) query.set('mine', 'true');
-        if (params.createdFrom) query.set('createdFrom', params.createdFrom);
-        if (params.createdTo) query.set('createdTo', params.createdTo);
-        if (params.dateFrom) query.set('dateFrom', params.dateFrom);
-        if (params.dateTo) query.set('dateTo', params.dateTo);
-        if (params.storeId) query.set('storeId', params.storeId);
-        setColumnFilterParam(query, params.filters);
+        setSalesListFilterParams(query, params);
         return fetchPaginated(`/sales?${query.toString()}`);
+    },
+    /** The stats strip over the sales list: the same filters, counted and summed. */
+    getSalesListSummary: (params: SalesListFilterParams): Promise<SalesListSummary> => {
+        const query = new URLSearchParams();
+        setSalesListFilterParams(query, params);
+        return fetchWithAuth(`/sales/summary?${query.toString()}`);
     },
     /** The most recent few sales — callers that do not need the whole history. */
     getSalesPage: (params?: { page?: number; limit?: number; mine?: boolean }) => {

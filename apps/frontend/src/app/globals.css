@@ -217,6 +217,13 @@
     line-height: 1.4;
 }
 
+/* The striped-row fill (TABLE_ROW_CLASSES.striped). A list drawn with the
+   person's view settings sets its own colour on the table; anything else
+   striped through that class gets the grey. */
+:root {
+    --dt-stripe: rgb(243 244 246 / 0.7);
+}
+
 .dt-view th,
 .dt-view th * {
     font-size: calc(var(--dt-font-size, 13px) - 1px);

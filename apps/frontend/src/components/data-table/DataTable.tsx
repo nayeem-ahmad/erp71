@@ -34,6 +34,7 @@ import {
     X,
     GripVertical,
     Check,
+    Sigma,
 } from 'lucide-react';
 import {
     DndContext,
@@ -57,7 +58,9 @@ import { dataTableDensity, type UiDensity } from '@/lib/ui/compact-density';
 import { stripedRowClass } from '@/lib/ui/striped-row';
 import { useTablePreferences } from './useTablePreferences';
 import FilterBar, { type ListFilter, type ResolvedListFilter } from './FilterBar';
-import { TableViewOptions, useTableViewSettings, TABLE_DENSITY_CLASSES, TABLE_FONT_PX, TABLE_ROW_CLASSES, type TableViewLayout } from '@/components/table';
+import ListStats, { type ListStat } from './ListStats';
+import { naturalColumnWidth } from './column-autofit';
+import { TableViewOptions, useTableViewSettings, stripeFill, TABLE_DENSITY_CLASSES, TABLE_FONT_PX, TABLE_ROW_CLASSES, type TableViewLayout } from '@/components/table';
 import {
     columnDefId,
     isPinnedColumnId,
@@ -176,6 +179,19 @@ export interface DataTableProps<T> {
      * bottom sheet on a phone). See `ListFilter`.
      */
     filters?: ListFilter[];
+    /**
+     * `row` holds the toolbar to one line on a desktop: the filters as chips,
+     * then a More button for the ones marked `more` and any the row has no
+     * room for, with the toolbar buttons drawn as icons. Piloted on the sales
+     * list before every list takes it. A phone keeps the Filters sheet.
+     */
+    filterLayout?: 'wrap' | 'row';
+    /**
+     * Figures over the rows the filters match, in a strip of tiles above the
+     * list — counted by the page, usually from the server. A Σ button in the
+     * toolbar folds the strip away, and this browser remembers it.
+     */
+    stats?: { items: ListStat[]; loading?: boolean; label: string };
     /** Opt-in server-side pagination + sorting. When set, the table drives page/size/sort
      *  through these callbacks and uses `total` for the footer count instead of the
      *  client row count. Pages using this pass `onSearchChange` so the toolbar box
@@ -276,17 +292,40 @@ function HeaderLabel({ header, align = 'start' }: { header: any; align?: ColumnA
     );
 }
 
-/** The resize grip on the cell's end edge, for a column that allows it. */
-function ResizeHandle({ header }: { header: any }) {
+/**
+ * The resize grip on the cell's end edge, for a column that allows it. A grey
+ * bar marks every boundary, so the grip is found without hunting for it; under
+ * the pointer, and while dragging, it is a thick blue bar. The hit area is
+ * wider than the bar and straddles the boundary. Double-click fits the column
+ * to what is in it.
+ */
+function ResizeHandle({ header, onAutoFit }: { header: any; onAutoFit?: (columnId: string) => void }) {
+    const { t } = useI18n();
     if (!header.column.getCanResize()) return null;
+    const resizing = header.column.getIsResizing();
     return (
         <div
+            data-resize-handle
+            // A pointer control, as it always was; hidden from assistive tech so
+            // it does not join the column header's name.
+            aria-hidden
+            title={t.common.dataTable.resizeColumn}
             onMouseDown={header.getResizeHandler()}
             onTouchStart={header.getResizeHandler()}
-            className={`absolute end-0 top-0 h-full w-1 cursor-col-resize select-none touch-none hover:bg-blue-400 transition-colors ${
-                header.column.getIsResizing() ? 'bg-blue-500' : 'bg-transparent'
-            }`}
-        />
+            onDoubleClick={onAutoFit ? () => onAutoFit(header.column.id) : undefined}
+            // A grip inside a draggable header must not start the column drag.
+            onPointerDown={(event) => event.stopPropagation()}
+            className="group/resize absolute -end-1.5 top-0 z-10 flex h-full w-3 cursor-col-resize select-none touch-none items-center justify-center [th:last-child>&]:end-0"
+        >
+            <span
+                aria-hidden
+                className={`block rounded-full transition-all ${
+                    resizing
+                        ? 'h-full w-1 bg-blue-600'
+                        : 'h-1/2 w-0.5 bg-gray-300 group-hover/resize:h-full group-hover/resize:w-1 group-hover/resize:bg-blue-500'
+                }`}
+            />
+        </div>
     );
 }
 
@@ -296,6 +335,7 @@ function SortableHeader({
     widthStyle,
     align = 'start',
     floatingGrip = false,
+    onAutoFit,
 }: {
     header: any;
     headerClassName: string;
@@ -303,6 +343,7 @@ function SortableHeader({
     align?: ColumnAlign;
     /** Pilot lists (`viewOptions`) float the grip so labels line up with values. */
     floatingGrip?: boolean;
+    onAutoFit?: (columnId: string) => void;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
         useSortable({ id: header.id });
@@ -318,6 +359,7 @@ function SortableHeader({
     return (
         <th
             ref={setNodeRef}
+            data-column-id={header.column.id}
             style={{
                 ...style,
                 ...widthStyle,
@@ -347,7 +389,7 @@ function SortableHeader({
                     <HeaderLabel header={header} align={align} />
                 </div>
             )}
-            <ResizeHandle header={header} />
+            <ResizeHandle header={header} onAutoFit={onAutoFit} />
         </th>
     );
 }
@@ -363,14 +405,17 @@ function PinnedHeader({
     headerClassName,
     widthStyle,
     align = 'start',
+    onAutoFit,
 }: {
     header: any;
     headerClassName: string;
     widthStyle: React.CSSProperties;
     align?: ColumnAlign;
+    onAutoFit?: (columnId: string) => void;
 }) {
     return (
         <th
+            data-column-id={header.column.id}
             style={{
                 position: 'relative',
                 ...widthStyle,
@@ -380,7 +425,7 @@ function PinnedHeader({
             <div className={`flex items-center ${JUSTIFY_CLASS[align]}`}>
                 <HeaderLabel header={header} align={align} />
             </div>
-            <ResizeHandle header={header} />
+            <ResizeHandle header={header} onAutoFit={onAutoFit} />
         </th>
     );
 }
@@ -419,6 +464,8 @@ export default function DataTable<T>({
     viewOptions = false,
     viewLayout,
     filters,
+    filterLayout = 'wrap',
+    stats,
 }: DataTableProps<T>) {
     const { t } = useI18n();
     // Lazy: every list page renders this table, but printing is a rare click.
@@ -590,6 +637,7 @@ export default function DataTable<T>({
     // Refs for click-outside
     const columnSelectorRef = useRef<HTMLDivElement>(null);
     const tableScrollRef = useRef<HTMLDivElement>(null);
+    const tableRef = useRef<HTMLTableElement>(null);
     const [tableCanScroll, setTableCanScroll] = useState(false);
     /** The scroller's width, which fit-to-width shares out between the columns. */
     const [containerWidth, setContainerWidth] = useState(0);
@@ -888,6 +936,18 @@ export default function DataTable<T>({
     );
 
     const toolbarBtnBase = `${d.toolbarBtn} ${d.toolbarBtnIdle}`;
+    /** The one-row toolbar, on a screen wide enough to hold it. */
+    const rowLayout = filterLayout === 'row' && isMdUp;
+    const iconOnlyToolbar = isCompact || rowLayout;
+    const statsHidden = stats ? prefs.isStatsHidden(tableId) : false;
+
+    /** Double-click on a resize grip: the column takes the width of its widest cell. */
+    const autoFitColumn = useCallback((columnId: string) => {
+        const element = tableRef.current;
+        if (!element) return;
+        const width = naturalColumnWidth(element, columnId);
+        if (width) setColumnSizing((current) => ({ ...current, [columnId]: width }));
+    }, []);
 
     /*
      * Column widths. Normally each column is its own size in px and a wide list
@@ -1018,14 +1078,14 @@ export default function DataTable<T>({
     // that is past the card's bottom edge, where it would cut them off.
     // Nothing inside paints into the rounded corners (the table scrolls in
     // its own box, the toolbar and footer have no fill), so nothing needs it.
-    return (
+    const card = (
         <div className={`bg-white ${d.wrapper} shadow-sm border border-gray-100`}>
             {/* ── Toolbar ─────────────────────────────────────────── */}
             <div className={d.toolbar}>
-                <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className={rowLayout ? 'flex flex-nowrap items-center gap-2' : 'flex items-center justify-between gap-3 flex-wrap'}>
                     {/* Search */}
                     {showSearch && (
-                        <div className="relative flex-1 min-w-[200px] max-w-md">
+                        <div className={rowLayout ? 'relative w-44 shrink-0 lg:w-56 xl:w-64' : 'relative flex-1 min-w-[200px] max-w-md'}>
                             <Search className={`absolute top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 ${isCompact ? 'start-2.5' : 'start-3'}`} />
                             <input
                                 type="text"
@@ -1046,13 +1106,29 @@ export default function DataTable<T>({
                     )}
 
                     {resolvedFilters.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-2">
-                            <FilterBar filters={resolvedFilters} compact={!isMdUp} />
-                        </div>
+                        rowLayout ? (
+                            <FilterBar filters={resolvedFilters} compact={false} layout="row" />
+                        ) : (
+                            <div className="flex flex-wrap items-center gap-2">
+                                <FilterBar filters={resolvedFilters} compact={!isMdUp} />
+                            </div>
+                        )
                     )}
 
                     {/* Toolbar buttons — always aligned to the right, even when the search box is hidden */}
-                    <div className="flex items-center gap-2 flex-wrap ms-auto">
+                    <div className={rowLayout ? 'ms-auto flex shrink-0 items-center gap-1.5' : 'flex items-center gap-2 flex-wrap ms-auto'}>
+                        {stats ? (
+                            <button
+                                type="button"
+                                onClick={() => prefs.setStatsHidden(tableId, !statsHidden)}
+                                className={`${d.toolbarBtn} ${statsHidden ? d.toolbarBtnIdle : 'bg-blue-50 text-blue-700 border-blue-200'}`}
+                                title={statsHidden ? t.common.dataTable.showStats : t.common.dataTable.hideStats}
+                                aria-pressed={!statsHidden}
+                            >
+                                <Sigma className="w-3.5 h-3.5" />
+                                <span className="sr-only">{statsHidden ? t.common.dataTable.showStats : t.common.dataTable.hideStats}</span>
+                            </button>
+                        ) : null}
                         {/* Advanced Filters */}
                         {filterableColumns.length > 0 && (
                             <button
@@ -1065,7 +1141,7 @@ export default function DataTable<T>({
                                 title={advancedFiltersLabel}
                             >
                                 <SlidersHorizontal className="w-3.5 h-3.5" />
-                                <span className={isCompact ? 'sr-only' : undefined}>{advancedFiltersLabel}</span>
+                                <span className={iconOnlyToolbar ? 'sr-only' : undefined}>{advancedFiltersLabel}</span>
                                 {advancedFilterCount > 0 && (
                                     <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px]">
                                         {advancedFilterCount}
@@ -1082,7 +1158,7 @@ export default function DataTable<T>({
                                 title={t.common.dataTable.columns}
                             >
                                 <Columns3 className="w-3.5 h-3.5" />
-                                <span className={isCompact ? 'sr-only' : undefined}>{t.common.dataTable.columns}</span>
+                                <span className={iconOnlyToolbar ? 'sr-only' : undefined}>{t.common.dataTable.columns}</span>
                             </button>
                             {showColumnSelector && (
                                 <div className="absolute end-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 max-h-72 overflow-y-auto">
@@ -1118,7 +1194,7 @@ export default function DataTable<T>({
                         </div>
 
                         {viewOptions && (
-                            <TableViewOptions tableId={tableId} buttonClassName={toolbarBtnBase} iconOnly={isCompact} layout={viewLayout} />
+                            <TableViewOptions tableId={tableId} buttonClassName={toolbarBtnBase} iconOnly={iconOnlyToolbar} layout={viewLayout} />
                         )}
 
                         {/* Export */}
@@ -1128,7 +1204,7 @@ export default function DataTable<T>({
                             title={t.common.dataTable.export}
                         >
                             <Download className="w-3.5 h-3.5" />
-                            <span className={isCompact ? 'sr-only' : undefined}>{t.common.dataTable.export}</span>
+                            <span className={iconOnlyToolbar ? 'sr-only' : undefined}>{t.common.dataTable.export}</span>
                         </button>
 
                         {/* Print */}
@@ -1157,7 +1233,7 @@ export default function DataTable<T>({
                             title={t.common.dataTable.print}
                         >
                             <Printer className="w-3.5 h-3.5" />
-                            <span className={isCompact ? 'sr-only' : undefined}>{t.common.dataTable.print}</span>
+                            <span className={iconOnlyToolbar ? 'sr-only' : undefined}>{t.common.dataTable.print}</span>
                         </button>
 
                         {/* Custom toolbar actions */}
@@ -1259,11 +1335,15 @@ export default function DataTable<T>({
                         onDragEnd={handleDragEnd}
                     >
                         <table
+                            ref={tableRef}
                             className={`w-full${viewOptions ? ' dt-view' : ''}${singleLine ? ' dt-single-line' : ''}`}
                             style={{
                                 tableLayout: 'fixed',
                                 ...(viewOptions
-                                    ? ({ '--dt-font-size': `${TABLE_FONT_PX[view.fontSize]}px` } as React.CSSProperties)
+                                    ? ({
+                                          '--dt-font-size': `${TABLE_FONT_PX[view.fontSize]}px`,
+                                          '--dt-stripe': stripeFill(view.stripeColor),
+                                      } as React.CSSProperties)
                                     : {}),
                             }}
                         >
@@ -1283,6 +1363,7 @@ export default function DataTable<T>({
                                                     return (
                                                         <th
                                                             key={header.id}
+                                                            data-column-id={header.column.id}
                                                             style={columnWidthStyle(header.column)}
                                                             className={headerCellClass}
                                                         >
@@ -1304,6 +1385,7 @@ export default function DataTable<T>({
                                                             headerClassName={headerCellClass}
                                                             widthStyle={columnWidthStyle(header.column)}
                                                             align={columnAlign(header.column)}
+                                                            onAutoFit={autoFitColumn}
                                                         />
                                                     );
                                                 }
@@ -1316,6 +1398,7 @@ export default function DataTable<T>({
                                                         widthStyle={columnWidthStyle(header.column)}
                                                         align={columnAlign(header.column)}
                                                         floatingGrip={viewOptions}
+                                                        onAutoFit={autoFitColumn}
                                                     />
                                                 );
                                             })}
@@ -1345,6 +1428,7 @@ export default function DataTable<T>({
                                         {row.getVisibleCells().map((cell) => (
                                             <td
                                                 key={cell.id}
+                                                data-column-id={cell.column.id}
                                                 className={`${bodyCellClass} ${TEXT_ALIGN_CLASS[columnAlign(cell.column)]}`}
                                                 style={{ width: columnWidthStyle(cell.column).width }}
                                                 data-actions={cell.column.id === PINNED_LAST_COLUMN_ID || undefined}
@@ -1469,6 +1553,14 @@ export default function DataTable<T>({
                 onClose={() => { if (!exportBusy) setShowExportDialog(false); }}
                 onConfirm={handleExport}
             />
+        </div>
+    );
+
+    if (!stats) return card;
+    return (
+        <div className="space-y-3">
+            {statsHidden ? null : <ListStats stats={stats.items} loading={stats.loading} label={stats.label} />}
+            {card}
         </div>
     );
 }

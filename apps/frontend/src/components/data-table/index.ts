@@ -17,4 +17,6 @@ export {
 } from './column-order';
 export { default as FilterBar } from './FilterBar';
 export { default as ListToolbar } from './ListToolbar';
-export type { ListFilter, ResolvedListFilter } from './FilterBar';
+export type { ListFilter, ListFilterOption, ResolvedListFilter } from './FilterBar';
+export { default as ListStats } from './ListStats';
+export type { ListStat } from './ListStats';

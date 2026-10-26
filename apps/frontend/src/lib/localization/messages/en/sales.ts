@@ -260,6 +260,27 @@ export const salesMessages = {
             title: 'Sales',
             subtitle: 'All transactions',
             printInvoice: 'Print Invoice',
+            statsLabel: 'Sales summary',
+            stats: {
+                sales: 'Sales',
+                cancelled: '{count} cancelled',
+                gross: 'Gross sales',
+                collected: 'Collected',
+                due: 'Due',
+                average: 'Avg. sale',
+                returns: 'Returns',
+                returnsCount: '{count, plural, one {# return} other {# returns}}',
+            },
+            filters: {
+                paymentStatus: 'Payment status',
+                paymentStatuses: {
+                    paid: 'Paid in full',
+                    partial: 'Part paid',
+                    unpaid: 'Unpaid',
+                },
+                salesRep: 'Sales rep',
+                noSalesRep: 'No sales rep',
+            },
         },
         hub: {
             moduleLabel: 'Sales Module',

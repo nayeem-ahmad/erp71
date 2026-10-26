@@ -25,7 +25,7 @@ export function tenantDateOnly(at: Date = new Date()): string {
     }
 }
 
-function addCalendarDays(ymd: string, days: number): string {
+export function addCalendarDays(ymd: string, days: number): string {
     const [year, month, day] = ymd.split('-').map(Number);
     return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }

@@ -260,6 +260,27 @@ export const salesMessages = {
                 title: "Jualan",
                 subtitle: "Semua transactions",
                 printInvoice: "Cetak Invois",
+                statsLabel: 'Ringkasan jualan',
+                stats: {
+                    sales: 'Jualan',
+                    cancelled: '{count} dibatalkan',
+                    gross: 'Jualan kasar',
+                    collected: 'Dikutip',
+                    due: 'Tertunggak',
+                    average: 'Purata jualan',
+                    returns: 'Pulangan',
+                    returnsCount: '{count} pulangan',
+                },
+                filters: {
+                    paymentStatus: 'Status bayaran',
+                    paymentStatuses: {
+                        paid: 'Dibayar penuh',
+                        partial: 'Dibayar sebahagian',
+                        unpaid: 'Belum dibayar',
+                    },
+                    salesRep: 'Wakil jualan',
+                    noSalesRep: 'Tiada wakil jualan',
+                },
             },
             hub: {
                 moduleLabel: "Modul Jualan",

@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Receipt, Eye, Edit2, FileText, Printer, Trash2 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Receipt, Eye, Edit2, FileText, Printer, Trash2, TrendingUp, Wallet, Clock, Calculator, Undo2 } from 'lucide-react';
+import { api, type PaymentMethodRow, type SalePaymentStatus, type SalesListFilterParams, type SalesListSummary } from '@/lib/api';
 import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, createdAtColumn, type ListFilter } from '@/components/data-table';
+import { DataTable, createdAtColumn, type ListFilter, type ListFilterOption, type ListStat } from '@/components/data-table';
+import type { NumberCondition } from '@/lib/number-condition';
 import { RowActions, RowActionButton } from '@/components/table';
 import { applyCreatedRangeQuery, applyDateRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { PostingBadge } from '@/components/PostingBadge';
@@ -44,6 +45,11 @@ interface Sale {
 }
 
 const SALE_STATUSES = ['DRAFT', 'COMPLETED', 'REFUNDED', 'PARTIAL_REFUND', 'CANCELLED'] as const;
+const PAYMENT_STATUSES: readonly SalePaymentStatus[] = ['paid', 'partial', 'unpaid'];
+/** The customer filter's value for a sale with no customer, as the server reads it. */
+const WALK_IN = 'none';
+/** Customers offered per typed search in the customer filter. */
+const CUSTOMER_SEARCH_LIMIT = 20;
 
 const statusTones: Record<string, StatusBadgeTone> = {
     DRAFT: 'neutral',
@@ -72,7 +78,7 @@ function formatSaleDate(value: string | null | undefined, locale: string): strin
 }
 
 export default function SalesPage() {
-    const { t, locale } = useI18n();
+    const { t, locale, fmt } = useI18n();
     const branch = useBranchScope();
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [cancelTarget, setCancelTarget] = useState<Sale | null>(null);
@@ -113,9 +119,18 @@ export default function SalesPage() {
 
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<string | null>(null);
+    const [statusFilter, setStatusFilter] = useState<string[]>([]);
+    const [statusExclude, setStatusExclude] = useState(false);
     const [dateRange, setDateRange] = useState<CreatedRange | null>(null);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
+    const [customerIds, setCustomerIds] = useState<string[]>([]);
+    const [paymentMethodIds, setPaymentMethodIds] = useState<string[]>([]);
+    const [totalFilter, setTotalFilter] = useState<NumberCondition | null>(null);
+    const [paidFilter, setPaidFilter] = useState<NumberCondition | null>(null);
+    const [paymentStatus, setPaymentStatus] = useState<string[]>([]);
+    const [salesRepIds, setSalesRepIds] = useState<string[]>([]);
+    const [paymentMethodOptions, setPaymentMethodOptions] = useState<ListFilterOption[]>([]);
+    const [salesRepOptions, setSalesRepOptions] = useState<ListFilterOption[]>([]);
     const [selectedSales, setSelectedSales] = useState<Sale[]>([]);
     const [pendingDelete, setPendingDelete] = useState<Sale | null>(null);
 
@@ -124,6 +139,50 @@ export default function SalesPage() {
         const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
         return () => clearTimeout(timer);
     }, [search]);
+
+    // The filters' choices that come from the workspace: its payment methods
+    // and the people who sell. A failed load leaves that filter with nothing
+    // to tick rather than failing the list.
+    useEffect(() => {
+        if (!branch.ready) return;
+        let live = true;
+        api.getPaymentMethods(undefined, branch.apiStoreId)
+            .then((rows: PaymentMethodRow[]) => {
+                if (live) setPaymentMethodOptions(rows.map((row) => ({ value: row.id, label: row.name })));
+            })
+            .catch(() => {});
+        api.getSalesReps()
+            .then((reps) => {
+                if (live) setSalesRepOptions(reps.map((rep) => ({ value: rep.id, label: rep.name })));
+            })
+            .catch(() => {});
+        return () => {
+            live = false;
+        };
+    }, [branch.ready, branch.apiStoreId]);
+
+    // One set of filters for the rows and the stats strip above them, so the
+    // two always describe the same sales.
+    const filterParams = useMemo<SalesListFilterParams>(
+        () => ({
+            search: debouncedSearch || undefined,
+            status: statusFilter.length ? statusFilter.join(',') : undefined,
+            statusExclude,
+            ...applyDateRangeQuery(dateRange),
+            ...applyCreatedRangeQuery(createdRange),
+            storeId: branch.apiStoreId,
+            customerIds,
+            salesRepIds,
+            paymentMethodIds,
+            paymentStatus: paymentStatus as SalePaymentStatus[],
+            total: totalFilter,
+            paid: paidFilter,
+        }),
+        [
+            debouncedSearch, statusFilter, statusExclude, dateRange, createdRange, branch.apiStoreId,
+            customerIds, salesRepIds, paymentMethodIds, paymentStatus, totalFilter, paidFilter,
+        ],
+    );
 
     // Pages against the server. This list used to pull the tenant's entire
     // sales history and render 20 rows from it, which fell over once an
@@ -140,20 +199,34 @@ export default function SalesPage() {
         initialSort: { id: 'created_at', desc: true },
         // The branch filter is a filter like the rest: a change is page 1 of a
         // fresh query, and the export walks the same filtered query.
-        deps: [debouncedSearch, statusFilter, dateRange, createdRange, branch.apiStoreId],
+        deps: [filterParams],
         enabled: branch.ready,
-        columnFilters: true,
-        fetch: (params) =>
-            api.getSalesList({
-                ...params,
-                search: debouncedSearch || undefined,
-                status: statusFilter || undefined,
-                ...applyDateRangeQuery(dateRange),
-                ...applyCreatedRangeQuery(createdRange),
-                storeId: branch.apiStoreId,
-            }),
+        fetch: (params) => api.getSalesList({ ...params, ...filterParams }),
     });
     useBranchForbiddenReset(listError, branch, t.dashboardLayout.branchFilterForbidden);
+
+    const [summary, setSummary] = useState<SalesListSummary | null>(null);
+    const [summaryLoading, setSummaryLoading] = useState(true);
+    /** Only the newest request may land: filters change faster than a slow summary answers. */
+    const summaryRequest = useRef(0);
+    const loadSummary = useCallback(() => {
+        if (!branch.ready) return;
+        const request = ++summaryRequest.current;
+        setSummaryLoading(true);
+        api.getSalesListSummary(filterParams)
+            .then((next) => {
+                if (request === summaryRequest.current) setSummary(next);
+            })
+            .catch(() => {
+                if (request === summaryRequest.current) setSummary(null);
+            })
+            .finally(() => {
+                if (request === summaryRequest.current) setSummaryLoading(false);
+            });
+    }, [branch.ready, filterParams]);
+    useEffect(() => {
+        loadSummary();
+    }, [loadSummary]);
 
     const confirmDelete = async () => {
         if (!pendingDelete) return;
@@ -163,6 +236,7 @@ export default function SalesPage() {
             setSales((prev) => prev.filter((s) => s.id !== pendingDelete.id));
             setPendingDelete(null);
             void reload();
+            loadSummary();
             toast.success(t.sales.detail.deleted);
         } catch (error: any) {
             console.error('Failed to delete sale', error);
@@ -179,8 +253,9 @@ export default function SalesPage() {
         );
         setCancelTarget(null);
         void reload();
+        loadSummary();
         toast.success(t.entryCancellation.saleCancelled);
-    }, [reload, setSales, t]);
+    }, [reload, loadSummary, setSales, t]);
 
     const columns: ColumnDef<Sale, any>[] = useMemo(
         () => [
@@ -359,20 +434,10 @@ export default function SalesPage() {
     );
 
     // Page-owned, not bound to a column: these go to the server with the page
-    // query. A column filter would only narrow the rows already on screen.
+    // query. A column filter would only narrow the rows already on screen. The
+    // row holds the five people reach for; the rest wait behind More.
     const filters = useMemo<ListFilter[]>(
         () => [
-            {
-                id: 'status',
-                type: 'select',
-                label: t.sales.columns.status,
-                value: statusFilter,
-                onChange: setStatusFilter,
-                options: SALE_STATUSES.map((value) => ({
-                    value,
-                    label: t.shared.statuses.sale[value] ?? value,
-                })),
-            },
             {
                 id: 'saleDate',
                 type: 'date-range',
@@ -380,11 +445,125 @@ export default function SalesPage() {
                 value: dateRange,
                 onChange: setDateRange,
                 withTime: true,
+                operators: true,
             },
-            { id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange },
+            {
+                id: 'status',
+                type: 'multi-select',
+                label: t.sales.columns.status,
+                value: statusFilter,
+                onChange: setStatusFilter,
+                exclude: { value: statusExclude, onChange: setStatusExclude },
+                options: SALE_STATUSES.map((value) => ({
+                    value,
+                    label: t.shared.statuses.sale[value] ?? value,
+                })),
+            },
+            {
+                id: 'customer',
+                type: 'multi-select',
+                label: t.sales.columns.customer,
+                value: customerIds,
+                onChange: setCustomerIds,
+                // Thousands of customers: the box asks the server as it is typed in.
+                options: [{ value: WALK_IN, label: t.shared.walkIn }],
+                loadOptions: (query) =>
+                    api.searchCustomers(query, CUSTOMER_SEARCH_LIMIT, branch.apiStoreId).then((rows: { id: string; name: string }[]) =>
+                        rows.map((row) => ({ value: row.id, label: row.name })),
+                    ),
+            },
+            {
+                id: 'payment',
+                type: 'multi-select',
+                label: t.sales.columns.payments,
+                value: paymentMethodIds,
+                onChange: setPaymentMethodIds,
+                options: paymentMethodOptions,
+            },
+            {
+                id: 'total',
+                type: 'number',
+                label: t.sales.columns.total,
+                value: totalFilter,
+                onChange: setTotalFilter,
+                money: true,
+            },
+            {
+                id: 'paid',
+                type: 'number',
+                label: t.sales.columns.paid,
+                value: paidFilter,
+                onChange: setPaidFilter,
+                money: true,
+                more: true,
+            },
+            {
+                id: 'paymentStatus',
+                type: 'multi-select',
+                label: t.sales.list.filters.paymentStatus,
+                value: paymentStatus,
+                onChange: setPaymentStatus,
+                options: PAYMENT_STATUSES.map((value) => ({ value, label: t.sales.list.filters.paymentStatuses[value] })),
+                more: true,
+            },
+            {
+                id: 'salesRep',
+                type: 'multi-select',
+                label: t.sales.list.filters.salesRep,
+                value: salesRepIds,
+                onChange: setSalesRepIds,
+                options: [{ value: 'none', label: t.sales.list.filters.noSalesRep }, ...salesRepOptions],
+                more: true,
+            },
+            { id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange, operators: true, more: true },
         ],
-        [t, statusFilter, dateRange, createdRange],
+        [
+            t, branch.apiStoreId, dateRange, statusFilter, statusExclude, customerIds, paymentMethodIds,
+            paymentMethodOptions, totalFilter, paidFilter, paymentStatus, salesRepIds, salesRepOptions, createdRange,
+        ],
     );
+
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const copy = t.sales.list.stats;
+        const dash = '—';
+        const items: ListStat[] = [
+            {
+                id: 'count',
+                icon: <Receipt aria-hidden />,
+                label: copy.sales,
+                value: summary ? summary.count.toLocaleString(locale) : dash,
+                hint: summary?.cancelledCount ? fmt(copy.cancelled, { count: summary.cancelledCount }) : undefined,
+            },
+            { id: 'gross', icon: <TrendingUp aria-hidden />, label: copy.gross, value: summary ? money(summary.gross) : dash },
+            {
+                id: 'collected',
+                icon: <Wallet aria-hidden />,
+                label: copy.collected,
+                value: summary ? money(summary.collected) : dash,
+                hint: summary && summary.gross > 0
+                    ? new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(summary.collected / summary.gross)
+                    : undefined,
+            },
+            {
+                id: 'due',
+                icon: <Clock aria-hidden />,
+                label: copy.due,
+                value: summary ? money(summary.due) : dash,
+                tone: summary && summary.due > 0 ? 'warning' : 'default',
+            },
+            { id: 'average', icon: <Calculator aria-hidden />, label: copy.average, value: summary ? money(summary.average) : dash },
+            {
+                id: 'returns',
+                icon: <Undo2 aria-hidden />,
+                label: copy.returns,
+                value: summary ? money(summary.returns.amount) : dash,
+                hint: summary?.returns.count ? fmt(copy.returnsCount, { count: summary.returns.count }) : undefined,
+                tone: summary && summary.returns.amount > 0 ? 'danger' : 'default',
+            },
+        ];
+        return { items, loading: summaryLoading && !summary, label: t.sales.list.statsLabel };
+    }, [summary, summaryLoading, locale, t, fmt]);
 
     return (
         <PageShell>
@@ -427,6 +606,10 @@ export default function SalesPage() {
                     searchPlaceholder={t.sales.dataTable.searchPlaceholder}
                     onSearchChange={setSearch}
                     filters={filters}
+                    filterLayout="row"
+                    stats={stats}
+                    // The filter row covers what the per-column boxes did, and sends it to the server.
+                    enableColumnFilters={false}
                     viewOptions
                     serverPagination={serverPagination}
                     enableRowSelection
