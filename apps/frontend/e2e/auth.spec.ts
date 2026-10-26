@@ -30,17 +30,21 @@ test.describe('Authentication', () => {
     });
 
     test('signup page renders and validates required fields', { tag: '@readonly' }, async ({ page }) => {
-        await page.goto('/signup');
+        await page.goto('/signup', { waitUntil: 'domcontentloaded' });
         await expect(page.getByRole('heading', { name: /create your erp71 workspace|create your workspace|sign up|create account|register/i })).toBeVisible();
 
-        // Submit without filling fields: the form uses native HTML5 `required`
-        // validation, so the browser blocks submission (no navigation away) and
-        // the first required field (email — the form is email/password/organization)
-        // is reported invalid.
+        // Current form: email, optional mobile, password, organization, terms.
+        // There is no "your name" or "store name" field. Submit is not sent —
+        // native `required` blocks an empty email, so this stays read-only.
+        await expect(page.locator('#signup-email')).toBeVisible();
+        await expect(page.locator('#signup-password')).toBeVisible();
+        await expect(page.locator('#signup-organization')).toBeVisible();
+        await expect(page.locator('#signup-terms')).toBeVisible();
+
         await page.getByRole('button', { name: /create workspace|sign up|create account|register/i }).click();
         await expect(page).toHaveURL(/\/signup/);
         const emailInvalid = await page
-            .getByLabel(/email address/i)
+            .locator('#signup-email')
             .evaluate((el) => (el as HTMLInputElement).validity.valueMissing);
         expect(emailInvalid).toBe(true);
     });
@@ -61,14 +65,16 @@ test.describe('Authentication', () => {
         const timestamp = Date.now();
         const email = `e2e-test-${timestamp}@example.com`;
 
-        await page.goto('/signup');
+        await page.goto('/signup', { waitUntil: 'domcontentloaded' });
 
-        // All of name/email/password/organization/store are required by the form.
-        await page.getByLabel(/your name/i).fill('E2E Test User');
-        await page.getByLabel(/email address/i).fill(email);
-        await page.getByLabel(/password/i).fill('SecurePassword123!');
-        await page.getByLabel(/organization name/i).fill(`E2E Org ${timestamp}`);
-        await page.getByLabel(/store name/i).fill('Main Branch');
+        await page.locator('#signup-email').fill(email);
+        const mobile = page.locator('#signup-mobile');
+        if ((await mobile.count()) > 0 && (await mobile.getAttribute('required')) !== null) {
+            await mobile.fill('01712345678');
+        }
+        await page.locator('#signup-password').fill('SecurePassword123!');
+        await page.locator('#signup-organization').fill(`E2E Org ${timestamp}`);
+        await page.locator('#signup-terms').check();
 
         await page.getByRole('button', { name: /create workspace|sign up|create account|register/i }).click();
 

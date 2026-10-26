@@ -77,12 +77,10 @@ test.describe('Sidebar navigation — all routes load without errors', { tag: '@
             // Navigate to the route
             await gotoSettled(page, `${BASE}${route.path}`);
 
-            // Check we weren't redirected to login (unauthenticated)
+            // A login bounce used to be logged and then ignored, so /support
+            // could "pass" while sitting on /login?redirect=%2Fsupport.
             const finalUrl = page.url();
-            const redirectedToLogin = finalUrl.includes('/login') || finalUrl.includes('/auth');
-            if (redirectedToLogin) {
-                console.log(`  ⚠ Redirected to login: ${finalUrl}`);
-            }
+            const redirectedToLogin = /\/login|\/auth/.test(finalUrl);
 
             // Check page body for fatal error text
             const bodyText = await page.locator('body').innerText().catch(() => '');
@@ -104,9 +102,9 @@ test.describe('Sidebar navigation — all routes load without errors', { tag: '@
                 console.log(`\n  ISSUES on ${route.path}:\n${issues.map((i) => `    - ${i}`).join('\n')}`);
             }
 
-            // Fail the test only for genuine fatal errors (not console warnings)
             const fatalIssues = [
-                ...fatalInBody,
+                ...(redirectedToLogin ? [`Redirected to login (${finalUrl})`] : []),
+                ...fatalInBody.map((p) => `Fatal text in body: ${p}`),
                 ...(errorOverlay > 0 ? ['error overlay'] : []),
                 ...networkErrors,
             ];

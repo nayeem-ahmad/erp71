@@ -1,6 +1,27 @@
 import { request } from '@playwright/test';
 import { CURRENT_TERMS_VERSION } from '@erp71/shared-types';
 
+/** Login is 10/60s per IP. A 429 must be retried, not treated as "no account". */
+async function loginWithThrottleRetry(
+    ctx: Awaited<ReturnType<typeof request.newContext>>,
+    apiUrl: string,
+    email: string,
+    password: string,
+) {
+    let last = await ctx.post(`${apiUrl}/api/v1/auth/login`, {
+        data: { email, password },
+        failOnStatusCode: false,
+    });
+    for (let attempt = 1; attempt <= 4 && last.status() === 429; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 2_000));
+        last = await ctx.post(`${apiUrl}/api/v1/auth/login`, {
+            data: { email, password },
+            failOnStatusCode: false,
+        });
+    }
+    return last;
+}
+
 /**
  * Ensures the canonical E2E account exists before the suite runs.
  *
@@ -8,21 +29,32 @@ import { CURRENT_TERMS_VERSION } from '@erp71/shared-types';
  * authenticate as this account. The CI E2E database is created fresh per run,
  * so this signs the account up via the public API; a 409 (already exists) is
  * treated as success so local re-runs against a persistent DB also work.
+ *
+ * Production smoke uses a pre-provisioned account. A failed login there must
+ * not fall through to signup — that used to post `planCode: 'FREE'`, which the
+ * API rejects, and abort the nightly before any test body ran.
  */
 async function globalSetup() {
     const apiUrl = process.env.E2E_API_URL || 'http://localhost:4000';
     const email = process.env.E2E_TEST_EMAIL || 'test@example.com';
     const password = process.env.E2E_TEST_PASSWORD || 'TestPassword123!';
+    const isProductionApi = /erp71\.com/i.test(apiUrl);
 
     const ctx = await request.newContext();
     try {
         // Nightly prod smoke tests use a pre-provisioned account — verify login first
         // so we don't depend on signup against a live deployment.
-        const existingLogin = await ctx.post(`${apiUrl}/api/v1/auth/login`, {
-            data: { email, password },
-            failOnStatusCode: false,
-        });
+        const existingLogin = await loginWithThrottleRetry(ctx, apiUrl, email, password);
         if (existingLogin.ok()) return;
+
+        if (isProductionApi) {
+            const body = await existingLogin.text();
+            throw new Error(
+                `E2E login failed (${existingLogin.status()}) against ${apiUrl}. ` +
+                    'Nightly uses a pre-provisioned account and will not sign up there. ' +
+                    body.slice(0, 300),
+            );
+        }
 
         let lastStatus = 0;
         let lastBody = '';
@@ -37,7 +69,9 @@ async function globalSetup() {
                     password,
                     tenantName: 'E2E Test Org',
                     storeName: 'E2E Test Store',
-                    planCode: 'FREE',
+                    // FREE is not a self-serve plan; the API rejects it with 400
+                    // and the suite never starts. STANDARD is the signup form's default.
+                    planCode: 'STANDARD',
                     // Signup refuses an account without it, and a hardcoded
                     // string here would rot silently on the next version bump.
                     acceptedTermsVersion: CURRENT_TERMS_VERSION,
