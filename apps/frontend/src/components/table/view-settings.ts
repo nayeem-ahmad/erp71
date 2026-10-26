@@ -10,15 +10,17 @@
  * describe *what* a list shows rather than *how* it is drawn.
  */
 
-import type { TableDensity, TableFontSize } from '@erp71/shared-types';
+import { TABLE_STRIPE_PRESETS, type TableDensity, type TableFontSize, type TableStripeColor, type TableStripePreset } from '@erp71/shared-types';
 
 export {
     DEFAULT_TABLE_VIEW,
     TABLE_DENSITIES,
     TABLE_FONT_SIZES,
+    TABLE_STRIPE_PRESETS,
+    isTableStripeColor,
     sanitizeTableView,
 } from '@erp71/shared-types';
-export type { TableDensity, TableFontSize, TableViewSettings } from '@erp71/shared-types';
+export type { TableDensity, TableFontSize, TableStripeColor, TableStripePreset, TableViewSettings } from '@erp71/shared-types';
 
 /** Body text in px. The header row sits one pixel under it. */
 export const TABLE_FONT_PX: Record<TableFontSize, number> = {
@@ -40,15 +42,36 @@ export const TABLE_DENSITY_CLASSES: Record<TableDensity, { headerCell: string; b
 };
 
 /**
- * Row fills. The stripe is a visible step (gray-100 at 70%, not the gray-50
- * that disappears on a laptop panel), the hover wash is blue with striping on
- * or off, and a ticked row sits a shade deeper than hover so the two can be
- * told apart. `hover:` follows `even:` in Tailwind's variant order, so the
- * wash replaces the stripe under the pointer; `selected` carries `!` because
- * it must win over both.
+ * The stripe swatches, as colours rather than classes: a custom colour cannot
+ * be a class, so every stripe is drawn through `--dt-stripe` alike. Grey is
+ * gray-100 at 70% — a visible step, not the gray-50 that disappears on a laptop
+ * panel; the others are their 100 tints, light enough to read black text on.
+ */
+export const TABLE_STRIPE_FILLS: Record<TableStripePreset, string> = {
+    gray: 'rgb(243 244 246 / 0.7)',
+    blue: 'rgb(219 234 254 / 0.6)',
+    green: 'rgb(209 250 229 / 0.6)',
+    amber: 'rgb(254 243 199 / 0.65)',
+    slate: 'rgb(226 232 240 / 0.65)',
+};
+
+/** The fill for a stored stripe colour: a preset's tint, or the custom colour as chosen. */
+export function stripeFill(color: TableStripeColor): string {
+    return (TABLE_STRIPE_PRESETS as readonly string[]).includes(color)
+        ? TABLE_STRIPE_FILLS[color as TableStripePreset]
+        : color;
+}
+
+/**
+ * Row fills. The stripe is the person's stripe colour (`--dt-stripe`, grey
+ * unless they chose another), the hover wash is blue with striping on or off,
+ * and a ticked row sits a shade deeper than hover so the two can be told apart.
+ * `hover:` follows `even:` in Tailwind's variant order, so the wash replaces
+ * the stripe under the pointer; `selected` carries `!` because it must win
+ * over both.
  */
 export const TABLE_ROW_CLASSES = {
-    striped: 'odd:bg-white even:bg-gray-100/70 hover:bg-blue-50 transition-colors',
+    striped: 'odd:bg-white even:bg-[color:var(--dt-stripe)] hover:bg-blue-50 transition-colors',
     plain: 'bg-white hover:bg-blue-50 transition-colors',
     selected: '!bg-blue-100/80',
 } as const;

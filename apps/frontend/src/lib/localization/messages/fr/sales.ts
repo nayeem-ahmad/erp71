@@ -260,6 +260,27 @@ export const salesMessages = {
             title: "Ventes",
             subtitle: "Toutes les opérations",
             printInvoice: "Imprimer la facture",
+            statsLabel: 'Résumé des ventes',
+            stats: {
+                sales: 'Ventes',
+                cancelled: '{count} annulées',
+                gross: 'Ventes brutes',
+                collected: 'Encaissé',
+                due: 'Dû',
+                average: 'Vente moyenne',
+                returns: 'Retours',
+                returnsCount: '{count, plural, one {# retour} other {# retours}}',
+            },
+            filters: {
+                paymentStatus: 'Statut de paiement',
+                paymentStatuses: {
+                    paid: 'Payé en totalité',
+                    partial: 'Payé en partie',
+                    unpaid: 'Impayé',
+                },
+                salesRep: 'Commercial',
+                noSalesRep: 'Sans commercial',
+            },
         },
         hub: {
             moduleLabel: "Module Ventes",

@@ -19,7 +19,7 @@ import {
 } from '@erp71/shared-types';
 import InvoiceLayoutFields from '@/app/(app)/sales/components/InvoiceLayoutFields';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
-import { Segmented } from '@/components/table/TableViewOptions';
+import { Segmented, StripeColorPicker } from '@/components/table/TableViewOptions';
 import { Alert, Button, Checkbox, ConfirmDialog, Field, Input, Select, StatusBadge } from '@/components/ui';
 import { useAppShell } from '@/contexts/AppShellContext';
 import { api } from '@/lib/api';
@@ -578,6 +578,11 @@ export default function ProfileEditorModal({ profileId, profiles, onChanged, onC
                             label={view.striped}
                             checked={listValue.striped}
                             onChange={(striped) => setDraft('tableView', { ...listValue, striped })}
+                        />
+                        <StripeColorPicker
+                            value={listValue.stripeColor}
+                            onChange={(stripeColor) => setDraft('tableView', { ...listValue, stripeColor })}
+                            disabled={!listValue.striped}
                         />
                         <CheckRow
                             label={view.fitWidth}

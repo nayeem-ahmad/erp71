@@ -126,7 +126,28 @@ describe('DataTable view options', () => {
         expect(table()).toHaveClass('dt-view');
         expect(table()).not.toHaveClass('dt-single-line');
         expect(table().style.getPropertyValue('--dt-font-size')).toBe('13px');
-        expect(screen.getByText('Alpha').closest('tr')).toHaveClass('even:bg-gray-100/70', 'hover:bg-blue-50');
+        expect(table().style.getPropertyValue('--dt-stripe')).toBe('rgb(243 244 246 / 0.7)');
+        expect(screen.getByText('Alpha').closest('tr')).toHaveClass('even:bg-[color:var(--dt-stripe)]', 'hover:bg-blue-50');
+    });
+
+    it('paints the stripe in the colour picked, a custom one included', () => {
+        render(<DataTable {...props} viewOptions />);
+        const menu = openViewOptions();
+        const blue = within(menu).getByRole('radio', { name: 'Blue' });
+        fireEvent.click(blue);
+        expect(blue).toHaveAttribute('aria-checked', 'true');
+        expect(table().style.getPropertyValue('--dt-stripe')).toBe('rgb(219 234 254 / 0.6)');
+
+        fireEvent.change(within(menu).getByLabelText('Custom colour'), { target: { value: '#F5F0FF' } });
+        expect(table().style.getPropertyValue('--dt-stripe')).toBe('#f5f0ff');
+        expect(within(menu).getByRole('radio', { name: 'Blue' })).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('keeps the stripe colour but greys out its picker while striping is off', () => {
+        render(<DataTable {...props} viewOptions />);
+        const menu = openViewOptions();
+        fireEvent.click(within(menu).getByRole('switch', { name: 'Striped rows' }));
+        expect(within(menu).getByRole('radio', { name: 'Green' })).toBeDisabled();
     });
 
     it('holds compact rows to one line', () => {
@@ -154,7 +175,7 @@ describe('DataTable view options', () => {
         render(<DataTable {...props} viewOptions />);
         fireEvent.click(within(openViewOptions()).getByRole('switch', { name: 'Striped rows' }));
         const row = screen.getByText('Alpha').closest('tr');
-        expect(row).not.toHaveClass('even:bg-gray-100/70');
+        expect(row).not.toHaveClass('even:bg-[color:var(--dt-stripe)]');
         // The hover wash stays with the stripes off.
         expect(row).toHaveClass('hover:bg-blue-50');
     });

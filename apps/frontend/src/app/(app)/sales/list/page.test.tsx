@@ -43,6 +43,10 @@ jest.mock('next/link', () => {
 jest.mock('@/lib/api', () => ({
     api: {
         getSalesList: jest.fn(),
+        getSalesListSummary: jest.fn(),
+        getPaymentMethods: jest.fn(),
+        getSalesReps: jest.fn(),
+        searchCustomers: jest.fn(),
         getSalesSettings: jest.fn().mockResolvedValue({ pos_enabled: true }),
         // The Cancel action is permission-gated, and `useTenantPlanFeatures`
         // resolves those through /auth/me on mount. No membership → no
@@ -109,6 +113,26 @@ const mockSales = [
     },
 ];
 
+/** A filter chip in the toolbar — the column headers' sort buttons share its name. */
+function chip(name: string | RegExp): HTMLElement {
+    const found = screen
+        .getAllByRole('button', { name })
+        .find((button) => button.getAttribute('aria-haspopup') === 'dialog');
+    if (!found) throw new Error(`No filter chip named ${String(name)}`);
+    return found;
+}
+
+const mockSummary = {
+    count: 248,
+    cancelledCount: 7,
+    revenueCount: 240,
+    gross: 1245300,
+    collected: 1098750,
+    due: 146550,
+    average: 5189,
+    returns: { count: 6, amount: 38400 },
+};
+
 describe('SalesListPage — Sales Transaction List', () => {
     beforeEach(() => {
         mockBranchScope();
@@ -122,26 +146,50 @@ describe('SalesListPage — Sales Transaction List', () => {
             limit: 20,
             pages: 1,
         });
+        api.getSalesListSummary.mockResolvedValue(mockSummary);
+        api.getPaymentMethods.mockResolvedValue([
+            { id: 'pm-cash', name: 'Cash Register' },
+            { id: 'pm-bkash', name: 'bKash Account' },
+        ]);
+        api.getSalesReps.mockResolvedValue([{ id: 'rep-1', name: 'Tanvir Hossain' }]);
+        api.searchCustomers.mockResolvedValue([{ id: 'cust-9', name: 'Karim Store' }]);
     });
 
     afterEach(() => {
         jest.clearAllMocks();
     });
 
-    // The table's advanced filters go to the server, so their matches are paged
-    // together rather than left wherever they fell in the unfiltered list.
-    it('filters on the server, from page 1, rather than within the rows on screen', async () => {
+    // The filter row sends its choices to the server, so their matches are
+    // paged together rather than left wherever they fell in the unfiltered list.
+    it('filters by customers found through a server search, from page 1', async () => {
         const { api } = require('@/lib/api');
         renderWithQueryClient(<SalesListPage />);
         await screen.findByText('SL-00001');
 
-        fireEvent.click(screen.getByRole('button', { name: /filters/i }));
-        fireEvent.change(screen.getByPlaceholderText(/^Filter Customer/), { target: { value: 'karim' } });
+        fireEvent.click(chip('Customer'));
+        fireEvent.change(screen.getByRole('searchbox', { name: 'Search Customer…' }), { target: { value: 'kar' } });
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'Karim Store' }));
 
+        expect(api.searchCustomers).toHaveBeenCalledWith('kar', 20, 'store-1');
         await waitFor(() =>
             expect(api.getSalesList).toHaveBeenLastCalledWith(
-                expect.objectContaining({ page: 1, filters: { customer: 'karim' } }),
+                expect.objectContaining({ page: 1, customerIds: ['cust-9'] }),
             ),
+        );
+        // The chip names the customer the search found, not their id.
+        expect(chip(/Customer: Karim Store/)).toBeInTheDocument();
+    });
+
+    it('offers walk-in sales in the customer filter before anything is typed', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+        await screen.findByText('SL-00001');
+
+        fireEvent.click(chip('Customer'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Walk-in' }));
+
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenLastCalledWith(expect.objectContaining({ customerIds: ['none'] })),
         );
     });
 
@@ -217,20 +265,153 @@ describe('SalesListPage — Sales Transaction List', () => {
         );
     });
 
-    it('filters by status from the toolbar, on the server', async () => {
+    it('filters by several statuses at once, on the server', async () => {
         const { api } = require('@/lib/api');
         renderWithQueryClient(<SalesListPage />);
         await screen.findByText('SL-00001');
 
-        fireEvent.change(screen.getByRole('combobox', { name: 'Status' }), {
-            target: { value: 'COMPLETED' },
-        });
+        fireEvent.click(chip('Status'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Completed' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Draft' }));
 
         await waitFor(() =>
             expect(api.getSalesList).toHaveBeenLastCalledWith(
-                expect.objectContaining({ status: 'COMPLETED', page: 1 }),
+                expect.objectContaining({ status: 'COMPLETED,DRAFT', statusExclude: false, page: 1 }),
             ),
         );
+        expect(chip(/Status: Completed \+1/)).toBeInTheDocument();
+    });
+
+    it('turns the status filter round to leave statuses out', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+        await screen.findByText('SL-00001');
+
+        fireEvent.click(chip('Status'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Cancelled' }));
+        fireEvent.click(screen.getByRole('button', { name: 'is none of' }));
+
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenLastCalledWith(
+                expect.objectContaining({ status: 'CANCELLED', statusExclude: true }),
+            ),
+        );
+        expect(chip(/Status: not Cancelled/)).toBeInTheDocument();
+    });
+
+    it('filters the total by a range, applied on Apply rather than per keystroke', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+        await screen.findByText('SL-00001');
+        const callsBefore = api.getSalesList.mock.calls.length;
+
+        fireEvent.click(chip('Total'));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Total (Min)' }), { target: { value: '1,000' } });
+        fireEvent.change(screen.getByRole('textbox', { name: 'Total (Max)' }), { target: { value: '5000' } });
+        expect(api.getSalesList.mock.calls.length).toBe(callsBefore);
+        fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenLastCalledWith(
+                expect.objectContaining({ total: { op: 'between', value: 1000, to: 5000 } }),
+            ),
+        );
+    });
+
+    it('filters the total by greater than', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+        await screen.findByText('SL-00001');
+
+        fireEvent.click(chip('Total'));
+        fireEvent.change(screen.getByRole('combobox', { name: 'Total' }), { target: { value: 'gt' } });
+        fireEvent.change(screen.getByRole('textbox', { name: 'Total (Amount)' }), { target: { value: '500' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenLastCalledWith(
+                expect.objectContaining({ total: { op: 'gt', value: 500 } }),
+            ),
+        );
+    });
+
+    it('refuses an amount that is not a number, inline', async () => {
+        renderWithQueryClient(<SalesListPage />);
+        await screen.findByText('SL-00001');
+
+        fireEvent.click(chip('Total'));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Total (Min)' }), { target: { value: 'abc' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+        expect(screen.getByRole('alert')).toHaveTextContent('Enter an amount');
+    });
+
+    it('filters by payment method from the workspace\'s own methods', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+        await screen.findByText('SL-00001');
+
+        fireEvent.click(chip('Payments'));
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'bKash Account' }));
+
+        expect(api.getPaymentMethods).toHaveBeenCalledWith(undefined, 'store-1');
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenLastCalledWith(expect.objectContaining({ paymentMethodIds: ['pm-bkash'] })),
+        );
+    });
+
+    it('keeps the rarer filters behind More', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+        await screen.findByText('SL-00001');
+
+        fireEvent.click(chip('More'));
+        const more = screen.getByRole('dialog', { name: 'More' });
+        for (const name of ['Paid', 'Payment status', 'Sales rep', 'Created']) {
+            expect(within(more).getByRole('button', { name: new RegExp(`^${name}`) })).toBeInTheDocument();
+        }
+
+        fireEvent.click(within(more).getByRole('button', { name: /^Payment status/ }));
+        fireEvent.click(within(more).getByRole('checkbox', { name: 'Unpaid' }));
+
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenLastCalledWith(expect.objectContaining({ paymentStatus: ['unpaid'] })),
+        );
+        expect(chip(/^More/)).toHaveTextContent('1');
+    });
+
+    it('shows the stats strip for the same filters as the rows', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+
+        const strip = await screen.findByRole('region', { name: 'Sales summary' });
+        await within(strip).findByText('248');
+        expect(within(strip).getByText('· 7 cancelled')).toBeInTheDocument();
+        expect(within(strip).getByText(/1,245,300|12,45,300/)).toBeInTheDocument();
+        expect(within(strip).getByText('· 88%')).toBeInTheDocument();
+
+        fireEvent.click(chip('Status'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Completed' }));
+
+        await waitFor(() =>
+            expect(api.getSalesListSummary).toHaveBeenLastCalledWith(
+                expect.objectContaining({ status: 'COMPLETED', storeId: 'store-1' }),
+            ),
+        );
+        const listCall = api.getSalesList.mock.lastCall[0];
+        const summaryCall = api.getSalesListSummary.mock.lastCall[0];
+        expect(summaryCall).toEqual(expect.objectContaining({ ...summaryCall, status: listCall.status, storeId: listCall.storeId }));
+    });
+
+    it('folds the stats strip away from the toolbar', async () => {
+        renderWithQueryClient(<SalesListPage />);
+        await screen.findByRole('region', { name: 'Sales summary' });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Hide summary' }));
+
+        expect(screen.queryByRole('region', { name: 'Sales summary' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Show summary' }));
+        expect(screen.getByRole('region', { name: 'Sales summary' })).toBeInTheDocument();
     });
 
     it('asks before deleting a sale', async () => {
@@ -433,7 +614,7 @@ describe('SalesListPage — Sales Transaction List', () => {
         renderWithQueryClient(<SalesListPage />);
         await waitFor(() => expect(api.getSalesList).toHaveBeenCalledTimes(1));
 
-        fireEvent.click(screen.getByRole('button', { name: /^date · any time$/i }));
+        fireEvent.click(chip('Date'));
         fireEvent.click(screen.getByRole('button', { name: 'Today' }));
 
         const today = createdRangeFromPreset('today');
@@ -443,13 +624,29 @@ describe('SalesListPage — Sales Transaction List', () => {
             ),
         );
         expect(api.getSalesList.mock.lastCall[0]).not.toHaveProperty('createdFrom');
-        expect(screen.getByRole('button', { name: /^created · any time$/i })).toBeInTheDocument();
     });
 
     it('offers times on the Date chip', async () => {
         renderWithQueryClient(<SalesListPage />);
-        fireEvent.click(await screen.findByRole('button', { name: /^date · any time$/i }));
+        await screen.findByText('SL-00001');
+        fireEvent.click(chip('Date'));
         expect(screen.getByLabelText('From (Time)')).toBeInTheDocument();
+    });
+
+    it('filters the sale date as before a day, which runs to the day before it', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+        await screen.findByText('SL-00001');
+
+        fireEvent.click(chip('Date'));
+        fireEvent.change(screen.getByRole('combobox', { name: 'Custom' }), { target: { value: 'before' } });
+        fireEvent.change(screen.getByLabelText('Date', { selector: 'input' }), { target: { value: '2026-10-12' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenLastCalledWith(expect.objectContaining({ dateTo: '2026-10-11' })),
+        );
+        expect(api.getSalesList.mock.lastCall[0].dateFrom).toBeUndefined();
     });
 
     /**
@@ -541,8 +738,11 @@ describe('SalesListPage — Sales Transaction List', () => {
         await waitFor(() => expect(api.getSalesList).toHaveBeenCalled());
         api.getSalesList.mockClear();
 
-        fireEvent.click(screen.getByRole('button', { name: /created · any time/i }));
-        fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+        // Created waits behind More, opening in place there.
+        fireEvent.click(chip('More'));
+        const more = screen.getByRole('dialog', { name: 'More' });
+        fireEvent.click(within(more).getByRole('button', { name: /^Created/ }));
+        fireEvent.click(within(more).getByRole('button', { name: 'Today' }));
 
         await waitFor(() => {
             expect(api.getSalesList).toHaveBeenCalledWith(

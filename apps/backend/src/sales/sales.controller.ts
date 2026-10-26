@@ -1,7 +1,8 @@
-import { Controller, Post, Get, Body, Param, Query, UseGuards, UseInterceptors, Patch, Delete, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, Controller, Post, Get, Body, Param, Query, UseGuards, UseInterceptors, Patch, Delete, ForbiddenException } from '@nestjs/common';
 import { readColumnFiltersQuery } from '../common/column-filter.util';
+import { readIdListQuery, readNumberConditionQuery } from '../common/number-condition.util';
 import { StorePermission } from '@erp71/shared-types';
-import { SalesService } from './sales.service';
+import { SALE_PAYMENT_STATUSES, SalesService, type SaleListFilters, type SalePaymentStatus } from './sales.service';
 import { CreateSaleDto, CreateSalesFromQuotationsDto, FinalizeSaleDto, PrintSalesBatchDto, UpdateSaleDto } from './sale.dto';
 import { CancelEntryDto } from '../common/cancel-entry.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -33,6 +34,59 @@ export class SalesController {
         return this.salesService.create(tenant.tenantId, tenant.userId, dto);
     }
 
+    /**
+     * The list's filters, read once for the list and its stats strip. New
+     * params go after `filters`: a spec calls `findAll` positionally up to
+     * `storeId`.
+     */
+    private async listFilters(
+        tenant: TenantContext,
+        q: {
+            mine?: string;
+            search?: string;
+            status?: string;
+            createdFrom?: string;
+            createdTo?: string;
+            storeId?: string;
+            dateFrom?: string;
+            dateTo?: string;
+            filters?: string;
+            statusExclude?: string;
+            customerId?: string;
+            salesRepId?: string;
+            paymentMethodId?: string;
+            paymentStatus?: string;
+            total?: string;
+            paid?: string;
+        },
+    ): Promise<SaleListFilters> {
+        const mineOnly = q.mine === 'true' || q.mine === '1';
+        const storeId = await this.branchScope.resolveStoreId(tenant, q.storeId, { permissions: SALES_READ });
+        const paymentStatus = readIdListQuery(q.paymentStatus);
+        if (paymentStatus?.some((value) => !SALE_PAYMENT_STATUSES.includes(value as SalePaymentStatus))) {
+            throw new BadRequestException(`paymentStatus takes ${SALE_PAYMENT_STATUSES.join(', ')}`);
+        }
+        return {
+            timezone: tenant.timezone,
+            storeId,
+            createdBy: mineOnly ? tenant.userId : undefined,
+            search: q.search || undefined,
+            status: q.status || undefined,
+            statusExclude: q.statusExclude === 'true' || q.statusExclude === '1',
+            createdFrom: q.createdFrom || undefined,
+            createdTo: q.createdTo || undefined,
+            dateFrom: q.dateFrom || undefined,
+            dateTo: q.dateTo || undefined,
+            filters: readColumnFiltersQuery(q.filters),
+            customerIds: readIdListQuery(q.customerId),
+            salesRepIds: readIdListQuery(q.salesRepId),
+            paymentMethodIds: readIdListQuery(q.paymentMethodId),
+            paymentStatus: paymentStatus as SalePaymentStatus[] | undefined,
+            total: readNumberConditionQuery(q.total, 'total'),
+            paid: readNumberConditionQuery(q.paid, 'paid'),
+        };
+    }
+
     @RequireAnyStorePermission(...SALES_READ)
     @Get()
     async findAll(
@@ -50,24 +104,58 @@ export class SalesController {
         @Query('dateFrom') dateFrom?: string,
         @Query('dateTo') dateTo?: string,
         @Query('filters') filters?: string,
+        @Query('statusExclude') statusExclude?: string,
+        @Query('customerId') customerId?: string,
+        @Query('salesRepId') salesRepId?: string,
+        @Query('paymentMethodId') paymentMethodId?: string,
+        @Query('paymentStatus') paymentStatus?: string,
+        @Query('total') total?: string,
+        @Query('paid') paid?: string,
     ) {
-        const mineOnly = mine === 'true' || mine === '1';
-        const storeId = await this.branchScope.resolveStoreId(tenant, requestedStoreId, { permissions: SALES_READ });
-        return this.salesService.findAll(tenant.tenantId, { timezone: tenant.timezone,
-            storeId,
+        const listFilters = await this.listFilters(tenant, {
+            mine, search, status, createdFrom, createdTo, storeId: requestedStoreId, dateFrom, dateTo, filters,
+            statusExclude, customerId, salesRepId, paymentMethodId, paymentStatus, total, paid,
+        });
+        return this.salesService.findAll(tenant.tenantId, {
+            ...listFilters,
             page: page ? parseInt(page, 10) : undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
-            createdBy: mineOnly ? tenant.userId : undefined,
-            search: search || undefined,
-            status: status || undefined,
             sortBy: sortBy || undefined,
             sortDir: sortDir || undefined,
-            createdFrom: createdFrom || undefined,
-            createdTo: createdTo || undefined,
-            dateFrom: dateFrom || undefined,
-            dateTo: dateTo || undefined,
-            filters: readColumnFiltersQuery(filters),
         });
+    }
+
+    /**
+     * The stats strip above the sales list: counts and amounts over the same
+     * filters as `GET /sales`. Declared before `:id`, which would take
+     * "summary" for an id.
+     */
+    @RequireAnyStorePermission(...SALES_READ)
+    @Get('summary')
+    async summary(
+        @Tenant() tenant: TenantContext,
+        @Query('mine') mine?: string,
+        @Query('search') search?: string,
+        @Query('status') status?: string,
+        @Query('createdFrom') createdFrom?: string,
+        @Query('createdTo') createdTo?: string,
+        @Query('storeId') requestedStoreId?: string,
+        @Query('dateFrom') dateFrom?: string,
+        @Query('dateTo') dateTo?: string,
+        @Query('filters') filters?: string,
+        @Query('statusExclude') statusExclude?: string,
+        @Query('customerId') customerId?: string,
+        @Query('salesRepId') salesRepId?: string,
+        @Query('paymentMethodId') paymentMethodId?: string,
+        @Query('paymentStatus') paymentStatus?: string,
+        @Query('total') total?: string,
+        @Query('paid') paid?: string,
+    ) {
+        const listFilters = await this.listFilters(tenant, {
+            mine, search, status, createdFrom, createdTo, storeId: requestedStoreId, dateFrom, dateTo, filters,
+            statusExclude, customerId, salesRepId, paymentMethodId, paymentStatus, total, paid,
+        });
+        return this.salesService.summary(tenant.tenantId, listFilters);
     }
 
     /**

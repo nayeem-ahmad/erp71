@@ -260,6 +260,27 @@ export const salesMessages = {
             title: "बिक्री",
             subtitle: "सभी लेन-देन",
             printInvoice: "चालान प्रिंट करें",
+            statsLabel: 'बिक्री सारांश',
+            stats: {
+                sales: 'बिक्री',
+                cancelled: '{count} रद्द',
+                gross: 'सकल बिक्री',
+                collected: 'वसूला गया',
+                due: 'बकाया',
+                average: 'औसत बिक्री',
+                returns: 'वापसी',
+                returnsCount: '{count} वापसी',
+            },
+            filters: {
+                paymentStatus: 'भुगतान स्थिति',
+                paymentStatuses: {
+                    paid: 'पूरा भुगतान',
+                    partial: 'आंशिक भुगतान',
+                    unpaid: 'अदत्त',
+                },
+                salesRep: 'बिक्री प्रतिनिधि',
+                noSalesRep: 'कोई प्रतिनिधि नहीं',
+            },
         },
         hub: {
             moduleLabel: "बिक्री मॉड्यूल",
