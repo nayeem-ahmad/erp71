@@ -9,12 +9,15 @@ test.describe('Critical launch path', () => {
         const timestamp = Date.now();
         const email = `critical-path-${timestamp}@example.com`;
 
-        await page.goto('/signup');
-        await page.getByLabel(/your name/i).fill('Critical Path User');
-        await page.getByLabel(/email address/i).fill(email);
-        await page.getByLabel(/password/i).fill('SecurePassword123!');
-        await page.getByLabel(/organization name/i).fill('Critical Workspace');
-        await page.getByLabel(/store name/i).fill('Critical Store');
+        await page.goto('/signup', { waitUntil: 'domcontentloaded' });
+        await page.locator('#signup-email').fill(email);
+        const mobile = page.locator('#signup-mobile');
+        if ((await mobile.count()) > 0 && (await mobile.getAttribute('required')) !== null) {
+            await mobile.fill('01712345678');
+        }
+        await page.locator('#signup-password').fill('SecurePassword123!');
+        await page.locator('#signup-organization').fill('Critical Workspace');
+        await page.locator('#signup-terms').check();
         await page.getByRole('button', { name: /create workspace|sign up|create account|register/i }).click();
 
         await expect(page).toHaveURL(/verify-email/, { timeout: 15_000 });

@@ -1,5 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
-import { E2E_BASE_URL, applyE2ESession, fetchE2ESession, sessionHasAccountingAccess } from './helpers/auth';
+import {
+    E2E_BASE_URL,
+    applyE2ESession,
+    e2eAccountIsPlatformAdmin,
+    fetchE2ESession,
+    sessionHasAccountingAccess,
+} from './helpers/auth';
 import { SETTLED_NAV_BUDGET_MS, gotoSettled } from './helpers/navigation';
 
 const HUB_PAGES = [
@@ -41,6 +47,8 @@ async function assertHubLinks(page: Page, hubPath: string) {
         has: page.locator('h2, h3, .text-sm.font-bold, .text-sm.font-semibold'),
     });
 
+    await expect(cardLinks.first(), `Expected hub cards on ${hubPath}`).toBeVisible({ timeout: 10_000 });
+
     const hrefs = await cardLinks.evaluateAll((anchors) =>
         [...new Set(
             anchors
@@ -51,10 +59,10 @@ async function assertHubLinks(page: Page, hubPath: string) {
 
     expect(hrefs.length, `Expected hub cards on ${hubPath}`).toBeGreaterThan(0);
 
-    // One test walks every card, so the default 30s budget is spent after ~10
-    // links (Sales and Accounting hubs have more) and the test dies mid-walk on
-    // whichever page it happened to reach. Budget each link instead.
-    test.setTimeout(30_000 + hrefs.length * SETTLED_NAV_BUDGET_MS);
+    // One test walks every card. The 30s default dies mid-walk on whichever
+    // Sales or Accounting link it has reached; 120s is the floor, and a long
+    // hub gets a per-link budget on top.
+    test.setTimeout(Math.max(120_000, hrefs.length * SETTLED_NAV_BUDGET_MS));
 
     for (const href of hrefs) {
         await gotoSettled(page, `${E2E_BASE_URL}${href}`);
@@ -73,7 +81,20 @@ async function assertHubLinks(page: Page, hubPath: string) {
     expect(networkErrors, `API errors from ${hubPath} links`).toHaveLength(0);
 }
 
+/** True while the document is still on this hub, including a child of it. */
+function stillOnHub(url: string, hubPath: string): boolean {
+    let path = url;
+    try {
+        path = new URL(url).pathname;
+    } catch {
+        // Relative URLs are already a path.
+    }
+    return path === hubPath || path.startsWith(`${hubPath}/`);
+}
+
 test.describe('Hub & quick-link navigation', { tag: '@readonly' }, () => {
+    test.describe.configure({ timeout: 120_000 });
+
     test.beforeAll(async () => {
         await fetchE2ESession();
     });
@@ -81,13 +102,15 @@ test.describe('Hub & quick-link navigation', { tag: '@readonly' }, () => {
     for (const hub of HUB_PAGES) {
         test(`${hub.label} cards navigate without errors`, async ({ page }) => {
             const session = await fetchE2ESession();
-            await applyE2ESession(page, session);
-            await page.goto(`${E2E_BASE_URL}${hub.path}`, { waitUntil: 'networkidle', timeout: 15000 });
-
             if (hub.path === '/accounting' && !sessionHasAccountingAccess(session)) {
                 test.skip(true, 'E2E smoke account lacks accounting plan — hub gated');
             }
-            if (!page.url().includes(hub.path)) {
+
+            await applyE2ESession(page, session);
+            await gotoSettled(page, `${E2E_BASE_URL}${hub.path}`);
+            expect(page.url(), `Redirected to login from ${hub.path}`).not.toMatch(/\/login|\/auth/);
+
+            if (!stillOnHub(page.url(), hub.path)) {
                 test.skip(true, `E2E user redirected away from ${hub.path}`);
             }
 
@@ -98,11 +121,29 @@ test.describe('Hub & quick-link navigation', { tag: '@readonly' }, () => {
     for (const hub of ADMIN_HUB_PAGES) {
         test(`${hub.label} cards navigate without errors`, async ({ page }) => {
             const session = await fetchE2ESession();
-            await applyE2ESession(page, session);
-            await page.goto(`${E2E_BASE_URL}${hub.path}`, { waitUntil: 'networkidle', timeout: 15000 });
+            // Shop sessions are redirected off /admin only after /auth/me
+            // resolves. Checking the URL the instant navigation returns races
+            // that redirect and counts zero cards. Skip from the profile
+            // instead, and only fall back to the URL when the profile itself
+            // could not be read.
+            const isPlatformAdmin = await e2eAccountIsPlatformAdmin(session);
+            if (isPlatformAdmin === false) {
+                test.skip(true, 'E2E account is not a platform admin');
+            }
 
-            if (!page.url().includes(hub.path)) {
-                test.skip(true, 'Shop E2E user is not a platform admin — admin hub cards not visible');
+            await applyE2ESession(page, session);
+            await page.goto(`${E2E_BASE_URL}${hub.path}`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
+            // A confirmed platform admin is never redirected, so only an
+            // unreadable profile (`null`) needs to wait for the shell to act.
+            if (isPlatformAdmin === null) {
+                await page
+                    .waitForURL((url) => !stillOnHub(url.href, hub.path), { timeout: 10_000 })
+                    .catch(() => {});
+            }
+            expect(page.url(), `Redirected to login from ${hub.path}`).not.toMatch(/\/login|\/auth/);
+
+            if (!stillOnHub(page.url(), hub.path)) {
+                test.skip(true, 'E2E session is not in the platform admin console');
             }
 
             await assertHubLinks(page, hub.path);
