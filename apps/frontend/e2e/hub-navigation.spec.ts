@@ -133,9 +133,13 @@ test.describe('Hub & quick-link navigation', { tag: '@readonly' }, () => {
 
             await applyE2ESession(page, session);
             await page.goto(`${E2E_BASE_URL}${hub.path}`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
-            await page
-                .waitForURL((url) => !stillOnHub(url.href, hub.path), { timeout: 10_000 })
-                .catch(() => {});
+            // A confirmed platform admin is never redirected, so only an
+            // unreadable profile (`null`) needs to wait for the shell to act.
+            if (isPlatformAdmin === null) {
+                await page
+                    .waitForURL((url) => !stillOnHub(url.href, hub.path), { timeout: 10_000 })
+                    .catch(() => {});
+            }
             expect(page.url(), `Redirected to login from ${hub.path}`).not.toMatch(/\/login|\/auth/);
 
             if (!stillOnHub(page.url(), hub.path)) {
