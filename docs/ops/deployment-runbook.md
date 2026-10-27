@@ -171,6 +171,27 @@ Then in the browser, DevTools → Network on `app.erp71.com`: API calls go to
 Editing `.env.production` alone does not stick, since the script rewrites both
 keys on every deploy. The Caddy route is harmless to leave in place.
 
+### Other apps on this host: Meet71
+
+Meet71 (video meetings, repo `nayeem-ahmad/meet71`) runs beside ERP71 at
+`https://meet.erp71.com`, set up the way `shared-vps-second-app.md` describes.
+What ERP71 operators need to know:
+
+- **It joins `erp71_default`.** Containers `meet71-app-1` and
+  `meet71-livekit-1` sit on ERP71's network so the shared Hermes Caddy can
+  reach them. `docker compose -p erp71 down` cannot remove the network
+  while they are attached; `up -d` and `scripts/deploy.sh` are unaffected.
+- **It has a block in the Hermes Caddyfile**, marked
+  `# meet71: managed by /opt/meet71/scripts/deploy.sh`. Its deploy appends the
+  block once (backup, in-place append, `caddy validate`, restore on failure)
+  and never edits the file again. Keep the block when tidying the file.
+- **It owns host ports `7881/tcp` and `7882/udp`** (LiveKit WebRTC media).
+- **No database.** It does not touch Postgres.
+
+Its own deploy (push to `main` in its repo, or
+`cd /opt/meet71 && bash scripts/deploy.sh`) builds and restarts only the
+`meet71` compose project.
+
 ---
 
 ## Pre-Deployment Checklist
