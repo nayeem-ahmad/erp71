@@ -686,8 +686,6 @@ Asked for as: compactness option (Standard/Compact/Cozy, one line per row in Com
 
 ## IMPORTANT — First month after launch
 
-- [ ] **KH Tradind expense reparent runs on the next release that includes heads** — added 2026-10-28. Mapping confirmed: person-named categories → Personal Expenses; Trust Care Company, Vat Return and Family Cost → Other Expenses. `sync:expense-reparent` does that after `db push` (tenant `5e7c7f4a-3d21-4c6d-bf4b-f909e57b54f7` only). Salary, Transport, Staff Conveyances, Shop Accessories and the bill categories stay. Production had no `ExpenseHead` table when this was written, so the rows are unchanged until that release. Posted vouchers stay as written.
-
 - [ ] **Roll the Sales list UI out to the other lists** — added 2026-10-26. `filterLayout="row"`, `stats`, the `multi-select`/`number` filter types and date `operators` are opt-in. Expenses list done 2026-10-28 (it already walks every page of the date window, so the chips and the strip narrow those rows in the browser). Next candidates: Purchases, Sales returns, Customer payments, Quotations, Sales orders. Each of those needs its server list to accept multi-value and amount params (see `SaleListFilters` / `number-condition.util.ts`) and a summary endpoint for its strip.
 - [ ] **Sales list filters left out of the pilot** — added 2026-10-26. (1) Voucher (posted / not posted / failed): posting status lives in `posting_events` with no relation from `Sale`, so it needs an id subquery. (2) Items count: Prisma cannot filter on a relation count without raw SQL. (3) Due as an amount range (`total_amount - amount_paid`): arithmetic on two columns needs raw SQL; Payment status (paid / part paid / unpaid) stands in for it.
 - [ ] **List UI pilot polish** — added 2026-10-26. (1) The stats strip's hidden state is per browser (like column widths), not in the synced preferences. (2) The resize grip is pointer-only, as before; a keyboard way to resize is still missing. (3) `GET /sales/summary` runs four queries per filter change; check its timing on the largest imported tenant.
@@ -2120,6 +2118,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 
 ## COMPLETED
+
+- [x] **KH Tradind expense reparent shipped with expense heads** — done 2026-10-28. Release PR #907 (`aebd5bf06`). Person-named categories are heads under Personal Expenses; Trust Care Company, Vat Return and Family Cost are heads under Other Expenses. Salary, Transport, Staff Conveyances, Shop Accessories and the bill categories stay. `sync:expense-reparent` ran in db-prepare on that deploy (tenant `5e7c7f4a-3d21-4c6d-bf4b-f909e57b54f7` only). Posted vouchers were not rewritten. The rows were not opened in the app after deploy.
 
 - [x] **Expenses list takes the Sales list UI** — done 2026-10-28. Filters sit in one row on the table: expense date (operators, still opens on this month), category, head, payment method and amount; Created is behind More. A strip above the rows shows the count, the total, the average, cash and other methods. The list already loads every page of the date window, so those chips and the strip narrow the same rows. Each row now includes its expense head. Strings in all nine locales.
 
