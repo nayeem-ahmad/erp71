@@ -36,7 +36,7 @@ export class OvertimeService {
      * minutes has approved 90 minutes, and a later correction is a decision for
      * a human, not a sweep.
      */
-    async generateForMonth(tenantId: string, year: number, month: number) {
+    async generateForMonth(tenantId: string, year: number, month: number, storeId?: string) {
         const { start, end } = this.monthRange(year, month);
 
         const records = await this.db.attendanceRecord.findMany({
@@ -44,6 +44,7 @@ export class OvertimeService {
                 tenant_id: tenantId,
                 date: { gte: start, lte: end },
                 overtime_minutes: { gt: 0 },
+                ...(storeId ? { employee: { store_id: storeId } } : {}),
             },
             select: { employee_id: true, date: true, overtime_minutes: true },
         });
@@ -77,8 +78,9 @@ export class OvertimeService {
         return { created: fresh.length, skipped: records.length - fresh.length };
     }
 
-    async list(tenantId: string, opts: { year?: number; month?: number; status?: string; employeeId?: string } = {}) {
+    async list(tenantId: string, opts: { year?: number; month?: number; status?: string; employeeId?: string; storeId?: string } = {}) {
         const where: any = { tenant_id: tenantId };
+        if (opts.storeId) where.employee = { store_id: opts.storeId };
         if (opts.status) where.status = opts.status;
         if (opts.employeeId) where.employee_id = opts.employeeId;
         if (opts.year && opts.month) {
@@ -106,8 +108,15 @@ export class OvertimeService {
         id: string,
         reviewerUserId: string,
         dto: { status: 'APPROVED' | 'REJECTED'; minutes?: number; note?: string },
+        storeId?: string,
     ) {
-        const record = await this.db.overtimeRecord.findFirst({ where: { id, tenant_id: tenantId } });
+        const record = await this.db.overtimeRecord.findFirst({
+            where: {
+                id,
+                tenant_id: tenantId,
+                ...(storeId ? { employee: { store_id: storeId } } : {}),
+            },
+        });
         if (!record) throw new NotFoundException('Overtime record not found.');
         if (record.status !== 'PENDING') {
             throw new BadRequestException('Only pending overtime can be reviewed.');
@@ -170,12 +179,17 @@ export class OvertimeService {
      * frozen per employee, and one settled leaver must not stop the rest of the
      * payroll being prepared.
      */
-    async buildSnapshots(tenantId: string, year: number, month: number) {
+    async buildSnapshots(tenantId: string, year: number, month: number, storeId?: string) {
         const { start, end } = this.monthRange(year, month);
 
         const [employees, frozen, holidayKeys] = await Promise.all([
             this.db.employee.findMany({
-                where: { tenant_id: tenantId, status: 'ACTIVE', deleted_at: null },
+                where: {
+                    tenant_id: tenantId,
+                    status: 'ACTIVE',
+                    deleted_at: null,
+                    ...(storeId ? { store_id: storeId } : {}),
+                },
                 select: { id: true },
             }),
             this.db.attendanceMonthSnapshot.findMany({
@@ -269,9 +283,14 @@ export class OvertimeService {
         return { built, skippedFrozen: frozenIds.size };
     }
 
-    async listSnapshots(tenantId: string, year: number, month: number) {
+    async listSnapshots(tenantId: string, year: number, month: number, storeId?: string) {
         return this.db.attendanceMonthSnapshot.findMany({
-            where: { tenant_id: tenantId, year, month },
+            where: {
+                tenant_id: tenantId,
+                year,
+                month,
+                ...(storeId ? { employee: { store_id: storeId } } : {}),
+            },
             include: { employee: { select: { id: true, name: true, employee_code: true } } },
             orderBy: { employee: { name: 'asc' } },
         });

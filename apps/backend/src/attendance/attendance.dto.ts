@@ -1,5 +1,6 @@
 import { IsString, IsDateString, IsOptional, IsEnum, IsNumber, IsPositive, IsUUID, IsBoolean, IsInt, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 
 export enum AttendanceStatusDto {
     PRESENT = 'PRESENT',
@@ -89,6 +90,10 @@ export class PunchQueryDto {
     employeeId?: string;
 
     @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
+    @IsOptional()
     @IsDateString()
     startDate?: string;
 
@@ -150,6 +155,10 @@ export class OvertimeQueryDto {
     @IsOptional()
     @IsUUID()
     employeeId?: string;
+
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
 }
 
 export class ReviewOvertimeDto {

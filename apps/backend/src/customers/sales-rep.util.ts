@@ -18,9 +18,13 @@ const CURRENT_EMPLOYEE = {
  * Its own list rather than `/employees`, which sits behind HR permission
  * because it carries pay; the people picking a customer's rep are sales staff.
  */
-export function listSalesReps(db: Client, tenantId: string) {
+export function listSalesReps(db: Client, tenantId: string, storeId?: string) {
     return db.employee.findMany({
-        where: { tenant_id: tenantId, ...CURRENT_EMPLOYEE },
+        where: {
+            tenant_id: tenantId,
+            ...CURRENT_EMPLOYEE,
+            ...(storeId ? { store_id: storeId } : {}),
+        },
         select: SALES_REP_SELECT,
         orderBy: { name: 'asc' },
     });
