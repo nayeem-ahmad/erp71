@@ -8,7 +8,8 @@ import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
-import { PayrollRunsService } from './payroll-runs.service';
+import { BranchScopeService } from '../database/branch-scope.service';
+import { PayrollRunsService, type PayrollBranchAccess } from './payroll-runs.service';
 import { PayrollDisbursementService } from './payroll-disbursement.service';
 import {
     CreatePayrollAdjustmentDto, CreatePayrollRunDto, DisbursePayrollDto,
@@ -27,11 +28,24 @@ export class PayrollRunsController {
     constructor(
         private readonly service: PayrollRunsService,
         private readonly disbursement: PayrollDisbursementService,
+        private readonly branchScope: BranchScopeService,
     ) {}
 
+    /** Header branch for a member; company view for someone who can see every branch. */
+    private async access(tenant: TenantContext, permissions: StorePermission[]): Promise<PayrollBranchAccess> {
+        const [storeId, consolidated] = await Promise.all([
+            this.branchScope.resolveStoreId(tenant, undefined, { permissions }),
+            this.branchScope.canSeeAllBranches(tenant),
+        ]);
+        return { consolidated, storeId };
+    }
+
     @Get()
-    list(@Tenant() tenant: TenantContext, @Query() query: PayrollRunQueryDto) {
-        return this.service.list(tenant.tenantId, query);
+    async list(@Tenant() tenant: TenantContext, @Query() query: PayrollRunQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_PAYROLL],
+        });
+        return this.service.list(tenant.tenantId, { ...query, storeId });
     }
 
     @Get('adjustments')
@@ -54,62 +68,78 @@ export class PayrollRunsController {
 
     @Post()
     @RequireStorePermission(StorePermission.MANAGE_HR)
-    createDraft(@Tenant() tenant: TenantContext, @Body() dto: CreatePayrollRunDto) {
-        return this.service.createDraft(tenant.tenantId, dto as any, tenant.userId);
+    async createDraft(@Tenant() tenant: TenantContext, @Body() dto: CreatePayrollRunDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, dto.storeId, {
+            permissions: [StorePermission.MANAGE_HR],
+            allowAll: false,
+        });
+        return this.service.createDraft(
+            tenant.tenantId,
+            { ...dto, storeId: storeId ?? dto.storeId },
+            tenant.userId,
+        );
     }
 
     @Get(':id')
-    get(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.service.get(tenant.tenantId, id);
+    async get(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const access = await this.access(tenant, [StorePermission.VIEW_PAYROLL]);
+        return this.service.get(tenant.tenantId, id, access);
     }
 
     @Get(':id/payslips/:employeeId')
-    getPayslip(
+    async getPayslip(
         @Tenant() tenant: TenantContext,
         @Param('id') id: string,
         @Param('employeeId') employeeId: string,
     ) {
-        return this.service.getPayslip(tenant.tenantId, id, employeeId);
+        const access = await this.access(tenant, [StorePermission.VIEW_PAYROLL]);
+        return this.service.getPayslip(tenant.tenantId, id, employeeId, access);
     }
 
     @Post(':id/recompute')
     @RequireStorePermission(StorePermission.MANAGE_HR)
     @HttpCode(HttpStatus.OK)
-    recompute(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.service.recompute(tenant.tenantId, id);
+    async recompute(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const access = await this.access(tenant, [StorePermission.MANAGE_HR]);
+        return this.service.recompute(tenant.tenantId, id, access);
     }
 
     @Patch(':id/approve')
     @RequireStorePermission(StorePermission.MANAGE_HR)
-    approve(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.service.approve(tenant.tenantId, id, tenant.userId);
+    async approve(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const access = await this.access(tenant, [StorePermission.MANAGE_HR]);
+        return this.service.approve(tenant.tenantId, id, tenant.userId, access);
     }
 
     @Patch(':id/reopen')
     @RequireStorePermission(StorePermission.MANAGE_HR)
-    reopen(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.service.reopen(tenant.tenantId, id);
+    async reopen(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const access = await this.access(tenant, [StorePermission.MANAGE_HR]);
+        return this.service.reopen(tenant.tenantId, id, access);
     }
 
     @Get(':id/disbursement-file')
-    disbursementFile(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.disbursement.buildDisbursementFile(tenant.tenantId, id);
+    async disbursementFile(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const access = await this.access(tenant, [StorePermission.VIEW_PAYROLL]);
+        return this.disbursement.buildDisbursementFile(tenant.tenantId, id, access);
     }
 
     @Post(':id/disburse')
     @RequireStorePermission(StorePermission.MANAGE_HR)
     @HttpCode(HttpStatus.OK)
-    disburse(
+    async disburse(
         @Tenant() tenant: TenantContext,
         @Param('id') id: string,
         @Body() dto: DisbursePayrollDto,
     ) {
-        return this.disbursement.disburse(tenant.tenantId, id, tenant.userId, dto);
+        const access = await this.access(tenant, [StorePermission.MANAGE_HR]);
+        return this.disbursement.disburse(tenant.tenantId, id, tenant.userId, dto, access);
     }
 
     @Patch(':id/cancel')
     @RequireStorePermission(StorePermission.MANAGE_HR)
-    cancel(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.service.cancel(tenant.tenantId, id);
+    async cancel(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const access = await this.access(tenant, [StorePermission.MANAGE_HR]);
+        return this.service.cancel(tenant.tenantId, id, access);
     }
 }

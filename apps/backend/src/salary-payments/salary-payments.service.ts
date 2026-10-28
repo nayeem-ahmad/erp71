@@ -146,7 +146,12 @@ export class SalaryPaymentsService {
         const periodDate = new Date(Date.UTC(dto.year, dto.month, 0));
 
         const employees = await this.db.employee.findMany({
-            where: { tenant_id: tenantId, status: 'ACTIVE', deleted_at: null },
+            where: {
+                tenant_id: tenantId,
+                status: 'ACTIVE',
+                deleted_at: null,
+                ...(dto.storeId ? { store_id: dto.storeId } : {}),
+            },
         });
 
         return this.db.$transaction(async (tx) => {

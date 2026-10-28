@@ -252,6 +252,20 @@ describe('SalaryPaymentsService', () => {
             expect(result.processed).toBe(1);
         });
 
+        it('selects only the named branch', async () => {
+            db.employee.findMany.mockResolvedValue([alice]);
+            db.salaryAccrual.findUnique.mockResolvedValue(null);
+            db.salaryAccrual.create.mockResolvedValue({ id: 'acc-1' });
+
+            await service.runMonthlyAccrual('t1', 'u1', { year: 2026, month: 6, storeId: 'store-a' });
+
+            expect(db.employee.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { tenant_id: 't1', status: 'ACTIVE', deleted_at: null, store_id: 'store-a' },
+                }),
+            );
+        });
+
         it('runs the whole period in one transaction and only for ACTIVE, non-deleted employees', async () => {
             db.employee.findMany.mockResolvedValue([alice]);
             db.salaryAccrual.findUnique.mockResolvedValue(null);
