@@ -308,6 +308,11 @@ step sync:expense-categories \
 step sync:expense-reparent \
     npm run sync:expense-reparent --workspace=@erp71/database
 
+# Saved sidebars do not grow new links on their own. Expense Heads is a new
+# leaf under Expenses. Idempotent: a layout that already has it is skipped.
+step sync:nav-expense-heads \
+    npm run sync:nav-layout --workspace=@erp71/database -- --nodes=expenses.heads
+
 # ---- After db push: fill what the schema just gained -----------------------
 
 # db:seed:platform — NOT db:seed. This runs unattended — before every deploy's

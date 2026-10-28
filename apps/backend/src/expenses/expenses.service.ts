@@ -379,19 +379,29 @@ export class ExpensesService {
             }));
 
         const monthMap = new Map<string, number>();
+        const dayMap = new Map<string, number>();
         for (const entry of entries) {
-            const month = entry.expense_date.toISOString().slice(0, 7);
-            monthMap.set(month, (monthMap.get(month) ?? 0) + Number(entry.amount));
+            const amount = Number(entry.amount);
+            const iso = entry.expense_date.toISOString();
+            const month = iso.slice(0, 7);
+            const day = iso.slice(0, 10);
+            monthMap.set(month, (monthMap.get(month) ?? 0) + amount);
+            dayMap.set(day, (dayMap.get(day) ?? 0) + amount);
         }
 
         const monthlyTrend = Array.from(monthMap.entries())
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([month, amount]) => ({ month, amount }));
 
+        const dailyTrend = Array.from(dayMap.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([date, amount]) => ({ date, amount }));
+
         return {
             total,
             byCategory,
             monthlyTrend,
+            dailyTrend,
             expenseToRevenueRatio: revenue > 0 ? total / revenue : 0,
         };
     }

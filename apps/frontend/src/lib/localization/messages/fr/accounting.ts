@@ -148,6 +148,7 @@ export const accountingMessages = {
             financialRatios: { title: "Ratios financiers", description: "Ratio de liquidité, marges, DSO, DPO — les indicateurs clés en un coup d'œil." },
             expenses: { title: "Dépenses", description: "Enregistrez et suivez les dépenses quotidiennes par catégorie et mode de paiement." },
             expenseCategories: { title: "Catégories de dépenses", description: "Classez les dépenses par catégorie pour le reporting et le suivi budgétaire." },
+            expenseHeads: { title: "Postes de dépense", description: "Ajoutez et modifiez les postes de chaque catégorie. Une dépense est enregistrée sur un poste." },
             expenseReports: { title: "Rapports de dépenses", description: "Ventilation des dépenses, tendances mensuelles et ratio dépenses/chiffre d'affaires." },
             loans: { title: "Emprunts et prêts", description: "Suivez l'argent emprunté ou prêté avec échéanciers et soldes restants." },
             investors: { title: "Investisseurs", description: "Capital des investisseurs et part de bénéfice mensuelle convenue avec chaque associé." },

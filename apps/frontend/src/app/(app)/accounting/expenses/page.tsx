@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Banknote, BarChart3, Calculator, CreditCard, Plus, Receipt, Settings2, Trash2, Wallet } from 'lucide-react';
+import { Banknote, BarChart3, Calculator, CreditCard, Plus, Receipt, Settings2, Tags, Trash2, Wallet } from 'lucide-react';
 import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
 import { applyCreatedRangeQuery, createdRangeFromPreset, type CreatedRange } from '@/lib/created-range';
 import type { NumberCondition } from '@/lib/number-condition';
@@ -382,6 +382,10 @@ function ExpensesPageContent() {
                 actions={(
                     <>
                         <BranchFilter scope={branch} />
+                        <Link href="/accounting/expenses/heads" className={compactDensity.btnSecondary}>
+                            <Tags className="w-3.5 h-3.5" />
+                            {t.expenses.manageHeads}
+                        </Link>
                         <Link href="/accounting/expenses/categories" className={compactDensity.btnSecondary}>
                             <Settings2 className="w-3.5 h-3.5" />
                             {t.expenses.manageCategories}
