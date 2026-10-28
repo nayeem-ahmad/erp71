@@ -1,7 +1,7 @@
 # Branch tills, filtered books, and branch employees
 
 **Date:** 2026-10-28
-**Status:** Draft pending review
+**Status:** Approved for implementation 2026-10-28
 **Asked as:** accounting and payment methods should be branch-wise, so a user
 of one branch cannot see another branch's accounts or balances, and cannot
 use the other branch's payment methods. Then: employees should be branch-wise
@@ -106,8 +106,10 @@ already limited to Babu Bazar. The tenant has two employees.
 
 ## Non-goals
 
-- A second full chart per branch, or due-to / due-from books. Inter-branch
-  fund transfers stay as they are.
+- A second full chart per branch, or a new due-to / due-from design.
+  Inter-branch transfers stay two vouchers on the shared clearing
+  accounts. The cash leg uses each branch's drawer. A bank or cheque
+  leg uses one shared bank. See §3.
 - Splitting departments, designations, account groups, or posting-rule rows
   per branch.
 - Two employee records for one person, or a phone number reused at two
@@ -275,6 +277,31 @@ Manual vouchers: a drawer line's account branch equals `voucher.store_id`.
 Bank, wallet and other shared lines are allowed on any branch. Saving a
 drawer line without a branch is a `400`.
 
+### Fund transfers
+
+A transfer stays two vouchers. Initiate is stamped with the source
+branch (`attribution` `INTER_BRANCH`, counterparty the destination):
+Dr Due from Branches, Cr the money account. Receive is stamped with the
+destination: Dr the money account, Cr Due to Branches. Due from Branches
+and Due to Branches stay shared. They are not cleared against each other.
+
+- Method `CASH`: initiate credits the source branch's drawer. Receive
+  debits the destination branch's drawer. While the transfer is in
+  transit the source drawer is already down and the destination drawer
+  is not yet up. Company cash is unchanged once both vouchers exist.
+- Method `BANK_TRANSFER` or `CHECK`: both vouchers use one shared bank.
+  Initiate credits the Bank method offered at the source branch. Receive
+  debits that same account, taken from the source voucher, so a later
+  change of payment methods cannot send the money to a different bank.
+  The company bank total is unchanged. Each branch's filtered bank
+  balance moves. The leg never uses a drawer.
+- A cash transfer with no branch is refused. A bank or cheque transfer
+  whose Bank method is missing, or whose account is a drawer, is refused.
+- A branch user sees a transfer when they can see the source or the
+  destination. They see the other branch's name. They do not see the
+  other branch's drawer. Reading a transfer they are not a side of is
+  `404`.
+
 ---
 
 ## 4. Employees, payroll, attendance
@@ -429,6 +456,9 @@ An account or employee outside the caller's branches is `404`.
 - `apps/backend/src/accounting/` — account CRUD, ledger, books, aging,
   export, balance sheet till rows, posting resolution in
   `posting.utils.ts` and the expense and salary callers.
+- `apps/backend/src/fund-transfers/` — cash credits the source drawer
+  and debits the destination drawer; bank and cheque use one shared
+  bank. `get` is limited to a side the caller can see.
 - `apps/backend/src/payment-methods/` — the till / branch invariant.
 - `apps/backend/src/employees/` — branch on create, list, read, update,
   delete. Department and designation messages.
@@ -457,6 +487,9 @@ An account or employee outside the caller's branches is `404`.
 - Posting Press Club cash uses Main Cash (LT). A Babu Bazar Cash method
   on that voucher is refused. Posting Press Club bank uses Premier Bank
   186, the same account Babu Bazar uses.
+- A cash fund transfer from Babu Bazar to Press Club credits Main Cash
+  (CF) and later debits Main Cash (LT). A bank transfer credits and
+  debits Premier Bank 186 on both vouchers and does not touch a drawer.
 - The sync dry-run fixture covers: a null-branch cash voucher repaired
   from a customer payment, a tenant aborted when one drawer voucher has
   no source and no party, Press Club lines moved off CF onto LT, Babu
