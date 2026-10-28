@@ -12,6 +12,7 @@ import {
 import { runImport, ImportResult } from '../common/import.util';
 import { availableAt, offeredAt } from './payment-method-branches';
 import { readLayoutEntry, resolvePaymentLayout, setLayoutEntry } from './payment-layout';
+import { isCashDrawer } from '../accounting/cash-drawer';
 
 /** Loaded with every method so responses can say which branches it is limited to. */
 const WITH_STORES = { stores: { select: { store_id: true } } } as const;
@@ -37,6 +38,7 @@ export class PaymentMethodsService {
     }
 
     // Validate account exists if provided
+    let linkedAccount: { id: string; name: string; category: string; store_id: string | null; tenant_id: string } | null = null;
     if (dto.account_id) {
       const account = await this.db.account.findUnique({
         where: { id: dto.account_id },
@@ -45,10 +47,12 @@ export class PaymentMethodsService {
       if (!account || account.tenant_id !== tenantId) {
         throw new BadRequestException('Invalid account ID or account does not belong to this tenant');
       }
+      linkedAccount = account;
     }
 
     const allBranches = dto.all_branches ?? true;
     const storeIds = allBranches ? [] : await this.validatedStoreIds(tenantId, dto.store_ids);
+    await this.assertDrawerOnOwnBranch(tenantId, dto.account_id || null, allBranches, storeIds, linkedAccount);
 
     // The join rows go in with the method: a limited method must never exist
     // for a moment without its branches.
@@ -276,6 +280,7 @@ export class PaymentMethodsService {
     }
 
     // Validate account exists if updating account
+    let linkedAccount: { id: string; name: string; category: string; store_id: string | null; tenant_id: string } | null = null;
     if (dto.account_id) {
       const account = await this.db.account.findUnique({
         where: { id: dto.account_id },
@@ -284,6 +289,7 @@ export class PaymentMethodsService {
       if (!account || account.tenant_id !== tenantId) {
         throw new BadRequestException('Invalid account ID or account does not belong to this tenant');
       }
+      linkedAccount = account;
     }
 
     // `??` here meant an explicit null fell back to the stored account, so
@@ -308,6 +314,7 @@ export class PaymentMethodsService {
         throw new BadRequestException('Pick at least one branch, or offer the payment method at all branches');
       }
     }
+    await this.assertDrawerOnOwnBranch(tenantId, nextAccountId, nextAllBranches, nextStoreIds, linkedAccount);
 
     const updated = await this.db.$transaction(async (tx) => {
       const row = await tx.paymentMethod.update({
@@ -400,6 +407,34 @@ export class PaymentMethodsService {
     });
 
     return paymentMethod ? this.mapToResponse(paymentMethod) : null;
+  }
+
+  /**
+   * A drawer method is only at that drawer's branch. A bank or wallet account
+   * may stay offered everywhere.
+   */
+  private async assertDrawerOnOwnBranch(
+    tenantId: string,
+    accountId: string | null,
+    allBranches: boolean,
+    storeIds: string[],
+    loaded: { id: string; name: string; category: string; store_id: string | null; tenant_id: string } | null,
+  ): Promise<void> {
+    if (!accountId) return;
+    const account = loaded ?? await this.db.account.findUnique({ where: { id: accountId } });
+    if (!account || account.tenant_id !== tenantId) return;
+    const wallets = await this.db.paymentMethod.findMany({
+      where: { tenant_id: tenantId, type: { equals: 'Mobile Wallet', mode: 'insensitive' } },
+      select: { account_id: true },
+    });
+    const walletIds = new Set(
+      wallets.map((row) => row.account_id).filter((id): id is string => Boolean(id)),
+    );
+    if (!isCashDrawer(account, walletIds)) return;
+    const ownBranch = account.store_id;
+    if (!ownBranch || allBranches || storeIds.some((id) => id !== ownBranch)) {
+      throw new BadRequestException('A cash drawer can only be used at its own branch.');
+    }
   }
 
   /**
