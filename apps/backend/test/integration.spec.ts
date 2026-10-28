@@ -359,6 +359,8 @@ describe('Integration Tests (e2e)', () => {
                     date: '2026-03-01',
                     description: 'Office expense settlement',
                     referenceNumber: 'CP-REF-1',
+                    // Signup stamps Cash in Hand onto this store, so the drawer line needs the branch.
+                    storeId,
                     details: [
                         { accountId: cashAccount?.id, debitAmount: 0, creditAmount: 125 },
                         { accountId: expenseAccount?.id, debitAmount: 125, creditAmount: 0 },
@@ -452,6 +454,7 @@ describe('Integration Tests (e2e)', () => {
                     date: '2026-03-05',
                     description: 'Customer collection',
                     referenceNumber: 'CR-REF-1',
+                    storeId,
                     details: [
                         { accountId: cashAccountId, debitAmount: 300, creditAmount: 0 },
                         { accountId: revenueAccount?.id, debitAmount: 0, creditAmount: 300 },
