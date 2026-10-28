@@ -15,6 +15,7 @@ import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 import { ImportRowsDto } from '../common/import.dto';
 
 /**
@@ -33,7 +34,10 @@ import { ImportRowsDto } from '../common/import.dto';
 @RequireStorePermission(StorePermission.VIEW_HR)
 @UseInterceptors(TenantInterceptor)
 export class EmployeesController {
-    constructor(private readonly employeesService: EmployeesService) {}
+    constructor(
+        private readonly employeesService: EmployeesService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     // ── Departments ───────────────────────────────────────────────────────────
 
@@ -91,25 +95,34 @@ export class EmployeesController {
 
     @Post()
     @RequireStorePermission(StorePermission.MANAGE_HR)
-    create(@Tenant() tenant: TenantContext, @Body() dto: CreateEmployeeDto) {
-        return this.employeesService.create(tenant.tenantId, dto, tenant);
+    async create(@Tenant() tenant: TenantContext, @Body() dto: CreateEmployeeDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, dto.storeId, {
+            permissions: [StorePermission.MANAGE_HR],
+            allowAll: false,
+        });
+        return this.employeesService.create(tenant.tenantId, { ...dto, storeId: storeId ?? dto.storeId }, tenant);
     }
 
     @Get()
-    findAll(
+    async findAll(
         @Tenant() tenant: TenantContext,
         @Query('page') page?: string,
         @Query('limit') limit?: string,
         @Query('search') search?: string,
         @Query('status') status?: string,
         @Query('departmentId') departmentId?: string,
+        @Query('storeId') requestedStoreId?: string,
     ) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, requestedStoreId, {
+            permissions: [StorePermission.VIEW_HR],
+        });
         return this.employeesService.findAll(tenant.tenantId, {
             page: page ? parseInt(page, 10) : undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
             search,
             status,
             departmentId,
+            storeId,
         }, tenant);
     }
 
@@ -120,33 +133,54 @@ export class EmployeesController {
     }
 
     @Get(':id')
-    findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.employeesService.findOne(tenant.tenantId, id, tenant);
+    async findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
+            permissions: [StorePermission.VIEW_HR],
+        });
+        return this.employeesService.findOne(tenant.tenantId, id, tenant, storeId);
     }
 
     @Patch(':id')
     @RequireStorePermission(StorePermission.MANAGE_HR)
-    update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateEmployeeDto) {
-        return this.employeesService.update(tenant.tenantId, id, dto, tenant);
+    async update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateEmployeeDto) {
+        if (dto.storeId) {
+            await this.branchScope.resolveStoreId(tenant, dto.storeId, {
+                permissions: [StorePermission.MANAGE_HR],
+                allowAll: false,
+            });
+        }
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
+            permissions: [StorePermission.MANAGE_HR],
+        });
+        return this.employeesService.update(tenant.tenantId, id, dto, tenant, storeId);
     }
 
     @Delete(':id')
     @RequireStorePermission(StorePermission.MANAGE_HR)
     @HttpCode(HttpStatus.NO_CONTENT)
-    remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.employeesService.remove(tenant.tenantId, id);
+    async remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
+            permissions: [StorePermission.MANAGE_HR],
+        });
+        return this.employeesService.remove(tenant.tenantId, id, storeId);
     }
 
     @Post(':id/link-user')
     @RequireStorePermission(StorePermission.MANAGE_HR)
-    linkUser(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: LinkUserDto) {
-        return this.employeesService.linkUser(tenant.tenantId, id, dto.user_id);
+    async linkUser(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: LinkUserDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
+            permissions: [StorePermission.MANAGE_HR],
+        });
+        return this.employeesService.linkUser(tenant.tenantId, id, dto.user_id, storeId);
     }
 
     @Delete(':id/link-user')
     @RequireStorePermission(StorePermission.MANAGE_HR)
     @HttpCode(HttpStatus.OK)
-    unlinkUser(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.employeesService.unlinkUser(tenant.tenantId, id);
+    async unlinkUser(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
+            permissions: [StorePermission.MANAGE_HR],
+        });
+        return this.employeesService.unlinkUser(tenant.tenantId, id, storeId);
     }
 }
