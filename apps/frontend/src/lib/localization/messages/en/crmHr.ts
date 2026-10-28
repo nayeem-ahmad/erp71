@@ -1333,6 +1333,8 @@ export const crmHrMessages = {
             "department": "Department",
             "designation": "Designation",
             "basicSalary": "Basic Salary",
+            "branch": "Branch",
+            "branchRequired": "An employee needs a branch.",
             "status": "Status",
             "nationalId": "National ID",
             "adding": "Adding...",

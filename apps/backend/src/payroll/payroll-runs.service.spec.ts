@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PayrollRunsService } from './payroll-runs.service';
 import { SalaryStructuresService } from './salary-structures.service';
 import { OvertimeService } from '../attendance/overtime.service';
@@ -85,14 +85,14 @@ describe('PayrollRunsService', () => {
                 .mockResolvedValueOnce(null)          // no existing run
                 .mockResolvedValue({ ...RUN, lines: [] });
 
-            await service.createDraft('t1', { year: 2026, month: 8 });
+            await service.createDraft('t1', { year: 2026, month: 8, storeId: 'store-a' });
 
             expect(overtime.freezeMonth).toHaveBeenCalledWith('t1', 2026, 8);
         });
 
         it('refuses a second regular run for the same month', async () => {
             db.payrollRun.findFirst.mockResolvedValue(RUN);
-            await expect(service.createDraft('t1', { year: 2026, month: 8 }))
+            await expect(service.createDraft('t1', { year: 2026, month: 8, storeId: 'store-a' }))
                 .rejects.toThrow(ConflictException);
         });
 
@@ -103,7 +103,7 @@ describe('PayrollRunsService', () => {
                 .mockResolvedValueOnce(null)
                 .mockResolvedValue({ ...RUN, kind: 'BONUS', lines: [] });
 
-            await service.createDraft('t1', { year: 2026, month: 8, kind: 'BONUS' });
+            await service.createDraft('t1', { year: 2026, month: 8, kind: 'BONUS', storeId: 'store-a' });
 
             expect(overtime.freezeMonth).not.toHaveBeenCalled();
         });
@@ -113,7 +113,7 @@ describe('PayrollRunsService', () => {
                 .mockResolvedValueOnce(null)
                 .mockResolvedValue({ ...RUN, lines: [] });
 
-            await service.createDraft('t1', { year: 2026, month: 8 });
+            await service.createDraft('t1', { year: 2026, month: 8, storeId: 'store-a' });
 
             const date = structures.resolveStructure.mock.calls[0][2];
             expect(date.toISOString().slice(0, 10)).toBe('2026-08-31');
@@ -124,7 +124,7 @@ describe('PayrollRunsService', () => {
                 .mockResolvedValueOnce(null)
                 .mockResolvedValue({ ...RUN, lines: [] });
 
-            await service.createDraft('t1', { year: 2026, month: 8 });
+            await service.createDraft('t1', { year: 2026, month: 8, storeId: 'store-a' });
 
             const data = db.payrollLine.create.mock.calls[0][0].data;
             expect(data.employee_id).toBe('emp-1');
@@ -140,7 +140,7 @@ describe('PayrollRunsService', () => {
                 .mockResolvedValueOnce(null)
                 .mockResolvedValue({ ...RUN, lines: [] });
 
-            await service.createDraft('t1', { year: 2026, month: 8 });
+            await service.createDraft('t1', { year: 2026, month: 8, storeId: 'store-a' });
 
             const data = db.payrollLine.create.mock.calls[0][0].data;
             expect(data.scheduled_days).toBe(0);
@@ -152,9 +152,29 @@ describe('PayrollRunsService', () => {
                 .mockResolvedValueOnce(null)
                 .mockResolvedValue({ ...RUN, lines: [] });
 
-            await service.createDraft('t1', { year: 2026, month: 8 });
+            await service.createDraft('t1', { year: 2026, month: 8, storeId: 'store-a' });
 
             expect(db.payrollAdjustment.findMany.mock.calls[0][0].where.applied_run_id).toBeNull();
+        });
+
+        it('computes lines only for the branch the run belongs to', async () => {
+            db.payrollRun.findFirst
+                .mockResolvedValueOnce(null)
+                .mockResolvedValue({ ...RUN, store_id: 'store-a', lines: [] });
+
+            await service.createDraft('t1', { year: 2026, month: 8, storeId: 'store-a' } as any);
+
+            expect(db.employee.findMany.mock.calls[0][0].where.store_id).toBe('store-a');
+        });
+
+        it('does not let a legacy run with no branch block a branch run', async () => {
+            db.payrollRun.findFirst.mockImplementation(async ({ where }: { where: { store_id?: string; id?: string } }) => {
+                if (where.id) return { ...RUN, store_id: 'store-a', lines: [] };
+                if (where.store_id === 'store-a') return null;
+                return { ...RUN, store_id: null };
+            });
+
+            await expect(service.createDraft('t1', { year: 2026, month: 8, storeId: 'store-a' } as any)).resolves.toMatchObject({ id: 'run-1' });
         });
     });
 
@@ -212,6 +232,11 @@ describe('PayrollRunsService', () => {
             expect(db.payrollRun.update.mock.calls[0][0].data.status).toBe('DRAFT');
         });
 
+        it('refuses a legacy run to a caller who cannot see every branch', async () => {
+            runExists({ store_id: null, status: 'APPROVED' });
+            await expect((service.reopen as any)('t1', 'run-1', { consolidated: false })).rejects.toBeInstanceOf(ForbiddenException);
+        });
+
         it('refuses to reopen a paid run', async () => {
             // Money has left the building; a draft cannot describe that.
             runExists({ status: 'PAID' });
@@ -264,6 +289,42 @@ describe('PayrollRunsService', () => {
             db.payrollAdjustment.findFirst.mockResolvedValue({ id: 'adj-1', applied_run_id: null });
             await service.deleteAdjustment('t1', 'adj-1');
             expect(db.payrollAdjustment.delete).toHaveBeenCalled();
+        });
+
+        it('lists adjustments only for the caller’s branch', async () => {
+            db.payrollAdjustment.findMany.mockResolvedValue([]);
+            await service.listAdjustments('t1', 2026, 8, { consolidated: false, storeId: 'store-bb' });
+            expect(db.payrollAdjustment.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: {
+                        tenant_id: 't1',
+                        year: 2026,
+                        month: 8,
+                        employee: { store_id: 'store-bb' },
+                    },
+                }),
+            );
+        });
+
+        it('hides an adjustment for an employee at another branch', async () => {
+            db.employee.findFirst.mockResolvedValue(null);
+            await expect(service.createAdjustment('t1', {
+                employee_id: 'emp-other', year: 2026, month: 8,
+                kind: 'EARNING', name: 'Bonus', amount: 100,
+            }, 'user-1', { consolidated: false, storeId: 'store-bb' })).rejects.toThrow(NotFoundException);
+            expect(db.employee.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ id: 'emp-other', store_id: 'store-bb' }),
+                }),
+            );
+        });
+
+        it('does not delete an adjustment outside the caller’s branch', async () => {
+            db.payrollAdjustment.findFirst.mockResolvedValue(null);
+            await expect(
+                service.deleteAdjustment('t1', 'adj-9', { consolidated: false, storeId: 'store-bb' }),
+            ).rejects.toThrow(NotFoundException);
+            expect(db.payrollAdjustment.delete).not.toHaveBeenCalled();
         });
     });
 

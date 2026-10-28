@@ -13,6 +13,7 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 import {
     CreateSalaryPaymentDto,
     ListSalaryPaymentsQueryDto,
@@ -29,51 +30,63 @@ import { PAYROLL_POST, PAYROLL_READ, PAYROLL_WRITE } from '../auth/permission-se
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class SalaryPaymentsController {
-    constructor(private readonly service: SalaryPaymentsService) {}
+    constructor(
+        private readonly service: SalaryPaymentsService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     @RequireAnyStorePermission(...PAYROLL_READ)
     @Get()
-    list(@Tenant() tenant: TenantContext, @Query() query: ListSalaryPaymentsQueryDto) {
-        return this.service.list(tenant.tenantId, query);
+    async list(@Tenant() tenant: TenantContext, @Query() query: ListSalaryPaymentsQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, { permissions: PAYROLL_READ });
+        return this.service.list(tenant.tenantId, { ...query, storeId });
     }
 
     @RequireAnyStorePermission(...PAYROLL_READ)
     @Get('summary')
-    getSummary(@Tenant() tenant: TenantContext, @Query() query: SalaryPaymentSummaryQueryDto) {
-        return this.service.getSummary(tenant.tenantId, query);
+    async getSummary(@Tenant() tenant: TenantContext, @Query() query: SalaryPaymentSummaryQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, { permissions: PAYROLL_READ });
+        return this.service.getSummary(tenant.tenantId, { ...query, storeId });
     }
 
     @RequireAnyStorePermission(...PAYROLL_READ)
     @Get(':id')
-    findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.service.findOne(tenant.tenantId, id);
+    async findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, { permissions: PAYROLL_READ });
+        return this.service.findOne(tenant.tenantId, id, storeId);
     }
 
     @RequireAnyStorePermission(...PAYROLL_WRITE)
     @Post()
-    create(@Tenant() tenant: TenantContext, @Body() dto: CreateSalaryPaymentDto) {
-        return this.service.create(tenant.tenantId, tenant.userId, dto);
+    async create(@Tenant() tenant: TenantContext, @Body() dto: CreateSalaryPaymentDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, { permissions: PAYROLL_WRITE });
+        return this.service.create(tenant.tenantId, tenant.userId, dto, storeId);
     }
 
     @RequireAnyStorePermission(...PAYROLL_POST)
     @Post('run-accrual')
-    runAccrual(@Tenant() tenant: TenantContext, @Body() dto: RunSalaryAccrualDto) {
-        return this.service.runMonthlyAccrual(tenant.tenantId, tenant.userId, dto);
+    async runAccrual(@Tenant() tenant: TenantContext, @Body() dto: RunSalaryAccrualDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, dto.storeId, {
+            permissions: PAYROLL_POST,
+        });
+        return this.service.runMonthlyAccrual(tenant.tenantId, tenant.userId, { ...dto, storeId });
     }
 
     @RequireAnyStorePermission(...PAYROLL_WRITE)
     @Patch(':id')
-    update(
+    async update(
         @Tenant() tenant: TenantContext,
         @Param('id') id: string,
         @Body() dto: UpdateSalaryPaymentDto,
     ) {
-        return this.service.update(tenant.tenantId, id, dto);
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, { permissions: PAYROLL_WRITE });
+        return this.service.update(tenant.tenantId, id, dto, storeId);
     }
 
     @RequireAnyStorePermission(...PAYROLL_WRITE)
     @Delete(':id')
-    remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.service.remove(tenant.tenantId, id);
+    async remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, { permissions: PAYROLL_WRITE });
+        return this.service.remove(tenant.tenantId, id, storeId);
     }
 }

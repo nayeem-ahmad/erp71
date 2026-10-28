@@ -646,6 +646,7 @@ export class RecruitmentService {
                     ? { designation_id: dto.designation_id ?? application.jobPost.designation_id! }
                     : {}),
                 ...(dto.basic_salary != null ? { basic_salary: dto.basic_salary } : {}),
+                storeId: viewer?.storeId,
             } as any,
             viewer,
         );

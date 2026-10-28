@@ -1329,6 +1329,8 @@ export const crmHrMessages = {
             "department": "Abteilung",
             "designation": "Position",
             "basicSalary": "Grundgehalt",
+            "branch": "Filiale",
+            "branchRequired": "Ein Mitarbeiter braucht eine Filiale.",
             "status": "Status",
             "nationalId": "Personalausweisnummer",
             "adding": "Wird hinzugefügt...",

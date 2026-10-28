@@ -110,6 +110,8 @@ export class PaymentMethodAccountDto {
   code: string | null;
   type: string;
   category: string;
+  /** Set when this account is one branch's cash drawer. Null when it is shared. */
+  store_id: string | null;
 }
 
 /** Which branch and screen a layout belongs to; both required on every layout route. */

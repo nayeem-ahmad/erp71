@@ -135,11 +135,15 @@ export class AccountingController {
         @Query() query: ExportLedgerQueryDto,
         @Res() res: Response,
     ) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
         const content = await this.accountingService.exportLedger(
             tenant.tenantId,
             query.format,
             query.from,
             query.to,
+            storeId,
         );
 
         const fromLabel = query.from ?? 'all';
@@ -230,8 +234,11 @@ export class AccountingController {
     }
 
     @Get('accounts')
-    findAccounts(@Tenant() tenant: TenantContext, @Query() query: ListAccountsQueryDto) {
-        return this.accountingService.findAccounts(tenant.tenantId, query);
+    async findAccounts(@Tenant() tenant: TenantContext, @Query() query: ListAccountsQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.findAccounts(tenant.tenantId, query, storeId);
     }
 
     @Get('accounts/next-code')
@@ -283,8 +290,11 @@ export class AccountingController {
     }
 
     @Get('vouchers/:id')
-    findVoucherById(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.accountingService.findVoucherById(tenant.tenantId, id);
+    async findVoucherById(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.findVoucherById(tenant.tenantId, id, storeId);
     }
 
     @Post('vouchers')
@@ -400,12 +410,15 @@ export class AccountingController {
     }
 
     @Get('reports/ledger/:accountId')
-    findLedger(
+    async findLedger(
         @Tenant() tenant: TenantContext,
         @Param('accountId') accountId: string,
         @Query() query: ListLedgerQueryDto,
     ) {
-        return this.accountingService.findLedger(tenant.tenantId, accountId, query);
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.findLedger(tenant.tenantId, accountId, query, storeId);
     }
 
     @Get('reports/profit-loss')
@@ -421,13 +434,19 @@ export class AccountingController {
     }
 
     @Get('reports/cashbook')
-    getCashbook(@Tenant() tenant: TenantContext, @Query() query: CashbookQueryDto) {
-        return this.accountingService.getCashbook(tenant.tenantId, query);
+    async getCashbook(@Tenant() tenant: TenantContext, @Query() query: CashbookQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.getCashbook(tenant.tenantId, query, storeId);
     }
 
     @Get('reports/bankbook')
-    getBankbook(@Tenant() tenant: TenantContext, @Query() query: BankbookQueryDto) {
-        return this.accountingService.getBankbook(tenant.tenantId, query);
+    async getBankbook(@Tenant() tenant: TenantContext, @Query() query: BankbookQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.getBankbook(tenant.tenantId, query, storeId);
     }
 
     @Get('reports/trial-balance')
@@ -437,36 +456,54 @@ export class AccountingController {
     }
 
     @Get('reports/ar-aging')
-    getArAging(@Tenant() tenant: TenantContext, @Query() query: ArAgingQueryDto) {
-        return this.accountingService.getArAging(tenant.tenantId, query);
+    async getArAging(@Tenant() tenant: TenantContext, @Query() query: ArAgingQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.getArAging(tenant.tenantId, query, storeId);
     }
 
     @Get('reports/ap-aging')
-    getApAging(@Tenant() tenant: TenantContext, @Query() query: ApAgingQueryDto) {
-        return this.accountingService.getApAging(tenant.tenantId, query);
+    async getApAging(@Tenant() tenant: TenantContext, @Query() query: ApAgingQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.getApAging(tenant.tenantId, query, storeId);
     }
 
     @Get('reports/comparative-pl')
     @RequiresAdditionalFeature('premiumAccountingAdvanced')
-    getComparativePL(@Tenant() tenant: TenantContext, @Query() query: ComparativePLQueryDto) {
-        return this.accountingService.getComparativePL(tenant.tenantId, query);
+    async getComparativePL(@Tenant() tenant: TenantContext, @Query() query: ComparativePLQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.getComparativePL(tenant.tenantId, query, storeId);
     }
 
     @Get('reports/vat-tax')
-    getVatTaxReport(@Tenant() tenant: TenantContext, @Query() query: VatTaxReportQueryDto) {
-        return this.accountingService.getVatTaxReport(tenant.tenantId, query);
+    async getVatTaxReport(@Tenant() tenant: TenantContext, @Query() query: VatTaxReportQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.getVatTaxReport(tenant.tenantId, query, storeId);
     }
 
     @Get('reports/financial-ratios')
     @RequiresAdditionalFeature('premiumAccountingAdvanced')
-    getFinancialRatios(@Tenant() tenant: TenantContext, @Query() query: FinancialRatiosQueryDto) {
-        return this.accountingService.getFinancialRatios(tenant.tenantId, query);
+    async getFinancialRatios(@Tenant() tenant: TenantContext, @Query() query: FinancialRatiosQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.getFinancialRatios(tenant.tenantId, query, storeId);
     }
 
     @Get('reports/cash-flow')
     @RequiresAdditionalFeature('premiumAccountingAdvanced')
-    getCashFlow(@Tenant() tenant: TenantContext, @Query() query: CashFlowQueryDto) {
-        return this.accountingService.getCashFlow(tenant.tenantId, query);
+    async getCashFlow(@Tenant() tenant: TenantContext, @Query() query: CashFlowQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.getCashFlow(tenant.tenantId, query, storeId);
     }
 
     // Feature 8: Fiscal Period Locking
@@ -504,8 +541,11 @@ export class AccountingController {
 
     @Get('reports/budget-vs-actual')
     @RequiresAdditionalFeature('premiumAccountingAdvanced')
-    getBudgetVsActual(@Tenant() tenant: TenantContext, @Query() query: BudgetVsActualQueryDto) {
-        return this.accountingService.getBudgetVsActual(tenant.tenantId, query);
+    async getBudgetVsActual(@Tenant() tenant: TenantContext, @Query() query: BudgetVsActualQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.getBudgetVsActual(tenant.tenantId, query, storeId);
     }
 
     // Feature 11: Cost Centers
@@ -521,8 +561,11 @@ export class AccountingController {
     }
 
     @Get('reports/cost-center-pl')
-    getCostCenterPL(@Tenant() tenant: TenantContext, @Query() query: CostCenterPLQueryDto) {
-        return this.accountingService.getCostCenterPL(tenant.tenantId, query);
+    async getCostCenterPL(@Tenant() tenant: TenantContext, @Query() query: CostCenterPLQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.getCostCenterPL(tenant.tenantId, query, storeId);
     }
 
     // Feature 12: Fixed Assets

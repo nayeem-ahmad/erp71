@@ -101,7 +101,7 @@ export const FINANCE_TOOLS: ChatTool[] = [
                     const result: any = await deps.accounting.getCashFlow(ctx.tenantId, {
                         from: args.from,
                         to: args.to,
-                    });
+                    }, storeId);
                     return {
                         ...(note ? { note } : {}),
                         statement: 'cash_flow',
@@ -145,7 +145,7 @@ export const FINANCE_TOOLS: ChatTool[] = [
                         asOfDate: args.asOfDate,
                         from: args.from,
                         to: args.to,
-                    });
+                    }, storeId);
                     return {
                         ...(note ? { note } : {}),
                         statement: 'ratios',

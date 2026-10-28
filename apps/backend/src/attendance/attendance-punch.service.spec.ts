@@ -342,6 +342,18 @@ describe('AttendancePunchService', () => {
             expect(where.date.gte).toEqual(new Date('2026-08-01'));
         });
 
+        it('lists a punch by the employee home branch, not the branch where they clocked in', async () => {
+            await service.list('t1', { storeId: 'store-a' } as any);
+            const home = db.attendancePunch.findMany.mock.calls[0][0].where;
+            expect(home.employee).toEqual({ store_id: 'store-a' });
+            expect(home.store_id).toBeUndefined();
+
+            await service.list('t1', { storeId: 'store-b' } as any);
+            const other = db.attendancePunch.findMany.mock.calls[1][0].where;
+            expect(other.employee).toEqual({ store_id: 'store-b' });
+            expect(other.store_id).toBeUndefined();
+        });
+
         it('caps the page size', async () => {
             await service.list('t1', { limit: 5000 } as any);
             expect(db.attendancePunch.findMany.mock.calls[0][0].take).toBe(200);

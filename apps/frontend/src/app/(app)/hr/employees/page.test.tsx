@@ -2,6 +2,9 @@
 
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import EmployeesPage from './page';
+import { mockBranchScope } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -86,6 +89,7 @@ function rowOf(name: string) {
 
 describe('EmployeesPage', () => {
     beforeEach(() => {
+        mockBranchScope();
         const { api } = require('@/lib/api');
         api.getEmployees.mockResolvedValue(mockEmployees);
         api.createEmployee.mockResolvedValue({});
@@ -296,6 +300,7 @@ describe('EmployeesPage', () => {
             department_id: 'dept-1',
             designation_id: 'des-1',
             basic_salary: 25000,
+            storeId: 'store-1',
         });
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
         expect(toast.success).toHaveBeenCalledWith('Employee updated successfully.');
@@ -351,7 +356,21 @@ describe('EmployeesPage', () => {
         fireEvent.change(within(dialog).getByPlaceholderText('+8801234567890'), { target: { value: '01800000000' } });
         fireEvent.click(within(dialog).getByRole('button', { name: 'Add Employee' }));
 
-        await waitFor(() => expect(api.createEmployee).toHaveBeenCalledWith({ name: 'Karim', phone: '01800000000', status: 'ACTIVE' }));
+        await waitFor(() => expect(api.createEmployee).toHaveBeenCalledWith({
+            name: 'Karim',
+            phone: '01800000000',
+            status: 'ACTIVE',
+            storeId: 'store-1',
+        }));
         await waitFor(() => expect(api.getEmployees).toHaveBeenCalledTimes(2));
+    });
+
+    it('requires a branch on a new employee', async () => {
+        render(<EmployeesPage />);
+        await screen.findByText('Alice Rahman');
+
+        fireEvent.click(screen.getByText('New Employee'));
+        const dialog = await screen.findByRole('dialog');
+        expect(within(dialog).getByLabelText('Branch')).toBeRequired();
     });
 });

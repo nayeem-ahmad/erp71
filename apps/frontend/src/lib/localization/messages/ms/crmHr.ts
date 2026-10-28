@@ -1329,6 +1329,8 @@ export const crmHrMessages = {
             department: "Jabatan",
             designation: "Jawatan",
             basicSalary: "Gaji Asas",
+            branch: "Cawangan",
+            branchRequired: "Seorang pekerja memerlukan cawangan.",
             status: "Status",
             nationalId: "Kad Pengenalan",
             adding: "Menambah...",

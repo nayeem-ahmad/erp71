@@ -10,6 +10,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { AuthCacheService } from '../database/auth-cache.service';
 import { DatabaseService } from '../database/database.service';
+import { BranchScopeService } from '../database/branch-scope.service';
 
 /**
  * Pins Phase 0 of the HRIS plan: this controller guarded with `JwtAuthGuard`
@@ -94,6 +95,14 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
             providers: [
                 { provide: EmployeesService, useValue: employeesService },
                 { provide: DatabaseService, useValue: db },
+                {
+                    provide: BranchScopeService,
+                    useValue: {
+                        resolveStoreId: jest.fn(async (ctx: { storeId?: string; userRole?: string }, requested?: string) =>
+                            requested || (ctx.userRole === 'OWNER' ? undefined : ctx.storeId),
+                        ),
+                    },
+                },
                 // Off, so each case is decided by the grants it mocks.
                 { provide: AuthCacheService, useValue: new AuthCacheService({ ttlMs: 0 }) },
                 Reflector,
@@ -197,6 +206,7 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
                 'tenant-1',
                 'emp-1',
                 expect.objectContaining({ tenantId: 'tenant-1', userId: 'user-1' }),
+                'store-1',
             );
         });
     });

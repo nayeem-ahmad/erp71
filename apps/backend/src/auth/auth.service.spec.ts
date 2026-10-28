@@ -63,6 +63,9 @@ describe('AuthService', () => {
         accountSubgroup: { upsert: jest.fn(), findUnique: jest.fn(), findMany: jest.fn() },
         account: {
             upsert: jest.fn(),
+            // saveSharedAccount updates a row findFirst already returned.
+            update: jest.fn(),
+            create: jest.fn(),
             findUnique: jest.fn(),
             findFirst: jest.fn().mockResolvedValue({ id: 'cash-id', name: 'Cash in Hand' }),
             findMany: jest.fn().mockResolvedValue([
@@ -94,7 +97,7 @@ describe('AuthService', () => {
         leadStatusOption: { createMany: jest.fn() },
         expenseCategory: { findUnique: jest.fn(), create: jest.fn() },
         expenseHead: { create: jest.fn() },
-        store: { create: jest.fn() },
+        store: { create: jest.fn(), findFirst: jest.fn() },
         tenantSubscription: { create: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) },
         userStoreAccess: { create: jest.fn() },
         userStorePermission: { createMany: jest.fn() },
@@ -189,7 +192,11 @@ describe('AuthService', () => {
         db.accountSubgroup.findMany.mockResolvedValue([]);
         db.account.findUnique.mockResolvedValue(null);
         db.account.upsert.mockResolvedValue({ id: 'account-1', name: 'Cash in Hand' });
+        db.account.update.mockResolvedValue({ id: 'account-1', name: 'Cash in Hand' });
+        db.account.create.mockResolvedValue({ id: 'account-1', name: 'Cash in Hand' });
         db.account.findFirst.mockResolvedValue({ id: 'cash-id', name: 'Cash in Hand' });
+        // No store yet on this mock, so Cash stays a shared link.
+        db.store.findFirst.mockResolvedValue(null);
         db.account.findMany.mockResolvedValue([
             { id: 'cash-id', name: 'Cash in Hand' },
             { id: 'bank-id', name: 'Main Bank Account' },

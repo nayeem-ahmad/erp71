@@ -13,6 +13,7 @@ import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { AuthCacheService } from '../database/auth-cache.service';
 import { DatabaseService } from '../database/database.service';
+import { BranchScopeService } from '../database/branch-scope.service';
 
 describe('AttendanceController — subscription guard', () => {
     let app: INestApplication;
@@ -89,6 +90,7 @@ describe('AttendanceController — subscription guard', () => {
                 { provide: AttendancePunchService, useValue: punchService },
                 { provide: OvertimeService, useValue: overtimeService },
                 { provide: DatabaseService, useValue: db },
+                { provide: BranchScopeService, useValue: { resolveStoreId: jest.fn().mockResolvedValue(undefined) } },
                 { provide: AuthCacheService, useValue: new AuthCacheService({ ttlMs: 0 }) },
                 Reflector,
                 SubscriptionAccessGuard,
@@ -191,7 +193,7 @@ describe('AttendanceController — subscription guard', () => {
             .delete('/attendance/punches/p-1')
             .set('x-tenant-id', 'tenant-1');
 
-        expect(punchService.remove).toHaveBeenCalledWith('tenant-1', 'p-1');
+        expect(punchService.remove).toHaveBeenCalledWith('tenant-1', 'p-1', undefined);
         expect(attendanceService.deleteAttendance).not.toHaveBeenCalled();
     });
 

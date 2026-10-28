@@ -397,7 +397,7 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
         expect(accountingService.findLedger).toHaveBeenCalledWith('tenant-1', 'account-1', {
             from: '2026-03-05',
             to: '2026-03-31',
-        });
+        }, undefined);
     });
 
     it('rejects users without VIEW_LEDGER permission from accounting endpoints', async () => {

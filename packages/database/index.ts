@@ -16,7 +16,7 @@ export { seedDemoAccount, DEMO_ACCOUNT_EMAIL, DEMO_ACCOUNT_PASSWORD } from './pr
 export { seedBusinessTypeTemplate } from './prisma/templates/seed-template.js';
 export { seedDefaultTenantRoles } from './prisma/tenant-role.seed.js';
 export { seedDefaultExpenseCategories, DEFAULT_EXPENSE_CATEGORIES } from './prisma/expense-category.seed.js';
-export { seedDefaultPaymentMethods, linkDefaultPaymentMethodAccounts, DEFAULT_PAYMENT_METHODS } from './prisma/payment-method.seed.js';
+export { seedDefaultPaymentMethods, linkDefaultPaymentMethodAccounts, ensureBranchCashDrawer, DEFAULT_PAYMENT_METHODS } from './prisma/payment-method.seed.js';
 export {
     seedDefaultLeadTaxonomy,
     DEFAULT_LEAD_SOURCES,

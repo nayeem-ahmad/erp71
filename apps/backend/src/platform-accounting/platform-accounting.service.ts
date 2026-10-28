@@ -654,8 +654,8 @@ export class PlatformAccountingService {
     }
 
     private async assertExpenseAccount(tenantId: string, accountName: string): Promise<void> {
-        const account = await this.db.account.findUnique({
-            where: { tenant_id_name: { tenant_id: tenantId, name: accountName } },
+        const account = await this.db.account.findFirst({
+            where: { tenant_id: tenantId, name: accountName, store_id: null },
             select: { type: true },
         });
         if (!account) {

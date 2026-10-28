@@ -1329,6 +1329,8 @@ export const crmHrMessages = {
             department: 'القسم',
             designation: 'المسمى الوظيفي',
             basicSalary: 'الراتب الأساسي',
+            branch: 'الفرع',
+            branchRequired: 'يحتاج الموظف إلى فرع.',
             status: 'الحالة',
             nationalId: 'رقم الهوية الوطنية',
             adding: 'جارٍ الإضافة...',

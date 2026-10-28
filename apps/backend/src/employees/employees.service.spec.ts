@@ -46,6 +46,9 @@ describe('EmployeesService', () => {
       tenantUser: {
         findFirst: jest.fn(),
       },
+      store: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'store-a' }),
+      },
       userStorePermission: {
         findFirst: jest.fn().mockResolvedValue(null),
       },
@@ -159,6 +162,7 @@ describe('EmployeesService', () => {
       phone: '01700000000',
       department_id: null,
       designation_id: null,
+      storeId: 'store-a',
     };
 
     const createdEmployee = {
@@ -785,9 +789,85 @@ describe('EmployeesService', () => {
       db.employee.findFirst.mockResolvedValue(null);
       db.employee.create.mockResolvedValue(row);
 
-      await service.create('t1', { name: 'Bob', phone: '01900000000', basic_salary: 99999 } as any, viewer());
+      await service.create('t1', { name: 'Bob', phone: '01900000000', basic_salary: 99999, storeId: 'store-a' } as any, viewer());
 
       expect(db.employee.create.mock.calls[0][0].data).not.toHaveProperty('basic_salary');
+    });
+  });
+
+  describe('home branch', () => {
+    const employee = {
+      id: 'emp-b',
+      name: 'Karim',
+      phone: '01800000000',
+      employee_code: 'EMP-00002',
+      store_id: 'store-b',
+      nid: null,
+      department: { id: 'dept-1', name: 'Sales' },
+      designation: null,
+      user: null,
+    };
+
+    it('lists store A without store B', async () => {
+      db.employee.findMany.mockResolvedValue([]);
+      db.employee.count.mockResolvedValue(0);
+
+      await service.findAll('t1', { storeId: 'store-a' });
+
+      const where = db.employee.findMany.mock.calls[0][0].where;
+      expect(where.store_id).toBe('store-a');
+      expect(where.store_id).not.toBe('store-b');
+    });
+
+    it('does not return an employee whose home branch is B', async () => {
+      db.employee.findFirst.mockImplementation(async ({ where }: { where: { store_id?: string } }) =>
+        where.store_id === 'store-a' ? null : employee,
+      );
+
+      await expect(service.findOne('t1', 'emp-b', undefined, 'store-a')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('still lists a department whose employees are all at another branch', async () => {
+      db.department.findMany.mockResolvedValue([{ id: 'dept-1', name: 'Sales', tenant_id: 't1' }]);
+
+      await expect(service.listDepartments('t1')).resolves.toEqual([
+        expect.objectContaining({ id: 'dept-1', name: 'Sales' }),
+      ]);
+      expect(db.employee.findMany).not.toHaveBeenCalled();
+    });
+
+    it('refuses to delete a department that is in use, without a name or a count', async () => {
+      db.department.findFirst.mockResolvedValue({ id: 'dept-1', name: 'Sales' });
+      db.employee.count.mockResolvedValue(2);
+
+      const rejected = service.deleteDepartment('t1', 'dept-1');
+      await expect(rejected).rejects.toThrow('This department is still in use.');
+      await rejected.catch((error: Error) => {
+        expect(error.message).not.toMatch(/\d/);
+        expect(error.message).not.toContain('Karim');
+        expect(error.message).not.toContain('Sales');
+      });
+      expect(db.employee.count).toHaveBeenCalledWith({
+        where: { department_id: 'dept-1', deleted_at: null },
+      });
+    });
+
+    it('refuses to delete a designation that is in use, without a name or a count', async () => {
+      db.designation.findFirst.mockResolvedValue({ id: 'des-1', name: 'Cashier' });
+      db.employee.count.mockResolvedValue(1);
+
+      const rejected = service.deleteDesignation('t1', 'des-1');
+      await expect(rejected).rejects.toThrow('This designation is still in use.');
+      await rejected.catch((error: Error) => {
+        expect(error.message).not.toMatch(/\d/);
+        expect(error.message).not.toContain('Cashier');
+      });
+    });
+
+    it('refuses to create an employee with no branch', async () => {
+      await expect(service.create('t1', { name: 'Alice', phone: '01700000000' } as any))
+        .rejects.toThrow('An employee needs a branch.');
+      expect(db.employee.create).not.toHaveBeenCalled();
     });
   });
 });

@@ -272,6 +272,14 @@ step sync:payment-method-account-fk \
 step "prisma db push" \
     env DIRECT_URL="$DATABASE_URL" npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma
 
+# sync:branch-constraints runs AFTER db push. The push drops indexes the schema
+# does not describe, and the one-drawer-per-branch unique, the shared-name
+# unique, and the cash-only check are raw SQL. This puts them back on every
+# boot. It does not stamp drawers, move lines, or place employees. That fold
+# stays a reviewed `sync:branch-books` run and is not hooked in here.
+step sync:branch-constraints \
+    npm run sync:branch-constraints --workspace=@erp71/database
+
 # sync:expense-heads runs AFTER db push. The push adds ExpenseHead and a
 # nullable ExpenseEntry.head_id and copies nothing, so every expense recorded
 # before this release would have no head. This creates one head per category

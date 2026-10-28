@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { AuthCacheService } from '../database/auth-cache.service';
+import { BranchScopeService } from '../database/branch-scope.service';
 import { DatabaseService } from '../database/database.service';
 
 /**
@@ -124,6 +125,14 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
                 { provide: EmployeeLoginService, useValue: loginService },
                 { provide: EmployeesService, useValue: employeesService },
                 { provide: DatabaseService, useValue: db },
+                {
+                    provide: BranchScopeService,
+                    useValue: {
+                        resolveStoreId: jest.fn(async (ctx: { storeId?: string; userRole?: string }, requested?: string) =>
+                            requested || (ctx.userRole === 'OWNER' ? undefined : ctx.storeId),
+                        ),
+                    },
+                },
                 { provide: AuthCacheService, useValue: new AuthCacheService({ ttlMs: 0 }) },
                 Reflector,
                 EmployeeGuard,

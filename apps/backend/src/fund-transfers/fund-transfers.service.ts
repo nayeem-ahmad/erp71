@@ -1,10 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ensureInterBranchAccounts } from '@erp71/database';
 import { DatabaseService } from '../database/database.service';
 import { VoucherAttribution } from '../accounting/accounting.constants';
+import { cashPostErrorMessage, resolveBranchCashAccount } from '../accounting/cash-account';
+import { isCashDrawer } from '../accounting/cash-drawer';
 import { autoPostFromRules } from '../accounting/posting.utils';
+import { availableAt } from '../payment-methods/payment-method-branches';
 import { InitiateFundTransferDto, ListFundTransfersQueryDto } from './fund-transfers.dto';
 import { createdAtRange } from '../common/created-range.util';
+
+const DUE_FROM_BRANCHES_CODE = '110401';
 
 @Injectable()
 export class FundTransfersService {
@@ -21,6 +27,11 @@ export class FundTransfersService {
         return this.db.$transaction(async (tx) => {
             // Ensure the Due from/to Branches accounts exist for the rule to resolve.
             await ensureInterBranchAccounts(tx, tenantId);
+
+            const method = dto.method ?? 'CASH';
+            const moneyAccountId = method === 'CASH'
+                ? await this.cashAccountId(tx, tenantId, dto.sourceStoreId)
+                : await this.bankAccountId(tx, tenantId, dto.sourceStoreId);
 
             const transfer = await tx.fundTransfer.create({
                 data: {
@@ -52,6 +63,7 @@ export class FundTransfersService {
                 storeId: dto.sourceStoreId,
                 attribution: VoucherAttribution.INTER_BRANCH,
                 counterpartyStoreId: dto.destinationStoreId,
+                overrideCreditAccountId: moneyAccountId,
             });
 
             return tx.fundTransfer.update({
@@ -65,10 +77,21 @@ export class FundTransfersService {
         });
     }
 
-    async receive(tenantId: string, userId: string, id: string) {
+    async receive(tenantId: string, userId: string, id: string, visibleStoreIds?: string[]) {
         return this.db.$transaction(async (tx) => {
             const transfer = await tx.fundTransfer.findFirst({
-                where: { id, tenant_id: tenantId },
+                where: {
+                    id,
+                    tenant_id: tenantId,
+                    ...(visibleStoreIds
+                        ? {
+                            OR: [
+                                { source_store_id: { in: visibleStoreIds } },
+                                { destination_store_id: { in: visibleStoreIds } },
+                            ],
+                        }
+                        : {}),
+                },
             });
 
             if (!transfer) {
@@ -89,8 +112,14 @@ export class FundTransfersService {
 
             await ensureInterBranchAccounts(tx, tenantId);
 
+            const method = transfer.method ?? 'CASH';
+            const moneyAccountId = method === 'CASH'
+                ? await this.cashAccountId(tx, tenantId, transfer.destination_store_id)
+                : await this.creditedMoneyAccountId(tx, transfer.source_voucher_id);
+
             // Dr Cash / Cr Due to Branches. legKey 'receive' — the second leg of
-            // this transfer.
+            // this transfer. Cash debits the destination drawer. A bank or cheque
+            // debits the same shared bank the source voucher credited.
             const posting = await autoPostFromRules({
                 tx,
                 tenantId,
@@ -106,6 +135,7 @@ export class FundTransfersService {
                 storeId: transfer.destination_store_id,
                 attribution: VoucherAttribution.INTER_BRANCH,
                 counterpartyStoreId: transfer.source_store_id,
+                overrideDebitAccountId: moneyAccountId,
             });
 
             return tx.fundTransfer.update({
@@ -139,9 +169,20 @@ export class FundTransfersService {
         });
     }
 
-    async get(tenantId: string, id: string) {
+    async get(tenantId: string, id: string, visibleStoreIds?: string[]) {
         const transfer = await this.db.fundTransfer.findFirst({
-            where: { id, tenant_id: tenantId },
+            where: {
+                id,
+                tenant_id: tenantId,
+                ...(visibleStoreIds
+                    ? {
+                        OR: [
+                            { source_store_id: { in: visibleStoreIds } },
+                            { destination_store_id: { in: visibleStoreIds } },
+                        ],
+                    }
+                    : {}),
+            },
             include: this.transferInclude(),
         });
 
@@ -161,6 +202,60 @@ export class FundTransfersService {
             sourceVoucher: { select: { id: true, voucher_number: true, voucher_type: true } },
             destinationVoucher: { select: { id: true, voucher_number: true, voucher_type: true } },
         };
+    }
+
+    private async cashAccountId(tx: Prisma.TransactionClient, tenantId: string, storeId: string): Promise<string> {
+        const resolved = await resolveBranchCashAccount(tx, tenantId, storeId);
+        if ('error' in resolved) {
+            throw new BadRequestException(cashPostErrorMessage(resolved.error));
+        }
+        return resolved.accountId;
+    }
+
+    private async bankAccountId(tx: Prisma.TransactionClient, tenantId: string, storeId: string): Promise<string> {
+        const method = await tx.paymentMethod.findFirst({
+            where: {
+                tenant_id: tenantId,
+                type: { equals: 'Bank', mode: 'insensitive' },
+                ...availableAt([storeId]),
+            },
+            select: {
+                account_id: true,
+                account: { select: { id: true, name: true, category: true } },
+            },
+        });
+        if (!method?.account_id || !method.account) {
+            throw new BadRequestException('No bank account is set up for this branch.');
+        }
+        const wallets = await tx.paymentMethod.findMany({
+            where: { tenant_id: tenantId, type: { equals: 'Mobile Wallet', mode: 'insensitive' } },
+            select: { account_id: true },
+        });
+        const walletIds = new Set(wallets.map((row) => row.account_id).filter((id): id is string => Boolean(id)));
+        if (isCashDrawer(method.account, walletIds)) {
+            throw new BadRequestException('A bank transfer cannot use a cash drawer.');
+        }
+        return method.account_id;
+    }
+
+    /** The source voucher's credit that is not Due from Branches. */
+    private async creditedMoneyAccountId(tx: Prisma.TransactionClient, voucherId: string): Promise<string> {
+        const lines = await tx.voucherDetail.findMany({
+            where: { voucher_id: voucherId },
+            select: {
+                credit_amount: true,
+                account: { select: { id: true, name: true, code: true } },
+            },
+        });
+        const money = lines.find((line) =>
+            Number(line.credit_amount) > 0
+            && line.account.code !== DUE_FROM_BRANCHES_CODE
+            && line.account.name !== 'Due from Branches',
+        );
+        if (!money) {
+            throw new BadRequestException('No bank account is set up for this branch.');
+        }
+        return money.account.id;
     }
 
     private async assertStoreExists(tenantId: string, storeId: string) {

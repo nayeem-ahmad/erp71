@@ -19,6 +19,13 @@ describe('listSalesReps', () => {
             orderBy: { name: 'asc' },
         });
     });
+
+    it('offers only employees whose home branch is the document branch', async () => {
+        const client = db();
+        await listSalesReps(client as any, 't1', 'store-a');
+
+        expect(client.employee.findMany.mock.calls[0][0].where.store_id).toBe('store-a');
+    });
 });
 
 describe('checkedSalesRepId', () => {
