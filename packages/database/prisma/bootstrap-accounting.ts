@@ -754,9 +754,19 @@ async function findSharedAccount(
 
 /** The signup store's Cash in Hand is that branch's drawer. Banks stay shared. */
 async function stampFirstDrawer(db: AccountingBootstrapClient, tenantId: string) {
-    const stores = (db as { store?: { findFirst?: AccountingBootstrapClient['account']['findFirst'] } }).store;
+    // A caller with no store client keeps Cash in Hand shared. The account
+    // findFirst type does not overlap a store lookup, so the cast goes through unknown.
+    const stores = (db as unknown as {
+        store?: {
+            findFirst?: (args: {
+                where: object;
+                orderBy: object;
+                select: { id: true };
+            }) => Promise<{ id: string } | null>;
+        };
+    }).store;
     if (!stores?.findFirst) return;
-    const firstStore = await (db as any).store.findFirst({
+    const firstStore = await stores.findFirst({
         where: {
             tenant_id: tenantId,
             NOT: { name: { equals: 'Online Store', mode: 'insensitive' } },

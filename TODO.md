@@ -2120,7 +2120,7 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
-- [x] **Integration cash vouchers name the signup branch** — done 2026-10-29. Signup stamps Cash in Hand onto the first store, so the integration cash payment and cash receipt send that store. Without it, CI Test (Backend) refused the voucher and the ledger and dashboard cases saw no cash.
+- [x] **Integration cash vouchers name the signup branch** — done 2026-10-29. Signup stamps Cash in Hand onto the first store, so the integration cash payment and cash receipt send that store. Without it, CI Test (Backend) refused the voucher and the ledger and dashboard cases saw no cash. The drawer stamp's store lookup casts through `unknown`, because a store query is not an account query, and that was what failed the backend build.
 
 - [x] **Branch cash drawers, filtered books, and a home branch on employees** — done 2026-10-29. Each branch has one cash drawer. Banks and wallets stay shared, and a branch user sees only that branch's vouchers on them. Cash posts to the branch drawer. A fund transfer stays two vouchers; a bank or cheque uses the same shared bank on both legs, and only a side of the transfer can receive it. Employees, attendance, leave, overtime and payroll follow the home branch. Departments and designations stay tenant-wide. `sync:branch-constraints` puts the partial uniques and the cash-only check back after every `db push`. The data fold (`sync:branch-books`) is not part of deploy and has not been run. Not opened in a browser.
 
