@@ -119,6 +119,7 @@ export const ACCOUNTING_WORKSPACE_ROUTES = [
     { path: '/accounting/reconciliation/bank', pattern: /bank reconciliation/i, label: 'Bank Reconciliation' },
     { path: '/accounting/expenses', pattern: /expense/i, label: 'Expenses' },
     { path: '/accounting/expenses/categories', pattern: /categor/i, label: 'Expense Categories' },
+    { path: '/accounting/expenses/heads', pattern: /head/i, label: 'Expense Heads' },
     { path: '/accounting/expenses/reports', pattern: /expense|report/i, label: 'Expense Reports' },
     { path: '/accounting/loans', pattern: /loan/i, label: 'Loans' },
     { path: '/accounting/investors', pattern: /investor/i, label: 'Investors' },

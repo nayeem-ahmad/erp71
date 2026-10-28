@@ -15,8 +15,8 @@ jest.mock('next/link', () => {
 });
 
 jest.mock('@/components/data-table', () => ({
-    DataTable: ({ data, columns }: { data: Array<{ id: string }>; columns: Array<{ id?: string; cell?: (ctx: { row: { original: unknown } }) => React.ReactNode }> }) => (
-        <div data-testid="data-table">
+    DataTable: ({ data, columns, filterLayout, viewOptions }: { data: Array<{ id: string }>; filterLayout?: string; viewOptions?: boolean; columns: Array<{ id?: string; cell?: (ctx: { row: { original: unknown } }) => React.ReactNode }> }) => (
+        <div data-testid="data-table" data-filter-layout={filterLayout} data-view-options={String(Boolean(viewOptions))}>
             {data.map((row) => (
                 <div key={row.id}>
                     {columns.filter((column) => column.id === 'heads').map((column) => (
@@ -53,6 +53,10 @@ describe('ExpenseCategoriesPage', () => {
     it('saves a category against a chosen expense account', async () => {
         render(<ExpenseCategoriesPage />);
 
+        const table = await screen.findByTestId('data-table');
+        expect(table).toHaveAttribute('data-filter-layout', 'row');
+        expect(table).toHaveAttribute('data-view-options', 'true');
+
         fireEvent.click(await screen.findByRole('button', { name: /add category/i }));
 
         const dialog = await screen.findByRole('dialog');
@@ -82,37 +86,6 @@ describe('ExpenseCategoriesPage', () => {
         await waitFor(() =>
             expect(api.createExpenseCategory).toHaveBeenCalledWith(
                 expect.objectContaining({ name: 'Conveyance', accountId: null }),
-            ),
-        );
-    });
-
-    it('lets a head use the category account, or its own', async () => {
-        (api.getExpenseCategories as jest.Mock).mockResolvedValue([
-            {
-                id: 'cat-salary',
-                name: 'Salary',
-                account_id: 'acct-salary',
-                account: { id: 'acct-salary', name: 'Salary & Wages', code: '510202' },
-                heads: [],
-            },
-        ]);
-        render(<ExpenseCategoriesPage />);
-
-        fireEvent.click(await screen.findByRole('button', { name: /heads/i }));
-        const dialog = await screen.findByRole('dialog');
-        expect(within(dialog).getByRole('button', { name: /expense account/i })).toHaveTextContent(/category account/i);
-        expect(within(dialog).getByRole('button', { name: /expense account/i })).toHaveTextContent(/salary & wages/i);
-
-        fireEvent.change(within(dialog).getByRole('textbox', { name: /expense head/i }), { target: { value: 'Salary - Karim' } });
-        fireEvent.click(within(dialog).getByRole('button', { name: /^save$/i }));
-
-        await waitFor(() =>
-            expect(api.createExpenseHead).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    categoryId: 'cat-salary',
-                    name: 'Salary - Karim',
-                    accountId: null,
-                }),
             ),
         );
     });

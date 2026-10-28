@@ -189,6 +189,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   expenses: { id: 'expenses', kind: 'module', icon: 'Receipt', labelKey: 'sidebar.modules.expenses', moduleKey: 'expenses' },
   'expenses.list': { id: 'expenses.list', kind: 'link', icon: 'Receipt', labelKey: 'accounting.links.expenses.title', href: '/accounting/expenses', exact: true },
   'expenses.categories': { id: 'expenses.categories', kind: 'link', icon: 'FolderTree', labelKey: 'accounting.links.expenseCategories.title', href: '/accounting/expenses/categories' },
+  'expenses.heads': { id: 'expenses.heads', kind: 'link', icon: 'Tags', labelKey: 'accounting.links.expenseHeads.title', href: '/accounting/expenses/heads' },
   'expenses.reports': { id: 'expenses.reports', kind: 'link', icon: 'BarChart3', labelKey: 'accounting.links.expenseReports.title', href: '/accounting/expenses/reports' },
 
   inventory: { id: 'inventory', kind: 'module', icon: 'Package', labelKey: 'sidebar.modules.inventory', moduleKey: 'inventory' },
@@ -563,6 +564,11 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
  * The 2026-10-18 Customer Dues Summary added `sales.receivables.dues-summary`
  * under Reports, after Due Aging:
  * `npx tsx prisma/sync-nav-layout.ts --nodes=sales.receivables.dues-summary`.
+ *
+ * The 2026-10-29 expense heads page added `expenses.heads` under Expenses.
+ * A saved layout takes it with
+ * `npx tsx prisma/sync-nav-layout.ts --nodes=expenses.heads`
+ * (also run from db-prepare). No reset: it is a new leaf, not a move.
  */
 export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('dashboard', null, 0),
@@ -669,7 +675,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('expenses', null, 6),
   layoutNode('expenses.list', 'expenses', 0),
   layoutNode('expenses.categories', 'expenses', 1),
-  layoutNode('expenses.reports', 'expenses', 2),
+  layoutNode('expenses.heads', 'expenses', 2),
+  layoutNode('expenses.reports', 'expenses', 3),
 
   layoutNode('inventory', null, 7),
   layoutNode('inventory.overview', 'inventory', 0),

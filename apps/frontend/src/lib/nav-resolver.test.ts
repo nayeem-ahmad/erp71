@@ -45,8 +45,11 @@ describe('nav-resolver', () => {
         expect((expenses?.children ?? []).map((child) => 'type' in child ? child.label : child.href)).toEqual([
             '/accounting/expenses',
             '/accounting/expenses/categories',
+            '/accounting/expenses/heads',
             '/accounting/expenses/reports',
         ]);
+        const heads = (expenses?.children ?? []).find((child) => !('type' in child) && child.href === '/accounting/expenses/heads');
+        expect(heads && !('type' in heads) ? heads.label : undefined).toBe('Expense Heads');
     });
 
     it('exposes imports as its own top-level module, not a Purchase subgroup', () => {
