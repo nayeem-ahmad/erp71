@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
@@ -13,6 +12,7 @@ import {
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { BranchFilter } from '@/components/ui';
+import { TabPanel, Tabs } from '@/components/ui/compact/Tabs';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
@@ -44,11 +44,43 @@ interface MonthlyTrend {
     amount: number;
 }
 
+interface DailyTrend {
+    date: string;
+    amount: number;
+}
+
 interface ExpenseSummary {
     total: number;
     byCategory: CategoryBreakdown[];
     monthlyTrend: MonthlyTrend[];
+    dailyTrend?: DailyTrend[];
     expenseToRevenueRatio: number;
+}
+
+type ReportView = 'trend' | 'category' | 'head' | 'period';
+type PeriodGrain = 'month' | 'week' | 'day';
+
+/** Monday of the UTC week that contains `YYYY-MM-DD`. */
+function weekStart(isoDate: string): string {
+    const [year, month, day] = isoDate.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    const weekday = date.getUTCDay();
+    date.setUTCDate(date.getUTCDate() - (weekday === 0 ? 6 : weekday - 1));
+    return date.toISOString().slice(0, 10);
+}
+
+function periodBuckets(summary: ExpenseSummary, grain: PeriodGrain): { key: string; amount: number }[] {
+    if (grain === 'month') {
+        return summary.monthlyTrend.map((row) => ({ key: row.month, amount: row.amount }));
+    }
+    const days = summary.dailyTrend ?? [];
+    if (grain === 'day') return days.map((row) => ({ key: row.date, amount: row.amount }));
+    const weeks = new Map<string, number>();
+    for (const row of days) {
+        const key = weekStart(row.date);
+        weeks.set(key, (weeks.get(key) ?? 0) + row.amount);
+    }
+    return Array.from(weeks, ([key, amount]) => ({ key, amount })).sort((a, b) => a.key.localeCompare(b.key));
 }
 
 const categoryHelper = createColumnHelper<CategoryBreakdown>();
@@ -73,6 +105,8 @@ export default function ExpenseReportsPage() {
     const [fromDate, setFromDate] = useState(defaultFrom());
     const [toDate, setToDate] = useState(defaultTo());
     const [loading, setLoading] = useState(true);
+    const [view, setView] = useState<ReportView>('trend');
+    const [grain, setGrain] = useState<PeriodGrain>('month');
 
     useEffect(() => {
         if (!branch.ready) return;
@@ -176,6 +210,53 @@ export default function ExpenseReportsPage() {
 
     const maxTrend = Math.max(...(summary?.monthlyTrend.map((row) => row.amount) ?? [1]), 1);
 
+    const periods = useMemo(
+        () => (summary ? periodBuckets(summary, grain) : []),
+        [summary, grain],
+    );
+
+    const periodColumns: ColumnDef<{ key: string; amount: number }, any>[] = useMemo(
+        () => [
+            {
+                id: 'key',
+                accessorKey: 'key',
+                header: t.expenses.period,
+                cell: (info: { getValue: () => string }) => <span className="text-sm font-medium text-gray-700">{info.getValue()}</span>,
+                size: 140,
+            },
+            {
+                id: 'amount',
+                accessorKey: 'amount',
+                header: t.common.amount,
+                cell: (info: { getValue: () => number }) => <span className="text-sm font-medium text-danger">{formatBDT(Number(info.getValue()))}</span>,
+                size: 140,
+            },
+            {
+                id: 'share',
+                header: t.expenses.share,
+                cell: ({ row }: { row: { original: { amount: number } } }) => {
+                    const share = summary && summary.total > 0 ? (row.original.amount / summary.total) * 100 : 0;
+                    return <span className="text-xs font-medium text-gray-500">{share.toFixed(1)}%</span>;
+                },
+                size: 100,
+            },
+        ],
+        [t, summary],
+    );
+
+    const reportTabs = [
+        { key: 'trend' as const, label: t.expenses.monthlyTrend },
+        { key: 'category' as const, label: t.expenses.byCategory },
+        { key: 'head' as const, label: t.expenses.byHead },
+        { key: 'period' as const, label: t.expenses.byPeriod },
+    ];
+
+    const grainTabs = [
+        { key: 'month' as const, label: t.expenses.periodMonth },
+        { key: 'week' as const, label: t.expenses.periodWeek },
+        { key: 'day' as const, label: t.expenses.periodDay },
+    ];
+
     return (
         <AccountingPageShell maxWidth="full">
             <PageHeader
@@ -235,54 +316,79 @@ export default function ExpenseReportsPage() {
                         />
                     </div>
 
-                    {summary.monthlyTrend.length > 0 && (
-                        <CompactSection title={t.expenses.monthlyTrend}>
-                            <div className="flex items-end gap-2 h-32">
-                                {summary.monthlyTrend.map((row) => (
-                                    <div key={row.month} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
-                                        <div
-                                            className="w-full bg-danger rounded-t-md transition-all"
-                                            style={{ height: `${Math.max(8, (row.amount / maxTrend) * 100)}%` }}
-                                            title={formatBDT(row.amount)}
-                                        />
-                                        <span className="text-[10px] font-medium text-gray-500 truncate w-full text-center">{row.month.slice(5)}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </CompactSection>
-                    )}
+                    <Tabs
+                        tabs={reportTabs}
+                        value={view}
+                        onChange={(next) => { if (next) setView(next); }}
+                        idPrefix="expense-report"
+                        label={t.expenses.reports}
+                    />
 
-                    <CompactSection title={t.expenses.byCategory}>
+                    <TabPanel tabKey="trend" value={view} idPrefix="expense-report">
+                        {summary.monthlyTrend.length > 0 && (
+                            <CompactSection title={t.expenses.monthlyTrend}>
+                                <div className="flex items-end gap-2 h-32">
+                                    {summary.monthlyTrend.map((row) => (
+                                        <div key={row.month} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
+                                            <div
+                                                className="w-full bg-danger rounded-t-md transition-all"
+                                                style={{ height: `${Math.max(8, (row.amount / maxTrend) * 100)}%` }}
+                                                title={formatBDT(row.amount)}
+                                            />
+                                            <span className="text-[10px] font-medium text-gray-500 truncate w-full text-center">{row.month.slice(5)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </CompactSection>
+                        )}
+                        <DataTable
+                            tableId="expense-reports-monthly"
+                            title={t.expenses.monthlyTrend}
+                            data={summary.monthlyTrend}
+                            columns={trendColumns}
+                            emptyMessage={t.common.noData}
+                        />
+                    </TabPanel>
+
+                    <TabPanel tabKey="category" value={view} idPrefix="expense-report">
                         <DataTable
                             tableId="expense-reports-by-category"
-                            title="Expenses by Category"
+                            title={t.expenses.byCategory}
                             data={summary.byCategory}
                             columns={categoryColumns}
                             searchPlaceholder={t.expenses.searchCategories}
                             emptyMessage={t.common.noData}
                         />
-                    </CompactSection>
+                    </TabPanel>
 
-                    <CompactSection title={t.expenses.byHead}>
+                    <TabPanel tabKey="head" value={view} idPrefix="expense-report">
                         <DataTable
                             tableId="expense-reports-by-head"
-                            title="Expenses by Head"
+                            title={t.expenses.byHead}
                             data={headRows}
                             columns={headColumns}
                             searchPlaceholder={t.expenses.searchHeads}
                             emptyMessage={t.common.noData}
                         />
-                    </CompactSection>
+                    </TabPanel>
 
-                    <CompactSection title={t.expenses.monthlyTrend}>
+                    <TabPanel tabKey="period" value={view} idPrefix="expense-report">
+                        <Tabs
+                            tabs={grainTabs}
+                            value={grain}
+                            onChange={(next) => { if (next) setGrain(next); }}
+                            idPrefix="expense-period"
+                            label={t.expenses.byPeriod}
+                            bordered={false}
+                        />
                         <DataTable
-                            tableId="expense-reports-monthly"
-                            title="Monthly Expense Trend"
-                            data={summary.monthlyTrend}
-                            columns={trendColumns}
+                            tableId="expense-reports-by-period"
+                            title={t.expenses.byPeriod}
+                            data={periods}
+                            columns={periodColumns}
                             emptyMessage={t.common.noData}
                         />
-                    </CompactSection>
+                    </TabPanel>
                 </>
             ) : (
                 <p className="text-center text-gray-500 py-8 text-sm">{t.common.noData}</p>

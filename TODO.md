@@ -686,6 +686,8 @@ Asked for as: compactness option (Standard/Compact/Cozy, one line per row in Com
 
 ## IMPORTANT — First month after launch
 
+- [ ] **Branch cash drawers, filtered books, and branch employees.** Spec: `docs/superpowers/specs/2026-10-28-branch-books-and-employees-design.md`. Plan: `docs/superpowers/plans/2026-10-28-branch-books-and-employees.md`. Implementation is on `feat/branch-books` (worktree `.claude/worktrees/branch-books`). Only the physical cash drawer is per branch: Press Club uses Main Cash (LT), Babu Bazar uses Main Cash (CF). Banks, bKash and Nagad stay shared. Do not run `sync:branch-books --yes` in production until a dry-run is reviewed.
+
 - [ ] **Roll the Sales list UI out to the other lists** — added 2026-10-26. `filterLayout="row"`, `stats`, the `multi-select`/`number` filter types and date `operators` are opt-in. Expenses list done 2026-10-28 (it already walks every page of the date window, so the chips and the strip narrow those rows in the browser). Next candidates: Purchases, Sales returns, Customer payments, Quotations, Sales orders. Each of those needs its server list to accept multi-value and amount params (see `SaleListFilters` / `number-condition.util.ts`) and a summary endpoint for its strip.
 - [ ] **Sales list filters left out of the pilot** — added 2026-10-26. (1) Voucher (posted / not posted / failed): posting status lives in `posting_events` with no relation from `Sale`, so it needs an id subquery. (2) Items count: Prisma cannot filter on a relation count without raw SQL. (3) Due as an amount range (`total_amount - amount_paid`): arithmetic on two columns needs raw SQL; Payment status (paid / part paid / unpaid) stands in for it.
 - [ ] **List UI pilot polish** — added 2026-10-26. (1) The stats strip's hidden state is per browser (like column widths), not in the synced preferences. (2) The resize grip is pointer-only, as before; a keyboard way to resize is still missing. (3) `GET /sales/summary` runs four queries per filter change; check its timing on the largest imported tenant.
@@ -2118,6 +2120,10 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 
 ## COMPLETED
+
+- [x] **Expense Heads in the Expenses menu, list UI on heads and categories, report tabs** — done 2026-10-29. Sidebar leaf `expenses.heads` (`/accounting/expenses/heads`); `sync:nav-layout --nodes=expenses.heads` runs in db-prepare so a saved sidebar grows the link. Heads and categories use the expenses list row (filters, summary strip, view options). Reports pick one view: monthly trend, by category, by head, or by period (month, week, or day). Not opened in a browser.
+
+- [x] **KH Tradind: Press Club imported payments moved off Babu Bazar cash** — done 2026-10-28. 1,341 external-sync customer and supplier payments had no branch and were posted to Main Cash (CF). Each payment row already belonged to Press Club. Cash lines moved to Main Cash (LT) (debit ৳12,648,495.98, credit ৳29,259.00) and the vouchers were stamped Press Club / BRANCH. Receivable and payable lines were left on the same vouchers. Rollback rows are in `kh_cash_branch_fix_20261028`. No cash or bank voucher on that tenant is left without a branch.
 
 - [x] **KH Tradind expense reparent shipped with expense heads** — done 2026-10-28. Release PR #907 (`aebd5bf06`). Person-named categories are heads under Personal Expenses; Trust Care Company, Vat Return and Family Cost are heads under Other Expenses. Salary, Transport, Staff Conveyances, Shop Accessories and the bill categories stay. `sync:expense-reparent` ran in db-prepare on that deploy (tenant `5e7c7f4a-3d21-4c6d-bf4b-f909e57b54f7` only). Posted vouchers were not rewritten. The rows were not opened in the app after deploy.
 

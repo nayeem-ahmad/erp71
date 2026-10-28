@@ -148,6 +148,7 @@ export const accountingMessages = {
             financialRatios: { title: 'Nisbah Kewangan', description: 'Nisbah semasa, margin, DSO, DPO — petunjuk prestasi utama sekilas pandang.' },
             expenses: { title: 'Perbelanjaan', description: 'Rekod dan jejak perbelanjaan perniagaan harian mengikut kategori dan kaedah bayaran.' },
             expenseCategories: { title: 'Kategori Perbelanjaan', description: 'Susun perbelanjaan ke dalam kategori untuk pelaporan dan penjejakan belanjawan.' },
+            expenseHeads: { title: 'Kepala Perbelanjaan', description: 'Tambah dan sunting kepala di bawah setiap kategori. Perbelanjaan direkod pada satu kepala.' },
             expenseReports: { title: 'Laporan Perbelanjaan', description: 'Pecahan perbelanjaan, trend bulanan, dan nisbah perbelanjaan kepada hasil.' },
             loans: { title: 'Pinjaman', description: 'Jejaki wang dipinjam atau dipinjamkan dengan jadual bayaran balik dan baki tertunggak.' },
             investors: { title: 'Pelabur', description: 'Modal pelabur dan bahagian keuntungan bulanan yang dipersetujui setiap rakan kongsi.' },

@@ -331,6 +331,10 @@ describe('ExpensesService', () => {
         const summary = await local.getSummary('tenant-1', {});
 
         expect(summary.total).toBe(400);
+        expect(summary.dailyTrend).toEqual([
+            { date: '2026-10-01', amount: 300 },
+            { date: '2026-10-02', amount: 100 },
+        ]);
         expect(summary.byCategory).toEqual([
             expect.objectContaining({
                 categoryId: 'cat-salary',

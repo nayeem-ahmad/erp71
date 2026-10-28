@@ -148,6 +148,7 @@ export const accountingMessages = {
             financialRatios: { title: 'Financial Ratios', description: 'Current ratio, margins, DSO, DPO — key performance indicators at a glance.' },
             expenses: { title: 'Expenses', description: 'Record and track daily business expenses by category and payment method.' },
             expenseCategories: { title: 'Expense Categories', description: 'Organise expenses into categories for reporting and budget tracking.' },
+            expenseHeads: { title: 'Expense Heads', description: 'Add and edit the heads under each expense category. An expense is recorded against a head.' },
             expenseReports: { title: 'Expense Reports', description: 'Expense breakdown, monthly trends, and expense-to-revenue ratio.' },
             loans: { title: 'Loans', description: 'Track money borrowed or lent with repayment schedules and outstanding balances.' },
             investors: { title: 'Investors', description: 'Investor capital and the monthly profit share each partner has agreed to.' },

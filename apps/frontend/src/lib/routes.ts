@@ -134,6 +134,7 @@ export const routes = {
         voucherTemplates: '/accounting/voucher-templates',
         expenses: '/accounting/expenses',
         expenseCategories: '/accounting/expenses/categories',
+        expenseHeads: '/accounting/expenses/heads',
         expenseReports: '/accounting/expenses/reports',
         loans: '/accounting/loans',
         investors: '/accounting/investors',

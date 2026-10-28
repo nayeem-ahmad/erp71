@@ -148,6 +148,7 @@ export const accountingMessages = {
             financialRatios: { title: "Finanzkennzahlen", description: "Liquiditätsgrad, Margen, DSO, DPO — die wichtigsten Kennzahlen auf einen Blick." },
             expenses: { title: "Ausgaben", description: "Tägliche Betriebsausgaben nach Kategorie und Zahlungsart erfassen und verfolgen." },
             expenseCategories: { title: "Ausgabenkategorien", description: "Ausgaben für Auswertungen und Budgetverfolgung in Kategorien ordnen." },
+            expenseHeads: { title: "Ausgabenposten", description: "Posten unter jeder Ausgabenkategorie anlegen und bearbeiten. Eine Ausgabe wird auf einen Posten gebucht." },
             expenseReports: { title: "Ausgabenberichte", description: "Ausgabenaufschlüsselung, Monatstrends und Verhältnis von Ausgaben zu Umsatz." },
             loans: { title: "Darlehen", description: "Aufgenommenes oder ausgereichtes Geld mit Tilgungsplänen und Restsalden verfolgen." },
             investors: { title: "Investoren", description: "Investorenkapital und der vereinbarte monatliche Gewinnanteil je Partner." },

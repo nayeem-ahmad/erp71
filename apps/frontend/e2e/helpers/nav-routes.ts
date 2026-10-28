@@ -59,6 +59,7 @@ export const NAV_ROUTES: { path: string; label: string }[] = [
     { path: '/accounting/reconciliation', label: 'Posting Exceptions' },
     { path: '/accounting/expenses', label: 'Expenses' },
     { path: '/accounting/expenses/categories', label: 'Expense Categories' },
+    { path: '/accounting/expenses/heads', label: 'Expense Heads' },
     { path: '/accounting/expenses/reports', label: 'Expense Reports' },
     { path: '/accounting/loans', label: 'Loans' },
     { path: '/accounting/investors', label: 'Investors' },
