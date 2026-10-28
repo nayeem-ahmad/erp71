@@ -305,9 +305,12 @@ describe('AccountingService — chart of accounts update/delete', () => {
         });
 
         it('rejects a name already taken by another account', async () => {
-            db.account.findFirst.mockResolvedValue({ id: 'account-1', type: 'asset', code: '110101' });
+            db.account.findFirst.mockImplementation(async ({ where }: { where: { name?: string } }) =>
+                where.name
+                    ? { id: 'account-9' }
+                    : { id: 'account-1', type: 'asset', code: '110101' },
+            );
             db.accountGroup.findFirst.mockResolvedValue({ id: 'group-2', type: 'asset', code: '11' });
-            db.account.findUnique.mockResolvedValue({ id: 'account-9' });
 
             await expect(
                 service.updateAccount('tenant-1', 'account-1', baseDto),

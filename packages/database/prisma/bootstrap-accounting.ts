@@ -739,6 +739,33 @@ async function upsertTemplateSubgroup(
  * code stranded by a tenant's own move has to be reissued rather than reused --
  * otherwise it would no longer start with its parent's code.
  */
+/** Shared chart rows only. A cash drawer may reuse a name, so it is not this row. */
+async function findSharedAccount(
+    db: AccountingBootstrapClient,
+    tenantId: string,
+    name: string,
+    select?: { id?: boolean; code?: boolean },
+) {
+    return db.account.findFirst({
+        where: { tenant_id: tenantId, name, store_id: null },
+        select,
+    });
+}
+
+async function saveSharedAccount(
+    db: AccountingBootstrapClient,
+    tenantId: string,
+    name: string,
+    update: Parameters<AccountingBootstrapClient['account']['update']>[0]['data'],
+    create: Parameters<AccountingBootstrapClient['account']['create']>[0]['data'],
+) {
+    const existing = await findSharedAccount(db, tenantId, name, { id: true });
+    if (existing) {
+        return db.account.update({ where: { id: existing.id }, data: update });
+    }
+    return db.account.create({ data: create });
+}
+
 async function resolveTemplateAccountCode(
     db: AccountingBootstrapClient,
     tenantId: string,
@@ -747,10 +774,7 @@ async function resolveTemplateAccountCode(
     subgroup: { code: string },
     preferredCode: string,
 ) {
-    const existing = await db.account.findUnique({
-        where: { tenant_id_name: { tenant_id: tenantId, name } },
-        select: { code: true },
-    });
+    const existing = await findSharedAccount(db, tenantId, name, { code: true });
 
     if (existing?.code && existing.code.startsWith(subgroup.code)) {
         return existing.code;
@@ -815,14 +839,11 @@ export async function applyAccountingTemplate(
                     accountDefinition.code,
                 );
 
-                await db.account.upsert({
-                    where: {
-                        tenant_id_name: {
-                            tenant_id: tenantId,
-                            name: accountDefinition.name,
-                        },
-                    },
-                    update: {
+                await saveSharedAccount(
+                    db,
+                    tenantId,
+                    accountDefinition.name,
+                    {
                         group_id: group.id,
                         subgroup_id: subgroup.id,
                         code: accountCode,
@@ -830,7 +851,7 @@ export async function applyAccountingTemplate(
                         category: accountDefinition.category,
                         party_type: accountDefinition.party_type ?? null,
                     },
-                    create: {
+                    {
                         tenant_id: tenantId,
                         group_id: group.id,
                         subgroup_id: subgroup.id,
@@ -840,7 +861,7 @@ export async function applyAccountingTemplate(
                         category: accountDefinition.category,
                         party_type: accountDefinition.party_type ?? null,
                     },
-                });
+                );
             }
         }
     }
@@ -960,16 +981,18 @@ export async function ensureInterBranchAccounts(
         '110401',
     );
 
-    await db.account.upsert({
-        where: { tenant_id_name: { tenant_id: tenantId, name: 'Due from Branches' } },
-        update: {
+    await saveSharedAccount(
+        db,
+        tenantId,
+        'Due from Branches',
+        {
             group_id: assetGroup.id,
             subgroup_id: dueFromSubgroup.id,
             code: dueFromCode,
             type: AccountType.ASSET,
             category: AccountCategory.GENERAL,
         },
-        create: {
+        {
             tenant_id: tenantId,
             group_id: assetGroup.id,
             subgroup_id: dueFromSubgroup.id,
@@ -978,7 +1001,7 @@ export async function ensureInterBranchAccounts(
             type: AccountType.ASSET,
             category: AccountCategory.GENERAL,
         },
-    });
+    );
 
     const dueToCode = await resolveTemplateAccountCode(
         db,
@@ -989,16 +1012,18 @@ export async function ensureInterBranchAccounts(
         '210401',
     );
 
-    await db.account.upsert({
-        where: { tenant_id_name: { tenant_id: tenantId, name: 'Due to Branches' } },
-        update: {
+    await saveSharedAccount(
+        db,
+        tenantId,
+        'Due to Branches',
+        {
             group_id: liabilityGroup.id,
             subgroup_id: dueToSubgroup.id,
             code: dueToCode,
             type: AccountType.LIABILITY,
             category: AccountCategory.GENERAL,
         },
-        create: {
+        {
             tenant_id: tenantId,
             group_id: liabilityGroup.id,
             subgroup_id: dueToSubgroup.id,
@@ -1007,5 +1032,5 @@ export async function ensureInterBranchAccounts(
             type: AccountType.LIABILITY,
             category: AccountCategory.GENERAL,
         },
-    });
+    );
 }

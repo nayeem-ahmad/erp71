@@ -19,9 +19,9 @@ describe('bootstrapDefaultAccountingForTenant — Story 30.2', () => {
             findMany: jest.fn().mockResolvedValue([]),
         };
         const account = {
-            upsert: jest.fn().mockResolvedValue({ id: 'account-id' }),
+            update: jest.fn().mockResolvedValue({ id: 'account-id' }),
+            create: jest.fn().mockResolvedValue({ id: 'account-id' }),
             findFirst: jest.fn().mockResolvedValue({ id: 'cash-id' }),
-            findUnique: jest.fn().mockResolvedValue(null),
             findMany: jest.fn().mockResolvedValue([
                 { id: 'cash-id', name: 'Cash in Hand' },
                 { id: 'bank-id', name: 'Main Bank Account' },
@@ -48,8 +48,8 @@ describe('bootstrapDefaultAccountingForTenant — Story 30.2', () => {
 
         expect(accountGroup.upsert).toHaveBeenCalled();
         expect(accountSubgroup.upsert).toHaveBeenCalled();
-        expect(account.upsert).toHaveBeenCalled();
-        expect(account.upsert.mock.calls.length).toBeGreaterThanOrEqual(5);
+        expect(account.update).toHaveBeenCalled();
+        expect(account.update.mock.calls.length).toBeGreaterThanOrEqual(5);
         expect(account.findMany).toHaveBeenCalled();
         expect(postingRule.create).toHaveBeenCalled();
     });
@@ -73,9 +73,9 @@ describe('bootstrapDefaultAccountingForTenant — Story 30.2', () => {
             findMany: jest.fn().mockResolvedValue([]),
         };
         const account = {
-            upsert: jest.fn().mockResolvedValue({ id: 'account-id' }),
+            update: jest.fn().mockResolvedValue({ id: 'account-id' }),
+            create: jest.fn().mockResolvedValue({ id: 'account-id' }),
             findFirst: jest.fn().mockResolvedValue({ id: 'cash-id' }),
-            findUnique: jest.fn().mockResolvedValue(null),
             findMany: jest.fn().mockResolvedValue([
                 { id: 'cash-id', name: 'Cash in Hand' },
                 { id: 'bank-id', name: 'Main Bank Account' },

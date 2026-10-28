@@ -1788,6 +1788,9 @@ model Store {
   printTemplateAssignments PrintTemplateStoreAssignment[]
   /// Limited payment methods offered at this branch.
   paymentMethodStores      PaymentMethodStore[]
+  cashDrawers              Account[]                    @relation("AccountDrawer")
+  employees                Employee[]                   @relation("EmployeeHomeBranch")
+  payrollRuns              PayrollRun[]                 @relation("PayrollRunBranch")
 
   @@unique([tenant_id, name])
   @@unique([tenant_id, code])
@@ -4227,6 +4230,10 @@ model Account {
   legacy_code String?
   type        String
   category    String     @default("general")
+  /// Set only on a branch cash drawer. Banks, wallets, and every other
+  /// account stay null. A branch has one drawer: the partial unique index
+  /// lives in the migration, because Prisma cannot express it.
+  store_id    String?
   /// Non-null on a control account (AR / Purchase Payable / Salary Payable):
   /// its balance is maintained as a subsidiary ledger, one balance per party.
   /// autoPostFromRules tags the voucher line hitting this account with party_id.
@@ -4235,6 +4242,7 @@ model Account {
   updated_at  DateTime   @updatedAt
 
   tenant                Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store                 Store?                 @relation("AccountDrawer", fields: [store_id], references: [id], onDelete: Restrict)
   group                 AccountGroup           @relation(fields: [group_id], references: [id])
   subgroup              AccountSubgroup?       @relation(fields: [subgroup_id], references: [id])
   voucherDetails        VoucherDetail[]
@@ -4252,8 +4260,8 @@ model Account {
   expenseCategories     ExpenseCategory[]
   expenseHeads          ExpenseHead[]
 
-  @@unique([tenant_id, name])
   @@index([tenant_id])
+  @@index([tenant_id, store_id])
   @@index([group_id])
   @@index([subgroup_id])
   @@index([tenant_id, type])
@@ -5851,6 +5859,9 @@ model Employee {
   department_id    String?
   designation_id   String?
   user_id          String?        @unique
+  /// Home branch. Nullable until sync-branch-books fills every row and a
+  /// later migration sets NOT NULL. Creating an employee still requires it.
+  store_id         String?
   basic_salary     Decimal?       @db.Decimal(12, 2)
   status           EmployeeStatus @default(ACTIVE)
   /// Why they left, in the tenant's own words. The status says which category;
@@ -5871,6 +5882,7 @@ model Employee {
   deleted_at    DateTime?
 
   tenant                  Tenant                    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store                   Store?                    @relation("EmployeeHomeBranch", fields: [store_id], references: [id], onDelete: Restrict)
   department              Department?               @relation(fields: [department_id], references: [id])
   designation             Designation?              @relation(fields: [designation_id], references: [id])
   user                    User?                     @relation(fields: [user_id], references: [id])
@@ -5902,6 +5914,7 @@ model Employee {
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])
+  @@index([tenant_id, store_id])
   @@index([tenant_id, status, deleted_at])
   @@index([tenant_id, department_id])
   @@index([tenant_id, designation_id])
@@ -6340,6 +6353,8 @@ model PayrollRun {
   month       Int
   /// REGULAR | BONUS | FINAL_SETTLEMENT
   kind        String    @default("REGULAR")
+  /// Branch this run belongs to. Null only on a legacy run that mixed branches.
+  store_id    String?
   /// DRAFT | APPROVED | PAID | CANCELLED
   /// DRAFT is recomputable; APPROVED is frozen; PAID has been disbursed.
   status      String    @default("DRAFT")
@@ -6353,9 +6368,10 @@ model PayrollRun {
   updated_at  DateTime  @updatedAt
 
   tenant Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store  Store?        @relation("PayrollRunBranch", fields: [store_id], references: [id], onDelete: Restrict)
   lines  PayrollLine[]
 
-  @@unique([tenant_id, year, month, kind])
+  @@unique([tenant_id, year, month, kind, store_id])
   @@index([tenant_id, status])
   @@map("payroll_runs")
 }

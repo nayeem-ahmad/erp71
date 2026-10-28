@@ -401,13 +401,8 @@ export class AccountingService {
             subgroupCode = subgroup.code;
         }
 
-        const existing = await this.db.account.findUnique({
-            where: {
-                tenant_id_name: {
-                    tenant_id: tenantId,
-                    name: dto.name,
-                },
-            },
+        const existing = await this.db.account.findFirst({
+            where: { tenant_id: tenantId, name: dto.name, store_id: null },
         });
 
         if (existing) {
@@ -713,8 +708,8 @@ export class AccountingService {
             subgroupCode = subgroup.code;
         }
 
-        const clash = await this.db.account.findUnique({
-            where: { tenant_id_name: { tenant_id: tenantId, name: dto.name } },
+        const clash = await this.db.account.findFirst({
+            where: { tenant_id: tenantId, name: dto.name, store_id: null },
             select: { id: true },
         });
 

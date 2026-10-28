@@ -575,30 +575,42 @@ describe('Integration Tests (e2e)', () => {
             // (tenant_id, name) unique index and failed the test before a single
             // assertion ran. Upserting keeps the test working whether or not the
             // seeded CoA happens to carry them.
-            const receivableAccount = await db.account.upsert({
-                where: { tenant_id_name: { tenant_id: tenantId, name: 'Accounts Receivable' } },
-                update: { group_id: assetGroup.id, type: 'asset', category: 'general' },
-                create: {
-                    tenant_id: tenantId,
-                    group_id: assetGroup.id,
-                    name: 'Accounts Receivable',
-                    code: '1030',
-                    type: 'asset',
-                    category: 'general',
-                },
+            const receivableExisting = await db.account.findFirst({
+                where: { tenant_id: tenantId, name: 'Accounts Receivable', store_id: null },
             });
-            const taxLiabilityAccount = await db.account.upsert({
-                where: { tenant_id_name: { tenant_id: tenantId, name: 'VAT Payable' } },
-                update: { group_id: liabilityGroup.id, type: 'liability', category: 'general' },
-                create: {
-                    tenant_id: tenantId,
-                    group_id: liabilityGroup.id,
-                    name: 'VAT Payable',
-                    code: '2020',
-                    type: 'liability',
-                    category: 'general',
-                },
+            const receivableAccount = receivableExisting
+                ? await db.account.update({
+                    where: { id: receivableExisting.id },
+                    data: { group_id: assetGroup.id, type: 'asset', category: 'general' },
+                })
+                : await db.account.create({
+                    data: {
+                        tenant_id: tenantId,
+                        group_id: assetGroup.id,
+                        name: 'Accounts Receivable',
+                        code: '1030',
+                        type: 'asset',
+                        category: 'general',
+                    },
+                });
+            const taxExisting = await db.account.findFirst({
+                where: { tenant_id: tenantId, name: 'VAT Payable', store_id: null },
             });
+            const taxLiabilityAccount = taxExisting
+                ? await db.account.update({
+                    where: { id: taxExisting.id },
+                    data: { group_id: liabilityGroup.id, type: 'liability', category: 'general' },
+                })
+                : await db.account.create({
+                    data: {
+                        tenant_id: tenantId,
+                        group_id: liabilityGroup.id,
+                        name: 'VAT Payable',
+                        code: '2020',
+                        type: 'liability',
+                        category: 'general',
+                    },
+                });
 
             await request(app.getHttpServer())
                 .post('/accounting/vouchers')
