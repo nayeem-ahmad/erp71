@@ -1838,6 +1838,23 @@ export class AccountingService {
         return approvalVoucherFilter(resolveApprovedOnly(settings, approvedOnly));
     }
 
+    /** One branch’s vouchers. Omitted means every voucher, including ones with no branch. */
+    private branchVoucher(storeId?: string): Prisma.VoucherWhereInput {
+        return storeId ? { store_id: storeId } : {};
+    }
+
+    /**
+     * Shared accounts plus the drawers of these branches. No list means every
+     * drawer, which is the company view.
+     */
+    private visibleDrawerWhere(storeIds?: string[]): Prisma.AccountWhereInput {
+        if (!storeIds || storeIds.length === 0) return {};
+        const drawer = storeIds.length === 1
+            ? { store_id: storeIds[0] }
+            : { store_id: { in: storeIds } };
+        return { OR: [{ store_id: null }, drawer] };
+    }
+
     async approveVoucher(tenantId: string, id: string, userId?: string) {
         const existing = await this.db.voucher.findFirst({ where: { tenant_id: tenantId, id } });
 
@@ -2307,10 +2324,15 @@ export class AccountingService {
             ...(await this.reportApprovalFilter(tenantId, query.approvedOnly)),
         };
 
+        const visibleStores = scopeParams.scope === ReportScope.BRANCH && scopeParams.storeId
+            ? [scopeParams.storeId]
+            : undefined;
+
         const bsAccounts = await this.db.account.findMany({
             where: {
                 tenant_id: tenantId,
                 type: { in: [AccountType.ASSET, AccountType.LIABILITY, AccountType.EQUITY] },
+                ...this.visibleDrawerWhere(visibleStores),
             },
             include: { group: true, subgroup: true },
         });
@@ -2411,8 +2433,12 @@ export class AccountingService {
             ...(await this.reportApprovalFilter(tenantId, query.approvedOnly)),
         };
 
+        const visibleStores = scopeParams.scope === ReportScope.BRANCH && scopeParams.storeId
+            ? [scopeParams.storeId]
+            : undefined;
+
         const accounts = await this.db.account.findMany({
-            where: { tenant_id: tenantId },
+            where: { tenant_id: tenantId, ...this.visibleDrawerWhere(visibleStores) },
             include: { group: true, subgroup: true },
         });
 
@@ -2505,7 +2531,7 @@ export class AccountingService {
         };
     }
 
-    async getArAging(tenantId: string, query: ArAgingQueryDto) {
+    async getArAging(tenantId: string, query: ArAgingQueryDto, storeId?: string) {
         const asOfDateStr = query.asOfDate ?? this.formatDateValue(new Date());
         const asOfDate = this.toEndOfDay(asOfDateStr);
 
@@ -2529,7 +2555,7 @@ export class AccountingService {
         const entries = await this.db.voucherDetail.findMany({
             where: {
                 account_id: { in: arAccounts.map((a) => a.id) },
-                voucher: { tenant_id: tenantId, ...approvalFilter, date: { lte: asOfDate } },
+                voucher: { tenant_id: tenantId, ...approvalFilter, ...this.branchVoucher(storeId), date: { lte: asOfDate } },
             },
             select: {
                 account_id: true,
@@ -2589,7 +2615,7 @@ export class AccountingService {
         };
     }
 
-    async getApAging(tenantId: string, query: ApAgingQueryDto) {
+    async getApAging(tenantId: string, query: ApAgingQueryDto, storeId?: string) {
         const asOfDateStr = query.asOfDate ?? this.formatDateValue(new Date());
         const asOfDate = this.toEndOfDay(asOfDateStr);
 
@@ -2613,7 +2639,7 @@ export class AccountingService {
         const entries = await this.db.voucherDetail.findMany({
             where: {
                 account_id: { in: apAccounts.map((a) => a.id) },
-                voucher: { tenant_id: tenantId, ...approvalFilter, date: { lte: asOfDate } },
+                voucher: { tenant_id: tenantId, ...approvalFilter, ...this.branchVoucher(storeId), date: { lte: asOfDate } },
             },
             select: {
                 account_id: true,
@@ -2673,7 +2699,7 @@ export class AccountingService {
         };
     }
 
-    async getComparativePL(tenantId: string, query: ComparativePLQueryDto) {
+    async getComparativePL(tenantId: string, query: ComparativePLQueryDto, storeId?: string) {
         const range = this.resolveDateRange(query.from, query.to);
         const fromDate = range.fromDate;
         const toDate = range.toDate;
@@ -2715,15 +2741,15 @@ export class AccountingService {
 
         const [currentDetails, prevDetails, yearAgoDetails] = await Promise.all([
             this.db.voucherDetail.findMany({
-                where: { account_id: { in: allIds }, voucher: { tenant_id: tenantId, ...approvalFilter, date: { gte: fromDate, lte: toDate } } },
+                where: { account_id: { in: allIds }, voucher: { tenant_id: tenantId, ...approvalFilter, ...this.branchVoucher(storeId), date: { gte: fromDate, lte: toDate } } },
                 select: { account_id: true, debit_amount: true, credit_amount: true },
             }),
             this.db.voucherDetail.findMany({
-                where: { account_id: { in: allIds }, voucher: { tenant_id: tenantId, ...approvalFilter, date: { gte: prevFromDate, lte: prevToDate } } },
+                where: { account_id: { in: allIds }, voucher: { tenant_id: tenantId, ...approvalFilter, ...this.branchVoucher(storeId), date: { gte: prevFromDate, lte: prevToDate } } },
                 select: { account_id: true, debit_amount: true, credit_amount: true },
             }),
             this.db.voucherDetail.findMany({
-                where: { account_id: { in: allIds }, voucher: { tenant_id: tenantId, ...approvalFilter, date: { gte: yearAgoFromDate, lte: yearAgoToDate } } },
+                where: { account_id: { in: allIds }, voucher: { tenant_id: tenantId, ...approvalFilter, ...this.branchVoucher(storeId), date: { gte: yearAgoFromDate, lte: yearAgoToDate } } },
                 select: { account_id: true, debit_amount: true, credit_amount: true },
             }),
         ]);
@@ -2814,7 +2840,7 @@ export class AccountingService {
         };
     }
 
-    async getVatTaxReport(tenantId: string, query: VatTaxReportQueryDto) {
+    async getVatTaxReport(tenantId: string, query: VatTaxReportQueryDto, storeId?: string) {
         const range = this.resolveDateRange(query.from, query.to);
 
         const accounts = await this.db.account.findMany({
@@ -2838,7 +2864,7 @@ export class AccountingService {
         const details = allVatIds.length === 0 ? [] : await this.db.voucherDetail.findMany({
             where: {
                 account_id: { in: allVatIds },
-                voucher: { tenant_id: tenantId, ...approvalFilter, date: { gte: range.fromDate, lte: range.toDate } },
+                voucher: { tenant_id: tenantId, ...approvalFilter, ...this.branchVoucher(storeId), date: { gte: range.fromDate, lte: range.toDate } },
             },
             select: { account_id: true, debit_amount: true, credit_amount: true },
         });
@@ -2872,7 +2898,7 @@ export class AccountingService {
         };
     }
 
-    async getFinancialRatios(tenantId: string, query: FinancialRatiosQueryDto) {
+    async getFinancialRatios(tenantId: string, query: FinancialRatiosQueryDto, storeId?: string) {
         const asOfDateStr = query.asOfDate ?? this.formatDateValue(new Date());
         const asOfDate = this.toEndOfDay(asOfDateStr);
         const range = this.resolveDateRange(query.from, query.to);
@@ -2889,14 +2915,14 @@ export class AccountingService {
             allIds.length === 0 ? Promise.resolve([]) : this.db.voucherDetail.findMany({
                 where: {
                     account_id: { in: allIds },
-                    voucher: { tenant_id: tenantId, ...approvalFilter, date: { lte: asOfDate } },
+                    voucher: { tenant_id: tenantId, ...approvalFilter, ...this.branchVoucher(storeId), date: { lte: asOfDate } },
                 },
                 select: { account_id: true, debit_amount: true, credit_amount: true },
             }),
             allIds.length === 0 ? Promise.resolve([]) : this.db.voucherDetail.findMany({
                 where: {
                     account_id: { in: allIds },
-                    voucher: { tenant_id: tenantId, ...approvalFilter, date: { gte: range.fromDate, lte: range.toDate } },
+                    voucher: { tenant_id: tenantId, ...approvalFilter, ...this.branchVoucher(storeId), date: { gte: range.fromDate, lte: range.toDate } },
                 },
                 select: { account_id: true, debit_amount: true, credit_amount: true },
             }),
@@ -2982,7 +3008,7 @@ export class AccountingService {
         };
     }
 
-    async getCashFlow(tenantId: string, query: CashFlowQueryDto) {
+    async getCashFlow(tenantId: string, query: CashFlowQueryDto, storeId?: string) {
         const range = this.resolveDateRange(query.from, query.to);
 
         const INVESTING_PATTERN = /(fixed\s+asset|property|equipment|plant|machinery|vehicle|furniture|land|building)/i;
@@ -3012,7 +3038,7 @@ export class AccountingService {
         const openingDetails = allIds.length === 0 ? [] : await this.db.voucherDetail.findMany({
             where: {
                 account_id: { in: allIds },
-                voucher: { tenant_id: tenantId, ...approvalFilter, date: { lt: range.fromDate } },
+                voucher: { tenant_id: tenantId, ...approvalFilter, ...this.branchVoucher(storeId), date: { lt: range.fromDate } },
             },
             select: { account_id: true, debit_amount: true, credit_amount: true },
         });
@@ -3021,7 +3047,7 @@ export class AccountingService {
         const periodDetails = allIds.length === 0 ? [] : await this.db.voucherDetail.findMany({
             where: {
                 account_id: { in: allIds },
-                voucher: { tenant_id: tenantId, ...approvalFilter, date: { gte: range.fromDate, lte: range.toDate } },
+                voucher: { tenant_id: tenantId, ...approvalFilter, ...this.branchVoucher(storeId), date: { gte: range.fromDate, lte: range.toDate } },
             },
             select: { account_id: true, debit_amount: true, credit_amount: true },
         });
@@ -3235,7 +3261,7 @@ export class AccountingService {
         });
     }
 
-    async getBudgetVsActual(tenantId: string, query: BudgetVsActualQueryDto) {
+    async getBudgetVsActual(tenantId: string, query: BudgetVsActualQueryDto, storeId?: string) {
         const budgets = await this.db.accountBudget.findMany({
             where: {
                 tenant_id: tenantId,
@@ -3265,7 +3291,7 @@ export class AccountingService {
         const details = await this.db.voucherDetail.findMany({
             where: {
                 account_id: { in: accountIds },
-                voucher: { tenant_id: tenantId, ...approvalFilter, date: { gte: fromDate, lte: toDate } },
+                voucher: { tenant_id: tenantId, ...approvalFilter, ...this.branchVoucher(storeId), date: { gte: fromDate, lte: toDate } },
             },
             select: { account_id: true, debit_amount: true, credit_amount: true },
         });
@@ -3337,7 +3363,7 @@ export class AccountingService {
         });
     }
 
-    async getCostCenterPL(tenantId: string, query: CostCenterPLQueryDto) {
+    async getCostCenterPL(tenantId: string, query: CostCenterPLQueryDto, storeId?: string) {
         const costCenter = await this.db.costCenter.findFirst({
             where: { id: query.costCenterId, tenant_id: tenantId },
         });
@@ -3365,7 +3391,7 @@ export class AccountingService {
             where: {
                 cost_center_id: query.costCenterId,
                 account_id: { in: accounts.map((a) => a.id) },
-                voucher: { tenant_id: tenantId, ...approvalFilter, date: { gte: range.fromDate, lte: range.toDate } },
+                voucher: { tenant_id: tenantId, ...approvalFilter, ...this.branchVoucher(storeId), date: { gte: range.fromDate, lte: range.toDate } },
             },
             select: { account_id: true, debit_amount: true, credit_amount: true },
         });
@@ -4133,12 +4159,13 @@ export class AccountingService {
         return this.buildBookReport(tenantId, AccountCategory.BANK, query, storeId);
     }
 
-    async exportLedger(tenantId: string, format: 'tally' | 'quickbooks', from?: string, to?: string): Promise<string> {
+    async exportLedger(tenantId: string, format: 'tally' | 'quickbooks', from?: string, to?: string, storeId?: string): Promise<string> {
         this.validateDateRange(from, to);
 
         const vouchers = await this.db.voucher.findMany({
             where: {
                 tenant_id: tenantId,
+                ...this.branchVoucher(storeId),
                 ...this.buildVoucherDateRangeFilter(from, to),
             },
             include: {
@@ -4892,6 +4919,7 @@ ${voucherMessages}
             where: {
                 tenant_id: tenantId,
                 type: { in: [AccountType.ASSET, AccountType.LIABILITY, AccountType.EQUITY] },
+                ...this.visibleDrawerWhere(scopeParams.storeIds),
             },
             include: { group: true, subgroup: true },
         });
@@ -5006,7 +5034,7 @@ ${voucherMessages}
         );
 
         const accounts = await this.db.account.findMany({
-            where: { tenant_id: tenantId },
+            where: { tenant_id: tenantId, ...this.visibleDrawerWhere(scopeParams.storeIds) },
             include: { group: true, subgroup: true },
         });
 

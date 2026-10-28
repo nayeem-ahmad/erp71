@@ -649,6 +649,11 @@ export class BankbookQueryDto extends ApprovedOnlyQueryDto {
 const EXPORT_FORMATS = ['tally', 'quickbooks'] as const;
 
 export class ExportLedgerQueryDto extends ApprovedOnlyQueryDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsString()
     @IsIn(EXPORT_FORMATS)
     format: typeof EXPORT_FORMATS[number];
@@ -692,18 +697,33 @@ export class TrialBalanceQueryDto extends ApprovedOnlyQueryDto {
 }
 
 export class ArAgingQueryDto extends ApprovedOnlyQueryDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsDateString()
     asOfDate?: string;
 }
 
 export class ApAgingQueryDto extends ApprovedOnlyQueryDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsDateString()
     asOfDate?: string;
 }
 
 export class ComparativePLQueryDto extends ApprovedOnlyQueryDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsDateString()
     from?: string;
@@ -714,6 +734,11 @@ export class ComparativePLQueryDto extends ApprovedOnlyQueryDto {
 }
 
 export class VatTaxReportQueryDto extends ApprovedOnlyQueryDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsDateString()
     from?: string;
@@ -724,6 +749,11 @@ export class VatTaxReportQueryDto extends ApprovedOnlyQueryDto {
 }
 
 export class FinancialRatiosQueryDto extends ApprovedOnlyQueryDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsDateString()
     asOfDate?: string;
@@ -738,6 +768,11 @@ export class FinancialRatiosQueryDto extends ApprovedOnlyQueryDto {
 }
 
 export class CashFlowQueryDto extends ApprovedOnlyQueryDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsDateString()
     from?: string;
@@ -820,6 +855,11 @@ export class UpsertBudgetDto {
 }
 
 export class BudgetVsActualQueryDto extends ApprovedOnlyQueryDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @Type(() => Number)
     @IsInt()
     @Min(2020)
@@ -845,6 +885,11 @@ export class CreateCostCenterDto {
 }
 
 export class CostCenterPLQueryDto extends ApprovedOnlyQueryDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsUUID()
     costCenterId: string;
 
