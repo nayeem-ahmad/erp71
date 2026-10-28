@@ -6,6 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
+import { cashPostErrorMessage, resolveBranchCashAccount } from '../accounting/cash-account';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
 import {
@@ -87,18 +88,35 @@ export class SalaryPaymentsService {
     }
 
     /** Settles the accrued payable: Dr Salary Payable / Cr <mode>, per employee. */
-    private postSalaryPayment(
+    private async postSalaryPayment(
         tx: Prisma.TransactionClient,
         tenantId: string,
         payment: { id: string; employee_id: string; amount: unknown; pay_period: string; payment_date: Date },
         paymentMethod: string,
     ) {
+        const employee = await tx.employee.findFirst({
+            where: { id: payment.employee_id, tenant_id: tenantId },
+            select: { store_id: true },
+        });
+        const storeId = employee?.store_id ?? null;
+        const mode = classifyPaymentMode(paymentMethod);
+        // No home branch yet: keep the posting rule's cash account. Once the
+        // employee has a branch, cash credits that branch's drawer.
+        let overrideCreditAccountId: string | undefined;
+        if (mode === 'cash' && storeId) {
+            const resolved = await resolveBranchCashAccount(tx, tenantId, storeId);
+            if ('error' in resolved) {
+                throw new BadRequestException(cashPostErrorMessage(resolved.error));
+            }
+            overrideCreditAccountId = resolved.accountId;
+        }
+
         return autoPostFromRules({
             tx,
             tenantId,
             eventType: 'salary_payment',
             conditionKey: 'payment_mode',
-            conditionValue: classifyPaymentMode(paymentMethod),
+            conditionValue: mode,
             sourceModule: 'salary-payments',
             sourceType: 'salary_payment',
             sourceId: payment.id,
@@ -107,6 +125,8 @@ export class SalaryPaymentsService {
             date: payment.payment_date,
             partyType: 'EMPLOYEE',
             partyId: payment.employee_id,
+            ...(storeId ? { storeId } : {}),
+            ...(overrideCreditAccountId ? { overrideCreditAccountId } : {}),
         });
     }
 
@@ -163,6 +183,7 @@ export class SalaryPaymentsService {
                     date: periodDate,
                     partyType: 'EMPLOYEE',
                     partyId: employee.id,
+                    ...(employee.store_id ? { storeId: employee.store_id } : {}),
                 });
 
                 if (posting.voucherId) {

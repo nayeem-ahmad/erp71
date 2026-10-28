@@ -47,6 +47,7 @@ import {
     type AccountCodeLevel,
 } from '@erp71/database';
 import { isCashDrawer } from './cash-drawer';
+import { manualDrawerProblem } from './cash-account';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
 import { createdAtRange } from '../common/created-range.util';
 import { AuditService } from '../audit/audit.service';
@@ -4486,9 +4487,27 @@ ${voucherMessages}
         }
     }
 
-    private validateVoucherTypeRules(dto: CreateVoucherDto, accounts: Array<{ id: string; category: string }>) {
+    private validateVoucherTypeRules(
+        dto: CreateVoucherDto,
+        accounts: Array<{ id: string; name?: string | null; category: string; store_id?: string | null }>,
+    ) {
         const accountById = new Map(accounts.map((account) => [account.id, account]));
-        const detailAccounts = dto.details.map((detail) => accountById.get(detail.accountId)).filter(Boolean) as Array<{ id: string; category: string }>;
+        const detailAccounts = dto.details.map((detail) => accountById.get(detail.accountId)).filter(Boolean) as Array<{ id: string; name?: string | null; category: string; store_id?: string | null }>;
+
+        for (const account of detailAccounts) {
+            const problem = manualDrawerProblem(dto.storeId, {
+                id: account.id,
+                name: account.name ?? '',
+                category: account.category,
+                store_id: account.store_id ?? null,
+            });
+            if (problem === 'NO_BRANCH') {
+                throw new BadRequestException('A cash drawer voucher needs a branch.');
+            }
+            if (problem === 'DRAWER_BRANCH_MISMATCH') {
+                throw new BadRequestException('This cash drawer belongs to another branch.');
+            }
+        }
 
         if (dto.voucherType === VoucherType.CASH_PAYMENT || dto.voucherType === VoucherType.CASH_RECEIVE) {
             if (!detailAccounts.some((account) => account.category === AccountCategory.CASH)) {
