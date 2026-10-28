@@ -1,6 +1,7 @@
 // CommonJS runtime counterpart of payment-method.seed.ts — keep the two in sync.
 // `type` values must match the shared PaymentMethodType contract.
 // `link_to` names the default account the method's tenders post to.
+const { nextAccountCode } = require('./account-code.js');
 const DEFAULT_PAYMENT_METHODS = [
     { name: 'Cash', type: 'Cash', sort_order: 1, link_to: 'Cash in Hand' },
     { name: 'Bank', type: 'Bank', sort_order: 2, link_to: 'Main Bank Account' },
@@ -38,18 +39,145 @@ async function linkDefaultPaymentMethodAccounts(tx, tenantId) {
 
     const accounts = await tx.account.findMany({
         where: { tenant_id: tenantId, name: { in: [...new Set(targets.values())] } },
-        select: { id: true, name: true },
+        select: { id: true, name: true, store_id: true },
     });
-    const accountIdByName = new Map(accounts.map((a) => [a.name, a.id]));
+    // Signup creates the first store before this runs. Cash is that store's
+    // drawer. A caller with no store client keeps today's shared link.
+    const firstStore = tx.store
+        ? await tx.store.findFirst({
+            where: {
+                tenant_id: tenantId,
+                NOT: { name: { equals: 'Online Store', mode: 'insensitive' } },
+            },
+            orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+            select: { id: true },
+        })
+        : null;
 
     const linked = [];
     for (const method of methods) {
-        const accountId = accountIdByName.get(targets.get(method.name));
+        const accountName = targets.get(method.name);
+        const preferStoreId = method.name === 'Cash' ? firstStore?.id ?? null : null;
+        const accountId = accountIdForLink(accountName, accounts, preferStoreId);
         if (!accountId) continue;
-        await tx.paymentMethod.update({ where: { id: method.id }, data: { account_id: accountId } });
+        await tx.paymentMethod.update({
+            where: { id: method.id },
+            data: preferStoreId ? { account_id: accountId, all_branches: false } : { account_id: accountId },
+        });
+        if (preferStoreId) {
+            await tx.paymentMethodStore.create({
+                data: { tenant_id: tenantId, payment_method_id: method.id, store_id: preferStoreId },
+            });
+        }
         linked.push(method.name);
     }
     return { linked };
 }
 
-module.exports = { seedDefaultPaymentMethods, linkDefaultPaymentMethodAccounts, DEFAULT_PAYMENT_METHODS };
+function accountIdForLink(accountName, accounts, preferStoreId) {
+    const matches = accounts.filter((account) => account.name === accountName);
+    if (preferStoreId) {
+        const drawer = matches.find((account) => account.store_id === preferStoreId);
+        if (drawer) return drawer.id;
+    }
+    const shared = matches.find((account) => account.store_id == null);
+    return (shared ?? matches[0])?.id;
+}
+
+// One drawer and one Cash method for a branch that does not have them yet.
+// Does not copy banks or wallets. A second branch cannot reuse the name Cash.
+async function ensureBranchCashDrawer(client, tenantId, storeId) {
+    const existing = await client.account.findFirst({
+        where: { tenant_id: tenantId, store_id: storeId, category: 'cash' },
+        select: { id: true },
+    });
+    let accountId = existing?.id;
+
+    if (!accountId) {
+        const subgroup = await client.accountSubgroup.findFirst({
+            where: { tenant_id: tenantId, code: '1101' },
+            select: { id: true, code: true, group_id: true },
+        });
+        const group = subgroup
+            ? await client.accountGroup.findFirst({
+                where: { id: subgroup.group_id },
+                select: { id: true, code: true },
+            })
+            : null;
+        const codes = await client.account.findMany({
+            where: { tenant_id: tenantId },
+            select: { code: true },
+        });
+        const created = await client.account.create({
+            data: {
+                tenant_id: tenantId,
+                group_id: group?.id ?? subgroup?.group_id ?? null,
+                subgroup_id: subgroup?.id ?? null,
+                name: 'Cash in Hand',
+                code: nextAccountCode(
+                    group?.code ?? '11',
+                    subgroup?.code ?? '1101',
+                    codes.map((row) => row.code).filter(Boolean),
+                ),
+                type: 'asset',
+                category: 'cash',
+                store_id: storeId,
+            },
+        });
+        accountId = created.id;
+    }
+
+    const method = await client.paymentMethod.findFirst({
+        where: {
+            tenant_id: tenantId,
+            account_id: accountId,
+            type: { equals: 'Cash', mode: 'insensitive' },
+        },
+        select: { id: true },
+    });
+    if (method) return { accountId, methodId: method.id };
+
+    const store = await client.store.findFirst({
+        where: { id: storeId, tenant_id: tenantId },
+        select: { id: true, name: true, code: true },
+    });
+    const taken = await client.paymentMethod.findMany({
+        where: { tenant_id: tenantId },
+        select: { name: true },
+    });
+    const branch = {
+        id: storeId,
+        name: store?.name ?? storeId,
+        code: store?.code ?? null,
+    };
+    const createdMethod = await client.paymentMethod.create({
+        data: {
+            tenant_id: tenantId,
+            type: 'Cash',
+            name: cashMethodName(branch, new Set(taken.map((row) => row.name))),
+            account_id: accountId,
+            is_active: true,
+            show_on_entry: true,
+            sort_order: 1,
+            all_branches: false,
+        },
+    });
+    await client.paymentMethodStore.create({
+        data: { tenant_id: tenantId, payment_method_id: createdMethod.id, store_id: storeId },
+    });
+    return { accountId, methodId: createdMethod.id };
+}
+
+function cashMethodName(branch, taken) {
+    const candidates = [
+        'Cash',
+        `Cash (${branch.name})`,
+        branch.code ? `Cash (${branch.name} ${branch.code})` : `Cash (${branch.name} ${branch.id.slice(0, 8)})`,
+    ];
+    for (const candidate of candidates) {
+        if (!taken.has(candidate)) return candidate;
+    }
+    return `Cash (${branch.name} ${branch.id})`;
+}
+
+module.exports = { seedDefaultPaymentMethods, linkDefaultPaymentMethodAccounts, ensureBranchCashDrawer, DEFAULT_PAYMENT_METHODS };

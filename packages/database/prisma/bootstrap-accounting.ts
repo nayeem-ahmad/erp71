@@ -752,6 +752,24 @@ async function findSharedAccount(
     });
 }
 
+/** The signup store's Cash in Hand is that branch's drawer. Banks stay shared. */
+async function stampFirstDrawer(db: AccountingBootstrapClient, tenantId: string) {
+    const stores = (db as { store?: { findFirst?: AccountingBootstrapClient['account']['findFirst'] } }).store;
+    if (!stores?.findFirst) return;
+    const firstStore = await (db as any).store.findFirst({
+        where: {
+            tenant_id: tenantId,
+            NOT: { name: { equals: 'Online Store', mode: 'insensitive' } },
+        },
+        orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+        select: { id: true },
+    });
+    if (!firstStore) return;
+    const cash = await findSharedAccount(db, tenantId, 'Cash in Hand', { id: true });
+    if (!cash) return;
+    await db.account.update({ where: { id: cash.id }, data: { store_id: firstStore.id } });
+}
+
 async function saveSharedAccount(
     db: AccountingBootstrapClient,
     tenantId: string,
@@ -872,6 +890,7 @@ export async function bootstrapDefaultAccountingForTenant(
     tenantId: string,
 ) {
     await applyAccountingTemplate(db, tenantId, DEFAULT_ACCOUNTING_TEMPLATE);
+    await stampFirstDrawer(db, tenantId);
 
     const accounts = await db.account.findMany({
         where: { tenant_id: tenantId },

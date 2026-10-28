@@ -580,8 +580,25 @@ async function applyAccountingTemplate(db, tenantId, template) {
 	}
 }
 
+async function stampFirstDrawer(db, tenantId) {
+	if (!db.store?.findFirst) return;
+	const firstStore = await db.store.findFirst({
+		where: {
+			tenant_id: tenantId,
+			NOT: { name: { equals: 'Online Store', mode: 'insensitive' } },
+		},
+		orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+		select: { id: true },
+	});
+	if (!firstStore) return;
+	const cash = await findSharedAccount(db, tenantId, 'Cash in Hand', { id: true });
+	if (!cash) return;
+	await db.account.update({ where: { id: cash.id }, data: { store_id: firstStore.id } });
+}
+
 async function bootstrapDefaultAccountingForTenant(db, tenantId) {
 	await applyAccountingTemplate(db, tenantId, DEFAULT_ACCOUNTING_TEMPLATE);
+	await stampFirstDrawer(db, tenantId);
 
 	const accounts = await db.account.findMany({
 		where: { tenant_id: tenantId },

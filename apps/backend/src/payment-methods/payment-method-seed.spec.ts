@@ -66,6 +66,44 @@ describe('default payment methods', () => {
         expect(tx.account.findMany).not.toHaveBeenCalled();
     });
 
+    it('limits the Cash method to the first store and leaves Bank on every branch', async () => {
+        const tx = {
+            paymentMethod: {
+                findMany: jest.fn().mockResolvedValue([
+                    { id: 'pm-cash', name: 'Cash', account_id: null },
+                    { id: 'pm-bank', name: 'Bank', account_id: null },
+                ]),
+                update: jest.fn().mockResolvedValue({}),
+            },
+            paymentMethodStore: {
+                create: jest.fn().mockResolvedValue({}),
+            },
+            account: {
+                findMany: jest.fn().mockResolvedValue([
+                    { id: 'a-cash', name: 'Cash in Hand', store_id: 's1' },
+                    { id: 'a-bank', name: 'Main Bank Account', store_id: null },
+                ]),
+            },
+            store: {
+                findFirst: jest.fn().mockResolvedValue({ id: 's1', name: 'Babu Bazar' }),
+            },
+        };
+
+        await linkDefaultPaymentMethodAccounts(tx, 't1');
+
+        expect(tx.paymentMethod.update).toHaveBeenCalledWith({
+            where: { id: 'pm-cash' },
+            data: { account_id: 'a-cash', all_branches: false },
+        });
+        expect(tx.paymentMethodStore.create).toHaveBeenCalledWith({
+            data: { tenant_id: 't1', payment_method_id: 'pm-cash', store_id: 's1' },
+        });
+        expect(tx.paymentMethod.update).toHaveBeenCalledWith({
+            where: { id: 'pm-bank' },
+            data: { account_id: 'a-bank' },
+        });
+    });
+
     it('never overwrites an existing link and skips names with no matching account', async () => {
         // The query asks for account_id: null, so a linked method is never returned.
         const tx = buildTx(
