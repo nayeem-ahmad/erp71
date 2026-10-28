@@ -7,6 +7,7 @@ jest.mock('@erp71/database', () => ({
     seedDefaultPaymentMethods: jest.fn().mockResolvedValue(undefined),
     linkDefaultPaymentMethodAccounts: jest.fn().mockResolvedValue({ linked: [] }),
     seedDefaultLeadTaxonomy: jest.fn().mockResolvedValue(undefined),
+    seedDefaultExpenseCategories: jest.fn().mockResolvedValue({ created: [], headsAdded: [] }),
     PrismaClient: class MockPrismaClient {},
 }));
 

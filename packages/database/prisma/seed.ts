@@ -10,6 +10,7 @@ import { seedDemoAccount, DEMO_ACCOUNT_EMAIL } from './seed-demo';
 import { ROLE_DEFAULT_PERMISSIONS, UserRole, resolveBaseUserRole, SYSTEM_TENANT_ROLE_TO_USER_ROLE } from '@erp71/shared-types';
 import { seedDefaultTenantRoles } from './tenant-role.seed';
 import { linkDefaultPaymentMethodAccounts, seedDefaultPaymentMethods } from './payment-method.seed';
+import { seedDefaultExpenseCategories } from './expense-category.seed';
 import { seedPlatformReferenceData } from './seed-platform';
 import { DEFAULT_FOUND_REASONS } from './inventory-reasons.seed';
 
@@ -326,6 +327,7 @@ async function main() {
     }
 
     await bootstrapDefaultAccountingForTenant(prisma, tenant.id);
+    await seedDefaultExpenseCategories(prisma, tenant.id);
     // The accounts now exist: point each default payment method at its own.
     await seedDefaultPaymentMethods(prisma, tenant.id);
     await linkDefaultPaymentMethodAccounts(prisma, tenant.id);

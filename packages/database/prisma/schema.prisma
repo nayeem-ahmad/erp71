@@ -1092,6 +1092,7 @@ model Tenant {
   supplierCreditTransactions SupplierCreditTransaction[]
   crmCampaigns               CrmCampaign[]
   expenseCategories          ExpenseCategory[]
+  expenseHeads               ExpenseHead[]
   expenseEntries             ExpenseEntry[]
   loans                      Loan[]
   loanPayments               LoanPayment[]
@@ -4248,6 +4249,8 @@ model Account {
   purchasePayments      PurchasePayment[]
   salesReturnPayments   SalesReturnPayment[]
   purchaseReturnPayments PurchaseReturnPayment[]
+  expenseCategories     ExpenseCategory[]
+  expenseHeads          ExpenseHead[]
 
   @@unique([tenant_id, name])
   @@index([tenant_id])
@@ -7355,14 +7358,46 @@ model ExpenseCategory {
   tenant_id   String
   name        String
   description String?
+  /// Expense account this category is charged to. Null keeps the posting
+  /// rule's debit (General Operating Expense). How it was paid still picks
+  /// cash or bank. SetNull so deleting the account unlinks the category
+  /// instead of blocking the delete.
+  account_id  String?
   created_at  DateTime           @default(now())
   updated_at  DateTime           @updatedAt
   tenant      Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  account     Account?           @relation(fields: [account_id], references: [id], onDelete: SetNull)
+  heads       ExpenseHead[]
   entries     ExpenseEntry[]
   claimLines  ExpenseClaimLine[]
 
   @@unique([tenant_id, name])
   @@index([tenant_id])
+  @@index([account_id])
+}
+
+/// A specific expense under a category. Salary is the category; "Salary - Karim"
+/// is a head. Entries record a head. The category stays on the entry, copied
+/// from the head, so reports can still total by category.
+model ExpenseHead {
+  id          String          @id @default(uuid())
+  tenant_id   String
+  category_id String
+  name        String
+  description String?
+  /// Own expense account. Null means this head charges the category's
+  /// account, or the posting rule when the category has none either.
+  account_id  String?
+  created_at  DateTime        @default(now())
+  updated_at  DateTime        @updatedAt
+  tenant      Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  category    ExpenseCategory @relation(fields: [category_id], references: [id])
+  account     Account?        @relation(fields: [account_id], references: [id], onDelete: SetNull)
+  entries     ExpenseEntry[]
+
+  @@unique([category_id, name])
+  @@index([tenant_id])
+  @@index([account_id])
 }
 
 model ExpenseEntry {
@@ -7370,6 +7405,10 @@ model ExpenseEntry {
   tenant_id      String
   store_id       String?
   category_id    String
+  /// Nullable only so a deploy can add the column while the previous app is
+  /// still recording expenses. The API requires a head, and sync-expense-heads
+  /// fills every row that predates it. See prisma/sync-expense-heads.ts.
+  head_id        String?
   amount         Decimal         @db.Decimal(12, 2)
   expense_date   DateTime        @db.Date
   description    String?
@@ -7378,10 +7417,12 @@ model ExpenseEntry {
   created_at     DateTime        @default(now())
   tenant         Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   category       ExpenseCategory @relation(fields: [category_id], references: [id])
+  head           ExpenseHead?    @relation(fields: [head_id], references: [id])
   store          Store?          @relation(fields: [store_id], references: [id])
 
   @@index([tenant_id, expense_date])
   @@index([tenant_id, category_id])
+  @@index([tenant_id, head_id])
 }
 
 // ── Loans ───────────────────────────────────────────────────────────────────

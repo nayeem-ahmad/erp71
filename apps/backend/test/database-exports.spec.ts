@@ -16,6 +16,7 @@ describe('@erp71/database runtime exports', () => {
         'seedBusinessTypeTemplate',
         'seedDefaultTenantRoles',
         'seedDefaultPaymentMethods',
+        'seedDefaultExpenseCategories',
         'linkDefaultPaymentMethodAccounts',
         'bootstrapDefaultAccountingForTenant',
         'seedDemoAccount',

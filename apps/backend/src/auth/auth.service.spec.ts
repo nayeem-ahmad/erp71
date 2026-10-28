@@ -92,6 +92,8 @@ describe('AuthService', () => {
         conversationChannel: { createMany: jest.fn() },
         crmActivityPurpose: { createMany: jest.fn() },
         leadStatusOption: { createMany: jest.fn() },
+        expenseCategory: { findUnique: jest.fn(), create: jest.fn() },
+        expenseHead: { create: jest.fn() },
         store: { create: jest.fn() },
         tenantSubscription: { create: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) },
         userStoreAccess: { create: jest.fn() },
@@ -196,6 +198,9 @@ describe('AuthService', () => {
             { id: 'expense-id', name: 'General Operating Expense' },
         ]);
         // Signup links the seeded methods to their accounts, reading the unlinked ones.
+        db.expenseCategory.findUnique.mockResolvedValue({ id: 'cat-seed', _count: { heads: 1 } });
+        db.expenseCategory.create.mockResolvedValue({ id: 'cat-seed' });
+        db.expenseHead.create.mockResolvedValue({ id: 'head-seed' });
         db.paymentMethod.findMany.mockResolvedValue([{ id: 'pm-cash', name: 'Cash' }]);
         db.paymentMethod.update.mockResolvedValue({});
         db.userStoreAccess.create.mockResolvedValue({});

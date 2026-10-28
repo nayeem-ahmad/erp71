@@ -272,6 +272,34 @@ step sync:payment-method-account-fk \
 step "prisma db push" \
     env DIRECT_URL="$DATABASE_URL" npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma
 
+# sync:expense-heads runs AFTER db push. The push adds ExpenseHead and a
+# nullable ExpenseEntry.head_id and copies nothing, so every expense recorded
+# before this release would have no head. This creates one head per category
+# that still has such a row — named the same as the category — and points the
+# row at it. Nullable on purpose: the previous app is still inserting expenses
+# (category only) while prepare runs, and a required column would reject them.
+# A later prepare fills any row that landed in that gap. Idempotent. See
+# prisma/sync-expense-heads.ts.
+step sync:expense-heads \
+    npm run sync:expense-heads --workspace=@erp71/database
+
+# sync:expense-categories runs AFTER db push, and after expense heads exist.
+# New tenants get Salary, Rent, Utilities, Refreshments, Conveyance and
+# Miscellaneous at signup. This is what gives the same list to tenants that
+# already exist. Each category also gets a head of the same name when it has
+# none, so an expense can be recorded. A category the tenant already has is
+# left alone, including the account they connected. Idempotent. See
+# prisma/sync-expense-categories.ts.
+step sync:expense-categories \
+    npm run sync:expense-categories --workspace=@erp71/database
+
+# KH Tradind recorded some categories as if they were heads. Person names
+# become heads under Personal Expenses. Trust Care Company, Vat Return and
+# Family Cost become heads under Other Expenses. Other shops are ignored.
+# Idempotent. See prisma/sync-expense-reparent.ts.
+step sync:expense-reparent \
+    npm run sync:expense-reparent --workspace=@erp71/database
+
 # ---- After db push: fill what the schema just gained -----------------------
 
 # db:seed:platform — NOT db:seed. This runs unattended — before every deploy's

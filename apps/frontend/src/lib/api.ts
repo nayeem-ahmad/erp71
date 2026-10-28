@@ -5616,23 +5616,37 @@ export const api = {
         return fetchWithAuth(`/audit-logs${query ? `?${query}` : ''}`);
     },
     getExpenseCategories: () => fetchWithAuth('/expenses/categories'),
-    createExpenseCategory: (data: { name: string; description?: string }) => fetchWithAuth('/expenses/categories', {
+    createExpenseCategory: (data: { name: string; description?: string; accountId?: string | null }) => fetchWithAuth('/expenses/categories', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    updateExpenseCategory: (id: string, data: { name?: string; description?: string }) => fetchWithAuth(`/expenses/categories/${id}`, {
+    updateExpenseCategory: (id: string, data: { name?: string; description?: string; accountId?: string | null }) => fetchWithAuth(`/expenses/categories/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteExpenseCategory: (id: string) => fetchWithAuth(`/expenses/categories/${id}`, { method: 'DELETE' }),
-    getExpenseEntries: (params?: { storeId?: string; from?: string; to?: string; categoryId?: string; createdFrom?: string; createdTo?: string }) => {
+    getExpenseHeads: (categoryId?: string) =>
+        fetchWithAuth(`/expenses/heads${categoryId ? `?categoryId=${encodeURIComponent(categoryId)}` : ''}`),
+    createExpenseHead: (data: { categoryId: string; name: string; description?: string; accountId?: string | null }) => fetchWithAuth('/expenses/heads', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateExpenseHead: (id: string, data: { name?: string; description?: string; accountId?: string | null }) => fetchWithAuth(`/expenses/heads/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteExpenseHead: (id: string) => fetchWithAuth(`/expenses/heads/${id}`, { method: 'DELETE' }),
+    getExpenseEntries: (params?: { storeId?: string; from?: string; to?: string; categoryId?: string; headId?: string; createdFrom?: string; createdTo?: string }) => {
         const q = new URLSearchParams();
         if (params?.storeId) q.set('storeId', params.storeId);
         if (params?.from) q.set('from', params.from);
         if (params?.to) q.set('to', params.to);
         if (params?.categoryId) q.set('categoryId', params.categoryId);
+        if (params?.headId) q.set('headId', params.headId);
         if (params?.createdFrom) q.set('createdFrom', params.createdFrom);
         if (params?.createdTo) q.set('createdTo', params.createdTo);
         return fetchAllPages(`/expenses/entries${q.toString() ? `?${q}` : ''}`);

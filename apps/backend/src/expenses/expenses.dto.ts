@@ -16,6 +16,11 @@ export class CreateExpenseCategoryDto {
     @IsOptional()
     @IsString()
     description?: string;
+
+    /** Expense account this category is charged to. Omit to use the posting rule. */
+    @IsOptional()
+    @IsUUID()
+    accountId?: string | null;
 }
 
 export class UpdateExpenseCategoryDto {
@@ -26,11 +31,54 @@ export class UpdateExpenseCategoryDto {
     @IsOptional()
     @IsString()
     description?: string;
+
+    /** Null clears the link and posts to the rule's debit account again. */
+    @IsOptional()
+    @IsUUID()
+    accountId?: string | null;
+}
+
+export class CreateExpenseHeadDto {
+    @IsUUID()
+    categoryId: string;
+
+    @IsString()
+    name: string;
+
+    @IsOptional()
+    @IsString()
+    description?: string;
+
+    /** Null uses the category's account. */
+    @IsOptional()
+    @IsUUID()
+    accountId?: string | null;
+}
+
+export class UpdateExpenseHeadDto {
+    @IsOptional()
+    @IsString()
+    name?: string;
+
+    @IsOptional()
+    @IsString()
+    description?: string;
+
+    /** Null clears a direct link so the head posts through its category. */
+    @IsOptional()
+    @IsUUID()
+    accountId?: string | null;
+}
+
+export class ListExpenseHeadsQueryDto {
+    @IsOptional()
+    @IsUUID()
+    categoryId?: string;
 }
 
 export class CreateExpenseEntryDto {
     @IsUUID()
-    categoryId: string;
+    headId: string;
 
     @IsNumber()
     @Min(0.01)
@@ -55,7 +103,7 @@ export class CreateExpenseEntryDto {
 export class UpdateExpenseEntryDto {
     @IsOptional()
     @IsUUID()
-    categoryId?: string;
+    headId?: string;
 
     @IsOptional()
     @IsNumber()
@@ -83,6 +131,10 @@ export class ListExpenseEntriesQueryDto extends PaginationDto {
     @IsOptional()
     @IsUUID()
     categoryId?: string;
+
+    @IsOptional()
+    @IsUUID()
+    headId?: string;
 
     @IsOptional()
     @IsStoreIdOrAll()

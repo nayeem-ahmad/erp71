@@ -10,8 +10,8 @@ export const FINANCE_TOOLS: ChatTool[] = [
         permission: StorePermission.VIEW_FINANCIAL_REPORTS,
         modules: ['retail', 'accounting'],
         description:
-            "Total business expenses for a date range, broken down by category with each category's share of spend. " +
-            'Use for "what did we spend", cost and overhead questions.',
+            "Total business expenses for a date range, broken down by category and by expense head under each category. " +
+            'Use for "what did we spend", cost and overhead questions, including a person or other head under a category such as Salary.',
         parameters: {
             type: 'object',
             properties: { ...DATE_RANGE_PROPS, ...STORE_PROP, ...PAGING_PROPS },
@@ -34,6 +34,11 @@ export const FINANCE_TOOLS: ChatTool[] = [
                     category: r.name,
                     amount: money(r.amount),
                     sharePct: pct(r.sharePct),
+                    heads: (r.heads ?? []).map((head: any) => ({
+                        head: head.name,
+                        amount: money(head.amount),
+                        sharePct: pct(head.sharePct),
+                    })),
                 })),
             };
         },

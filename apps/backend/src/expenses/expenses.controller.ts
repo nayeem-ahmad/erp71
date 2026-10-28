@@ -17,10 +17,13 @@ import { BranchScopeService } from '../database/branch-scope.service';
 import {
     CreateExpenseCategoryDto,
     CreateExpenseEntryDto,
+    CreateExpenseHeadDto,
     ExpenseReportQueryDto,
     ListExpenseEntriesQueryDto,
+    ListExpenseHeadsQueryDto,
     UpdateExpenseCategoryDto,
     UpdateExpenseEntryDto,
+    UpdateExpenseHeadDto,
 } from './expenses.dto';
 import { ExpensesService } from './expenses.service';
 
@@ -62,6 +65,34 @@ export class ExpensesController {
     @Delete('categories/:id')
     deleteCategory(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.service.deleteCategory(tenant.tenantId, id);
+    }
+
+    @RequireAnyStorePermission(...EXPENSE_READ)
+    @Get('heads')
+    listHeads(@Tenant() tenant: TenantContext, @Query() query: ListExpenseHeadsQueryDto) {
+        return this.service.listHeads(tenant.tenantId, query.categoryId);
+    }
+
+    @RequireAnyStorePermission(...EXPENSE_WRITE)
+    @Post('heads')
+    createHead(@Tenant() tenant: TenantContext, @Body() dto: CreateExpenseHeadDto) {
+        return this.service.createHead(tenant.tenantId, dto);
+    }
+
+    @RequireAnyStorePermission(...EXPENSE_WRITE)
+    @Patch('heads/:id')
+    updateHead(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: UpdateExpenseHeadDto,
+    ) {
+        return this.service.updateHead(tenant.tenantId, id, dto);
+    }
+
+    @RequireAnyStorePermission(...EXPENSE_WRITE)
+    @Delete('heads/:id')
+    deleteHead(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.service.deleteHead(tenant.tenantId, id);
     }
 
     @RequireAnyStorePermission(...EXPENSE_READ)

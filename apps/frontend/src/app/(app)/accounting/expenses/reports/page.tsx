@@ -20,11 +20,23 @@ import { useI18n } from '@/lib/i18n';
 import { formatBDT } from '@/lib/format';
 import { compactDensity } from '@/lib/ui/compact-density';
 
+interface HeadBreakdown {
+    headId: string;
+    name: string;
+    amount: number;
+    sharePct: number;
+}
+
 interface CategoryBreakdown {
     categoryId: string;
     name: string;
     amount: number;
     sharePct: number;
+    heads?: HeadBreakdown[];
+}
+
+interface HeadRow extends HeadBreakdown {
+    categoryName: string;
 }
 
 interface MonthlyTrend {
@@ -40,6 +52,7 @@ interface ExpenseSummary {
 }
 
 const categoryHelper = createColumnHelper<CategoryBreakdown>();
+const headHelper = createColumnHelper<HeadRow>();
 const trendHelper = createColumnHelper<MonthlyTrend>();
 
 function defaultFrom() {
@@ -107,6 +120,39 @@ export default function ExpenseReportsPage() {
                     </div>
                 ),
                 size: 180,
+            }),
+        ],
+        [t],
+    );
+
+    const headRows: HeadRow[] = useMemo(
+        () => (summary?.byCategory ?? []).flatMap((category) =>
+            (category.heads ?? []).map((head) => ({ ...head, categoryName: category.name })),
+        ),
+        [summary],
+    );
+
+    const headColumns: ColumnDef<HeadRow, any>[] = useMemo(
+        () => [
+            headHelper.accessor('categoryName', {
+                header: t.expenses.category,
+                cell: (info) => <span className="text-sm text-gray-600">{info.getValue()}</span>,
+                size: 160,
+            }),
+            headHelper.accessor('name', {
+                header: t.expenses.head,
+                cell: (info) => <span className="text-sm font-bold text-gray-800">{info.getValue()}</span>,
+                size: 200,
+            }),
+            headHelper.accessor('amount', {
+                header: t.common.amount,
+                cell: (info) => <span className="text-sm font-bold text-danger">{formatBDT(Number(info.getValue()))}</span>,
+                size: 140,
+            }),
+            headHelper.accessor('sharePct', {
+                header: t.expenses.share,
+                cell: (info) => <span className="text-xs font-bold text-gray-500">{Number(info.getValue()).toFixed(1)}%</span>,
+                size: 100,
             }),
         ],
         [t],
@@ -213,6 +259,17 @@ export default function ExpenseReportsPage() {
                             data={summary.byCategory}
                             columns={categoryColumns}
                             searchPlaceholder={t.expenses.searchCategories}
+                            emptyMessage={t.common.noData}
+                        />
+                    </CompactSection>
+
+                    <CompactSection title={t.expenses.byHead}>
+                        <DataTable
+                            tableId="expense-reports-by-head"
+                            title="Expenses by Head"
+                            data={headRows}
+                            columns={headColumns}
+                            searchPlaceholder={t.expenses.searchHeads}
                             emptyMessage={t.common.noData}
                         />
                     </CompactSection>

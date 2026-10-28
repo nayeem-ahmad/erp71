@@ -102,6 +102,7 @@ export class DemoWorld {
     suppliers: PartyRuntime[] = [];
     employees: EmployeeRuntime[] = [];
     expenseCategoryIds = new Map<string, string>();
+    expenseHeadIds = new Map<string, string>();
 
     /**
      * A short tail of the most recent sales. Deliveries, warranty claims and
