@@ -4,14 +4,11 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Loader2, Plus, Settings2, BarChart3, Trash2 } from 'lucide-react';
-import { DataTable, createdAtColumn, CreatedRangeFilter, DateRangeFilter } from '@/components/data-table';
+import { Banknote, BarChart3, Calculator, CreditCard, Plus, Receipt, Settings2, Trash2, Wallet } from 'lucide-react';
+import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
 import { applyCreatedRangeQuery, createdRangeFromPreset, type CreatedRange } from '@/lib/created-range';
-import {
-    AccountingPageShell,
-    CompactSection,
-    CompactStat,
-} from '@/components/accounting/compact';
+import type { NumberCondition } from '@/lib/number-condition';
+import { AccountingPageShell } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
@@ -23,9 +20,16 @@ import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import { getWorkspaceItem } from '@/lib/session-store';
 
+interface ExpenseHead {
+    id: string;
+    name: string;
+    category_id?: string;
+}
+
 interface ExpenseCategory {
     id: string;
     name: string;
+    heads?: ExpenseHead[];
 }
 
 interface ExpenseEntry {
@@ -36,15 +40,31 @@ interface ExpenseEntry {
     description?: string | null;
     payment_method: string;
     category?: ExpenseCategory;
+    head?: ExpenseHead | null;
     store?: { id: string; name: string } | null;
 }
 
 const columnHelper = createColumnHelper<ExpenseEntry>();
 
 const PAYMENT_METHODS = ['CASH', 'BKASH', 'CARD', 'BANK'] as const;
+type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
+function isKnownMethod(method: string): method is PaymentMethod {
+    return (PAYMENT_METHODS as readonly string[]).includes(method);
+}
+
+/** An amount chip applied to rows already loaded for the date window. */
+function matchesAmount(amount: number, condition: NumberCondition | null): boolean {
+    if (!condition) return true;
+    if (condition.op === 'gt') return amount > condition.value;
+    if (condition.op === 'lt') return amount < condition.value;
+    if (condition.op === 'eq') return amount === condition.value;
+    const upper = condition.to ?? condition.value;
+    return amount >= condition.value && amount <= upper;
+}
 
 function ExpensesPageContent() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     // Which branch's entries to list; a new entry is still booked on the
     // header branch.
     const branch = useBranchScope();
@@ -55,12 +75,16 @@ function ExpensesPageContent() {
     // Opens on this month, read on the workspace's calendar rather than UTC's.
     const [dateRange, setDateRange] = useState<CreatedRange | null>(() => createdRangeFromPreset('thisMonth'));
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
-    const [categoryFilter, setCategoryFilter] = useState('');
+    const [categoryIds, setCategoryIds] = useState<string[]>([]);
+    const [headIds, setHeadIds] = useState<string[]>([]);
+    const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
+    const [amountFilter, setAmountFilter] = useState<NumberCondition | null>(null);
+    const [search, setSearch] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [saving, setSaving] = useState(false);
     const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-    const [formCategoryId, setFormCategoryId] = useState('');
+    const [formHeadId, setFormHeadId] = useState('');
     const [formAmount, setFormAmount] = useState('');
     const [formDate, setFormDate] = useState(new Date().toISOString().slice(0, 10));
     const [formDescription, setFormDescription] = useState('');
@@ -73,7 +97,6 @@ function ExpensesPageContent() {
                 api.getExpenseEntries({
                     from: dateRange?.from,
                     to: dateRange?.to,
-                    categoryId: categoryFilter || undefined,
                     ...applyCreatedRangeQuery(createdRange),
                     storeId: branch.apiStoreId,
                 }),
@@ -92,7 +115,7 @@ function ExpensesPageContent() {
     useEffect(() => {
         if (!branch.ready) return;
         void loadData();
-    }, [dateRange, categoryFilter, createdRange, branch.ready, branch.apiStoreId]);
+    }, [dateRange, createdRange, branch.ready, branch.apiStoreId]);
 
     useEffect(() => {
         if (searchParams.get('new') === '1') {
@@ -100,30 +123,60 @@ function ExpensesPageContent() {
         }
     }, [searchParams]);
 
+    const heads = useMemo(
+        () => categories.flatMap((category) =>
+            (category.heads ?? []).map((head) => ({ ...head, categoryId: category.id, categoryName: category.name })),
+        ),
+        [categories],
+    );
+    const methodLabel = (method: string) => (isKnownMethod(method) ? t.expenses.methods[method] : method);
+
+    // Date, created and branch narrow what the server sends. The list walks
+    // every page of that window, so the other chips and the strip narrow the
+    // same rows here.
+    const filteredEntries = useMemo(() => {
+        const categorySet = new Set(categoryIds);
+        const headSet = new Set(headIds);
+        const methodSet = new Set(paymentMethods);
+        const query = search.trim().toLowerCase();
+        return entries.filter((entry) => {
+            const categoryId = entry.category?.id ?? '';
+            const headId = entry.head?.id ?? '';
+            if (categorySet.size && !categorySet.has(categoryId)) return false;
+            if (headSet.size && !headSet.has(headId)) return false;
+            if (methodSet.size && !methodSet.has(entry.payment_method)) return false;
+            if (!matchesAmount(Number(entry.amount || 0), amountFilter)) return false;
+            if (!query) return true;
+            const haystack = [
+                entry.head?.name,
+                entry.category?.name,
+                entry.description,
+                entry.payment_method,
+                methodLabel(entry.payment_method),
+                String(entry.amount ?? ''),
+            ].filter(Boolean).join(' ').toLowerCase();
+            return haystack.includes(query);
+        });
+    }, [entries, categoryIds, headIds, paymentMethods, amountFilter, search, t]);
+
     const resetForm = () => {
-        setFormCategoryId(categories[0]?.id ?? '');
+        setFormHeadId('');
         setFormAmount('');
         setFormDate(new Date().toISOString().slice(0, 10));
         setFormDescription('');
         setFormPaymentMethod('CASH');
     };
 
-    useEffect(() => {
-        if (categories.length > 0 && !formCategoryId) {
-            setFormCategoryId(categories[0].id);
-        }
-    }, [categories, formCategoryId]);
-
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formCategoryId || !formAmount) {
+        if (!formHeadId || !formAmount) {
             setToast({ type: 'error', message: t.expenses.entryRequired });
             return;
         }
         setSaving(true);
         try {
             await api.createExpenseEntry({
-                categoryId: formCategoryId,
+                headId: formHeadId,
                 amount: Number(formAmount),
                 expenseDate: formDate,
                 description: formDescription.trim() || undefined,
@@ -161,11 +214,18 @@ function ExpensesPageContent() {
                 size: 120,
             }),
             createdAtColumn(columnHelper, { header: t.common.createdAt }),
+            columnHelper.accessor((row) => row.head?.name ?? row.category?.name ?? '—', {
+                id: 'head',
+                header: t.expenses.head,
+                cell: (info) => <span className="text-sm font-bold text-gray-800">{info.getValue()}</span>,
+                size: 180,
+            }),
             columnHelper.accessor((row) => row.category?.name ?? '—', {
                 id: 'category',
                 header: t.expenses.category,
-                cell: (info) => <span className="text-sm font-bold text-gray-800">{info.getValue()}</span>,
-                size: 160,
+                cell: (info) => <span className="text-sm text-gray-600">{info.getValue()}</span>,
+                meta: { hideOnMobile: true },
+                size: 140,
             }),
             columnHelper.accessor('description', {
                 header: t.expenses.notes,
@@ -174,10 +234,8 @@ function ExpensesPageContent() {
             }),
             columnHelper.accessor('payment_method', {
                 header: t.expenses.paymentMethod,
-                cell: (info) => (
-                    <span className="text-[10px] font-semibold text-gray-500">{info.getValue()}</span>
-                ),
-                size: 100,
+                cell: (info) => <span className="text-sm text-gray-600">{methodLabel(info.getValue())}</span>,
+                size: 120,
             }),
             columnHelper.accessor('amount', {
                 header: t.common.amount,
@@ -206,7 +264,109 @@ function ExpensesPageContent() {
         [t],
     );
 
-    const totalAmount = entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+    const headChoices = useMemo(
+        () => (categoryIds.length
+            ? heads.filter((head) => categoryIds.includes(head.categoryId))
+            : heads),
+        [heads, categoryIds],
+    );
+
+    // The row holds what the old bar held, plus amount. Created waits behind More.
+    const filters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'expenseDate',
+                type: 'date-range',
+                label: t.common.date,
+                value: dateRange,
+                onChange: setDateRange,
+                operators: true,
+            },
+            {
+                id: 'category',
+                type: 'multi-select',
+                label: t.expenses.category,
+                value: categoryIds,
+                onChange: (next) => {
+                    setCategoryIds(next);
+                    if (!next.length) return;
+                    const allowed = new Set(
+                        heads.filter((head) => next.includes(head.categoryId)).map((head) => head.id),
+                    );
+                    setHeadIds((current) => current.filter((id) => allowed.has(id)));
+                },
+                options: categories.map((category) => ({ value: category.id, label: category.name })),
+            },
+            {
+                id: 'head',
+                type: 'multi-select',
+                label: t.expenses.head,
+                value: headIds,
+                onChange: setHeadIds,
+                options: headChoices.map((head) => ({
+                    value: head.id,
+                    label: categoryIds.length === 1 ? head.name : `${head.categoryName} — ${head.name}`,
+                })),
+            },
+            {
+                id: 'payment',
+                type: 'multi-select',
+                label: t.expenses.paymentMethod,
+                value: paymentMethods,
+                onChange: setPaymentMethods,
+                options: PAYMENT_METHODS.map((value) => ({ value, label: t.expenses.methods[value] })),
+            },
+            {
+                id: 'amount',
+                type: 'number',
+                label: t.common.amount,
+                value: amountFilter,
+                onChange: setAmountFilter,
+                money: true,
+            },
+            { id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange, operators: true, more: true },
+        ],
+        [t, dateRange, categoryIds, categories, headIds, headChoices, paymentMethods, amountFilter, createdRange, heads],
+    );
+
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale });
+        const count = filteredEntries.length;
+        const total = filteredEntries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+        const cash = filteredEntries.reduce(
+            (sum, entry) => sum + (entry.payment_method === 'CASH' ? Number(entry.amount || 0) : 0),
+            0,
+        );
+        const items: ListStat[] = [
+            {
+                id: 'count',
+                icon: <Receipt aria-hidden />,
+                label: t.expenses.entryCount,
+                value: count.toLocaleString(locale),
+            },
+            {
+                id: 'total',
+                icon: <Banknote aria-hidden />,
+                label: t.expenses.periodTotal,
+                value: money(total),
+                tone: total > 0 ? 'danger' : 'default',
+            },
+            {
+                id: 'average',
+                icon: <Calculator aria-hidden />,
+                label: t.expenses.average,
+                value: money(count ? total / count : 0),
+            },
+            { id: 'cash', icon: <Wallet aria-hidden />, label: t.expenses.cash, value: money(cash) },
+            {
+                id: 'other',
+                icon: <CreditCard aria-hidden />,
+                label: t.expenses.otherMethods,
+                value: money(total - cash),
+            },
+        ];
+        return { items, loading, label: t.expenses.statsLabel };
+    }, [filteredEntries, loading, locale, t]);
 
     return (
         <AccountingPageShell>
@@ -248,57 +408,44 @@ function ExpensesPageContent() {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <CompactStat label={t.expenses.periodTotal} value={formatBDT(totalAmount)} tone="negative" />
-                <CompactSection className="sm:col-span-2" flat>
-                    <div className={`${compactDensity.filterBar} !p-0 !border-0 !bg-transparent`}>
-                        <DateRangeFilter label={t.common.date} value={dateRange} onChange={setDateRange} />
-                        <label className="block">
-                            <span className={`${compactDensity.formLabel} block mb-1`}>{t.expenses.category}</span>
-                            <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className={compactDensity.formField}>
-                                <option value="">{t.expenses.allCategories}</option>
-                                {categories.map((cat) => (
-                                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                                ))}
-                            </select>
-                        </label>
-                        <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
-                    </div>
-                </CompactSection>
-            </div>
-
-            {loading ? (
-                <div className="flex items-center justify-center py-12 text-gray-400">
-                    <Loader2 className="w-5 h-5 animate-spin me-2" />
-                    {t.common.loading}
-                </div>
-            ) : (
-                <DataTable
-                    tableId="expenses"
-                    title="Expenses"
-                    data={entries}
-                    columns={columns}
-                    searchPlaceholder={t.expenses.searchEntries}
-                    emptyMessage={categories.length === 0 ? t.expenses.noCategoriesHint : t.common.noData}
-                />
-            )}
+            <DataTable
+                tableId="expenses"
+                title={t.expenses.title}
+                data={filteredEntries}
+                columns={columns}
+                isLoading={loading}
+                searchPlaceholder={t.expenses.searchEntries}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+                emptyMessage={categories.length === 0 ? t.expenses.noCategoriesHint : heads.length === 0 ? t.expenses.noHeadsHint : t.common.noData}
+            />
 
             {showForm && (
                 <ModalShell size="sm" onBackdropClick={() => setShowForm(false)}>
                     <form onSubmit={handleCreate} className="flex max-h-[90vh] flex-col overflow-hidden">
                         <ModalHeader title={t.expenses.addEntry} onClose={() => setShowForm(false)} />
                         <div className={`${compactDensity.modalPadding} ${compactDensity.formStack} overflow-y-auto`}>
-                            {categories.length === 0 ? (
+                            {heads.length === 0 ? (
                                 <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                                    {t.expenses.noCategoriesHint}
+                                    {categories.length === 0 ? t.expenses.noCategoriesHint : t.expenses.noHeadsHint}
                                 </p>
                             ) : (
                                 <>
                                     <label className="block">
-                                        <span className={`${compactDensity.formLabel} block mb-1`}>{t.expenses.category}</span>
-                                        <select value={formCategoryId} onChange={(e) => setFormCategoryId(e.target.value)} className={compactDensity.formField} required>
-                                            {categories.map((cat) => (
-                                                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                        <span className={`${compactDensity.formLabel} block mb-1`}>{t.expenses.head}</span>
+                                        <select value={formHeadId} onChange={(e) => setFormHeadId(e.target.value)} className={compactDensity.formField} required>
+                                            <option value="">{t.expenses.selectHead}</option>
+                                            {categories.filter((cat) => (cat.heads ?? []).length > 0).map((cat) => (
+                                                <optgroup key={cat.id} label={cat.name}>
+                                                    {(cat.heads ?? []).map((head) => (
+                                                        <option key={head.id} value={head.id}>{head.name}</option>
+                                                    ))}
+                                                </optgroup>
                                             ))}
                                         </select>
                                     </label>
@@ -314,7 +461,7 @@ function ExpensesPageContent() {
                                         <span className={`${compactDensity.formLabel} block mb-1`}>{t.expenses.paymentMethod}</span>
                                         <select value={formPaymentMethod} onChange={(e) => setFormPaymentMethod(e.target.value as typeof formPaymentMethod)} className={compactDensity.formField}>
                                             {PAYMENT_METHODS.map((method) => (
-                                                <option key={method} value={method}>{method}</option>
+                                                <option key={method} value={method}>{t.expenses.methods[method]}</option>
                                             ))}
                                         </select>
                                     </label>
@@ -329,7 +476,7 @@ function ExpensesPageContent() {
                             <Button variant="secondary" type="button" onClick={() => setShowForm(false)}>
                                 {t.common.cancel}
                             </Button>
-                            <Button variant="primary" type="submit" loading={saving} disabled={categories.length === 0}>
+                            <Button variant="primary" type="submit" loading={saving} disabled={heads.length === 0}>
                                 {t.common.save}
                             </Button>
                         </ModalFooter>

@@ -5,6 +5,7 @@ const accountCode = require('./prisma/account-code.js');
 const tenantRoles = require('./prisma/tenant-role.seed.js');
 const paymentMethods = require('./prisma/payment-method.seed.js');
 const leadTaxonomy = require('./prisma/lead-taxonomy.seed.js');
+const expenseCategories = require('./prisma/expense-category.seed.js');
 const seedDemo = require('./prisma/seed-demo.js');
 const seedTemplate = require('./prisma/templates/seed-template.js');
 
@@ -20,6 +21,7 @@ module.exports = {
     ...tenantRoles,
     ...paymentMethods,
     ...leadTaxonomy,
+    ...expenseCategories,
     DEMO_ACCOUNT_EMAIL: seedDemo.DEMO_ACCOUNT_EMAIL,
     DEMO_ACCOUNT_PASSWORD: seedDemo.DEMO_ACCOUNT_PASSWORD,
     seedDemoAccount: seedDemo.seedDemoAccount,
