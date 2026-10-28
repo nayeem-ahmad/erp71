@@ -344,6 +344,8 @@ export const accountingMessages = {
         selectGroup: "समूह चुनें",
         noSubgroup: "कोई उपसमूह नहीं",
         accountName: "खाते का नाम",
+        drawerBranch: "शाखा",
+        drawerBranchRequired: "नकद दराज के लिए एक शाखा चाहिए।",
         accountCode: "खाता कोड",
         accountType: "खाता प्रकार",
         accountGroup: "खाता समूह",

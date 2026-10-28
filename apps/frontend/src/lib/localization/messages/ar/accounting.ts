@@ -344,6 +344,8 @@ export const accountingMessages = {
         selectGroup: 'اختر مجموعة',
         noSubgroup: 'بلا مجموعة فرعية',
         accountName: 'اسم الحساب',
+        drawerBranch: 'الفرع',
+        drawerBranchRequired: 'يحتاج درج النقد إلى فرع.',
         accountCode: 'رمز الحساب',
         accountType: 'نوع الحساب',
         accountGroup: 'مجموعة الحساب',

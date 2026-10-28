@@ -1329,6 +1329,8 @@ export const crmHrMessages = {
                 department: "বিভাগ",
                 designation: "পদবি",
                 basicSalary: "মূল বেতন",
+                branch: "শাখা",
+                branchRequired: "একজন কর্মীর একটি শাখা লাগে।",
                 status: "স্ট্যাটাস",
                 nationalId: "জাতীয় পরিচয়পত্র",
                 adding: "যোগ করা হচ্ছে...",

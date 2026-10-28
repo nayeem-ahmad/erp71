@@ -344,6 +344,8 @@ export const accountingMessages = {
         selectGroup: "Gruppe auswählen",
         noSubgroup: "Keine Untergruppe",
         accountName: "Kontenbezeichnung",
+        drawerBranch: "Filiale",
+        drawerBranchRequired: "Eine Kassenschublade braucht eine Filiale.",
         accountCode: "Kontonummer",
         accountType: "Kontenart",
         accountGroup: "Kontengruppe",

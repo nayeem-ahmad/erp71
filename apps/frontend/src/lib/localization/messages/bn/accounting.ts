@@ -440,6 +440,8 @@ export const accountingMessages = {
             selectGroup: "গ্রুপ নির্বাচন করুন",
             noSubgroup: "কোনো উপগ্রুপ নেই",
             accountName: "হিসাবের নাম",
+            drawerBranch: "শাখা",
+            drawerBranchRequired: "নগদ ড্রয়ারের একটি শাখা লাগে।",
             accountCode: "হিসাব কোড",
             accountType: "হিসাবের ধরন",
             accountGroup: "হিসাব গ্রুপ",

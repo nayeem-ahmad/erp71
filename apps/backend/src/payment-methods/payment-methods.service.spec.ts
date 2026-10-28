@@ -439,14 +439,14 @@ describe('PaymentMethodsService', () => {
   describe('findLinkableAccounts()', () => {
     it('scopes the lookup to the tenant and returns picker fields only', async () => {
       db.account.findMany.mockResolvedValue([
-        { id: 'acc-1', name: 'Cash in Hand', code: '110101', type: 'asset', category: 'cash' },
+        { id: 'acc-1', name: 'Cash in Hand', code: '110101', type: 'asset', category: 'cash', store_id: 'store-1' },
       ]);
 
       const result = await service.findLinkableAccounts(tenantId);
 
       expect(db.account.findMany.mock.calls[0][0].where).toEqual({ tenant_id: tenantId });
       expect(result).toEqual([
-        { id: 'acc-1', name: 'Cash in Hand', code: '110101', type: 'asset', category: 'cash' },
+        { id: 'acc-1', name: 'Cash in Hand', code: '110101', type: 'asset', category: 'cash', store_id: 'store-1' },
       ]);
     });
 

@@ -217,7 +217,7 @@ export class PaymentMethodsService {
   async findLinkableAccounts(tenantId: string): Promise<PaymentMethodAccountDto[]> {
     const accounts = await this.db.account.findMany({
       where: { tenant_id: tenantId },
-      select: { id: true, name: true, code: true, type: true, category: true },
+      select: { id: true, name: true, code: true, type: true, category: true, store_id: true },
       // Fixed-width codes make a plain string sort the hierarchy order; accounts
       // still awaiting a code sort last under Postgres' NULLS LAST default.
       orderBy: [{ code: 'asc' }, { name: 'asc' }],
@@ -229,6 +229,7 @@ export class PaymentMethodsService {
       code: account.code ?? null,
       type: account.type,
       category: account.category,
+      store_id: account.store_id ?? null,
     }));
   }
 

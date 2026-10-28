@@ -12,6 +12,8 @@ import {
     CompactStat,
 } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { BranchFilter } from '@/components/ui';
+import { useBranchScope } from '@/lib/branch-scope';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
@@ -81,6 +83,7 @@ export default function AccountingLedgerPage() {
 
 function AccountingLedgerPageContent() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
@@ -98,12 +101,14 @@ function AccountingLedgerPageContent() {
     useEffect(() => {
         let active = true;
 
+        if (!branch.ready) return;
+
         const loadAccounts = async () => {
             setIsLoadingAccounts(true);
             setAccountError('');
 
             try {
-                const data = await api.getAccounts();
+                const data = await api.getAccounts({ storeId: branch.apiStoreId });
                 if (!active) {
                     return;
                 }
@@ -127,7 +132,7 @@ function AccountingLedgerPageContent() {
         return () => {
             active = false;
         };
-    }, []);
+    }, [branch.ready, branch.apiStoreId]);
 
     useEffect(() => {
         const query = new URLSearchParams();
@@ -150,7 +155,7 @@ function AccountingLedgerPageContent() {
 
         // Hold off until the tenant's approved-only setting is known, so the
         // ledger is never drawn against the wrong value and then corrected.
-        if (!approvalReady) {
+        if (!approvalReady || !branch.ready) {
             return;
         }
 
@@ -170,6 +175,7 @@ function AccountingLedgerPageContent() {
                     from: from || undefined,
                     to: to || undefined,
                     approvedOnly,
+                    storeId: branch.apiStoreId,
                 });
 
                 if (!active) {
@@ -196,7 +202,7 @@ function AccountingLedgerPageContent() {
         return () => {
             active = false;
         };
-    }, [selectedAccountId, from, to, approvedOnly, approvalReady]);
+    }, [selectedAccountId, from, to, approvedOnly, approvalReady, branch.ready, branch.apiStoreId]);
 
     const selectedAccount = accounts.find((account) => account.id === selectedAccountId) || ledger?.account || null;
     const periodMovement = ledger
@@ -279,6 +285,7 @@ function AccountingLedgerPageContent() {
                     t.ledger.title,
                     'accounting',
                 )}
+                actions={<BranchFilter scope={branch} />}
             />
 
             <CompactSection title={t.ledger.title}>

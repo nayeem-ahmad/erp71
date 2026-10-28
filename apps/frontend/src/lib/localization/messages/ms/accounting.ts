@@ -256,6 +256,8 @@ export const accountingMessages = {
         selectGroup: 'Pilih kumpulan',
         noSubgroup: 'Tiada subkumpulan',
         accountName: 'Nama akaun',
+        drawerBranch: 'Cawangan',
+        drawerBranchRequired: 'Laci tunai memerlukan cawangan.',
         accountCode: 'Kod akaun',
         accountType: 'Jenis akaun',
         accountGroup: 'Kumpulan akaun',

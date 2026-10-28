@@ -14,7 +14,8 @@ import { displayEmail } from '@erp71/shared-types';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
-import { PageShell, Button, ConfirmDialog, StatusBadge, type StatusBadgeTone } from '@/components/ui';
+import { PageShell, Button, BranchFilter, ConfirmDialog, StatusBadge, type StatusBadgeTone } from '@/components/ui';
+import { useBranchScope } from '@/lib/branch-scope';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
@@ -40,6 +41,7 @@ interface Employee {
     department?: { id: string; name: string } | null;
     designation?: { id: string; name: string } | null;
     user?: { id: string; email: string; name?: string | null; mobile?: string | null } | null;
+    store_id?: string | null;
 }
 
 const EMPLOYEE_STATUSES = ['ACTIVE', 'PROBATION', 'INACTIVE', 'RESIGNED', 'TERMINATED', 'CONTRACT_ENDED'] as const;
@@ -59,6 +61,7 @@ const columnHelper = createColumnHelper<Employee>();
 
 export default function EmployeesPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
     const [formOpen, setFormOpen] = useState(false);
@@ -68,12 +71,15 @@ export default function EmployeesPage() {
     const [changingStatus, setChangingStatus] = useState(false);
 
     useEffect(() => {
-        loadEmployees();
-    }, []);
+        if (!branch.ready) return;
+        void loadEmployees(branch.apiStoreId);
+        // loadEmployees closes over nothing but the store id passed in.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch.ready, branch.apiStoreId]);
 
-    const loadEmployees = async () => {
+    const loadEmployees = async (storeId?: string) => {
         try {
-            setEmployees(await api.getEmployees());
+            setEmployees(await api.getEmployees(storeId ? { storeId } : undefined));
         } catch (error) {
             console.error('Failed to load employees', error);
         } finally {
@@ -107,7 +113,7 @@ export default function EmployeesPage() {
             toast.success(t.employees.detail.updateSuccess);
         } else {
             await api.createEmployee(data);
-            void loadEmployees();
+            void loadEmployees(branch.apiStoreId);
         }
     };
 
@@ -265,6 +271,7 @@ export default function EmployeesPage() {
                     )}
                     actions={(
                         <>
+                            <BranchFilter scope={branch} />
                             <Button variant="secondary" icon={<Upload className="w-4 h-4" />} onClick={() => setImportOpen(true)}>
                                 {t.common.import}
                             </Button>
@@ -283,7 +290,7 @@ export default function EmployeesPage() {
                     entityLabel="Employees"
                     fields={IMPORT_FIELDS}
                     importFn={(rows, mode) => api.importEmployees(rows, mode)}
-                    onSuccess={() => void loadEmployees()}
+                    onSuccess={() => void loadEmployees(branch.apiStoreId)}
                 />
 
                 <DataTable<Employee>

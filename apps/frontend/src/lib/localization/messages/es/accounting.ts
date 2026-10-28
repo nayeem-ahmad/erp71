@@ -344,6 +344,8 @@ export const accountingMessages = {
         selectGroup: "Seleccionar grupo",
         noSubgroup: "Sin subgrupo",
         accountName: "Nombre de la cuenta",
+        drawerBranch: "Sucursal",
+        drawerBranchRequired: "Un cajón de efectivo necesita una sucursal.",
         accountCode: "Código de cuenta",
         accountType: "Tipo de cuenta",
         accountGroup: "Grupo de cuentas",

@@ -1520,6 +1520,8 @@ export interface PaymentMethodAccount {
     code: string | null;
     type: string;
     category: string;
+    /** Set when the account is one branch's cash drawer. */
+    store_id?: string | null;
 }
 
 /** What `POST /admin/tenants/:id/restore` reports back. */
@@ -2771,12 +2773,13 @@ export const api = {
     deleteAccountSubgroup: (id: string) => fetchWithAuth(`/accounting/account-subgroups/${id}`, { method: 'DELETE' }),
     getNextAccountSubgroupCode: (groupId: string) =>
         fetchWithAuth(`/accounting/account-subgroups/next-code?groupId=${encodeURIComponent(groupId)}`),
-    getAccounts: (params?: { search?: string; groupId?: string; type?: string; category?: string }) => {
+    getAccounts: (params?: { search?: string; groupId?: string; type?: string; category?: string; storeId?: string }) => {
         const query = new URLSearchParams();
         if (params?.search) query.set('search', params.search);
         if (params?.groupId) query.set('groupId', params.groupId);
         if (params?.type) query.set('type', params.type);
         if (params?.category) query.set('category', params.category);
+        if (params?.storeId) query.set('storeId', params.storeId);
         return fetchWithAuth(`/accounting/accounts${query.toString() ? `?${query.toString()}` : ''}`);
     },
     createAccount: (data: any) => fetchWithAuth('/accounting/accounts', {
@@ -2810,10 +2813,11 @@ export const api = {
         return fetchWithAuth(`/accounting/vouchers${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getVoucher: (id: string) => fetchWithAuth(`/accounting/vouchers/${id}`),
-    getLedger: (accountId: string, params?: { from?: string; to?: string } & ApprovedOnlyParams) => {
+    getLedger: (accountId: string, params?: { from?: string; to?: string; storeId?: string } & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        if (params?.storeId) query.set('storeId', params.storeId);
         appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/reports/ledger/${accountId}${query.toString() ? `?${query.toString()}` : ''}`);
     },
@@ -2930,19 +2934,21 @@ export const api = {
         appendReportScopeParams(query, params);
         return fetchWithAuth(`/accounting/reports/balance-sheet${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getCashbook: (params?: { from?: string; to?: string; accountId?: string } & ApprovedOnlyParams) => {
+    getCashbook: (params?: { from?: string; to?: string; accountId?: string; storeId?: string } & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         if (params?.accountId) query.set('accountId', params.accountId);
+        if (params?.storeId) query.set('storeId', params.storeId);
         appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/reports/cashbook${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getBankbook: (params?: { from?: string; to?: string; accountId?: string } & ApprovedOnlyParams) => {
+    getBankbook: (params?: { from?: string; to?: string; accountId?: string; storeId?: string } & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         if (params?.accountId) query.set('accountId', params.accountId);
+        if (params?.storeId) query.set('storeId', params.storeId);
         appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/reports/bankbook${query.toString() ? `?${query.toString()}` : ''}`);
     },
@@ -5043,11 +5049,12 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     // Employees
-    getEmployees: (params?: { search?: string; status?: string; departmentId?: string }) => {
+    getEmployees: (params?: { search?: string; status?: string; departmentId?: string; storeId?: string }) => {
         const query = new URLSearchParams();
         if (params?.search) query.set('search', params.search);
         if (params?.status) query.set('status', params.status);
         if (params?.departmentId) query.set('departmentId', params.departmentId);
+        if (params?.storeId) query.set('storeId', params.storeId);
         return fetchAllPages(`/employees${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getEmployee: (id: string) => fetchWithAuth(`/employees/${id}`),

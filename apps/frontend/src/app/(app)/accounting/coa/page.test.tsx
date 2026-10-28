@@ -3,6 +3,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PlatformFeaturesProvider } from '@/contexts/PlatformFeaturesContext';
 import ChartOfAccountsPage from './page';
+import { mockBranchScope } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 function renderPage() {
     return render(
@@ -18,6 +21,7 @@ jest.mock('@/lib/api', () => ({
         getAccountSubgroups: jest.fn(),
         getAccounts: jest.fn(),
         getNextAccountCode: jest.fn(),
+        getStores: jest.fn(),
         createAccount: jest.fn(),
         updateAccount: jest.fn(),
         deleteAccount: jest.fn(),
@@ -30,6 +34,7 @@ jest.mock('next/link', () => {
 
 describe('ChartOfAccountsPage', () => {
     beforeEach(() => {
+        mockBranchScope();
         const { api } = require('@/lib/api');
         jest.clearAllMocks();
         api.getAccountGroups.mockResolvedValue([
@@ -53,6 +58,7 @@ describe('ChartOfAccountsPage', () => {
         ]);
         // The modal asks for a suggested code whenever the parent changes.
         api.getNextAccountCode.mockResolvedValue({ code: '110102' });
+        api.getStores.mockResolvedValue([{ id: 'store-a', name: 'Babu Bazar' }]);
         api.createAccount.mockResolvedValue({ id: 'account-2' });
         api.updateAccount.mockResolvedValue({ id: 'account-1' });
         api.deleteAccount.mockResolvedValue({ id: 'account-1' });
@@ -147,7 +153,10 @@ describe('ChartOfAccountsPage', () => {
         await waitFor(() => screen.getByText('Cash in Hand'));
 
         fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-        fireEvent.change(screen.getByLabelText('Account name'), { target: { value: 'Cash on Hand' } });
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.change(within(dialog).getByLabelText('Account name'), { target: { value: 'Cash on Hand' } });
+        await waitFor(() => expect(within(dialog).getByRole('option', { name: 'Babu Bazar' })).toBeInTheDocument());
+        fireEvent.change(within(dialog).getByLabelText('Branch'), { target: { value: 'store-a' } });
         fireEvent.click(screen.getByRole('button', { name: /update account/i }));
 
         await waitFor(() => {
@@ -157,6 +166,7 @@ describe('ChartOfAccountsPage', () => {
                 name: 'Cash on Hand',
                 code: '110101',
                 category: 'cash',
+                storeId: 'store-a',
             });
         });
         expect(api.updateAccount.mock.calls[0][1]).not.toHaveProperty('type');

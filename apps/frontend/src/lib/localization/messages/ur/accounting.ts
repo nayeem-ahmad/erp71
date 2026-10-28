@@ -344,6 +344,8 @@ export const accountingMessages = {
         selectGroup: 'گروپ منتخب کریں',
         noSubgroup: 'کوئی ذیلی گروپ نہیں',
         accountName: 'اکاؤنٹ کا نام',
+        drawerBranch: 'شاخ',
+        drawerBranchRequired: 'نقد دراز کو ایک شاخ چاہیے۔',
         accountCode: 'اکاؤنٹ کوڈ',
         accountType: 'اکاؤنٹ کی قسم',
         accountGroup: 'اکاؤنٹ گروپ',
