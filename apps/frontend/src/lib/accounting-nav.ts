@@ -10,6 +10,7 @@ import {
     Cpu,
     FileText,
     FolderTree,
+    Tags,
     GitMerge,
     HandCoins,
     Landmark,
@@ -46,6 +47,7 @@ export type AccountingLinkKey =
     | 'bankReconciliation'
     | 'expenses'
     | 'expenseCategories'
+    | 'expenseHeads'
     | 'expenseReports'
     | 'loans'
     | 'fundTransfers'
@@ -111,6 +113,7 @@ export const ACCOUNTING_FINANCING_LINKS: AccountingNavItem[] = [
 export const EXPENSE_LINKS: AccountingNavItem[] = [
     { key: 'expenses', href: routes.accounting.expenses, icon: Receipt, accent: 'bg-rose-50 text-rose-700 border-rose-100' },
     { key: 'expenseCategories', href: routes.accounting.expenseCategories, icon: FolderTree, accent: 'bg-orange-50 text-orange-700 border-orange-100' },
+    { key: 'expenseHeads', href: routes.accounting.expenseHeads, icon: Tags, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
     { key: 'expenseReports', href: routes.accounting.expenseReports, icon: BarChart3, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
 ];
 

@@ -431,15 +431,15 @@ test.describe.serial('Accounting module — full feature coverage', () => {
         await categoryForm.getByRole('button', { name: /^save$/i }).click();
         await expect(page.getByText(expenseCategoryName).first()).toBeVisible({ timeout: 10_000 });
 
-        const categoryRow = page.locator('table tbody tr').filter({ hasText: expenseCategoryName });
-        await categoryRow.getByRole('button', { name: /heads/i }).click();
+        await page.goto('/accounting/expenses/heads');
+        await page.getByRole('button', { name: /add head/i }).click();
         const headForm = page.locator('form').filter({
             has: page.getByRole('heading', { name: /add head/i }),
         });
+        await headForm.locator('select').first().selectOption({ label: expenseCategoryName });
         await headForm.locator('input[type="text"]').fill(expenseHeadName);
         await headForm.getByRole('button', { name: /^save$/i }).click();
-        await expect(headForm.getByText(expenseHeadName)).toBeVisible({ timeout: 10_000 });
-        await headForm.getByRole('button', { name: /^cancel$/i }).click();
+        await expect(page.getByText(expenseHeadName).first()).toBeVisible({ timeout: 10_000 });
 
         await page.goto('/accounting/expenses');
         await page.getByRole('button', { name: /add expense/i }).click();
