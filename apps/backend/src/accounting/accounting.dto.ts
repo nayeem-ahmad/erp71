@@ -192,6 +192,11 @@ export class ListAccountSubgroupsQueryDto {
 }
 
 export class ListAccountsQueryDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsString()
     search?: string;
@@ -389,6 +394,11 @@ export class UpdateAccountingSettingsDto {
 }
 
 export class ListLedgerQueryDto extends ApprovedOnlyQueryDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsDateString()
     from?: string;
@@ -599,6 +609,11 @@ export class BalanceSheetQueryDto extends ApprovedOnlyQueryDto {
 }
 
 export class CashbookQueryDto extends ApprovedOnlyQueryDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsDateString()
     from?: string;
@@ -613,6 +628,11 @@ export class CashbookQueryDto extends ApprovedOnlyQueryDto {
 }
 
 export class BankbookQueryDto extends ApprovedOnlyQueryDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsDateString()
     from?: string;

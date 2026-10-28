@@ -554,8 +554,23 @@ export class AccountingService {
         }
     }
 
-    async findAccounts(tenantId: string, query: ListAccountsQueryDto) {
+    async findAccounts(tenantId: string, query: ListAccountsQueryDto, storeId?: string) {
         const search = query.search?.trim();
+        const branchAccounts: Prisma.AccountWhereInput | undefined = storeId
+            ? { OR: [{ store_id: null }, { store_id: storeId }] }
+            : undefined;
+        const searchClause: Prisma.AccountWhereInput | undefined = search
+            ? {
+                  OR: [
+                      { name: { contains: search, mode: 'insensitive' } },
+                      // A prefix search doubles as a subtree filter:
+                      // "1101" returns exactly that subgroup's accounts.
+                      { code: { contains: search, mode: 'insensitive' } },
+                      // Tenants still have the old flat numbers on paper.
+                      { legacy_code: { contains: search, mode: 'insensitive' } },
+                  ],
+              }
+            : undefined;
 
         const accounts = await this.db.account.findMany({
             where: {
@@ -563,18 +578,9 @@ export class AccountingService {
                 ...(query.groupId ? { group_id: query.groupId } : {}),
                 ...(query.type ? { type: query.type } : {}),
                 ...(query.category ? { category: query.category } : {}),
-                ...(search
-                    ? {
-                          OR: [
-                              { name: { contains: search, mode: 'insensitive' } },
-                              // A prefix search doubles as a subtree filter:
-                              // "1101" returns exactly that subgroup's accounts.
-                              { code: { contains: search, mode: 'insensitive' } },
-                              // Tenants still have the old flat numbers on paper.
-                              { legacy_code: { contains: search, mode: 'insensitive' } },
-                          ],
-                      }
-                    : {}),
+                ...(branchAccounts && searchClause
+                    ? { AND: [branchAccounts, searchClause] }
+                    : branchAccounts ?? searchClause ?? {}),
             },
             include: {
                 group: true,
@@ -599,7 +605,11 @@ export class AccountingService {
             by: ['account_id'],
             where: {
                 account_id: { in: accounts.map((account) => account.id) },
-                voucher: { tenant_id: tenantId, ...approvalFilter },
+                voucher: {
+                    tenant_id: tenantId,
+                    ...approvalFilter,
+                    ...(storeId ? { store_id: storeId } : {}),
+                },
             },
             _sum: { debit_amount: true, credit_amount: true },
         });
@@ -1440,7 +1450,7 @@ export class AccountingService {
         };
     }
 
-    async findLedger(tenantId: string, accountId: string, query: ListLedgerQueryDto) {
+    async findLedger(tenantId: string, accountId: string, query: ListLedgerQueryDto, storeId?: string) {
         this.validateDateRange(query.from, query.to);
 
         const account = await this.db.account.findFirst({
@@ -1454,10 +1464,11 @@ export class AccountingService {
             },
         });
 
-        if (!account) {
+        if (!account || (storeId && account.store_id && account.store_id !== storeId)) {
             throw new NotFoundException('Account not found');
         }
 
+        const branchVoucher = storeId ? { store_id: storeId } : {};
         const openingRangeStart = query.from ? this.toStartOfDay(query.from) : undefined;
         const ledgerDateRange = this.buildVoucherDateRangeFilter(query.from, query.to);
         const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
@@ -1469,6 +1480,7 @@ export class AccountingService {
                     voucher: {
                         tenant_id: tenantId,
                         ...approvalFilter,
+                        ...branchVoucher,
                         ...(openingRangeStart ? { date: { lt: openingRangeStart } } : {}),
                     },
                 },
@@ -1483,6 +1495,7 @@ export class AccountingService {
                     voucher: {
                         tenant_id: tenantId,
                         ...approvalFilter,
+                        ...branchVoucher,
                         ...ledgerDateRange,
                     },
                 },
@@ -3992,17 +4005,33 @@ export class AccountingService {
         tenantId: string,
         category: AccountCategory,
         query: CashbookQueryDto | BankbookQueryDto,
+        storeId?: string,
     ) {
         this.validateDateRange(query.from, query.to);
         const range = this.resolveDateRange(query.from, query.to);
-
-        const bookAccounts = await this.db.account.findMany({
-            where: {
-                tenant_id: tenantId,
-                category,
-                ...(query.accountId ? { id: query.accountId } : {}),
-            },
+        const wallets = await this.walletAccountIds(tenantId);
+        const loaded = await this.db.account.findMany({
+            where: category === AccountCategory.CASH
+                ? {
+                    tenant_id: tenantId,
+                    category,
+                    ...(storeId ? { store_id: storeId } : {}),
+                    ...(query.accountId ? { id: query.accountId } : {}),
+                }
+                : {
+                    tenant_id: tenantId,
+                    ...(query.accountId ? { id: query.accountId } : {}),
+                    OR: [
+                        { category: AccountCategory.BANK },
+                        { category: AccountCategory.CASH, store_id: null },
+                    ],
+                },
         });
+        const bookAccounts = loaded.filter((account) =>
+            category === AccountCategory.CASH
+                ? isCashDrawer(account, wallets)
+                : account.category === AccountCategory.BANK || !isCashDrawer(account, wallets),
+        );
 
         if (bookAccounts.length === 0) {
             return {
@@ -4023,7 +4052,12 @@ export class AccountingService {
         const openingTotals = await this.db.voucherDetail.aggregate({
             where: {
                 account_id: { in: accountIds },
-                voucher: { tenant_id: tenantId, ...approvalFilter, date: { lt: range.fromDate } },
+                voucher: {
+                    tenant_id: tenantId,
+                    ...approvalFilter,
+                    ...(storeId ? { store_id: storeId } : {}),
+                    date: { lt: range.fromDate },
+                },
             },
             _sum: { debit_amount: true, credit_amount: true },
         });
@@ -4036,7 +4070,12 @@ export class AccountingService {
         const entries = await this.db.voucherDetail.findMany({
             where: {
                 account_id: { in: accountIds },
-                voucher: { tenant_id: tenantId, ...approvalFilter, ...this.buildVoucherDateRangeFilter(range.from, range.to) },
+                voucher: {
+                    tenant_id: tenantId,
+                    ...approvalFilter,
+                    ...(storeId ? { store_id: storeId } : {}),
+                    ...this.buildVoucherDateRangeFilter(range.from, range.to),
+                },
             },
             include: {
                 voucher: true,
@@ -4086,12 +4125,12 @@ export class AccountingService {
         };
     }
 
-    async getCashbook(tenantId: string, query: CashbookQueryDto) {
-        return this.buildBookReport(tenantId, AccountCategory.CASH, query);
+    async getCashbook(tenantId: string, query: CashbookQueryDto, storeId?: string) {
+        return this.buildBookReport(tenantId, AccountCategory.CASH, query, storeId);
     }
 
-    async getBankbook(tenantId: string, query: BankbookQueryDto) {
-        return this.buildBookReport(tenantId, AccountCategory.BANK, query);
+    async getBankbook(tenantId: string, query: BankbookQueryDto, storeId?: string) {
+        return this.buildBookReport(tenantId, AccountCategory.BANK, query, storeId);
     }
 
     async exportLedger(tenantId: string, format: 'tally' | 'quickbooks', from?: string, to?: string): Promise<string> {

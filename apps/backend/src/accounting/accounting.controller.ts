@@ -230,8 +230,11 @@ export class AccountingController {
     }
 
     @Get('accounts')
-    findAccounts(@Tenant() tenant: TenantContext, @Query() query: ListAccountsQueryDto) {
-        return this.accountingService.findAccounts(tenant.tenantId, query);
+    async findAccounts(@Tenant() tenant: TenantContext, @Query() query: ListAccountsQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.findAccounts(tenant.tenantId, query, storeId);
     }
 
     @Get('accounts/next-code')
@@ -400,12 +403,15 @@ export class AccountingController {
     }
 
     @Get('reports/ledger/:accountId')
-    findLedger(
+    async findLedger(
         @Tenant() tenant: TenantContext,
         @Param('accountId') accountId: string,
         @Query() query: ListLedgerQueryDto,
     ) {
-        return this.accountingService.findLedger(tenant.tenantId, accountId, query);
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.findLedger(tenant.tenantId, accountId, query, storeId);
     }
 
     @Get('reports/profit-loss')
@@ -421,13 +427,19 @@ export class AccountingController {
     }
 
     @Get('reports/cashbook')
-    getCashbook(@Tenant() tenant: TenantContext, @Query() query: CashbookQueryDto) {
-        return this.accountingService.getCashbook(tenant.tenantId, query);
+    async getCashbook(@Tenant() tenant: TenantContext, @Query() query: CashbookQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.getCashbook(tenant.tenantId, query, storeId);
     }
 
     @Get('reports/bankbook')
-    getBankbook(@Tenant() tenant: TenantContext, @Query() query: BankbookQueryDto) {
-        return this.accountingService.getBankbook(tenant.tenantId, query);
+    async getBankbook(@Tenant() tenant: TenantContext, @Query() query: BankbookQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.getBankbook(tenant.tenantId, query, storeId);
     }
 
     @Get('reports/trial-balance')
