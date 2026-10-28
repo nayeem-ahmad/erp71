@@ -48,7 +48,10 @@ export class FundTransfersController {
 
     @RequireAnyStorePermission(...FUND_READ)
     @Get(':id')
-    get(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.service.get(tenant.tenantId, id);
+    async get(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const storeIds = (await this.branchScope.canSeeAllBranches(tenant))
+            ? undefined
+            : await this.branchScope.memberStoreIds(tenant);
+        return this.service.get(tenant.tenantId, id, storeIds);
     }
 }
