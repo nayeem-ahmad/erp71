@@ -15,6 +15,7 @@
     "fix:imported-codes": "tsx prisma/fix-imported-codes.ts",
     "fix:stock-from-movements": "tsx prisma/fix-stock-from-movements.ts",
     "sync:accounting": "tsx prisma/sync-accounting.ts",
+    "sync:branch-books": "tsx prisma/sync-branch-books.ts",
     "sync:lead-taxonomy": "tsx prisma/sync-lead-taxonomy.ts",
     "sync:crm-activities": "tsx prisma/sync-crm-activities.ts",
     "sync:crm-activity-approval": "tsx prisma/sync-crm-activity-approval.ts",
