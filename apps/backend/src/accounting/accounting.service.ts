@@ -398,6 +398,12 @@ export class AccountingService {
             }
             return null;
         }
+        // A wallet that is not linked yet has no id in the Mobile Wallet set,
+        // so the name rule still calls it a drawer. The chart sends null to
+        // keep it shared. Omitting the branch on a real drawer still fails.
+        if (!account.id && storeId === null) {
+            return null;
+        }
         if (!requested) {
             throw new BadRequestException('A cash drawer needs a branch.');
         }
@@ -601,7 +607,10 @@ export class AccountingService {
         // for the whole page rather than a per-account aggregate. It follows the
         // tenant's approved-only setting for the same reason: the number here has to
         // agree with the ledger it links to.
-        const approvalFilter = await this.reportApprovalFilter(tenantId);
+        const [approvalFilter, wallets] = await Promise.all([
+            this.reportApprovalFilter(tenantId),
+            this.walletAccountIds(tenantId),
+        ]);
         const totals = await this.db.voucherDetail.groupBy({
             by: ['account_id'],
             where: {
@@ -628,7 +637,12 @@ export class AccountingService {
                 ),
             );
 
-            return { ...account, balance: balance.amount, balance_side: balance.side };
+            return {
+                ...account,
+                balance: balance.amount,
+                balance_side: balance.side,
+                linked_wallet: wallets.has(account.id),
+            };
         });
     }
 
@@ -993,11 +1007,12 @@ export class AccountingService {
         };
     }
 
-    async findVoucherById(tenantId: string, id: string) {
+    async findVoucherById(tenantId: string, id: string, storeId?: string) {
         const voucher = await this.db.voucher.findFirst({
             where: {
                 tenant_id: tenantId,
                 id,
+                ...(storeId ? { store_id: storeId } : {}),
             },
             include: this.getVoucherInclude(),
         });

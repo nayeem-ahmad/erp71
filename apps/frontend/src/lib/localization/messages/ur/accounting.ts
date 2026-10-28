@@ -346,6 +346,7 @@ export const accountingMessages = {
         accountName: 'اکاؤنٹ کا نام',
         drawerBranch: 'شاخ',
         drawerBranchRequired: 'نقد دراز کو ایک شاخ چاہیے۔',
+        sharedWallet: 'مشترک والیٹ، دراز نہیں',
         accountCode: 'اکاؤنٹ کوڈ',
         accountType: 'اکاؤنٹ کی قسم',
         accountGroup: 'اکاؤنٹ گروپ',

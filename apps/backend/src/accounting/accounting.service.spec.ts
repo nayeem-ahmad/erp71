@@ -590,6 +590,15 @@ describe('AccountingService — Story 30.2', () => {
         expect(result.total_amount).toBe(50);
     });
 
+    it('hides a voucher that belongs to another branch', async () => {
+        db.voucher.findFirst.mockResolvedValue(null);
+
+        await expect(service.findVoucherById('tenant-1', 'voucher-1', 'store-bb')).rejects.toBeInstanceOf(NotFoundException);
+        expect(db.voucher.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+            where: { tenant_id: 'tenant-1', id: 'voucher-1', store_id: 'store-bb' },
+        }));
+    });
+
     it('returns financial KPIs for a date range with positive cash movement', async () => {
         db.account.findMany.mockResolvedValue([
             { id: 'account-cash', type: AccountType.ASSET, category: AccountCategory.CASH, name: 'Cash in Hand', code: '1010' },

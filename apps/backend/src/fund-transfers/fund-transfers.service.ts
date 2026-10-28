@@ -77,10 +77,21 @@ export class FundTransfersService {
         });
     }
 
-    async receive(tenantId: string, userId: string, id: string) {
+    async receive(tenantId: string, userId: string, id: string, visibleStoreIds?: string[]) {
         return this.db.$transaction(async (tx) => {
             const transfer = await tx.fundTransfer.findFirst({
-                where: { id, tenant_id: tenantId },
+                where: {
+                    id,
+                    tenant_id: tenantId,
+                    ...(visibleStoreIds
+                        ? {
+                            OR: [
+                                { source_store_id: { in: visibleStoreIds } },
+                                { destination_store_id: { in: visibleStoreIds } },
+                            ],
+                        }
+                        : {}),
+                },
             });
 
             if (!transfer) {

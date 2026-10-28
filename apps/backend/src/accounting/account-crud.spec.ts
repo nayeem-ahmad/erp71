@@ -431,6 +431,26 @@ describe('AccountingService — chart of accounts update/delete', () => {
             expect(db.account.create).not.toHaveBeenCalled();
         });
 
+        it('still refuses a cash drawer when the branch is omitted', async () => {
+            await expect(
+                service.createAccount('tenant-1', draft({ name: 'Main Cash' })),
+            ).rejects.toThrow('A cash drawer needs a branch.');
+            expect(db.account.create).not.toHaveBeenCalled();
+        });
+
+        it('saves an unlinked wallet as shared when the chart sends no branch', async () => {
+            db.account.create.mockResolvedValue({ id: 'upay' });
+
+            await expect(
+                service.createAccount('tenant-1', draft({ name: 'Upay', storeId: null })),
+            ).resolves.toEqual({ id: 'upay' });
+            expect(db.account.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ name: 'Upay', store_id: null }),
+                }),
+            );
+        });
+
         it('accepts a bKash wallet with no branch', async () => {
             db.account.create.mockResolvedValue({ id: 'bkash' });
 

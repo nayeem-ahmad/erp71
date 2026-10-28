@@ -346,6 +346,7 @@ export const accountingMessages = {
         accountName: "खाते का नाम",
         drawerBranch: "शाखा",
         drawerBranchRequired: "नकद दराज के लिए एक शाखा चाहिए।",
+        sharedWallet: "साझा वॉलेट, दराज नहीं",
         accountCode: "खाता कोड",
         accountType: "खाता प्रकार",
         accountGroup: "खाता समूह",

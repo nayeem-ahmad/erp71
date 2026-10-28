@@ -442,6 +442,7 @@ export const accountingMessages = {
             accountName: "হিসাবের নাম",
             drawerBranch: "শাখা",
             drawerBranchRequired: "নগদ ড্রয়ারের একটি শাখা লাগে।",
+            sharedWallet: "শেয়ার্ড ওয়ালেট, ড্রয়ার নয়",
             accountCode: "হিসাব কোড",
             accountType: "হিসাবের ধরন",
             accountGroup: "হিসাব গ্রুপ",

@@ -346,6 +346,7 @@ export const accountingMessages = {
         accountName: "Nombre de la cuenta",
         drawerBranch: "Sucursal",
         drawerBranchRequired: "Un cajón de efectivo necesita una sucursal.",
+        sharedWallet: "Billetera compartida, no un cajón",
         accountCode: "Código de cuenta",
         accountType: "Tipo de cuenta",
         accountGroup: "Grupo de cuentas",

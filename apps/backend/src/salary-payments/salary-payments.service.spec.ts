@@ -79,12 +79,35 @@ describe('SalaryPaymentsService', () => {
             expect(where.payment_date.gte).toBeInstanceOf(Date);
             expect(where.payment_date.lte).toBeInstanceOf(Date);
         });
+
+        it('limits the list to employees of one branch', async () => {
+            db.salaryPayment.findMany.mockResolvedValue([]);
+            db.salaryPayment.count.mockResolvedValue(0);
+
+            await service.list('t1', { storeId: 'store-bb' } as any);
+
+            expect(db.salaryPayment.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { tenant_id: 't1', employee: { store_id: 'store-bb' } },
+                }),
+            );
+        });
     });
 
     describe('findOne', () => {
         it('throws when the payment does not exist', async () => {
             db.salaryPayment.findFirst.mockResolvedValue(null);
             await expect(service.findOne('t1', 'missing')).rejects.toThrow(NotFoundException);
+        });
+
+        it('hides a payment for an employee at another branch', async () => {
+            db.salaryPayment.findFirst.mockResolvedValue(null);
+            await expect(service.findOne('t1', 'p1', 'store-bb')).rejects.toThrow(NotFoundException);
+            expect(db.salaryPayment.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { id: 'p1', tenant_id: 't1', employee: { store_id: 'store-bb' } },
+                }),
+            );
         });
     });
 
@@ -100,6 +123,17 @@ describe('SalaryPaymentsService', () => {
             id: 'p1', employee_id: 'e1', amount: 5000, pay_period: '2026-06',
             payment_date: new Date('2026-06-30'), payment_method: 'CASH',
         };
+
+        it('does not pay an employee who works at another branch', async () => {
+            db.employee.findFirst.mockResolvedValue(null);
+            await expect(service.create('t1', 'u1', dto as any, 'store-bb')).rejects.toThrow(BadRequestException);
+            expect(db.employee.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ id: 'e1', store_id: 'store-bb' }),
+                }),
+            );
+            expect(db.salaryPayment.create).not.toHaveBeenCalled();
+        });
 
         it('records a salary payment and posts Dr Salary Payable / Cr Cash tagged to the employee', async () => {
             db.employee.findFirst.mockResolvedValue({ id: 'e1', tenant_id: 't1' });

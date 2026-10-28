@@ -258,6 +258,7 @@ export const accountingMessages = {
         accountName: 'Nama akaun',
         drawerBranch: 'Cawangan',
         drawerBranchRequired: 'Laci tunai memerlukan cawangan.',
+        sharedWallet: 'Dompet berkongsi, bukan laci',
         accountCode: 'Kod akaun',
         accountType: 'Jenis akaun',
         accountGroup: 'Kumpulan akaun',

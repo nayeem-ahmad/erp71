@@ -52,12 +52,15 @@ export interface Account {
     balance_side?: 'debit' | 'credit' | 'neutral';
     /** Set on a cash drawer. Banks and wallets stay shared. */
     store_id?: string | null;
+    /** True when a Mobile Wallet method already posts to this account. */
+    linked_wallet?: boolean;
 }
 
 /** bKash and Nagad are named cash accounts, but they are wallets, not drawers. */
 const WALLET_ACCOUNT_NAMES = new Set(['bkash account', 'nagad account']);
 
-export function isPhysicalCashDrawer(category: string, name: string): boolean {
+export function isPhysicalCashDrawer(category: string, name: string, linkedWallet = false): boolean {
+    if (linkedWallet) return false;
     return category === 'cash' && !WALLET_ACCOUNT_NAMES.has(name.trim().toLowerCase());
 }
 
@@ -102,10 +105,12 @@ export default function AccountFormModal({
     const [codeSuggestion, setCodeSuggestion] = useState('');
     const [category, setCategory] = useState<AccountCategory>(account?.category ?? 'general');
     const [storeId, setStoreId] = useState(account?.store_id ?? '');
+    const [sharedWallet, setSharedWallet] = useState(false);
     const [stores, setStores] = useState<Array<{ id: string; name: string }>>([]);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
-    const drawer = isPhysicalCashDrawer(category, name);
+    const namedDrawer = isPhysicalCashDrawer(category, name, account?.linked_wallet === true);
+    const drawer = namedDrawer && !sharedWallet;
 
     const selectedGroup = groups.find((group) => group.id === groupId) ?? null;
     /**
@@ -201,7 +206,7 @@ export default function AccountFormModal({
                 category,
                 // Omitting storeId on update keeps the current branch. A drawer
                 // sends the one it belongs to; a shared account clears it.
-                ...(drawer ? { storeId } : account ? { storeId: null } : {}),
+                ...(drawer ? { storeId } : account || sharedWallet ? { storeId: null } : {}),
             };
 
             if (account) {
@@ -366,6 +371,18 @@ export default function AccountFormModal({
                             </select>
                         </label>
                     </div>
+
+                    {!account && namedDrawer ? (
+                        <label className="flex min-h-touch items-center gap-2 text-sm text-gray-700">
+                            <input
+                                type="checkbox"
+                                aria-label={t.coa.sharedWallet}
+                                checked={sharedWallet}
+                                onChange={(event) => setSharedWallet(event.target.checked)}
+                            />
+                            {t.coa.sharedWallet}
+                        </label>
+                    ) : null}
 
                     {drawer ? (
                         <label className="block">

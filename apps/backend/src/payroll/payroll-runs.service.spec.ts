@@ -290,6 +290,42 @@ describe('PayrollRunsService', () => {
             await service.deleteAdjustment('t1', 'adj-1');
             expect(db.payrollAdjustment.delete).toHaveBeenCalled();
         });
+
+        it('lists adjustments only for the caller’s branch', async () => {
+            db.payrollAdjustment.findMany.mockResolvedValue([]);
+            await service.listAdjustments('t1', 2026, 8, { consolidated: false, storeId: 'store-bb' });
+            expect(db.payrollAdjustment.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: {
+                        tenant_id: 't1',
+                        year: 2026,
+                        month: 8,
+                        employee: { store_id: 'store-bb' },
+                    },
+                }),
+            );
+        });
+
+        it('hides an adjustment for an employee at another branch', async () => {
+            db.employee.findFirst.mockResolvedValue(null);
+            await expect(service.createAdjustment('t1', {
+                employee_id: 'emp-other', year: 2026, month: 8,
+                kind: 'EARNING', name: 'Bonus', amount: 100,
+            }, 'user-1', { consolidated: false, storeId: 'store-bb' })).rejects.toThrow(NotFoundException);
+            expect(db.employee.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ id: 'emp-other', store_id: 'store-bb' }),
+                }),
+            );
+        });
+
+        it('does not delete an adjustment outside the caller’s branch', async () => {
+            db.payrollAdjustment.findFirst.mockResolvedValue(null);
+            await expect(
+                service.deleteAdjustment('t1', 'adj-9', { consolidated: false, storeId: 'store-bb' }),
+            ).rejects.toThrow(NotFoundException);
+            expect(db.payrollAdjustment.delete).not.toHaveBeenCalled();
+        });
     });
 
     describe('getPayslip', () => {

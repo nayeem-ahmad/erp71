@@ -25,6 +25,7 @@ config({ path: resolve(__dirname, '../../../.env') });
 
 import { Prisma, PrismaClient } from '@prisma/client';
 import { nextAccountCode } from './account-code';
+import { installBranchBookConstraints } from './branch-book-constraints';
 import {
     isCashDrawer,
     planBranchBooks,
@@ -101,25 +102,11 @@ async function ensureBranchConstraints(): Promise<void> {
         return;
     }
 
-    const statements = [
-        `CREATE UNIQUE INDEX IF NOT EXISTS "accounts_shared_name_key" ON "accounts" ("tenant_id", "name") WHERE "store_id" IS NULL`,
-        `CREATE UNIQUE INDEX IF NOT EXISTS "accounts_one_drawer_per_branch" ON "accounts" ("tenant_id", "store_id") WHERE "store_id" IS NOT NULL`,
-        `DO $$ BEGIN
-            ALTER TABLE "accounts" ADD CONSTRAINT "accounts_store_id_cash_only"
-            CHECK ("store_id" IS NULL OR "category" = 'cash');
-         EXCEPTION WHEN duplicate_object THEN NULL;
-         END $$`,
-        `DROP INDEX IF EXISTS "accounts_tenant_id_name_key"`,
-    ];
-    for (const sql of statements) {
-        try {
-            await prisma.$executeRawUnsafe(sql);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            console.error(`Could not install branch-drawer constraints: ${message}`);
-            process.exitCode = 1;
-            return;
-        }
+    const error = await installBranchBookConstraints((sql) => prisma.$executeRawUnsafe(sql));
+    if (error) {
+        console.error(`Could not install branch-drawer constraints: ${error}`);
+        process.exitCode = 1;
+        return;
     }
     console.log(`${modeLabel()}: branch-drawer constraints are in place (this DDL is kept on a dry-run).`);
 }

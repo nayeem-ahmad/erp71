@@ -20,14 +20,27 @@ export class FundTransfersController {
 
     @RequireAnyStorePermission(...FUND_CREATE)
     @Post()
-    initiate(@Tenant() tenant: TenantContext, @Body() dto: InitiateFundTransferDto) {
-        return this.service.initiate(tenant.tenantId, tenant.userId, dto);
+    async initiate(@Tenant() tenant: TenantContext, @Body() dto: InitiateFundTransferDto) {
+        // Cash credits this branch's drawer, so the caller must be allowed to use it.
+        const sourceStoreId = await this.branchScope.resolveStoreId(tenant, dto.sourceStoreId, {
+            permissions: FUND_CREATE,
+            allowAll: false,
+        });
+        return this.service.initiate(tenant.tenantId, tenant.userId, {
+            ...dto,
+            sourceStoreId: sourceStoreId ?? dto.sourceStoreId,
+        });
     }
 
     @RequireAnyStorePermission(...FUND_RECEIVE)
     @Post(':id/receive')
-    receive(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.service.receive(tenant.tenantId, tenant.userId, id);
+    async receive(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        // Same rule as get: a caller who cannot see every branch may receive
+        // only a transfer they are a side of.
+        const storeIds = (await this.branchScope.canSeeAllBranches(tenant))
+            ? undefined
+            : await this.branchScope.memberStoreIds(tenant);
+        return this.service.receive(tenant.tenantId, tenant.userId, id, storeIds);
     }
 
     @RequireAnyStorePermission(...FUND_READ)

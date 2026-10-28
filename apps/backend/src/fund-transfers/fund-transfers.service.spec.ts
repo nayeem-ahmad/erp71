@@ -157,6 +157,27 @@ describe('FundTransfersService', () => {
         await expect(service.receive('tenant-1', 'user-2', 'missing')).rejects.toThrow(NotFoundException);
     });
 
+    it('refuses to receive a transfer the caller is not a side of', async () => {
+        tx.fundTransfer.findFirst.mockImplementation(async ({ where }: { where: { OR?: Array<{ source_store_id?: { in?: string[] }; destination_store_id?: { in?: string[] } }> } }) => {
+            const stores = (where.OR ?? []).flatMap((side) => [
+                ...(side.source_store_id?.in ?? []),
+                ...(side.destination_store_id?.in ?? []),
+            ]);
+            if (stores.length > 0 && !stores.includes('store-a') && !stores.includes('store-b')) return null;
+            return {
+                id: 'ft-1',
+                status: 'IN_TRANSIT',
+                source_voucher_id: 'v-source-1',
+                source_store_id: 'store-a',
+                destination_store_id: 'store-b',
+                amount: 500,
+            };
+        });
+
+        await expect(service.receive('tenant-1', 'user-2', 'ft-1', ['other-store'])).rejects.toBeInstanceOf(NotFoundException);
+        expect(tx.fundTransfer.update).not.toHaveBeenCalled();
+    });
+
     it('lists transfers for tenant', async () => {
         db.fundTransfer.findMany.mockResolvedValue([{ id: 'ft-1' }]);
 

@@ -346,6 +346,7 @@ export const accountingMessages = {
         accountName: 'Account name',
         drawerBranch: 'Branch',
         drawerBranchRequired: 'A cash drawer needs a branch.',
+        sharedWallet: 'Shared wallet, not a drawer',
         accountCode: 'Account code',
         accountType: 'Account type',
         accountGroup: 'Account group',

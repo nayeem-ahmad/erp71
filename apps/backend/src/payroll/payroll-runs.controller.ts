@@ -49,21 +49,24 @@ export class PayrollRunsController {
     }
 
     @Get('adjustments')
-    listAdjustments(@Tenant() tenant: TenantContext, @Query() query: PayrollPeriodDto) {
-        return this.service.listAdjustments(tenant.tenantId, query.year, query.month);
+    async listAdjustments(@Tenant() tenant: TenantContext, @Query() query: PayrollPeriodDto) {
+        const access = await this.access(tenant, [StorePermission.VIEW_PAYROLL]);
+        return this.service.listAdjustments(tenant.tenantId, query.year, query.month, access);
     }
 
     @Post('adjustments')
     @RequireStorePermission(StorePermission.MANAGE_HR)
-    createAdjustment(@Tenant() tenant: TenantContext, @Body() dto: CreatePayrollAdjustmentDto) {
-        return this.service.createAdjustment(tenant.tenantId, dto as any, tenant.userId);
+    async createAdjustment(@Tenant() tenant: TenantContext, @Body() dto: CreatePayrollAdjustmentDto) {
+        const access = await this.access(tenant, [StorePermission.MANAGE_HR]);
+        return this.service.createAdjustment(tenant.tenantId, dto as any, tenant.userId, access);
     }
 
     @Delete('adjustments/:id')
     @RequireStorePermission(StorePermission.MANAGE_HR)
     @HttpCode(HttpStatus.NO_CONTENT)
-    deleteAdjustment(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.service.deleteAdjustment(tenant.tenantId, id);
+    async deleteAdjustment(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const access = await this.access(tenant, [StorePermission.MANAGE_HR]);
+        return this.service.deleteAdjustment(tenant.tenantId, id, access);
     }
 
     @Post()

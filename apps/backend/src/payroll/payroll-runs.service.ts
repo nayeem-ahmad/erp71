@@ -14,6 +14,12 @@ export type PayrollBranchAccess = {
     storeId?: string;
 };
 
+/** A branch user sees adjustments only for employees at their branch. */
+function adjustmentHomeBranch(access?: PayrollBranchAccess): { employee?: { store_id?: string } } {
+    if (!access || access.consolidated !== false) return {};
+    return { employee: { store_id: access.storeId } };
+}
+
 export function assertPayrollBranchAccess(
     run: { store_id?: string | null },
     access?: PayrollBranchAccess,
@@ -335,9 +341,9 @@ export class PayrollRunsService {
 
     // ── Adjustments ───────────────────────────────────────────────────────────
 
-    async listAdjustments(tenantId: string, year: number, month: number) {
+    async listAdjustments(tenantId: string, year: number, month: number, access?: PayrollBranchAccess) {
         return this.db.payrollAdjustment.findMany({
-            where: { tenant_id: tenantId, year, month },
+            where: { tenant_id: tenantId, year, month, ...adjustmentHomeBranch(access) },
             include: { employee: { select: { id: true, name: true, employee_code: true } } },
             orderBy: { created_at: 'desc' },
         });
@@ -346,9 +352,14 @@ export class PayrollRunsService {
     async createAdjustment(tenantId: string, dto: {
         employee_id: string; year: number; month: number;
         kind: string; name: string; amount: number; note?: string;
-    }, createdBy?: string) {
+    }, createdBy?: string, access?: PayrollBranchAccess) {
         const employee = await this.db.employee.findFirst({
-            where: { id: dto.employee_id, tenant_id: tenantId, deleted_at: null },
+            where: {
+                id: dto.employee_id,
+                tenant_id: tenantId,
+                deleted_at: null,
+                ...(access?.consolidated === false ? { store_id: access.storeId } : {}),
+            },
         });
         if (!employee) throw new NotFoundException('Employee not found.');
         if (dto.amount <= 0) {
@@ -362,9 +373,9 @@ export class PayrollRunsService {
         });
     }
 
-    async deleteAdjustment(tenantId: string, id: string) {
+    async deleteAdjustment(tenantId: string, id: string, access?: PayrollBranchAccess) {
         const adjustment = await this.db.payrollAdjustment.findFirst({
-            where: { id, tenant_id: tenantId },
+            where: { id, tenant_id: tenantId, ...adjustmentHomeBranch(access) },
         });
         if (!adjustment) throw new NotFoundException('Adjustment not found.');
         if (adjustment.applied_run_id) {

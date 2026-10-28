@@ -290,8 +290,11 @@ export class AccountingController {
     }
 
     @Get('vouchers/:id')
-    findVoucherById(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.accountingService.findVoucherById(tenant.tenantId, id);
+    async findVoucherById(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return this.accountingService.findVoucherById(tenant.tenantId, id, storeId);
     }
 
     @Post('vouchers')

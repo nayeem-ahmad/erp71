@@ -346,6 +346,7 @@ export const accountingMessages = {
         accountName: "Kontenbezeichnung",
         drawerBranch: "Filiale",
         drawerBranchRequired: "Eine Kassenschublade braucht eine Filiale.",
+        sharedWallet: "Gemeinsame Geldbörse, keine Kasse",
         accountCode: "Kontonummer",
         accountType: "Kontenart",
         accountGroup: "Kontengruppe",

@@ -48,4 +48,49 @@ describe('AccountFormModal branch', () => {
         fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'bank' } });
         expect(screen.queryByLabelText('Branch')).not.toBeInTheDocument();
     });
+
+    it('saves a linked wallet with no branch', () => {
+        render(
+            <AccountFormModal
+                account={{
+                    id: 'upay',
+                    name: 'Upay',
+                    code: '110104',
+                    type: 'asset',
+                    category: 'cash',
+                    store_id: null,
+                    linked_wallet: true,
+                    group: groups[0],
+                }}
+                groups={groups}
+                subgroups={[]}
+                onClose={() => {}}
+                onSaved={() => {}}
+            />,
+        );
+
+        expect(screen.queryByLabelText('Branch')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Update Account' }));
+        expect(api.updateAccount).toHaveBeenCalledWith('upay', expect.objectContaining({
+            name: 'Upay',
+            category: 'cash',
+            storeId: null,
+        }));
+    });
+
+    it('saves a new shared wallet with no branch before it is linked', () => {
+        open();
+        fireEvent.change(screen.getByLabelText('Account name'), { target: { value: 'Upay' } });
+        fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'cash' } });
+        fireEvent.click(screen.getByLabelText('Shared wallet, not a drawer'));
+
+        expect(screen.queryByLabelText('Branch')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Create Account' }));
+        expect(api.createAccount).toHaveBeenCalledWith(expect.objectContaining({
+            name: 'Upay',
+            category: 'cash',
+            type: 'asset',
+            storeId: null,
+        }));
+    });
 });

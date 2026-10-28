@@ -346,6 +346,7 @@ export const accountingMessages = {
         accountName: 'اسم الحساب',
         drawerBranch: 'الفرع',
         drawerBranchRequired: 'يحتاج درج النقد إلى فرع.',
+        sharedWallet: 'محفظة مشتركة، ليست درجًا',
         accountCode: 'رمز الحساب',
         accountType: 'نوع الحساب',
         accountGroup: 'مجموعة الحساب',
