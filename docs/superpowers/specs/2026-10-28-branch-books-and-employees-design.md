@@ -50,24 +50,30 @@ already limited to Babu Bazar. The tenant has two employees.
 
 ## Decisions
 
-1. **Cash and bank accounts belong to one branch.** Category `cash` or `bank`
-   requires `store_id`. The same name may exist at two branches. Codes stay
-   unique per tenant. Every other account stays shared (`store_id` null).
+1. **Only the physical cash drawer belongs to a branch.** One drawer per
+   branch. Bank accounts stay shared: any branch may post to them, because
+   there is nothing physical to separate. bKash and Nagad stay shared for
+   the same reason. They are mobile wallets, not a drawer, even though the
+   chart stores them as category `cash`.
 2. **A branch user sees one branch at a time**, the branch filter that
-   already exists. They see that branch's tills, and on a shared account only
-   the balance of that branch's vouchers. Owners and holders of
-   `VIEW_CONSOLIDATED_REPORTS` see every till and the full balances. "All
-   branches" stays behind that permission.
-3. **A payment method whose account is a till is offered only at that till's
-   branch.** `all_branches` is false and the method has that one store.
-4. **A cash or bank voucher has a branch.** Where history has none, the
-   branch is taken from the source document, then from the customer or
-   supplier on the voucher. A tenant that still has a till line with no
-   branch is printed and not migrated.
-5. **KH Trading's two cash drawers stay what they already are.** Main Cash
-   (CF) is Babu Bazar. Main Cash (LT) is Press Club. The 801 Press Club
-   vouchers still on Main Cash (CF) move to Main Cash (LT). They do not
-   become a third account named Main Cash (CF) at Press Club.
+   already exists. They see their own drawer and not the other branch's.
+   On a shared account, including a bank or a wallet, they see only the
+   balance of their branch's vouchers. They can still post to that bank.
+   Owners and holders of `VIEW_CONSOLIDATED_REPORTS` see every drawer and
+   the full balances. "All branches" stays behind that permission.
+3. **The Cash payment method is offered only at the branch whose drawer it
+   posts to.** Bank, card and wallet methods may be offered at every
+   branch, and an existing branch limit on one of those methods is kept.
+4. **A voucher that hits a cash drawer has a branch.** Where history has
+   none, the branch is taken from the source document, then from the
+   customer or supplier on the voucher. A tenant that still has a drawer
+   line with no branch is printed and not migrated.
+5. **Each branch's cash is folded onto the drawer it already uses most.**
+   Press Club's drawer is Main Cash (LT). Every Press Club line on any
+   other cash drawer moves there, including the 801 still on Main Cash
+   (CF). Babu Bazar's drawer is Main Cash (CF). Every Babu Bazar line on
+   a different cash drawer moves there, which is the 3 lines on Cash in
+   Hand. Bank lines and wallet lines stay on their own accounts.
 6. **An employee belongs to exactly one branch.** The other branch does not
    see that person, their salary, their leave, or their attendance. Phone and
    employee code stay unique for the whole tenant. Two people may share a
@@ -83,19 +89,20 @@ already limited to Babu Bazar. The tenant has two employees.
 
 ## Goals
 
-- A branch user cannot read another branch's till, that till's ledger, or
-  that till's balance, including by calling the API with the other branch's
-  id.
-- On Sales, Purchases, Rent and the other shared accounts, the same user
-  sees only their branch's vouchers. The company total is unchanged for
-  someone who can see every branch.
-- A tender, an expense, or a salary payment at branch A posts to branch A's
-  till. Branch B's method cannot be selected.
+- A branch user cannot read another branch's cash drawer, its ledger, or
+  its balance, including by calling the API with the other branch's id.
+- On Sales, Purchases, Rent, the banks and the wallets, the same user sees
+  only their branch's vouchers, and can still post to those shared
+  accounts. The company total is unchanged for someone who can see every
+  branch.
+- A cash tender, expense, or salary payment at branch A posts to branch
+  A's drawer. Branch B's Cash method cannot be selected. A bank or wallet
+  method offered at A posts to the shared account.
 - HR lists, attendance, leave, salary and payroll follow the employee's
   branch. Departments and designations stay shared.
-- Existing books are split by a dry-run sync. KH Trading is the checked
-  case: after it, Press Club cash is Main Cash (LT) only, and Babu Bazar
-  cash is Main Cash (CF) plus the three-line Cash in Hand.
+- Existing cash is folded by a dry-run sync. KH Trading is the checked
+  case: Press Club cash ends on Main Cash (LT) only, and Babu Bazar cash
+  ends on Main Cash (CF) only.
 
 ## Non-goals
 
@@ -107,9 +114,9 @@ already limited to Babu Bazar. The tenant has two employees.
   branches.
 - Rewriting a historical payroll run that contained both branches into two
   runs.
-- Copying tills automatically when a branch is opened later. The owner adds
-  that branch's accounts and methods. A new tenant's first branch still
-  receives the template tills.
+- Copying bank or wallet accounts when a branch is opened. Those stay one
+  account for the business. A new branch does get its own empty cash
+  drawer and a Cash method pointed at it.
 - Changing who may edit departments and designations. The same people as
   today can rename Sales for the whole business.
 - A new permission. Branch access and `VIEW_CONSOLIDATED_REPORTS` are the
@@ -119,27 +126,30 @@ already limited to Babu Bazar. The tenant has two employees.
 
 ## What changes for users
 
-- The chart, on one branch, lists shared accounts and that branch's tills.
-  "Main Cash" at Babu Bazar and "Main Cash" at Press Club are different
-  rows. The other branch's row is absent, not shown at zero.
+- The chart, on one branch, lists the shared accounts (including every
+  bank and wallet) and that branch's cash drawer. The other branch's
+  drawer is absent, not shown at zero. Premier Bank is one row at both
+  branches.
 - Shared-account balances, the ledger, the cash book, the bank book, aging
   and the export follow the branch filter. P&L, balance sheet and trial
-  balance already do. The balance sheet drops tills that are not the branch
-  being viewed, so a till with no activity in the period is omitted rather
-  than printed at zero from the other branch.
-- Settings → Payment Methods: a method linked to a till has one branch, the
-  till's branch. The All branches box is not available for that method.
-- A new till account asks for a branch. A manual voucher that uses a till
-  must be that till's branch.
+  balance already do. The cash book shows that branch's drawer. The bank
+  book shows the shared banks, limited to that branch's vouchers. The
+  balance sheet omits the other branch's drawer.
+- Settings → Payment Methods: Cash is one branch, the drawer's branch.
+  The All branches box is not available for Cash. Bank, card and wallet
+  methods may stay on All branches.
+- A new cash drawer asks for a branch, and a branch can have only one.
+  A manual voucher that uses a drawer must be that drawer's branch. A
+  bank line is allowed on any branch's voucher.
 - Employees ask for a branch, defaulting to the header branch. The list
   follows the branch filter. Department and designation screens stay one
   list, with no headcount from the other branch.
 - Payroll asks for a branch. A member of one branch has that choice fixed.
 - Someone who can see every branch keeps today's company view, and sees
-  every till as its own row.
+  every drawer as its own row.
 
 Single-branch tenants see no new filter. Their one branch is written onto
-the tills and the employees.
+the cash drawer and the employees.
 
 ---
 
@@ -153,23 +163,31 @@ indexed `(tenant_id, store_id)`.
 A check constraint keeps the rule in the database:
 
 ```text
-(category IN ('cash', 'bank')) = (store_id IS NOT NULL)
+store_id IS NULL OR category = 'cash'
 ```
 
-`@@unique([tenant_id, name])` is dropped. Two partial unique indexes replace
-it, which Prisma cannot express, so they live in the migration SQL:
+`store_id` set means "this is that branch's cash drawer". Category `bank`
+always has `store_id` null. A category `cash` account with `store_id` null
+is a wallet (bKash, Nagad), shared like a bank. `@@unique([tenant_id, name])`
+cannot stay, because two drawers may share a name. Two partial unique
+indexes replace it. Prisma cannot express them, so they live in the
+migration SQL:
 
-- `(tenant_id, name)` where `store_id` is null
-- `(tenant_id, store_id, name)` where `store_id` is not null
+- `(tenant_id, name)` where `store_id` is null, so banks, wallets and the
+  rest of the chart still cannot share a name
+- `(tenant_id, store_id)` where `store_id` is not null, so a branch has
+  one drawer
 
 Codes stay unique per tenant by the existing allocator (`nextAccountCode`).
-A cloned till takes the next free code. `110101` stays on the original row.
+`110101` stays on Main Cash (CF). A drawer created for a new branch takes
+the next free code.
 
 ### Payment methods
 
-No new column. The service refuses `all_branches: true`, or more than one
-store, when `account_id` points at a till. A method with no account, or an
-account that is not a till, may still be offered at every branch.
+No new column. The service refuses `all_branches: true`, or any branch
+other than the account's, when `account_id` points at a drawer. A method
+whose account is a bank, a wallet, or empty may be offered at every
+branch.
 
 ### Employees
 
@@ -195,19 +213,19 @@ later per-branch run. A run created after this change always has a branch.
 Reads go through `BranchScopeService`, the same way vouchers and the
 statements already do.
 
-| Caller | Tills | Shared-account balance | Employees |
+| Caller | Cash drawer | Shared accounts, including banks and wallets | Employees |
 |---|---|---|---|
-| Branch filter on branch A | A's tills only | vouchers with `store_id = A` | employees with `store_id = A` |
-| All branches (owner or `VIEW_CONSOLIDATED_REPORTS`) | every till | every voucher, including `store_id` null | every employee |
+| Branch filter on branch A | A's drawer only | vouchers with `store_id = A` | employees with `store_id = A` |
+| All branches (owner or `VIEW_CONSOLIDATED_REPORTS`) | every drawer | every voucher, including `store_id` null | every employee |
 | A member naming a branch they cannot use | `403` | `403` | `403` |
 
-A till ledger for a branch the caller cannot use is `404` (the account is
-not in their chart). A shared-account ledger with no `storeId` resolves
-like the other branch reads: the header branch for a limited member, every
-branch for someone who may see all.
+The other branch's drawer is `404` (it is not in their chart). A bank or
+wallet ledger with no `storeId` resolves like the other branch reads: the
+header branch for a limited member, every branch for someone who may see
+all. The account is listed either way, so they can post to it.
 
 Company vouchers (`store_id` null) stay in the company view only. After the
-migration, a till line is never on one of those.
+migration, a drawer line is never on one of those.
 
 These reads gain the filter. Statements, the dashboard, KPIs, trends and
 the voucher list already have it.
@@ -231,32 +249,31 @@ full tenant list. They do not include employees.
 
 ## 3. Posting
 
-Posting rules stay one set per tenant. A rule may still point at a till
-account. That pointer is not used for another branch. At post time the
-cash or bank leg is chosen in this order:
+Posting rules stay one set per tenant. A rule may still point at one cash
+drawer. That pointer is not used for another branch. At post time:
 
 1. A tender that already resolved a payment method uses that method's
-   account. The account's branch must be the voucher's branch, or the post
-   is refused.
-2. Otherwise the payment mode (a sale, an expense, a salary payment) uses
-   the active method of that mode offered at the voucher's branch, and that
-   method's account. Press Club cash then posts to Main Cash (LT), because
-   that is where the Press Club Cash method points after the migration.
-   Babu Bazar cash posts to Main Cash (CF).
-3. Otherwise, when the rule account is a till, it is replaced by the
-   account of the same name and category at the voucher's branch.
+   account. If the account is a drawer, its branch must be the voucher's
+   branch, or the post is refused. If the account is a bank or a wallet,
+   any branch the method is offered at may use it.
+2. Otherwise a cash mode (a sale, an expense, a salary payment) uses the
+   Cash method offered at the voucher's branch, which points at that
+   branch's drawer. Press Club cash posts to Main Cash (LT). Babu Bazar
+   cash posts to Main Cash (CF).
+3. Otherwise a bank or wallet mode uses the method of that mode offered at
+   the voucher's branch and that method's shared account. The voucher
+   still carries the branch, so the balance stays filtered.
 
-If none of those yields an account at the voucher's branch, the post is
-refused with the mode or account name and the branch name. Nothing is
-written to another branch's till. A till post with no branch is refused.
+A cash post with no branch is refused. Nothing is written to another
+branch's drawer.
 
 Salary accrual has no cash leg. Its voucher takes the employee's branch.
-Salary payment takes the employee's branch and resolves the till through
-the mode, as above. An expense takes the expense's branch.
+Salary payment takes the employee's branch and resolves cash through the
+Cash method, as above. An expense takes the expense's branch.
 
-Manual vouchers: every till line's account branch equals `voucher.store_id`.
-Shared accounts are allowed on any branch. Saving a till line without a
-branch is a `400`.
+Manual vouchers: a drawer line's account branch equals `voucher.store_id`.
+Bank, wallet and other shared lines are allowed on any branch. Saving a
+drawer line without a branch is a `400`.
 
 ---
 
@@ -299,47 +316,51 @@ account check constraint. Doing either before the script would reject the
 rows that are already in production.
 
 One script, `packages/database/prisma/sync-branch-books.ts`. Dry-run unless
-`--yes`. Optional `--tenant=<id>`. Idempotent: a till that already has the
-right `store_id`, and a line already on that till, is left alone. The
-1,341 Press Club lines already on Main Cash (LT) are not moved again.
+`--yes`. Optional `--tenant=<id>`. Idempotent: a drawer that already has
+the right `store_id`, and a line already on that drawer, is left alone.
+The 1,341 Press Club lines already on Main Cash (LT) are not moved again.
+Bank and wallet rows are not given a branch and are not cloned.
+
+A **cash drawer** is a category `cash` account that is not the linked
+account of a Mobile Wallet method, and is not named `bKash Account` or
+`Nagad Account`. Everything else in the cash and bank group stays shared.
 
 Per tenant, in one transaction:
 
-1. **Give every till voucher a branch.** For each voucher that has a till
-   line and `store_id` null, take the branch from the source document
-   (sale, purchase, return, expense, loan, payroll, customer or supplier
-   payment, each side of a fund transfer). If it names none, take the
-   customer or supplier on a voucher line. If the tenant has one branch,
-   use that. Anything still blank aborts that tenant. The script prints
-   voucher number, date, account and amount, and writes nothing for that
-   tenant.
-2. **Give every till account a branch.** The branch is the one with the
-   most lines on that account. A tie goes to the oldest physical store
-   (the main branch used by party backfill: `created_at`, then `id`, never
-   the online branch). An account with no lines goes to the main branch.
-3. **Move lines that disagree.** A line whose voucher branch is not the
-   account's branch moves as follows.
-   - Same name and category already exist at the voucher's branch: move
-     the line there.
-   - The source account is the primary cash account of its own branch
-     (the category-`cash` account assigned to that branch with the most
-     lines), and the voucher's branch has its own primary cash account:
-     move the line to that primary account. This is what sends KH
-     Trading's 801 Press Club vouchers from Main Cash (CF) to Main Cash
-     (LT). It does not move bKash, Nagad, or a bank.
-   - Otherwise clone the account for the voucher's branch (same name,
-     category, group and subgroup, next code) and move the line.
-4. **Split methods that point at a till and are still offered at more than
-   that till's branch.** The existing row keeps the account's branch,
-   `all_branches` false, and one store row. Each other branch where the
-   method was offered gets a new method, same name and type, linked to
-   that branch's account of the same name, or to that branch's primary
-   cash account when step 3 used the primary-cash rule. Bank (DBBL) is
-   already Babu Bazar only and stays one method.
-5. **A method offered at a branch that has no copy of its till** (Nagad at
-   Press Club, for example) gets a cloned till with no historical lines,
-   then a method pointing at it. Empty bank accounts that no method offers
-   at the other branch stay on the main branch and are not copied.
+1. **Give every drawer voucher a branch.** For each voucher that has a
+   drawer line and `store_id` null, take the branch from the source
+   document (sale, purchase, return, expense, loan, payroll, customer or
+   supplier payment, each side of a fund transfer). If it names none, take
+   the customer or supplier on a voucher line. If the tenant has one
+   branch, use that. Anything still blank aborts that tenant. The script
+   prints voucher number, date, account and amount, and writes nothing
+   for that tenant. Bank and wallet vouchers are not part of this abort.
+2. **Pick each branch's drawer.** Among drawer accounts, the one with the
+   most lines whose voucher is that branch. A tie goes to the account
+   whose own lines are mostly that branch, then to the oldest account.
+   An account is assigned to only one branch: the branch with the most
+   lines on it. The other branch then takes its next-best account, or
+   receives a new drawer in step 3. Set `store_id` on the chosen
+   account. For KH Trading this is Main Cash (LT) for Press Club and
+   Main Cash (CF) for Babu Bazar.
+3. **Fold the other cash lines onto that drawer.** Every drawer line for
+   the branch that sits on a different drawer account moves. Press Club
+   lines on Main Cash (CF) move to Main Cash (LT) (801 on 2026-10-28; the
+   dry-run prints the live count). Babu Bazar lines on Cash in Hand move
+   to Main Cash (CF) (3 on 2026-10-28). A branch that has lines and no
+   drawer of its own gets a new account, same name as the account those
+   lines are leaving, next code, and the lines move there. KH Trading
+   does not need that clone.
+4. **Retire an emptied drawer.** Payment methods and posting rules that
+   still point at it are pointed at the branch drawer those lines moved
+   to. The empty account is then deleted. Cash in Hand is the KH Trading
+   case. If a remaining reference blocks the delete, the script stops
+   and prints it rather than leaving a second drawer on the chart.
+5. **Split the Cash method.** The existing Cash row keeps the branch of
+   the drawer it now points at, `all_branches` false, and one store row.
+   Each other branch gets a Cash method of the same name pointed at that
+   branch's drawer. Bank, card and wallet methods are left as they are,
+   including Bank (DBBL) limited to Babu Bazar.
 6. **Employees.** One branch on the tenant: that branch. Otherwise the
    linked user's only `UserStoreAccess` store. Otherwise the store on the
    majority of that employee's attendance punches that have a store. A tie,
@@ -351,27 +372,24 @@ Per tenant, in one transaction:
 
 KH Trading after the sync, checked by the dry-run before `--yes`:
 
-- Main Cash (CF) is Babu Bazar and has only Babu Bazar lines.
-- Main Cash (LT) is Press Club and holds the 1,341 lines already there
-  plus the Press Club lines moved off CF (801 on 2026-10-28). The dry-run
-  prints the live count, and that count is reviewed before `--yes`.
-- Premier Bank 186 stays Babu Bazar. Press Club gets a new Premier Bank
-  186 for its 5 vouchers. Bank and Card at Press Club point at that copy.
-  Babu Bazar's Bank and Card keep the original.
-- bKash Account is Press Club. Babu Bazar gets a new bKash Account because
-  the bKash method is offered there, with no historical lines.
-- Cash in Hand is Babu Bazar.
-- Nagad is cloned for Press Club the same way. The original, which has no
-  lines, stays on the main branch (Babu Bazar).
-- DBBL and the other unused bank accounts stay on Babu Bazar. DBBL's
-  method is already that branch only.
+- Main Cash (LT) is Press Club and holds its 1,341 lines plus the Press
+  Club lines moved off Main Cash (CF).
+- Main Cash (CF) is Babu Bazar and holds its own lines plus the Cash in
+  Hand lines. It has no Press Club lines.
+- Cash in Hand is gone.
+- Premier Bank 186, bKash, Nagad, DBBL and the other banks are unchanged
+  shared accounts. Their voucher lines are not moved.
+- The Cash method exists twice: Babu Bazar → Main Cash (CF), Press Club →
+  Main Cash (LT). Bank, bKash, Nagad and Card stay offered at both
+  branches. Bank (DBBL) stays Babu Bazar only.
 - Both employees have a branch. The script prints anyone who fell through
   to the main branch.
 
-A new tenant's bootstrap attaches the template tills (Cash in Hand, Main
-Bank Account, bKash Account, Nagad Account) to the first store, and the
-seeded methods point at those accounts with `all_branches` false. A store
-created afterwards does not receive copies.
+A new tenant's bootstrap attaches the template Cash in Hand to the first
+store and points the seeded Cash method at it, for that store only. Main
+Bank Account, bKash Account and Nagad Account stay shared, and their
+methods stay available at every branch. Opening another store creates one
+cash drawer for it and one Cash method. It does not copy banks or wallets.
 
 ---
 
@@ -379,10 +397,10 @@ created afterwards does not receive copies.
 
 No new resources. Existing routes gain the behaviour above.
 
-- Account create and update take `storeId`. It is required when the
-  category is cash or bank, and rejected otherwise. The name may repeat
-  across branches and may not repeat inside one branch, or among shared
-  accounts.
+- Account create and update take `storeId`. It is required for a new
+  cash drawer, rejected for a bank, a wallet, or any other shared
+  account, and rejected when that branch already has a drawer. The
+  drawer name may repeat across branches. A shared name may not.
 - Ledger, cash book, bank book, aging, the other reports listed in §2,
   and the export take `storeId` and resolve it with `BranchScopeService`
   and `VIEW_LEDGER`, the same permission the voucher list uses.
@@ -391,8 +409,9 @@ No new resources. Existing routes gain the behaviour above.
 - Payroll create takes `storeId`, required. A second run for the same
   branch, month and kind is the existing conflict. A legacy null run does
   not block it.
-- Payment-method create and update return `400` when a till account is
+- Payment-method create and update return `400` when a drawer account is
   combined with all branches or with any branch other than the account's.
+  A bank or wallet account does not trip that check.
 
 Branch ids the caller cannot use stay `403` from `BranchScopeService`.
 An account or employee outside the caller's branches is `404`.
@@ -425,47 +444,56 @@ An account or employee outside the caller's branches is `404`.
 
 ## 8. Testing
 
-- Account constraint: a cash account without a branch is rejected, a
-  shared account with a branch is rejected, two branches may both have
-  "Cash in Hand", one branch may not.
+- Account constraint: a bank account with a branch is rejected, a second
+  drawer for the same branch is rejected, a wallet (bKash) with no
+  branch is accepted, and two branches may each have one drawer.
 - Ledger and chart balances for a limited member exclude the other
-  branch's vouchers and do not return the other branch's till. Naming
-  the other branch is `403`. The company view still returns both.
-- Balance sheet at branch scope omits the other branch's till.
-- Posting a Press Club tender uses the Press Club till. A Babu Bazar
-  method id on that voucher is refused.
-- The sync dry-run fixture covers: a null-branch voucher repaired from
-  a customer payment, a tenant aborted when one till voucher has no
-  source and no party, a primary-cash move (the CF → LT case), a bank
-  cloned for the smaller branch, an empty till not copied, a method
-  split, an employee assigned from their only store and one printed as
-  a main-branch fallback.
+  branch's vouchers and do not return the other branch's drawer. The
+  shared bank is returned, with only that member's branch in the
+  balance. Naming the other branch is `403`. The company view still
+  returns both drawers and the full bank balance.
+- Balance sheet at branch scope omits the other branch's drawer and
+  still includes the shared bank at that branch's figure.
+- Posting Press Club cash uses Main Cash (LT). A Babu Bazar Cash method
+  on that voucher is refused. Posting Press Club bank uses Premier Bank
+  186, the same account Babu Bazar uses.
+- The sync dry-run fixture covers: a null-branch cash voucher repaired
+  from a customer payment, a tenant aborted when one drawer voucher has
+  no source and no party, Press Club lines moved off CF onto LT, Babu
+  Bazar lines moved off a second cash account onto CF, a bank line left
+  where it is, the emptied cash account deleted, the Cash method split,
+  an employee assigned from their only store and one printed as a
+  main-branch fallback.
 - Employee list for a one-branch member does not include the other
   branch. Department list still returns a department that has employees
   only at the other branch. Delete of that department is refused with
   the nameless message.
 - A branch payroll run ignores the other branch's employees. A legacy
   run with no branch is `403` for a member without consolidated access.
-- Frontend: the till form requires a branch, the employee form requires
-  a branch, and the payment-method form hides All branches when the
-  linked account is a till.
+- Frontend: the drawer form requires a branch, the employee form requires
+  a branch, the payment-method form hides All branches when the linked
+  account is a drawer, and leaves it available for a bank or a wallet.
 
 ---
 
 ## 9. Key decisions
 
-- Shared books, private tills. Balances of Sales and the rest are
-  filtered. The till itself is a different account, so it cannot leak
-  as a zero row.
-- KH Trading's named cash drawers are the primary-cash rule, not a
-  hard-coded tenant id. Any tenant that already kept one cash account
-  per branch by name is treated the same way.
-- The 801 Press Club vouchers on Main Cash (CF) move. The 1,341 already
-  moved on 2026-10-28 stay where they are.
+- Private cash drawers, shared banks. A bank is one account any branch
+  can post to. Its balance on a branch screen is still only that
+  branch's vouchers. bKash and Nagad are treated as banks for this
+  purpose: no physical drawer, so they are not split and their lines
+  are not folded into Main Cash.
+- One drawer per branch, chosen as the cash account that branch already
+  uses most. Press Club's is Main Cash (LT). Babu Bazar's is Main Cash
+  (CF). Other cash lines of that branch move onto it. This is not a
+  hard-coded tenant id.
+- The 801 Press Club vouchers on Main Cash (CF) move to Main Cash (LT).
+  The 3 Babu Bazar vouchers on Cash in Hand move to Main Cash (CF), and
+  Cash in Hand is removed. The 1,341 already on Main Cash (LT) stay.
 - Departments stay shared. The leak to close is the employee list behind
   them, not the department row.
 - An employee who cannot be placed from a login or from attendance goes
   to the main branch and is printed, rather than blocking the tenant.
-  A till voucher that cannot be placed does block that tenant, because
-  a wrong till is money in the wrong drawer and a wrong home branch can
+  A drawer voucher that cannot be placed does block that tenant, because
+  a wrong drawer is money in the wrong till and a wrong home branch can
   be edited afterwards.
