@@ -47,6 +47,7 @@ test.describe.serial('Accounting module — full feature coverage', () => {
     let session: DemoSession;
     let marker: string;
     let expenseCategoryName: string;
+    let expenseHeadName: string;
     let createdVoucherRef: string;
     let seededAccounts: AccountSummary[];
 
@@ -70,6 +71,7 @@ test.describe.serial('Accounting module — full feature coverage', () => {
 
         marker = `E2E-AC-${Date.now()}`;
         expenseCategoryName = `${marker}-cat`;
+        expenseHeadName = `${marker}-head`;
         createdVoucherRef = `${marker}-CP`;
     });
 
@@ -429,17 +431,27 @@ test.describe.serial('Accounting module — full feature coverage', () => {
         await categoryForm.getByRole('button', { name: /^save$/i }).click();
         await expect(page.getByText(expenseCategoryName).first()).toBeVisible({ timeout: 10_000 });
 
+        const categoryRow = page.locator('table tbody tr').filter({ hasText: expenseCategoryName });
+        await categoryRow.getByRole('button', { name: /heads/i }).click();
+        const headForm = page.locator('form').filter({
+            has: page.getByRole('heading', { name: /add head/i }),
+        });
+        await headForm.locator('input[type="text"]').fill(expenseHeadName);
+        await headForm.getByRole('button', { name: /^save$/i }).click();
+        await expect(headForm.getByText(expenseHeadName)).toBeVisible({ timeout: 10_000 });
+        await headForm.getByRole('button', { name: /^cancel$/i }).click();
+
         await page.goto('/accounting/expenses');
         await page.getByRole('button', { name: /add expense/i }).click();
         const expenseForm = page.locator('form').filter({
             has: page.getByRole('heading', { name: /add expense/i }),
         });
-        await expenseForm.locator('select').first().selectOption({ label: expenseCategoryName });
+        await expenseForm.locator('select').first().selectOption({ label: expenseHeadName });
         await expenseForm.locator('input[type="number"]').first().fill('350');
         await expenseForm.getByRole('button', { name: /^save$/i }).click();
         await expect(page.getByText(/expense recorded/i)).toBeVisible({ timeout: 15_000 });
         await expect(
-            page.locator('table tbody tr').filter({ hasText: expenseCategoryName }),
+            page.locator('table tbody tr').filter({ hasText: expenseHeadName }),
         ).toBeVisible({ timeout: 15_000 });
 
         await page.goto('/accounting/expenses/reports');

@@ -249,6 +249,14 @@ export class DemoWriter {
                 update: {}, create: { tenant_id: tenantId, name },
             });
             this.world.expenseCategoryIds.set(name, cat.id);
+            // Demo spend lands on a head named like the category. A shop then
+            // adds the specific heads (Salary - Karim) itself.
+            const head = await tx.expenseHead.upsert({
+                where: { category_id_name: { category_id: cat.id, name } },
+                update: {},
+                create: { tenant_id: tenantId, category_id: cat.id, name },
+            });
+            this.world.expenseHeadIds.set(name, head.id);
         }
     }
 
@@ -806,13 +814,15 @@ export class DemoWriter {
 
     async writeExpense(tx: Tx, date: Date, categoryName: string, amount: number, bank: boolean, anomaly?: AnomalyKind): Promise<void> {
         const categoryId = this.world.expenseCategoryIds.get(categoryName);
-        if (!categoryId) return;
+        const headId = this.world.expenseHeadIds.get(categoryName);
+        if (!categoryId || !headId) return;
         const store = this.world.mainStore;
         const paymentMode = bank ? 'bank' : 'cash';
         const entry = await tx.expenseEntry.create({
             data: {
                 tenant_id: this.world.tenantId,
                 category_id: categoryId,
+                head_id: headId,
                 amount: money(amount),
                 expense_date: date,
                 description: anomaly ? `${categoryName} — ${anomalyNote(anomaly)}` : `${categoryName} — demo`,

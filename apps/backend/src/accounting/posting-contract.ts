@@ -114,8 +114,8 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     { eventType: 'purchase_return', conditionKey: 'none', conditionValue: null, emittedBy: 'purchase-returns.service.ts:616 / :687', expectation: 'rule' },
 
     // ── expenses ─────────────────────────────────────────────────────────────
-    { eventType: 'expense', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'expenses.service.ts:136', expectation: 'rule' },
-    { eventType: 'expense', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'expenses.service.ts:136', expectation: 'rule' },
+    { eventType: 'expense', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'expenses.service.ts:224', expectation: 'rule' },
+    { eventType: 'expense', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'expenses.service.ts:224', expectation: 'rule' },
 
     // ── customer payments ────────────────────────────────────────────────────
     // Now plain DEFAULT_POSTING_RULES entries (formerly lazy

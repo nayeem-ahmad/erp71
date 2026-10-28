@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { bootstrapDefaultAccountingForTenant } from './bootstrap-accounting';
+import { seedDefaultExpenseCategories } from './expense-category.seed';
 import { ROLE_DEFAULT_PERMISSIONS, UserRole } from '@erp71/shared-types';
 
 export const DEMO_ACCOUNT_EMAIL = 'demo@erp71.com';
@@ -212,6 +213,7 @@ export async function seedDemoAccount(prisma: PrismaClient) {
     }
 
     await bootstrapDefaultAccountingForTenant(prisma, tenant.id);
+    await seedDefaultExpenseCategories(prisma, tenant.id);
 
     return {
         userId: user.id,
