@@ -46,6 +46,7 @@ import {
     validateAccountCode,
     type AccountCodeLevel,
 } from '@erp71/database';
+import { isCashDrawer } from './cash-drawer';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
 import { createdAtRange } from '../common/created-range.util';
 import { AuditService } from '../audit/audit.service';
@@ -366,6 +367,60 @@ export class AccountingService {
         });
     }
 
+    /** Mobile Wallet links stay shared even when the account is category cash. */
+    private async walletAccountIds(tenantId: string): Promise<Set<string>> {
+        const methods = await this.db.paymentMethod.findMany({
+            where: { tenant_id: tenantId, type: { equals: 'Mobile Wallet', mode: 'insensitive' } },
+            select: { account_id: true },
+        });
+        return new Set(methods.map((method) => method.account_id).filter((id): id is string => !!id));
+    }
+
+    /**
+     * A cash drawer needs exactly one branch, and that branch needs exactly one
+     * drawer. Banks, wallets, and every other account stay shared.
+     * `storeId` omitted on update keeps the account's current branch.
+     */
+    private async resolveDrawerStoreId(
+        tenantId: string,
+        account: { id?: string; name: string; category: string; store_id?: string | null },
+        storeId: string | null | undefined,
+    ): Promise<string | null> {
+        const requested = storeId === undefined ? (account.store_id ?? null) : storeId || null;
+        const drawer = isCashDrawer(
+            { id: account.id ?? '', name: account.name, category: account.category },
+            await this.walletAccountIds(tenantId),
+        );
+        if (!drawer) {
+            if (requested) {
+                throw new BadRequestException('Only a cash drawer belongs to a branch.');
+            }
+            return null;
+        }
+        if (!requested) {
+            throw new BadRequestException('A cash drawer needs a branch.');
+        }
+        const store = await this.db.store.findFirst({
+            where: { id: requested, tenant_id: tenantId },
+            select: { id: true },
+        });
+        if (!store) {
+            throw new BadRequestException('Branch not found.');
+        }
+        const taken = await this.db.account.findFirst({
+            where: {
+                tenant_id: tenantId,
+                store_id: requested,
+                ...(account.id ? { NOT: { id: account.id } } : {}),
+            },
+            select: { id: true },
+        });
+        if (taken) {
+            throw new BadRequestException('This branch already has a cash drawer.');
+        }
+        return requested;
+    }
+
     async createAccount(tenantId: string, dto: CreateAccountDto) {
         const group = await this.db.accountGroup.findFirst({
             where: {
@@ -401,14 +456,6 @@ export class AccountingService {
             subgroupCode = subgroup.code;
         }
 
-        const existing = await this.db.account.findFirst({
-            where: { tenant_id: tenantId, name: dto.name, store_id: null },
-        });
-
-        if (existing) {
-            throw new BadRequestException('An account with this name already exists.');
-        }
-
         const taken = await this.tenantAccountCodes(tenantId);
         const code = this.resolveCode(
             dto.code,
@@ -417,6 +464,21 @@ export class AccountingService {
             taken,
             () => nextAccountCode(group.code, subgroupCode, taken),
         );
+
+        const storeId = await this.resolveDrawerStoreId(
+            tenantId,
+            { name: dto.name, category: dto.category },
+            dto.storeId,
+        );
+
+        if (!storeId) {
+            const existing = await this.db.account.findFirst({
+                where: { tenant_id: tenantId, name: dto.name, store_id: null },
+            });
+            if (existing) {
+                throw new BadRequestException('An account with this name already exists.');
+            }
+        }
 
         try {
             return await this.db.account.create({
@@ -428,6 +490,7 @@ export class AccountingService {
                     code,
                     type: dto.type,
                     category: dto.category,
+                    store_id: storeId,
                 },
                 include: {
                     group: true,
@@ -708,13 +771,20 @@ export class AccountingService {
             subgroupCode = subgroup.code;
         }
 
-        const clash = await this.db.account.findFirst({
-            where: { tenant_id: tenantId, name: dto.name, store_id: null },
-            select: { id: true },
-        });
+        const storeId = await this.resolveDrawerStoreId(
+            tenantId,
+            { id, name: dto.name, category: dto.category, store_id: account.store_id },
+            dto.storeId,
+        );
 
-        if (clash && clash.id !== id) {
-            throw new BadRequestException('An account with this name already exists.');
+        if (!storeId) {
+            const clash = await this.db.account.findFirst({
+                where: { tenant_id: tenantId, name: dto.name, store_id: null },
+                select: { id: true },
+            });
+            if (clash && clash.id !== id) {
+                throw new BadRequestException('An account with this name already exists.');
+            }
         }
 
         // Re-parenting invalidates the code's prefix, so the account is re-coded
@@ -743,6 +813,7 @@ export class AccountingService {
                     code,
                     type: group.type,
                     category: dto.category,
+                    store_id: storeId,
                 },
                 include: { group: true, subgroup: true },
             });

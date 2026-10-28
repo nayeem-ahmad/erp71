@@ -50,6 +50,10 @@ describe('AccountingService — Story 30.2', () => {
         },
         store: {
             findMany: jest.fn(),
+            findFirst: jest.fn(),
+        },
+        paymentMethod: {
+            findMany: jest.fn(),
         },
         fiscalPeriod: {
             findFirst: jest.fn().mockResolvedValue(null),
@@ -91,6 +95,7 @@ describe('AccountingService — Story 30.2', () => {
         // Default: no settings row, i.e. approval off — the behaviour every
         // pre-existing test in this file was written against.
         db.accountingSettings.findUnique.mockResolvedValue(null);
+        db.paymentMethod.findMany.mockResolvedValue([]);
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -194,6 +199,7 @@ describe('AccountingService — Story 30.2', () => {
         db.accountSubgroup.findFirst.mockResolvedValue({ id: 'subgroup-1', tenant_id: 'tenant-1', group_id: 'group-1', code: '1101' });
         db.account.findUnique.mockResolvedValue(null);
         db.account.findMany.mockResolvedValue([]);
+        db.store.findFirst.mockResolvedValue({ id: 'store-1' });
         db.account.create.mockResolvedValue({ id: 'account-1', name: 'Cash in Hand', category: 'cash' });
 
         const result = await service.createAccount('tenant-1', {
@@ -203,6 +209,7 @@ describe('AccountingService — Story 30.2', () => {
             code: '110101',
             type: AccountType.ASSET,
             category: AccountCategory.CASH,
+            storeId: 'store-1',
         });
 
         expect(result.name).toBe('Cash in Hand');
@@ -215,6 +222,7 @@ describe('AccountingService — Story 30.2', () => {
                 code: '110101',
                 type: 'asset',
                 category: 'cash',
+                store_id: 'store-1',
             },
             include: {
                 group: true,

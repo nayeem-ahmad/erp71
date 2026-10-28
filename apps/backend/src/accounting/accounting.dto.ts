@@ -142,6 +142,12 @@ export class CreateAccountDto {
     @IsString()
     @IsIn(Object.values(AccountCategory))
     category: AccountCategory;
+
+    /** Required for a cash drawer. Rejected on a bank, a wallet, or any other shared account. */
+    @IsOptional()
+    @ValidateIf((_object, value) => value !== null && value !== '')
+    @IsString()
+    storeId?: string | null;
 }
 
 /**
@@ -171,6 +177,12 @@ export class UpdateAccountDto {
     @IsString()
     @IsIn(Object.values(AccountCategory))
     category: AccountCategory;
+
+    /** Required while the account is a cash drawer. Null clears it when the account is shared. */
+    @IsOptional()
+    @ValidateIf((_object, value) => value !== null && value !== '')
+    @IsString()
+    storeId?: string | null;
 }
 
 export class ListAccountSubgroupsQueryDto {

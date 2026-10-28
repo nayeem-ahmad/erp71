@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AccountingService } from './accounting.service';
-import { AccountCategory } from './accounting.constants';
+import { AccountCategory, AccountType } from './accounting.constants';
 import { DatabaseService } from '../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
@@ -32,6 +32,7 @@ describe('AccountingService — chart of accounts update/delete', () => {
             findFirst: jest.fn(),
             findUnique: jest.fn(),
             findMany: jest.fn(),
+            create: jest.fn(),
             update: jest.fn(),
             delete: jest.fn(),
         },
@@ -42,7 +43,8 @@ describe('AccountingService — chart of accounts update/delete', () => {
         recurringVoucherLine: { count: jest.fn() },
         voucherTemplateLine: { count: jest.fn() },
         paymentRecord: { count: jest.fn() },
-        paymentMethod: { count: jest.fn() },
+        paymentMethod: { count: jest.fn(), findMany: jest.fn() },
+        store: { findFirst: jest.fn() },
         purchasePayment: { count: jest.fn() },
         salesReturnPayment: { count: jest.fn() },
         purchaseReturnPayment: { count: jest.fn() },
@@ -70,6 +72,7 @@ describe('AccountingService — chart of accounts update/delete', () => {
         db.accountGroup.findMany.mockResolvedValue([]);
         db.accountSubgroup.findMany.mockResolvedValue([]);
         db.account.findMany.mockResolvedValue([]);
+        db.paymentMethod.findMany.mockResolvedValue([]);
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -245,7 +248,7 @@ describe('AccountingService — chart of accounts update/delete', () => {
         const baseDto = {
             groupId: 'group-2',
             name: 'Cash in Hand',
-            category: AccountCategory.CASH,
+            category: AccountCategory.GENERAL,
         };
 
         it('refuses to move a posted account into a group of a different type', async () => {
@@ -382,6 +385,81 @@ describe('AccountingService — chart of accounts update/delete', () => {
             await expect(
                 service.updateAccountSubgroup('tenant-1', 'subgroup-1', { name: 'Cash and Bank' }),
             ).rejects.toBeInstanceOf(BadRequestException);
+        });
+    });
+
+    describe('createAccount branch drawer', () => {
+        const group = { id: 'group-1', tenant_id: 'tenant-1', type: 'asset', code: '11' };
+
+        function draft(overrides: Record<string, unknown> = {}) {
+            return {
+                groupId: 'group-1',
+                name: 'Main Cash',
+                type: AccountType.ASSET,
+                category: AccountCategory.CASH,
+                ...overrides,
+            };
+        }
+
+        beforeEach(() => {
+            db.accountGroup.findFirst.mockResolvedValue(group);
+            db.account.findFirst.mockResolvedValue(null);
+            db.store.findFirst.mockResolvedValue({ id: 'store-bb', tenant_id: 'tenant-1' });
+            db.paymentMethod.findMany.mockResolvedValue([]);
+            db.account.create.mockResolvedValue({ id: 'account-new' });
+        });
+
+        it('rejects a bank account that names a branch', async () => {
+            await expect(
+                service.createAccount('tenant-1', draft({
+                    name: 'Premier Bank',
+                    category: AccountCategory.BANK,
+                    storeId: 'store-bb',
+                })),
+            ).rejects.toThrow('Only a cash drawer belongs to a branch.');
+            expect(db.account.create).not.toHaveBeenCalled();
+        });
+
+        it('rejects a second cash drawer for the same branch', async () => {
+            db.account.findFirst.mockImplementation(async ({ where }: { where: { store_id?: string } }) =>
+                where.store_id ? { id: 'drawer-1' } : null,
+            );
+
+            await expect(
+                service.createAccount('tenant-1', draft({ storeId: 'store-bb' })),
+            ).rejects.toThrow('This branch already has a cash drawer.');
+            expect(db.account.create).not.toHaveBeenCalled();
+        });
+
+        it('accepts a bKash wallet with no branch', async () => {
+            db.account.create.mockResolvedValue({ id: 'bkash' });
+
+            await expect(
+                service.createAccount('tenant-1', draft({ name: 'bKash Account' })),
+            ).resolves.toEqual({ id: 'bkash' });
+            expect(db.account.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ name: 'bKash Account', store_id: null }),
+                }),
+            );
+        });
+
+        it('accepts one drawer on each of two branches, even with the same name', async () => {
+            db.account.create
+                .mockResolvedValueOnce({ id: 'drawer-bb' })
+                .mockResolvedValueOnce({ id: 'drawer-pc' });
+
+            await service.createAccount('tenant-1', draft({ storeId: 'store-bb' }));
+            await service.createAccount('tenant-1', draft({ name: 'Main Cash', storeId: 'store-pc' }));
+
+            expect(db.account.create).toHaveBeenNthCalledWith(
+                1,
+                expect.objectContaining({ data: expect.objectContaining({ store_id: 'store-bb' }) }),
+            );
+            expect(db.account.create).toHaveBeenNthCalledWith(
+                2,
+                expect.objectContaining({ data: expect.objectContaining({ name: 'Main Cash', store_id: 'store-pc' }) }),
+            );
         });
     });
 });
