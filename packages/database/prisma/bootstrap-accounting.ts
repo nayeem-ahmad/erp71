@@ -746,8 +746,18 @@ async function findSharedAccount(
     name: string,
     select?: { id?: boolean; code?: boolean },
 ) {
-    return db.account.findFirst({
+    const shared = await db.account.findFirst({
         where: { tenant_id: tenantId, name, store_id: null },
+        select,
+    });
+    if (shared) return shared;
+    // Signup stamps Cash in Hand onto the first store. A later bootstrap must
+    // reuse that drawer instead of minting a second shared row that cannot be
+    // stamped (accounts_one_drawer_per_branch).
+    if (name !== 'Cash in Hand') return null;
+    return db.account.findFirst({
+        where: { tenant_id: tenantId, name },
+        orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
         select,
     });
 }
@@ -775,6 +785,11 @@ async function stampFirstDrawer(db: AccountingBootstrapClient, tenantId: string)
         select: { id: true },
     });
     if (!firstStore) return;
+    const existingDrawer = await db.account.findFirst({
+        where: { tenant_id: tenantId, store_id: firstStore.id },
+        select: { id: true },
+    });
+    if (existingDrawer) return;
     const cash = await findSharedAccount(db, tenantId, 'Cash in Hand', { id: true });
     if (!cash) return;
     await db.account.update({ where: { id: cash.id }, data: { store_id: firstStore.id } });
