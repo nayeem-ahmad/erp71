@@ -127,7 +127,7 @@ describe('HrDashboard', () => {
         renderWithQueryClient(<HrDashboard {...identity} />);
 
         // The tile says what the commitment leaves out; the strip says who to fix.
-        expect(await screen.findByText('৳ 500,000.00 monthly, excluding 4 with no salary set')).toBeInTheDocument();
+        expect(await screen.findByText('৳ 5,00,000.00 monthly, excluding 4 with no salary set')).toBeInTheDocument();
         expect(screen.getByText('4 staff have no salary on file')).toBeInTheDocument();
     });
 
