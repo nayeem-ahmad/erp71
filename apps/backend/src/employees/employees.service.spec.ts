@@ -249,6 +249,20 @@ describe('EmployeesService', () => {
       expect(result.nid).toBe('123456789');
     });
 
+    it('turns a date-only joining date into a Date so Prisma accepts it', async () => {
+      db.employee.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+      db.employee.create.mockResolvedValue(createdEmployee);
+
+      await service.create('t1', { ...baseDto, date_of_joining: '2024-10-26' });
+
+      const written = db.employee.create.mock.calls[0][0].data.date_of_joining;
+      expect(written).toBeInstanceOf(Date);
+      expect(Number.isNaN(written.getTime())).toBe(false);
+      expect(written.toISOString().startsWith('2024-10-26')).toBe(true);
+    });
+
     it('creates employee with valid department and designation', async () => {
       db.employee.findFirst
         .mockResolvedValueOnce(null) // phone check
@@ -486,6 +500,26 @@ describe('EmployeesService', () => {
       await service.update('t1', 'emp-1', { nid: '999' } as any);
 
       expect(encryption.encrypt).toHaveBeenCalledWith('999');
+    });
+
+    it('turns a date-only joining date into a Date so Prisma accepts it', async () => {
+      // The edit form's <input type="date"> posts YYYY-MM-DD. Prisma DateTime
+      // rejects that with "premature end of input. Expected ISO-8601 DateTime".
+      db.employee.findFirst.mockResolvedValueOnce(existingEmployee);
+      db.employee.update.mockResolvedValue({
+        ...existingEmployee,
+        nid: null,
+        department: null,
+        designation: null,
+        user: null,
+      });
+
+      await service.update('t1', 'emp-1', { date_of_joining: '2024-10-26' } as any);
+
+      const written = db.employee.update.mock.calls[0][0].data.date_of_joining;
+      expect(written).toBeInstanceOf(Date);
+      expect(Number.isNaN(written.getTime())).toBe(false);
+      expect(written.toISOString().startsWith('2024-10-26')).toBe(true);
     });
   });
 
