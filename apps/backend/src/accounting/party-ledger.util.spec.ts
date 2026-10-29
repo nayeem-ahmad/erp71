@@ -1,10 +1,23 @@
 import { buildPartyLedger } from './party-ledger.util';
 
-const line = (debit: number, credit: number, date: string, voucher_number = 'V', description = 'desc') => ({
+const line = (
+    debit: number,
+    credit: number,
+    date: string,
+    voucher_number = 'V',
+    description = 'desc',
+    source: { source_type?: string | null; source_id?: string | null } = {},
+) => ({
     id: `${voucher_number}-${date}`,
     debit_amount: debit,
     credit_amount: credit,
-    voucher: { date: new Date(date), voucher_number, description },
+    voucher: {
+        date: new Date(date),
+        voucher_number,
+        description,
+        source_type: source.source_type ?? null,
+        source_id: source.source_id ?? null,
+    },
 });
 
 function buildDb(controlAccountId: string | null, lines: unknown[]) {
@@ -20,13 +33,34 @@ const SUP = { increaseLabel: 'CREDIT_PURCHASE', decreaseLabel: 'PAYMENT' };
 describe('buildPartyLedger', () => {
     it('a customer receivable is debit − credit, with a running balance', async () => {
         // Sale posts Dr AR 700; payment posts Cr AR 300 → 700 then 400.
-        const db = buildDb('ar', [line(700, 0, '2026-05-01'), line(0, 300, '2026-05-10')]);
+        const db = buildDb('ar', [
+            line(700, 0, '2026-05-01', 'V1', 'sale', { source_type: 'sale', source_id: 'sale-1' }),
+            line(0, 300, '2026-05-10', 'V2', 'receipt', { source_type: 'customer_payment', source_id: 'pay-1' }),
+        ]);
 
         const ledger = await buildPartyLedger(db, 't1', 'CUSTOMER', 'cust-1', CUST);
 
         expect(ledger.transactions).toEqual([
-            expect.objectContaining({ type: 'CREDIT_SALE', amount: 700, balance_before: 0, balance_after: 700 }),
-            expect.objectContaining({ type: 'PAYMENT', amount: 300, balance_before: 700, balance_after: 400 }),
+            expect.objectContaining({
+                type: 'CREDIT_SALE',
+                amount: 700,
+                debit: 700,
+                credit: 0,
+                source_type: 'sale',
+                source_id: 'sale-1',
+                balance_before: 0,
+                balance_after: 700,
+            }),
+            expect.objectContaining({
+                type: 'PAYMENT',
+                amount: 300,
+                debit: 0,
+                credit: 300,
+                source_type: 'customer_payment',
+                source_id: 'pay-1',
+                balance_before: 700,
+                balance_after: 400,
+            }),
         ]);
         expect(ledger.closing_balance).toBe(400);
     });
@@ -38,8 +72,8 @@ describe('buildPartyLedger', () => {
         const ledger = await buildPartyLedger(db, 't1', 'SUPPLIER', 'sup-1', SUP);
 
         expect(ledger.transactions).toEqual([
-            expect.objectContaining({ type: 'CREDIT_PURCHASE', amount: 500, balance_after: 500 }),
-            expect.objectContaining({ type: 'PAYMENT', amount: 200, balance_after: 300 }),
+            expect.objectContaining({ type: 'CREDIT_PURCHASE', amount: 500, debit: 500, credit: 0, balance_after: 500 }),
+            expect.objectContaining({ type: 'PAYMENT', amount: 200, debit: 0, credit: 200, balance_after: 300 }),
         ]);
         expect(ledger.closing_balance).toBe(300);
     });

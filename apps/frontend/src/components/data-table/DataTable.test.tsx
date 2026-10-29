@@ -116,6 +116,22 @@ describe('DataTable', () => {
         expect(screen.getByText('Gamma Product')).toBeInTheDocument();
     });
 
+    it('renders a totals footer when columns define one', () => {
+        const cols: ColumnDef<Row, any>[] = [
+            { accessorKey: 'name', header: 'Name', id: 'name', footer: 'Total' },
+            { accessorKey: 'amount', header: 'Amount', id: 'amount', footer: () => '600' },
+        ];
+        render(<DataTable {...defaultProps} columns={cols} />);
+        const footer = screen.getByText('Total').closest('tfoot');
+        expect(footer).not.toBeNull();
+        expect(footer).toHaveTextContent('600');
+    });
+
+    it('omits the footer when no column defines one', () => {
+        render(<DataTable {...defaultProps} />);
+        expect(document.querySelector('tfoot')).toBeNull();
+    });
+
     it('stripes rows and gives them a hover wash when asked', () => {
         render(<DataTable {...defaultProps} striped />);
         const row = screen.getByText('Alpha Product').closest('tr');

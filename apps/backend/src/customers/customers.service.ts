@@ -7,6 +7,7 @@ import { EncryptionService } from '../common/encryption.service';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { cashLegOverride, resolveCreditPaymentMethod, storedPaymentMethodAccountId } from '../accounting/payment-account.util';
 import { buildPartyLedger } from '../accounting/party-ledger.util';
+import { enrichCustomerLedgerWithSales } from './customer-ledger-sales.util';
 import { ageBalance, ageInDays, type AgingEntry } from '../accounting/aging.utils';
 import {
     CreateCustomerDto,
@@ -724,12 +725,18 @@ export class CustomersService {
         });
         if (!customer) throw new NotFoundException('Customer not found');
 
-        const ledger = await buildPartyLedger(this.db, tenantId, 'CUSTOMER', id, {
-            from: params?.from,
-            to: params?.to,
-            increaseLabel: 'CREDIT_SALE',
-            decreaseLabel: 'PAYMENT',
-        });
+        const ledger = await enrichCustomerLedgerWithSales(
+            this.db,
+            tenantId,
+            id,
+            await buildPartyLedger(this.db, tenantId, 'CUSTOMER', id, {
+                from: params?.from,
+                to: params?.to,
+                increaseLabel: 'CREDIT_SALE',
+                decreaseLabel: 'PAYMENT',
+            }),
+            params,
+        );
 
         return {
             customer: { id: customer.id, name: customer.name, phone: customer.phone },

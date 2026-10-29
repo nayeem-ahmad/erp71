@@ -174,13 +174,54 @@ describe('CustomerLedgerPage list UI', () => {
         );
     });
 
-    it('right-aligns the amount and the balance', async () => {
+    it('right-aligns sales total, paid, due, payment and balance', async () => {
         render(<CustomerLedgerPage />);
         await screen.findByTestId('ledger-table');
 
         const align = (id: string) =>
             mockTableProps.columns.find((column: any) => (column.id ?? column.accessorKey) === id)?.meta?.align;
-        expect(align('amount')).toBe('end');
+        expect(align('sale_total')).toBe('end');
+        expect(align('amount_paid')).toBe('end');
+        expect(align('due')).toBe('end');
+        expect(align('payment')).toBe('end');
         expect(align('balance_after')).toBe('end');
+        expect(align('amount')).toBeUndefined();
+    });
+
+    it('keeps a fully paid sale on the ledger and totals the money columns', async () => {
+        (api.getCustomerGlLedger as jest.Mock).mockResolvedValue({
+            ...EMPTY_LEDGER,
+            transactions: [
+                {
+                    id: 'sale:1',
+                    type: 'SALE',
+                    debit: 0,
+                    credit: 0,
+                    sale_total: 2000,
+                    amount_paid: 2000,
+                    payment_number: 'INV-002',
+                    source_type: 'sale',
+                    source_id: 'sale-1',
+                    balance_before: 0,
+                    balance_after: 0,
+                    created_at: '2026-05-03T00:00:00.000Z',
+                },
+            ],
+        });
+
+        render(<CustomerLedgerPage />);
+
+        await waitFor(() => {
+            expect(mockTableProps.data.find((row: any) => row.id === 'sale:1')).toEqual(expect.objectContaining({
+                type: 'SALE',
+                sale_total: 2000,
+                amount_paid: 2000,
+                debit: 0,
+                credit: 0,
+                source_type: 'sale',
+            }));
+        });
+        expect(mockTableProps.columns.find((column: any) => column.id === 'due')?.footer).toEqual(expect.any(Function));
+        expect(mockTableProps.columns.find((column: any) => column.id === 'payment')?.footer).toEqual(expect.any(Function));
     });
 });

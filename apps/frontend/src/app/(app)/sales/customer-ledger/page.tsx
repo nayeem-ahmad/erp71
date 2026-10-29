@@ -29,6 +29,12 @@ type LedgerRow = {
     type?: string;
     payment_number?: string | null;
     amount?: number | string;
+    debit?: number | string;
+    credit?: number | string;
+    sale_total?: number | string | null;
+    amount_paid?: number | string | null;
+    source_type?: string | null;
+    source_id?: string | null;
     balance_before?: number | string;
     balance_after: number | string;
     notes?: string | null;
@@ -62,10 +68,27 @@ function formatOpeningDate(value: string, locale: string) {
     });
 }
 
-function directionLabel(type: string | undefined, copy: { directionReceive: string; directionPay: string }) {
+function directionLabel(type: string | undefined, copy: { directionReceive: string; directionPay: string; directionSale: string }) {
     if (type === 'PAYOUT') return copy.directionPay;
     if (type === 'PAYMENT') return copy.directionReceive;
+    if (type === 'SALE' || type === 'CREDIT_SALE') return copy.directionSale;
     return type?.replace(/_/g, ' ') ?? '—';
+}
+
+function transactionRowsFromTable(table: { getFilteredRowModel: () => { rows: { original: LedgerRow }[] } }): LedgerRow[] {
+    return table.getFilteredRowModel().rows.map((row) => row.original).filter((row) => row.rowType === 'transaction');
+}
+
+function sumField(rows: LedgerRow[], key: 'sale_total' | 'amount_paid' | 'debit' | 'credit'): number {
+    return rows.reduce((sum, row) => sum + Number(row[key] ?? 0), 0);
+}
+
+const dash = <span className="text-gray-400">—</span>;
+
+function moneyCell(value: number | string | null | undefined, locale: string, className?: string) {
+    const amount = Number(value ?? 0);
+    if (!amount) return dash;
+    return <span className={className}>{formatBDT(amount, { locale })}</span>;
 }
 
 /** Money in is good news on a due ledger; money paid out to the customer is the one to look at. */
@@ -81,8 +104,6 @@ function balanceClass(value: number): string | undefined {
     if (value < 0) return 'text-emerald-600';
     return undefined;
 }
-
-const dash = <span className="text-gray-400">—</span>;
 
 function CustomerLedgerContent() {
     const { t, locale } = useI18n();
@@ -202,12 +223,26 @@ function CustomerLedgerContent() {
                 info.row.original.rowType === 'opening'
                     ? formatOpeningDate(info.getValue(), locale)
                     : formatDateTime(info.getValue(), locale),
+            footer: () => copy.columnTotal,
             sortingFn: 'datetime',
             size: 150,
         }),
         columnHelper.accessor('payment_number', {
             header: copy.columns.serial,
-            cell: (info) => (info.row.original.rowType === 'opening' ? dash : info.getValue() || dash),
+            cell: (info) => {
+                const row = info.row.original;
+                if (row.rowType === 'opening') return dash;
+                const serial = info.getValue();
+                if (!serial) return dash;
+                if (row.source_type === 'sale' && row.source_id) {
+                    return (
+                        <Link href={`/sales/${row.source_id}`} className="text-blue-600 hover:underline">
+                            {serial}
+                        </Link>
+                    );
+                }
+                return serial;
+            },
             size: 110,
         }),
         columnHelper.accessor('type', {
@@ -231,21 +266,34 @@ function CustomerLedgerContent() {
             size: 140,
             meta: { hideOnMobile: true },
         }),
-        columnHelper.accessor('amount', {
-            header: copy.columns.amount,
-            cell: (info) => {
-                const row = info.row.original;
-                if (row.rowType === 'opening') return dash;
-                const isPayment = row.type === 'PAYMENT';
-                const signed = row.type === 'PAYOUT' || row.type === 'CREDIT_SALE';
-                const amt = Number(info.getValue() ?? 0);
-                return (
-                    <span className={signed ? 'text-danger' : isPayment ? 'text-emerald-600' : undefined}>
-                        {signed && amt > 0 ? '+' : isPayment ? '−' : ''}{formatBDT(amt, { locale })}
-                    </span>
-                );
-            },
+        columnHelper.accessor('sale_total', {
+            header: copy.columns.saleTotal,
+            cell: (info) => (info.row.original.rowType === 'opening' ? dash : moneyCell(info.getValue(), locale)),
+            footer: ({ table }) => moneyCell(sumField(transactionRowsFromTable(table), 'sale_total'), locale),
             size: 120,
+            meta: { align: 'end', hideOnMobile: true },
+        }),
+        columnHelper.accessor('amount_paid', {
+            header: copy.columns.paid,
+            cell: (info) => (info.row.original.rowType === 'opening' ? dash : moneyCell(info.getValue(), locale)),
+            footer: ({ table }) => moneyCell(sumField(transactionRowsFromTable(table), 'amount_paid'), locale),
+            size: 110,
+            meta: { align: 'end', hideOnMobile: true },
+        }),
+        columnHelper.accessor('debit', {
+            id: 'due',
+            header: copy.columns.due,
+            cell: (info) => (info.row.original.rowType === 'opening' ? dash : moneyCell(info.getValue(), locale, 'text-danger')),
+            footer: ({ table }) => moneyCell(sumField(transactionRowsFromTable(table), 'debit'), locale, 'text-danger'),
+            size: 110,
+            meta: { align: 'end' },
+        }),
+        columnHelper.accessor('credit', {
+            id: 'payment',
+            header: copy.columns.payment,
+            cell: (info) => (info.row.original.rowType === 'opening' ? dash : moneyCell(info.getValue(), locale, 'text-emerald-600')),
+            footer: ({ table }) => moneyCell(sumField(transactionRowsFromTable(table), 'credit'), locale, 'text-emerald-600'),
+            size: 110,
             meta: { align: 'end' },
         }),
         columnHelper.accessor('notes', {
@@ -260,10 +308,11 @@ function CustomerLedgerContent() {
                 const v = Number(info.getValue());
                 return <span className={balanceClass(v)}>{formatBDT(v, { locale })}</span>;
             },
+            footer: () => <span className={balanceClass(closingBalance)}>{formatBDT(closingBalance, { locale })}</span>,
             size: 120,
             meta: { align: 'end' },
         }),
-    ], [copy, locale]);
+    ], [copy, locale, closingBalance]);
 
     // Page-owned: the range goes to the ledger query, and the opening balance
     // is read at its start.
