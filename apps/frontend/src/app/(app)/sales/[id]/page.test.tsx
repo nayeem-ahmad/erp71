@@ -52,6 +52,8 @@ jest.mock('@/lib/format', () => ({
     formatBDT: (n: number) => `৳${n.toFixed(2)}`,
     formatDate: (d: string) => d,
     formatDateTime: (d: string) => d,
+    // The detailed challan stamps the print time in this zone.
+    getActiveTimeZone: () => 'UTC',
     toDatetimeLocal: (date: Date) => {
         const pad = (n: number) => String(n).padStart(2, '0');
         return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
