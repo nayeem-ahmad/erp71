@@ -109,8 +109,9 @@ describe('bootstrapDefaultAccountingForTenant — Story 30.2', () => {
             create: jest.fn().mockResolvedValue({ id: 'account-id' }),
             findFirst: jest.fn().mockImplementation(async ({ where }: { where: { name?: string; store_id?: string | null } }) => {
                 if (where?.name === 'Cash in Hand' && where.store_id === null) return { id: 'cash-id', name: 'Cash in Hand' };
+                if (where?.store_id === 's1' && !where?.name) return null;
                 if (where?.name) return { id: `${where.name}-id` };
-                return { id: 'cash-id' };
+                return null;
             }),
             findMany: jest.fn().mockResolvedValue([
                 { id: 'cash-id', name: 'Cash in Hand' },
@@ -150,6 +151,64 @@ describe('bootstrapDefaultAccountingForTenant — Story 30.2', () => {
         });
         const bankStamp = account.update.mock.calls.find((call: any[]) => call[0]?.data?.store_id && call[0]?.where?.id === 'bank-id');
         expect(bankStamp).toBeUndefined();
+    });
+
+    it('does not mint a second Cash in Hand after the first store already has a drawer', async () => {
+        // Production after the first post-branch-books deploy: Cash in Hand is
+        // already the signup branch's drawer. A later sync:accounting must not
+        // create a shared row of the same name and then stamp it onto that store
+        // — that unique-constraint is what aborted the 2026-10-29 employee-save
+        // deploy (run 40920975122).
+        const accounts = [
+            { id: 'cash-id', name: 'Cash in Hand', store_id: 's1', code: '110101' },
+            { id: 'bank-id', name: 'Main Bank Account', store_id: null, code: '110102' },
+            { id: 'revenue-id', name: 'Sales Revenue', store_id: null },
+            { id: 'payable-id', name: 'Purchase Payable', store_id: null },
+            { id: 'expense-id', name: 'General Operating Expense', store_id: null },
+        ];
+        const account = {
+            update: jest.fn().mockResolvedValue({ id: 'account-id' }),
+            create: jest.fn().mockResolvedValue({ id: 'account-id' }),
+            findFirst: jest.fn().mockImplementation(async ({ where }: { where: { name?: string; store_id?: string | null } }) => {
+                if (where?.store_id === 's1' && !where?.name) {
+                    return accounts.find((row) => row.store_id === 's1') ?? null;
+                }
+                if (where?.name && where.store_id === null) {
+                    return accounts.find((row) => row.name === where.name && row.store_id == null) ?? null;
+                }
+                if (where?.name) {
+                    return accounts.find((row) => row.name === where.name) ?? null;
+                }
+                return null;
+            }),
+            findMany: jest.fn().mockResolvedValue(accounts),
+        };
+        const db = {
+            accountGroup: {
+                upsert: jest.fn().mockImplementation(async ({ create }: any) => ({ id: `${create.name}-id`, ...create })),
+                findUnique: jest.fn().mockResolvedValue(null),
+                findMany: jest.fn().mockResolvedValue([]),
+            },
+            accountSubgroup: {
+                upsert: jest.fn().mockImplementation(async ({ create }: any) => ({ id: `${create.name}-id`, ...create })),
+                findUnique: jest.fn().mockResolvedValue(null),
+                findMany: jest.fn().mockResolvedValue([]),
+            },
+            account,
+            postingRule: {
+                findFirst: jest.fn().mockResolvedValue({ id: 'existing-rule-id' }),
+                create: jest.fn(),
+                update: jest.fn().mockResolvedValue({ id: 'rule-id' }),
+            },
+            store: {
+                findFirst: jest.fn().mockResolvedValue({ id: 's1' }),
+            },
+        } as any;
+
+        await bootstrapDefaultAccountingForTenant(db, 'tenant-1');
+
+        expect(account.create.mock.calls.some((call: any[]) => call[0]?.data?.name === 'Cash in Hand')).toBe(false);
+        expect(account.update.mock.calls.some((call: any[]) => call[0]?.data?.store_id === 's1')).toBe(false);
     });
 });
 
