@@ -468,6 +468,8 @@ export const salesMessages = {
             date: "तारीख",
             deliverTo: "प्राप्तकर्ता",
             challanDetails: "चालान विवरण",
+            name: "नाम",
+            mobile: "मोबाइल",
             address: "डिलीवरी पता",
             driver: "चालक",
             vehicle: "वाहन सं.",

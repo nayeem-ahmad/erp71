@@ -1,12 +1,19 @@
-import { COMPACT_SCOPE, openPrintWindow, renderHeaderHtml } from './print';
+import { DEFAULT_INVOICE_PRINT_PREFS, type InvoicePrintPrefs } from '@erp71/shared-types';
+import { COMPACT_SCOPE, isThermalPaper, openPrintWindow, renderHeaderHtml } from './print';
 import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig, PrintPreviewOptions } from './print';
+import {
+    detailedFooterHtml,
+    detailedInfoBoxHtml,
+    detailedStyles,
+    formatPrintStamp,
+} from './sales-invoice-detailed';
 
 export { PAPER_SIZES, paperSizeLabel } from './print';
 export type { PaperSize } from './print';
 
 /**
  * A delivery challan is the invoice minus the money: what left the shop, who
- * it is going to, and two signature lines. The delivery rider carries it and
+ * it is going to, and three signature lines. The delivery rider carries it and
  * the customer signs it on receipt, so it must never show what anything cost —
  * the rider is not owed the shop's margins and the customer settles against
  * the invoice, not this.
@@ -15,6 +22,10 @@ export type { PaperSize } from './print';
  * is no price, rate, discount, VAT or total field anywhere in `ChallanItem` or
  * `DeliveryChallanData`, and this module deliberately does not import
  * `formatBDT`. A caller cannot leak a figure onto the challan by passing one.
+ *
+ * On sheet paper the body is the detailed invoice's design — the boxed
+ * customer / document block, the shaded item table — with quantity columns in
+ * place of the money ones. A till roll keeps the compact layout it always had.
  */
 export interface ChallanItem {
     name: string;
@@ -32,6 +43,10 @@ export interface ChallanLabels {
     date: string;
     deliverTo: string;
     challanDetails: string;
+    /** Customer name label on the detailed sheet box. */
+    name: string;
+    /** Customer phone label on the detailed sheet box. */
+    mobile: string;
     address: string;
     driver: string;
     vehicle: string;
@@ -77,6 +92,13 @@ export interface DeliveryChallanData {
     items: ChallanItem[];
     note?: string;
     labels: ChallanLabels;
+    /** Who is printing it — the signed-in user — named after the print time. */
+    printedBy?: string;
+    /**
+     * When it was printed, already formatted. Left out, the moment of printing
+     * is used; a caller sets it only to pin the stamp, as a test does.
+     */
+    printedAt?: string;
 }
 
 function esc(str: string): string {
@@ -87,103 +109,81 @@ function esc(str: string): string {
         .replaceAll('"', '&quot;');
 }
 
-function buildStyles(isThermal: boolean): string {
+function separateInvoiceNo(data: DeliveryChallanData): string | null {
+    return data.invoiceNumber && data.invoiceNumber !== data.challanNumber
+        ? data.invoiceNumber
+        : null;
+}
+
+function totalQuantityOf(data: DeliveryChallanData): number {
+    return data.items.reduce((sum, item) => sum + item.quantity, 0);
+}
+
+function carrierLines(data: DeliveryChallanData): string[] {
+    const l = data.labels;
+    return [
+        data.driverName ? `${l.driver}: ${data.driverName}` : null,
+        data.driverPhone,
+        data.vehicleNo ? `${l.vehicle}: ${data.vehicleNo}` : null,
+    ].filter(Boolean) as string[];
+}
+
+function buildThermalStyles(): string {
     return `
-        body { font-family: ${isThermal ? "'Courier New', Courier, monospace" : 'Arial, Helvetica, sans-serif'}; }
+        body { font-family: 'Courier New', Courier, monospace; }
 
-        /* Meta grid */
-        .meta-grid { ${isThermal ? 'margin:4px 0;' : 'display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;'} }
-        .meta-block { ${isThermal ? 'margin:3px 0;' : 'background:#f8fafc; border-radius:8px; padding:12px 16px;'} }
-        .meta-block h3 { font-size:${isThermal ? '10px' : '11px'}; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; color:${isThermal ? '#444' : '#6b7280'}; margin-bottom:5px; }
-        .meta-block p  { font-size:${isThermal ? '10px' : '13px'}; color:#222; margin-bottom:2px; }
+        .meta-grid { margin:4px 0; }
+        .meta-block { margin:3px 0; }
+        .meta-block h3 { font-size:10px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; color:#444; margin-bottom:5px; }
+        .meta-block p  { font-size:10px; color:#222; margin-bottom:2px; }
 
-        /* Divider */
-        .divider { border:none; border-top:1px ${isThermal ? 'dashed #000' : 'solid #e5e7eb'}; margin:${isThermal ? '6px 0' : '0 0 20px 0'}; }
+        .divider { border:none; border-top:1px dashed #000; margin:6px 0; }
 
-        /* Items table — quantities only, no money columns */
-        .items-table { width:100%; border-collapse:collapse; margin-bottom:${isThermal ? '6px' : '20px'}; }
+        .items-table { width:100%; border-collapse:collapse; margin-bottom:6px; }
         .items-table thead th {
-            font-size:${isThermal ? '9px' : '11px'}; font-weight:bold; text-transform:uppercase;
-            letter-spacing:0.5px; color:${isThermal ? '#000' : '#6b7280'};
-            border-bottom:${isThermal ? '1px solid #000' : '2px solid #e5e7eb'};
-            padding:${isThermal ? '3px 0' : '8px 10px'}; text-align:left;
+            font-size:9px; font-weight:bold; text-transform:uppercase;
+            letter-spacing:0.5px; color:#000;
+            border-bottom:1px solid #000;
+            padding:3px 0; text-align:left;
         }
         .items-table tbody td {
-            padding:${isThermal ? '2px 0' : '7px 10px'};
+            padding:2px 0;
             vertical-align:top;
-            border-bottom:1px solid ${isThermal ? 'transparent' : '#f3f4f6'};
-            font-size:${isThermal ? '10px' : '13px'};
+            border-bottom:1px solid transparent;
+            font-size:10px;
         }
-        .item-sl   { width:${isThermal ? '8%' : '6%'}; color:#888; }
-        .item-name { width:${isThermal ? '52%' : '58%'}; }
-        .item-qty  { width:${isThermal ? '20%' : '18%'}; text-align:right; font-weight:bold; }
-        .item-unit { width:${isThermal ? '20%' : '18%'}; color:#555; }
+        .item-sl   { width:8%; color:#888; }
+        .item-name { width:52%; }
+        .item-qty  { width:20%; text-align:right; font-weight:bold; }
+        .item-unit { width:20%; color:#555; }
         .sku       { font-size:9px; color:#888; }
 
-        /* Quantity summary — the only total a challan carries */
-        .qty-summary { ${isThermal ? 'margin:4px 0;' : 'display:flex; justify-content:flex-end; margin-bottom:20px;'} }
-        .qty-summary table { width:${isThermal ? '100%' : '260px'}; border-collapse:collapse; }
+        .qty-summary { margin:4px 0; }
+        .qty-summary table { width:100%; border-collapse:collapse; }
         .qty-summary td {
-            padding:${isThermal ? '3px 0' : '6px 10px'}; font-size:${isThermal ? '11px' : '14px'}; font-weight:bold;
-            border-top:2px solid ${isThermal ? '#000' : '#1d4ed8'};
+            padding:3px 0; font-size:11px; font-weight:bold;
+            border-top:2px solid #000;
         }
         .qty-summary td:last-child { text-align:right; }
 
-        /* Note */
         .note-box {
-            font-size:${isThermal ? '10px' : '12px'}; color:#555;
-            ${isThermal
-                ? 'border:1px dashed #aaa; padding:4px 6px; margin:6px 0;'
-                : 'background:#fef9c3; border:1px solid #fde68a; border-radius:6px; padding:10px 14px; margin-bottom:20px;'}
+            font-size:10px; color:#555;
+            border:1px dashed #aaa; padding:4px 6px; margin:6px 0;
         }
 
-        /* Signature band — the point of the document */
-        .sign-band {
-            ${isThermal ? '' : 'display:grid; grid-template-columns:repeat(3, 1fr); gap:24px;'}
-            margin-top:${isThermal ? '14px' : '48px'};
-            page-break-inside: avoid;
-        }
-        .sign-box { ${isThermal ? 'margin-bottom:14px;' : ''} text-align:center; }
-        .sign-name { font-size:${isThermal ? '10px' : '12px'}; color:#222; min-height:${isThermal ? '12px' : '16px'}; }
-        .sign-line { border-top:1px solid #333; margin:${isThermal ? '14px 0 3px' : '4px 0 6px'}; }
-        .sign-role { font-size:${isThermal ? '10px' : '12px'}; font-weight:bold; color:#222; }
-        .sign-hint { font-size:${isThermal ? '9px' : '10px'}; color:#888; }
+        .sign-band { margin-top:14px; page-break-inside: avoid; }
+        .sign-box { margin-bottom:14px; text-align:center; }
+        .sign-name { font-size:10px; color:#222; min-height:12px; }
+        .sign-line { border-top:1px solid #333; margin:14px 0 3px; }
+        .sign-role { font-size:10px; font-weight:bold; color:#222; }
+        .sign-hint { font-size:9px; color:#888; }
 
-        .no-price { text-align:center; font-size:${isThermal ? '9px' : '11px'}; color:#888; margin-top:${isThermal ? '8px' : '18px'}; font-style:italic; }
-        .footer { text-align:center; font-size:${isThermal ? '10px' : '12px'}; color:#888; margin-top:${isThermal ? '8px' : '18px'}; ${isThermal ? '' : 'border-top:1px solid #e5e7eb; padding-top:14px;'} }
-        ${isThermal ? '' : compactStyles()}
+        .no-price { text-align:center; font-size:9px; color:#888; margin-top:8px; font-style:italic; }
+        .footer { text-align:center; font-size:10px; color:#888; margin-top:8px; }
     `;
 }
 
-/**
- * The compact challan — the invoice's treatment: tighter rows, one size
- * smaller type, the SKU beside the item name. The signature band keeps enough
- * room above its lines to sign on; that space is the point of the document.
- *
- * Inert until `html.p71-compact` is set, and never emitted for a roll.
- */
-function compactStyles(): string {
-    const c = COMPACT_SCOPE;
-    return `
-        ${c} .meta-grid { gap:8px; margin-bottom:8px; }
-        ${c} .meta-block { padding:5px 10px; border-radius:6px; }
-        ${c} .meta-block h3 { font-size:10px; margin-bottom:2px; }
-        ${c} .meta-block p { font-size:11px; margin-bottom:0; }
-        ${c} .divider { margin:0 0 6px 0; }
-        ${c} .items-table { margin-bottom:6px; }
-        ${c} .items-table thead th { font-size:10px; padding:3px 6px; }
-        ${c} .items-table tbody td { font-size:11px; padding:2px 6px; }
-        ${c} .item-name br { display:none; }
-        ${c} .item-name .sku { margin-left:6px; }
-        ${c} .qty-summary { margin-bottom:6px; }
-        ${c} .qty-summary td { font-size:12px; padding:2px 6px; }
-        ${c} .note-box { font-size:11px; padding:5px 8px; margin-bottom:6px; }
-        ${c} .sign-band { margin-top:32px; }
-        ${c} .no-price { font-size:10px; margin-top:8px; }
-        ${c} .footer { font-size:10px; margin-top:8px; padding-top:6px; }`;
-}
-
-function buildBody(data: DeliveryChallanData, isThermal: boolean): string {
+function buildThermalBody(data: DeliveryChallanData): string {
     const l = data.labels;
 
     const itemRows = data.items.map((item, index) => `<tr>
@@ -193,24 +193,13 @@ function buildBody(data: DeliveryChallanData, isThermal: boolean): string {
             <td class="item-unit">${item.unit ? esc(item.unit) : '—'}</td>
         </tr>`).join('');
 
-    const totalQuantity = data.items.reduce((sum, item) => sum + item.quantity, 0);
-
-    const separateInvoiceNo =
-        data.invoiceNumber && data.invoiceNumber !== data.challanNumber
-            ? data.invoiceNumber
-            : null;
-
     const deliveryLines = [
         data.customerName,
         data.customerPhone,
         data.deliveryAddress,
     ].filter(Boolean) as string[];
 
-    const carrierLines = [
-        data.driverName ? `${l.driver}: ${data.driverName}` : null,
-        data.driverPhone,
-        data.vehicleNo ? `${l.vehicle}: ${data.vehicleNo}` : null,
-    ].filter(Boolean) as string[];
+    const carrier = carrierLines(data);
 
     return `
     <div class="meta-grid">
@@ -219,17 +208,9 @@ function buildBody(data: DeliveryChallanData, isThermal: boolean): string {
             <h3>${esc(l.deliverTo)}</h3>
             ${deliveryLines.map((line) => `<p>${esc(line)}</p>`).join('')}
         </div>` : ''}
-        ${!isThermal ? `
+        ${carrier.length ? `
         <div class="meta-block">
-            <h3>${esc(l.challanDetails)}</h3>
-            <p>${esc(l.challanNo)}: <strong>${esc(data.challanNumber)}</strong></p>
-            ${separateInvoiceNo ? `<p>${esc(l.invoiceNo)}: ${esc(separateInvoiceNo)}</p>` : ''}
-            <p>${esc(l.date)}: ${esc(data.date)}</p>
-            ${carrierLines.map((line) => `<p>${esc(line)}</p>`).join('')}
-        </div>` : ''}
-        ${isThermal && carrierLines.length ? `
-        <div class="meta-block">
-            ${carrierLines.map((line) => `<p>${esc(line)}</p>`).join('')}
+            ${carrier.map((line) => `<p>${esc(line)}</p>`).join('')}
         </div>` : ''}
     </div>
 
@@ -249,7 +230,7 @@ function buildBody(data: DeliveryChallanData, isThermal: boolean): string {
 
     <div class="qty-summary">
         <table>
-            <tr><td>${esc(l.totalQuantity)}</td><td>${totalQuantity}</td></tr>
+            <tr><td>${esc(l.totalQuantity)}</td><td>${totalQuantityOf(data)}</td></tr>
         </table>
     </div>
 
@@ -279,14 +260,134 @@ function buildBody(data: DeliveryChallanData, isThermal: boolean): string {
     <p class="no-price">${esc(l.noPriceHint)}</p>`;
 }
 
-export function printDeliveryChallan(
-    data: DeliveryChallanData,
-    paperSize: PaperSize = 'A4',
-    preview?: PrintPreviewOptions,
-): void {
-    const isThermal = paperSize === 'Thermal80' || paperSize === 'Thermal58';
+/** The member's padding choice, vertical then horizontal — same as the invoice. */
+const BODY_PADDING: Record<InvoicePrintPrefs['padding'], string> = {
+    narrow: '2mm 1mm',
+    normal: '6mm 4mm',
+    wide: '12mm 8mm',
+};
 
-    const headerContext: HeaderContext = {
+/**
+ * The detailed invoice's chrome, plus a unit column, three signature lines
+ * and the no-price notice. Compact keeps room to sign.
+ */
+function challanSheetStyles(layout: InvoicePrintPrefs): string {
+    const c = COMPACT_SCOPE;
+    const signSpace = layout.signature_space_mm == null
+        ? ''
+        : `.d-sign-band, ${c} .d-sign-band { margin-top:${layout.signature_space_mm}mm; }`;
+    return `
+        body { font-family: Arial, Helvetica, sans-serif; }
+        .invoice-body { padding:${BODY_PADDING[layout.padding]}; }
+        ${detailedStyles()}
+        .d-table th.d-unit, .d-table td.d-unit { width:12%; text-align:center; }
+        .d-table th.d-num, .d-table td.d-num { width:12%; }
+        .d-item .sku { font-size:11px; color:#555; }
+        .d-sign-band {
+            display:grid; grid-template-columns:repeat(3, 1fr); gap:24px;
+            margin-top:48px; page-break-inside:avoid; break-inside:avoid;
+        }
+        .d-sign-name { font-size:12px; color:#222; min-height:16px; }
+        .d-sign-line { border-top:1px solid #6b7280; padding-top:4px; font-size:11px; color:#374151; }
+        .d-sign-hint { font-size:10px; color:#888; margin-top:2px; }
+        .no-price { text-align:center; font-size:11px; color:#888; margin-top:18px; font-style:italic; }
+
+        ${c} .invoice-body { padding:1mm 0; }
+        ${c} .d-sign-band { margin-top:32px; }
+        ${c} .d-item br { display:none; }
+        ${c} .d-item .sku { margin-left:6px; }
+        ${c} .no-price { font-size:10px; margin-top:8px; }
+        ${signSpace}
+    `;
+}
+
+function driverValue(data: DeliveryChallanData): string | undefined {
+    if (!data.driverName && !data.driverPhone) return undefined;
+    if (data.driverName && data.driverPhone) return `${data.driverName} · ${data.driverPhone}`;
+    return data.driverName || data.driverPhone;
+}
+
+function buildDetailedParts(data: DeliveryChallanData, layout: InvoicePrintPrefs): { body: string; end: string } {
+    const l = data.labels;
+    const invoiceNo = separateInvoiceNo(data);
+    const ruled = layout.table_borders === 'columns';
+    const columns = 4;
+
+    const infoBox = detailedInfoBoxHtml(
+        [
+            [l.name, data.customerName],
+            [l.mobile, data.customerPhone],
+            [l.address, data.deliveryAddress],
+        ],
+        [
+            [l.challanNo, data.challanNumber],
+            [l.invoiceNo, invoiceNo ?? undefined],
+            [l.date, data.date],
+            [l.driver, driverValue(data)],
+            [l.vehicle, data.vehicleNo],
+        ],
+    );
+
+    const itemRows = data.items.map((item, index) => `<tr>
+            <td class="d-sl">${index + 1}</td>
+            <td class="d-item">${esc(item.name)}${item.sku ? `<br><span class="sku">${esc(item.sku)}</span>` : ''}</td>
+            <td class="d-num">${item.quantity}</td>
+            <td class="d-unit">${item.unit ? esc(item.unit) : '—'}</td>
+        </tr>`).join('');
+
+    const body = `
+    <div class="invoice-body inv-d inv-d--top">
+    <table class="d-table${ruled ? ' d-table--ruled' : ''}">
+        <thead>
+            <tr class="d-info-row"><td colspan="${columns}">${infoBox}</td></tr>
+            <tr>
+                <th class="d-sl">${esc(l.sl)}</th>
+                <th class="d-item">${esc(l.item)}</th>
+                <th class="d-num">${esc(l.quantity)}</th>
+                <th class="d-unit">${esc(l.unit)}</th>
+            </tr>
+        </thead>
+        <tbody>${itemRows}</tbody>
+        ${ruled ? `<tfoot><tr class="d-close"><td colspan="${columns}"></td></tr></tfoot>` : ''}
+    </table>
+    </div>`;
+
+    const end = `
+    <div class="invoice-body inv-d inv-d--end">
+    <div class="d-sums">
+        <div class="d-left"></div>
+        <div class="d-right">
+            <table class="d-block">
+                <tr class="rule"><td>${esc(l.totalQuantity)}</td><td>${totalQuantityOf(data)}</td></tr>
+            </table>
+        </div>
+    </div>
+    ${data.note ? `<div class="note-box"><strong>${esc(l.note)}:</strong> ${esc(data.note)}</div>` : ''}
+    <div class="d-sign-band">
+        <div class="d-sign-box">
+            <div class="d-sign-name">${data.companyName ? esc(data.companyName) : ''}</div>
+            <div class="d-sign-line">${esc(l.deliveredBy)}</div>
+            <p class="d-sign-hint">${esc(l.signatureAndDate)}</p>
+        </div>
+        <div class="d-sign-box">
+            <div class="d-sign-name">${data.driverName ? esc(data.driverName) : ''}</div>
+            <div class="d-sign-line">${esc(l.carriedBy)}</div>
+            <p class="d-sign-hint">${esc(l.signatureAndDate)}</p>
+        </div>
+        <div class="d-sign-box">
+            <div class="d-sign-name">${data.customerName ? esc(data.customerName) : ''}</div>
+            <div class="d-sign-line">${esc(l.receivedBy)}</div>
+            <p class="d-sign-hint">${esc(l.signatureAndDate)}</p>
+        </div>
+    </div>
+    <p class="no-price">${esc(l.noPriceHint)}</p>
+    </div>`;
+
+    return { body, end };
+}
+
+function headerContextOf(data: DeliveryChallanData, printedAt: string): HeaderContext {
+    return {
         docTitle: data.labels.title,
         docNumber: data.challanNumber,
         docDate: data.date,
@@ -294,21 +395,59 @@ export function printDeliveryChallan(
         storeName: data.storeName,
         address: data.companyAddress,
         phone: data.companyPhone,
+        printDate: printedAt,
     };
-    const headerHtml = renderHeaderHtml(data.headerConfig, headerContext, paperSize);
+}
+
+/**
+ * @param layout The printing member's invoice padding, table rules and
+ *   signature gap; the built-in ones when omitted. Sheet paper always prints
+ *   the detailed design — a challan is a trade document, the same way a
+ *   quotation is. A roll keeps the compact layout it always had.
+ */
+export function printDeliveryChallan(
+    data: DeliveryChallanData,
+    paperSize: PaperSize = 'A4',
+    preview?: PrintPreviewOptions,
+    layout: InvoicePrintPrefs = DEFAULT_INVOICE_PRINT_PREFS,
+): void {
+    if (isThermalPaper(paperSize)) {
+        const headerContext = headerContextOf(data, data.printedAt ?? formatPrintStamp());
+        openPrintWindow({
+            context: headerContext,
+            title: `${data.labels.title} ${data.challanNumber}`,
+            paperSize,
+            headerConfig: data.headerConfig,
+            headerHtml: renderHeaderHtml(data.headerConfig, headerContext, paperSize),
+            bodyHtml: buildThermalBody(data),
+            footerHtml: `<div class="footer">${esc(data.labels.footer)}</div>`,
+            styles: buildThermalStyles(),
+            compactable: false,
+            preview,
+        });
+        return;
+    }
+
+    const printedAt = data.printedAt ?? formatPrintStamp();
+    const who = data.printedBy?.trim();
+    const context = headerContextOf(data, printedAt);
+    const { body, end } = buildDetailedParts(data, layout);
 
     openPrintWindow({
-        context: headerContext,
+        context,
+        headerConfig: data.headerConfig,
+        headerHtml: renderHeaderHtml(data.headerConfig, { ...context, hideDocMeta: true }, paperSize),
+        bodyHtml: body,
+        endHtml: end,
+        footerHtml: detailedFooterHtml(data.labels.footer),
         title: `${data.labels.title} ${data.challanNumber}`,
         paperSize,
-        headerConfig: data.headerConfig,
-        headerHtml,
-        bodyHtml: buildBody(data, isThermal),
-        footerHtml: `<div class="footer">${esc(data.labels.footer)}</div>`,
-        styles: buildStyles(isThermal),
-        // Long item lists spill onto page 2 — keep the letterhead on every page.
-        repeatHeader: !isThermal,
+        styles: challanSheetStyles(layout),
+        repeatHeader: true,
+        pinFooter: true,
+        pageStamp: { text: `Printed ${printedAt}${who ? ` by ${who}` : ''}`, pageNumbers: true },
         compactable: true,
+        bodyTypeScale: true,
         preview,
     });
 }

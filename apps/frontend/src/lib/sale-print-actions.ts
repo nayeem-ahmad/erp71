@@ -43,6 +43,7 @@ export interface PrintableSale {
         product?: {
             name?: string;
             sku?: string | null;
+            unit_type?: string | null;
             warranty_enabled?: boolean;
             warranty_duration_days?: number | null;
             vat_rate?: string | number | null;
@@ -115,6 +116,13 @@ export interface SalePrintContext {
 
 function itemName(item: PrintableSale['items'][number], fallback: string): string {
     return item.name ?? item.product?.name ?? fallback;
+}
+
+/** The product's unit on the challan; the default "none" is not a unit a rider counts. */
+function challanUnit(unitType?: string | null): string | undefined {
+    const unit = unitType?.trim();
+    if (!unit || unit === 'none') return undefined;
+    return unit;
 }
 
 function unitPrice(item: PrintableSale['items'][number]): number {
@@ -372,16 +380,22 @@ export function printSaleChallan(
             customerName: sale.customer?.name,
             customerPhone: sale.customer?.phone ?? undefined,
             deliveryAddress: sale.customer?.address ?? undefined,
-            items: sale.items.map((i) => ({
-                name: itemName(i, ctx.unknownProductLabel),
-                sku: i.product?.sku ?? undefined,
-                quantity: i.quantity,
-            })),
+            items: sale.items.map((i) => {
+                const unit = challanUnit(i.product?.unit_type);
+                return {
+                    name: itemName(i, ctx.unknownProductLabel),
+                    sku: i.product?.sku ?? undefined,
+                    quantity: i.quantity,
+                    ...(unit ? { unit } : {}),
+                };
+            }),
             note: sale.note ?? undefined,
             labels: ctx.challanLabels,
+            printedBy: ctx.printedBy,
         },
         size,
         previewFor('challan', size, ctx, skipPreview),
+        ctx.invoiceLayout,
     );
 }
 

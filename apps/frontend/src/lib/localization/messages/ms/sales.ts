@@ -468,6 +468,8 @@ export const salesMessages = {
                 date: "Tarikh",
                 deliverTo: "Hantar Kepada",
                 challanDetails: "Butiran Nota",
+                name: "Nama",
+                mobile: "Mudah alih",
                 address: "Alamat Penghantaran",
                 driver: "Pemandu",
                 vehicle: "No. Kenderaan",

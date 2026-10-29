@@ -209,6 +209,7 @@ describe('the sale\u2019s store on the letterhead', () => {
             expect.objectContaining({ storeName: 'Gulshan', companyAddress: '12 Gulshan Ave' }),
             'A4',
             undefined,
+            undefined,
         );
     });
 
@@ -400,5 +401,26 @@ describe('printSaleChallan', () => {
         // The challan type has no field for money, and this is the assertion
         // that keeps it that way if someone widens the mapping later.
         expect(JSON.stringify(data)).not.toMatch(/1000|3000/);
+    });
+
+    it('prints the product unit a rider counts, and skips the default none', () => {
+        printSaleChallan(
+            {
+                ...listShapedSale,
+                items: [
+                    { quantity: 2, price_at_sale: '100', product: { name: 'Rice', sku: 'R1', unit_type: 'kg' } },
+                    { quantity: 1, price_at_sale: '100', product: { name: 'Bag', sku: 'B1', unit_type: 'none' } },
+                ],
+            },
+            'A4',
+            ctx,
+            true,
+        );
+        const data = (printDeliveryChallan as jest.Mock).mock.calls[0][0];
+
+        expect(data.items).toEqual([
+            { name: 'Rice', sku: 'R1', quantity: 2, unit: 'kg' },
+            { name: 'Bag', sku: 'B1', quantity: 1 },
+        ]);
     });
 });
