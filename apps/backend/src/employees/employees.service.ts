@@ -48,6 +48,20 @@ export class EmployeesService {
     }
 
     /**
+     * Prisma DateTime rejects a date-only string (`YYYY-MM-DD`) with
+     * "premature end of input. Expected ISO-8601 DateTime". The employee form's
+     * `<input type="date">` posts exactly that, and `@IsDateString()` accepts it.
+     */
+    private toJoiningDate(value: string | undefined): Date | undefined {
+        if (value == null || value === '') return undefined;
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            throw new BadRequestException('Invalid date of joining.');
+        }
+        return date;
+    }
+
+    /**
      * Whether `viewer` may see salary figures.
      *
      * `viewer` is optional so the existing `(tenantId, ...)` call shape still
@@ -196,7 +210,7 @@ export class EmployeesService {
 
         const employee_code = await this.generateEmployeeCode(tenantId);
         const seesSalary = await this.canSeeSalary(viewer);
-        const { nid, basic_salary, storeId, ...rest } = dto as CreateEmployeeDto & { basic_salary?: unknown };
+        const { nid, basic_salary, storeId, date_of_joining, ...rest } = dto as CreateEmployeeDto & { basic_salary?: unknown };
 
         // Same rule as `update`: no VIEW_PAYROLL, no salary written. On create
         // there is nothing to overwrite, so this only drops a figure the caller
@@ -213,6 +227,7 @@ export class EmployeesService {
                 ...rest,
                 ...salaryPatch,
                 ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
+                ...(date_of_joining ? { date_of_joining: this.toJoiningDate(date_of_joining) } : {}),
             },
             include: { department: true, designation: true, user: { select: EMPLOYEE_USER_SELECT } },
         });
@@ -292,7 +307,7 @@ export class EmployeesService {
         }
 
         const seesSalary = await this.canSeeSalary(viewer);
-        const { nid, basic_salary, storeId: nextStoreId, ...rest } = dto as UpdateEmployeeDto & { basic_salary?: unknown };
+        const { nid, basic_salary, storeId: nextStoreId, date_of_joining, ...rest } = dto as UpdateEmployeeDto & { basic_salary?: unknown };
         if (nextStoreId) {
             const branch = await this.db.store.findFirst({
                 where: { id: nextStoreId, tenant_id: tenantId },
@@ -319,6 +334,7 @@ export class EmployeesService {
                 ...salaryPatch,
                 ...(nextStoreId ? { store_id: nextStoreId } : {}),
                 ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
+                ...(date_of_joining ? { date_of_joining: this.toJoiningDate(date_of_joining) } : {}),
             },
             include: { department: true, designation: true, user: { select: EMPLOYEE_USER_SELECT } },
         });
