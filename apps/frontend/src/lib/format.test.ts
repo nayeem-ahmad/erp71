@@ -10,8 +10,16 @@ describe('format helpers', () => {
         expect(formatBDT(1234.5)).toBe('৳ 1,234.50');
     });
 
+    it('groups BDT in thousand, lac and crore', () => {
+        expect(formatBDT(1_000)).toBe('৳ 1,000.00');
+        expect(formatBDT(1_00_000)).toBe('৳ 1,00,000.00');
+        expect(formatBDT(12_34_567)).toBe('৳ 12,34,567.00');
+        expect(formatBDT(1_23_45_678.9)).toBe('৳ 1,23,45,678.90');
+    });
+
     it('formats BDT using Bangla digits when locale is bn', () => {
         expect(formatBDT(1234.5, { locale: 'bn' })).toBe('৳ ১,২৩৪.৫০');
+        expect(formatBDT(12_34_567, { locale: 'bn' })).toBe('৳ ১২,৩৪,৫৬৭.০০');
     });
 
     it('formats numbers using locale metadata', () => {

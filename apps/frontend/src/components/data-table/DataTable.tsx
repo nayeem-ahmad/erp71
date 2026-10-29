@@ -1440,6 +1440,26 @@ export default function DataTable<T>({
                                     </tr>
                                 ))}
                             </tbody>
+                            {table.getAllLeafColumns().some((column) => column.columnDef.footer != null) ? (
+                                <tfoot>
+                                    {table.getFooterGroups().map((footerGroup) => (
+                                        <tr key={footerGroup.id} className="border-t border-gray-200 bg-gray-50">
+                                            {footerGroup.headers.map((header) => (
+                                                <td
+                                                    key={header.id}
+                                                    data-column-id={header.column.id}
+                                                    className={`${bodyCellClass} font-semibold ${TEXT_ALIGN_CLASS[columnAlign(header.column)]}`}
+                                                    style={{ width: columnWidthStyle(header.column).width }}
+                                                >
+                                                    {header.isPlaceholder
+                                                        ? null
+                                                        : flexRender(header.column.columnDef.footer, header.getContext())}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))}
+                                </tfoot>
+                            ) : null}
                         </table>
                     </DndContext>
                 )}

@@ -14,6 +14,14 @@ export interface PartyLedgerRow {
     id: string;
     type: string;
     amount: number;
+    /** Natural-sign increase (customer due / supplier bill). */
+    debit: number;
+    /** Natural-sign decrease (receipt / payment). */
+    credit: number;
+    sale_total: number | null;
+    amount_paid: number | null;
+    source_type: string | null;
+    source_id: string | null;
     balance_before: number;
     balance_after: number;
     notes: string | null;
@@ -55,7 +63,7 @@ export async function buildPartyLedger(
     const isAsset = partyType === 'CUSTOMER';
     const lines = await db.voucherDetail.findMany({
         where: { account_id: control.id, party_id: partyId },
-        include: { voucher: { select: { date: true, voucher_number: true, description: true } } },
+        include: { voucher: { select: { date: true, voucher_number: true, description: true, source_type: true, source_id: true } } },
         orderBy: [{ voucher: { date: 'asc' } }, { created_at: 'asc' }],
     });
 
@@ -85,6 +93,12 @@ export async function buildPartyLedger(
             id: line.id,
             type: delta >= 0 ? params.increaseLabel : params.decreaseLabel,
             amount: Math.abs(delta),
+            debit: delta > 0 ? delta : 0,
+            credit: delta < 0 ? -delta : 0,
+            sale_total: null,
+            amount_paid: null,
+            source_type: line.voucher.source_type ?? null,
+            source_id: line.voucher.source_id ?? null,
             balance_before,
             balance_after: running,
             notes: line.voucher.description ?? null,
@@ -101,13 +115,13 @@ export async function buildPartyLedger(
     };
 }
 
-function startOfDay(iso: string): Date {
+export function startOfDay(iso: string): Date {
     const d = new Date(iso);
     d.setUTCHours(0, 0, 0, 0);
     return d;
 }
 
-function endOfDay(iso: string): Date {
+export function endOfDay(iso: string): Date {
     const d = new Date(iso);
     d.setUTCHours(23, 59, 59, 999);
     return d;
