@@ -133,6 +133,7 @@ export class AttendanceService {
             startDate?: string;
             endDate?: string;
             status?: string;
+            storeId?: string;
             page?: number;
             limit?: number;
         },
@@ -142,6 +143,7 @@ export class AttendanceService {
         const skip = (page - 1) * limit;
 
         const where: any = { tenant_id: tenantId };
+        if (opts?.storeId) where.employee = { store_id: opts.storeId };
         if (opts?.employeeId) where.employee_id = opts.employeeId;
         if (opts?.status) where.status = opts.status;
         if (opts?.startDate || opts?.endDate) {
@@ -369,7 +371,7 @@ export class AttendanceService {
      * Approved and pending both, because the question a manager is asking is
      * "who might be off", not "who is definitely off".
      */
-    async getLeaveCalendar(tenantId: string, from: string, to: string) {
+    async getLeaveCalendar(tenantId: string, from: string, to: string, storeId?: string) {
         const fromDate = new Date(from);
         const toDate = new Date(to);
 
@@ -380,6 +382,7 @@ export class AttendanceService {
                 status: { in: ['APPROVED', 'PENDING'] },
                 start_date: { lte: toDate },
                 end_date: { gte: fromDate },
+                ...(storeId ? { employee: { store_id: storeId } } : {}),
             },
             include: {
                 employee: { select: { id: true, name: true } },
@@ -466,6 +469,7 @@ export class AttendanceService {
         opts?: {
             employeeId?: string;
             status?: string;
+            storeId?: string;
             page?: number;
             limit?: number;
         },
@@ -475,6 +479,7 @@ export class AttendanceService {
         const skip = (page - 1) * limit;
 
         const where: any = { tenant_id: tenantId, deleted_at: null };
+        if (opts?.storeId) where.employee = { store_id: opts.storeId };
         if (opts?.employeeId) where.employee_id = opts.employeeId;
         if (opts?.status) where.status = opts.status;
 
@@ -501,9 +506,15 @@ export class AttendanceService {
         requestId: string,
         reviewerUserId: string,
         dto: ReviewLeaveRequestDto,
+        storeId?: string,
     ) {
         const request = await this.db.leaveRequest.findFirst({
-            where: { id: requestId, tenant_id: tenantId, deleted_at: null },
+            where: {
+                id: requestId,
+                tenant_id: tenantId,
+                deleted_at: null,
+                ...(storeId ? { employee: { store_id: storeId } } : {}),
+            },
         });
         if (!request) throw new NotFoundException('Leave request not found.');
         if (request.status !== 'PENDING') {
@@ -615,9 +626,10 @@ export class AttendanceService {
         });
     }
 
-    async cancelLeaveRequest(tenantId: string, requestId: string, employeeId?: string) {
+    async cancelLeaveRequest(tenantId: string, requestId: string, employeeId?: string, storeId?: string) {
         const where: any = { id: requestId, tenant_id: tenantId, deleted_at: null };
         if (employeeId) where.employee_id = employeeId;
+        if (storeId) where.employee = { store_id: storeId };
 
         const request = await this.db.leaveRequest.findFirst({ where });
         if (!request) throw new NotFoundException('Leave request not found.');

@@ -1,5 +1,14 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { ensureBranchCashDrawer } from '@erp71/database';
 import { StoresService } from './stores.service';
+
+jest.mock('@erp71/database', () => {
+    const actual = jest.requireActual('@erp71/database');
+    return {
+        ...actual,
+        ensureBranchCashDrawer: jest.fn().mockResolvedValue({ accountId: 'drawer', methodId: 'pm' }),
+    };
+});
 
 const OWNER_CTX = { tenantId: 't1', userId: 'u-owner', userRole: 'OWNER', timezone: 'Asia/Dhaka' } as any;
 
@@ -264,6 +273,11 @@ describe('StoresService.create', () => {
     it('seeds no permission rows for an owner, who bypasses the permission guard', async () => {
         await service.create(OWNER_CTX, { name: 'Mirpur' });
         expect(tx.userStorePermission.createMany).not.toHaveBeenCalled();
+    });
+
+    it('opens one cash drawer for the new branch', async () => {
+        await service.create(OWNER_CTX, { name: 'Mirpur' });
+        expect(ensureBranchCashDrawer).toHaveBeenCalledWith(tx, 't1', 's-new');
     });
 
     it('audit-logs the creation', async () => {

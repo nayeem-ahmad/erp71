@@ -23,6 +23,17 @@ interface Account {
     id: string;
     name: string;
     code?: string | null;
+    category?: string | null;
+    store_id?: string | null;
+}
+
+const WALLET_ACCOUNT_NAMES = new Set(['bkash account', 'nagad account']);
+
+/** A drawer is cash that belongs to one branch. Wallets stay shared. */
+function linkedDrawerStoreId(account: Account | undefined): string | null {
+    if (!account || account.category !== 'cash' || !account.store_id) return null;
+    if (WALLET_ACCOUNT_NAMES.has(account.name.trim().toLowerCase())) return null;
+    return account.store_id;
 }
 
 interface PaymentMethod {
@@ -80,7 +91,10 @@ function MethodForm({ initial, accounts, accountsError, branches, onSave, onCanc
 
     // A one-branch shop has nothing to choose: the field is hidden and the
     // request leaves the stored value alone (a new method defaults to all).
+    // A cash drawer is already one branch, so All branches is not a choice.
     const showBranches = branches.length > 1;
+    const pinnedStoreId = linkedDrawerStoreId(accounts.find((account) => account.id === accountId));
+    const showBranchPicker = showBranches && !pinnedStoreId;
 
     const toggleStore = (id: string) => {
         setBranchError(null);
@@ -90,12 +104,17 @@ function MethodForm({ initial, accounts, accountsError, branches, onSave, onCanc
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!name.trim()) return;
-        if (showBranches && !allBranches && storeIds.length === 0) {
+        if (showBranchPicker && !allBranches && storeIds.length === 0) {
             setBranchError('Pick at least one branch');
             return;
         }
         setSaving(true);
         try {
+            const branchPayload = !showBranches
+                ? {}
+                : pinnedStoreId
+                    ? { all_branches: false, store_ids: [pinnedStoreId] }
+                    : { all_branches: allBranches, store_ids: allBranches ? [] : storeIds };
             await onSave({
                 name: name.trim(),
                 type,
@@ -105,9 +124,7 @@ function MethodForm({ initial, accounts, accountsError, branches, onSave, onCanc
                 is_active: isActive,
                 show_on_entry: showOnEntry,
                 sort_order: Number(serial) || 0,
-                ...(showBranches
-                    ? { all_branches: allBranches, store_ids: allBranches ? [] : storeIds }
-                    : {}),
+                ...branchPayload,
             });
         } finally {
             setSaving(false);
@@ -172,7 +189,7 @@ function MethodForm({ initial, accounts, accountsError, branches, onSave, onCanc
                     ) : null}
                 </Field>
 
-                {showBranches && (
+                {showBranchPicker && (
                     <Field label="Branches" error={branchError ?? undefined} className="sm:col-span-2">
                         <div className="space-y-2">
                             <label className="flex items-center gap-2 text-sm text-gray-700 max-md:min-h-touch">

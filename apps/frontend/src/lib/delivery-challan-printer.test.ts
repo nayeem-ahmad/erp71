@@ -13,6 +13,8 @@ const labels: ChallanLabels = {
     date: 'Date',
     deliverTo: 'Deliver To',
     challanDetails: 'Challan Details',
+    name: 'Name',
+    mobile: 'Mobile',
     address: 'Delivery Address',
     driver: 'Driver',
     vehicle: 'Vehicle No.',
@@ -56,6 +58,11 @@ const fullChallan: DeliveryChallanData = {
  */
 const MONEY_MARKERS = /৳|BDT|\$|€|Unit Price|Discount|Subtotal|VAT|Payment|Amount|Total Price|Rate|Paid|Balance|Due/i;
 
+/** Markup the rider actually sees — stylesheets can name money classes the challan never prints. */
+function printedMarkup(html: string): string {
+    return html.replace(/<style[\s\S]*?<\/style>/g, '');
+}
+
 let lastOpenArgs: unknown[] = [];
 
 function renderChallan(
@@ -85,6 +92,74 @@ afterEach(() => {
     lastOpenArgs = [];
 });
 
+/** The customer side and the document side of the boxed block. */
+function infoBox(html: string): { left: string; right: string } {
+    const start = html.indexOf('<div class="d-info">');
+    const box = html.slice(start, html.indexOf('</thead>', start));
+    return {
+        left: box.slice(box.indexOf('d-info-l'), box.indexOf('d-info-r')),
+        right: box.slice(box.indexOf('d-info-r')),
+    };
+}
+
+const customerLine = (label: string, value: string) =>
+    `<span class="d-info-k">${label}</span><span class="d-info-c">:</span><span>${value}</span>`;
+
+describe('printDeliveryChallan — detailed sheet', () => {
+    it('prints on the detailed invoice design even when the member’s invoice is standard', () => {
+        const html = renderChallan();
+
+        expect(html).toContain('<div class="d-info">');
+        expect(html).toContain('class="d-table');
+        expect(html).not.toContain('meta-block');
+        expect(html).not.toContain('meta-grid');
+    });
+
+    it('boxes the customer on the left and the challan on the right', () => {
+        const { left, right } = infoBox(renderChallan());
+
+        expect(left).toContain(customerLine('Name', 'Rahim Traders'));
+        expect(left).toContain(customerLine('Mobile', '01711-000000'));
+        expect(left).toContain(customerLine('Delivery Address', '12 Bijoy Sarani, Dhaka'));
+        expect(right).toContain('<strong>Challan No.:</strong> INV-00042');
+        expect(right).toContain('<strong>Date:</strong> 17 Sep 2026');
+        expect(right).toContain('<strong>Driver:</strong> Karim');
+        expect(right).toContain('<strong>Vehicle No.:</strong> DHA-11-2233');
+        // Same number as the challan, so the invoice line stays off.
+        expect(right).not.toContain('Invoice No.');
+    });
+
+    it('puts the box in the item table head so it repeats on a second page', () => {
+        const html = renderChallan();
+        const table = html.slice(html.indexOf('<table class="d-table'));
+        const head = table.slice(0, table.indexOf('</thead>'));
+
+        expect(head).toContain('d-info-row');
+        expect(head).toContain('<div class="d-info">');
+        expect(head).toContain('>SL</th>');
+        expect(head).toContain('>Item</th>');
+        expect(head).toContain('>Qty</th>');
+        expect(head).toContain('>Unit</th>');
+    });
+
+    it('hides the letterhead number and date, which the box already says', () => {
+        const html = renderChallan();
+        const header = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
+
+        expect(header).toContain('Delivery Challan');
+        expect(header).not.toContain('p71-hd-meta');
+    });
+
+    it('pins the closing block with the footer and stamps the print time', () => {
+        const html = renderChallan();
+
+        expect(html).toContain('p71-doc--end');
+        expect(html).toContain('Printed ');
+        expect(html).toContain('Page " counter(page)');
+        expect(html).toContain('Goods received in good condition and full quantity.');
+    });
+});
+
 describe('printDeliveryChallan — what it carries', () => {
     it('prints the goods, the parties and the carrier', () => {
         const html = renderChallan();
@@ -97,8 +172,8 @@ describe('printDeliveryChallan — what it carries', () => {
         expect(html).toContain('Ceiling Fan');
         expect(html).toContain('FAN-56');
         expect(html).toContain('Cable Roll');
-        expect(html).toContain('Driver: Karim');
-        expect(html).toContain('Vehicle No.: DHA-11-2233');
+        expect(html).toContain('<strong>Driver:</strong> Karim');
+        expect(html).toContain('<strong>Vehicle No.:</strong> DHA-11-2233');
         expect(html).toContain('Call before arriving.');
     });
 
@@ -106,11 +181,11 @@ describe('printDeliveryChallan — what it carries', () => {
         const html = renderChallan();
 
         // Two lines, numbered 1 and 2 — a rider counts down the page.
-        expect(html).toContain('<td class="item-sl">1</td>');
-        expect(html).toContain('<td class="item-sl">2</td>');
+        expect(html).toContain('<td class="d-sl">1</td>');
+        expect(html).toContain('<td class="d-sl">2</td>');
         // The fan is in pcs; the cable roll was given no unit.
-        expect(html).toContain('<td class="item-unit">pcs</td>');
-        expect(html).toContain('<td class="item-unit">—</td>');
+        expect(html).toContain('<td class="d-unit">pcs</td>');
+        expect(html).toContain('<td class="d-unit">—</td>');
     });
 
     it('totals the quantity, which is the only total it has', () => {
@@ -139,10 +214,10 @@ describe('printDeliveryChallan — what it carries', () => {
         expect(html).toContain('Delivered By');
         expect(html).toContain('Carried By');
         expect(html).toContain('Received By');
-        expect(html.match(/class="sign-line"/g)).toHaveLength(3);
+        expect(html.match(/class="d-sign-line"/g)).toHaveLength(3);
         // The band must not be split by a page break — a signature stranded on
         // page 2 is how a delivery ends up with no proof of receipt.
-        expect(html).toContain('page-break-inside: avoid');
+        expect(html).toContain('page-break-inside:avoid');
     });
 
     it('prints the invoice number only when it differs from the challan number', () => {
@@ -150,7 +225,7 @@ describe('printDeliveryChallan — what it carries', () => {
         expect(same).not.toContain('Invoice No.');
 
         const differs = renderChallan({ ...fullChallan, challanNumber: 'CHL-0007' });
-        expect(differs).toContain('Invoice No.: INV-00042');
+        expect(differs).toContain('<strong>Invoice No.:</strong> INV-00042');
     });
 });
 
@@ -162,7 +237,7 @@ describe('printDeliveryChallan — the no-price guarantee', () => {
     it('carries no price, rate, discount, VAT or total amount', () => {
         const html = renderChallan();
 
-        expect(html).not.toMatch(MONEY_MARKERS);
+        expect(printedMarkup(html)).not.toMatch(MONEY_MARKERS);
         expect(html).toContain('This document carries no price information.');
     });
 
@@ -188,7 +263,7 @@ describe('printDeliveryChallan — the no-price guarantee', () => {
         expect(html).not.toContain('5000');
         expect(html).not.toContain('1500');
         expect(html).not.toContain('250');
-        expect(html).not.toMatch(MONEY_MARKERS);
+        expect(printedMarkup(html)).not.toMatch(MONEY_MARKERS);
     });
 
     it('stays money-free on thermal paper, where the layout differs', () => {
@@ -196,7 +271,7 @@ describe('printDeliveryChallan — the no-price guarantee', () => {
 
         expect(html).toContain('@page { size: 80mm auto');
         expect(html).toContain('Ceiling Fan');
-        expect(html).not.toMatch(MONEY_MARKERS);
+        expect(printedMarkup(html)).not.toMatch(MONEY_MARKERS);
     });
 });
 
@@ -250,11 +325,13 @@ describe('printDeliveryChallan — sparse sales', () => {
             labels,
         });
 
-        // Nobody to address it to, so the block is skipped rather than printed empty.
+        // Nobody to address it to, so the customer side of the box stays empty
+        // rather than inventing a walk-in line a rider cannot deliver to.
         expect(html).not.toContain('Deliver To');
+        expect(html).not.toContain(customerLine('Name', ''));
         // But somebody still signs for the goods.
         expect(html).toContain('Received By');
-        expect(html.match(/class="sign-line"/g)).toHaveLength(3);
+        expect(html.match(/class="d-sign-line"/g)).toHaveLength(3);
     });
 
     it('omits the note box when the sale has no note', () => {
@@ -345,13 +422,13 @@ describe('printDeliveryChallan — compact', () => {
 
         expect(html).toContain('<html class="p71-compact">');
         expect(html).toContain('class="p71-pv-check p71-pv-compact"');
-        expect(html).toContain('html.p71-compact .items-table tbody td');
+        expect(html).toContain('html.p71-compact .d-table td');
     });
 
     it('keeps room to sign above the signature lines', () => {
         const html = renderChallan();
 
-        expect(html).toMatch(/html\.p71-compact \.sign-band \{ margin-top:32px; \}/);
+        expect(html).toMatch(/html\.p71-compact \.d-sign-band \{ margin-top:32px; \}/);
     });
 
     it('leaves the roll alone', () => {

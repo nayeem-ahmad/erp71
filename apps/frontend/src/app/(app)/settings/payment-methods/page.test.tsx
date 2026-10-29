@@ -1,6 +1,7 @@
 'use client';
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { selectAccount } from '@/test-utils/account-select';
 import PaymentMethodsSettingsPage from './page';
 import { MOCK_BRANCHES, mockBranchScope } from '@/test-utils/branch-scope';
 
@@ -221,6 +222,22 @@ describe('PaymentMethodsSettingsPage', () => {
                 fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
             });
         };
+
+        it('hides All branches for a cash drawer and shows it for a bank', async () => {
+            mockApi.getPaymentMethods.mockResolvedValue([]);
+            mockApi.getPaymentMethodAccounts.mockResolvedValue([
+                { id: 'drawer', name: 'Main Cash', code: '110101', category: 'cash', store_id: 'store-1' },
+                { id: 'bank', name: 'Premier Bank', code: '110102', category: 'bank', store_id: null },
+            ] as never);
+            render(<PaymentMethodsSettingsPage />);
+            await openCreate();
+
+            selectAccount('Account', /Main Cash/);
+            expect(screen.queryByLabelText('All branches')).not.toBeInTheDocument();
+
+            selectAccount('Account', /Premier Bank/);
+            expect(screen.getByLabelText('All branches')).toBeInTheDocument();
+        });
 
         it('shows an All branches checkbox, checked by default, and a branch checklist when unchecked', async () => {
             mockApi.getPaymentMethods.mockResolvedValue([]);

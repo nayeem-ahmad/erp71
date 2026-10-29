@@ -439,8 +439,8 @@ export class CustomersService {
     }
 
     /** The employees a customer's sales rep can be picked from — see `listSalesReps`. */
-    salesReps(tenantId: string) {
-        return listSalesReps(this.db, tenantId);
+    salesReps(tenantId: string, storeId?: string) {
+        return listSalesReps(this.db, tenantId, storeId);
     }
 
     async findAll(

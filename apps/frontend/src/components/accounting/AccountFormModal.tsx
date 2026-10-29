@@ -50,6 +50,18 @@ export interface Account {
     /** All-time closing balance, presented as a positive amount plus the side it sits on. */
     balance?: number;
     balance_side?: 'debit' | 'credit' | 'neutral';
+    /** Set on a cash drawer. Banks and wallets stay shared. */
+    store_id?: string | null;
+    /** True when a Mobile Wallet method already posts to this account. */
+    linked_wallet?: boolean;
+}
+
+/** bKash and Nagad are named cash accounts, but they are wallets, not drawers. */
+const WALLET_ACCOUNT_NAMES = new Set(['bkash account', 'nagad account']);
+
+export function isPhysicalCashDrawer(category: string, name: string, linkedWallet = false): boolean {
+    if (linkedWallet) return false;
+    return category === 'cash' && !WALLET_ACCOUNT_NAMES.has(name.trim().toLowerCase());
 }
 
 /** Subgroups arrive either embedded (`group.id`) or flat (`group_id`). */
@@ -92,8 +104,13 @@ export default function AccountFormModal({
     const [code, setCode] = useState(account?.code ?? '');
     const [codeSuggestion, setCodeSuggestion] = useState('');
     const [category, setCategory] = useState<AccountCategory>(account?.category ?? 'general');
+    const [storeId, setStoreId] = useState(account?.store_id ?? '');
+    const [sharedWallet, setSharedWallet] = useState(false);
+    const [stores, setStores] = useState<Array<{ id: string; name: string }>>([]);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const namedDrawer = isPhysicalCashDrawer(category, name, account?.linked_wallet === true);
+    const drawer = namedDrawer && !sharedWallet;
 
     const selectedGroup = groups.find((group) => group.id === groupId) ?? null;
     /**
@@ -104,6 +121,19 @@ export default function AccountFormModal({
     const availableSubgroups = subgroups.filter((subgroup) => subgroupGroupId(subgroup) === groupId);
     const selectedSubgroup = availableSubgroups.find((sub) => sub.id === subgroupId) ?? null;
     const codePrefix = accountCodePrefix(selectedGroup, selectedSubgroup);
+
+    useEffect(() => {
+        if (!drawer) return;
+        let cancelled = false;
+        api.getStores()
+            .then((rows: Array<{ id: string; name: string }>) => {
+                if (!cancelled) setStores(rows ?? []);
+            })
+            .catch(() => {});
+        return () => {
+            cancelled = true;
+        };
+    }, [drawer]);
 
     // Drop a subgroup that no longer belongs to the chosen group.
     useEffect(() => {
@@ -159,6 +189,10 @@ export default function AccountFormModal({
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
         if (!groupId || !derivedType || saving) return;
+        if (drawer && !storeId) {
+            setError(t.coa.drawerBranchRequired);
+            return;
+        }
 
         setSaving(true);
         setError('');
@@ -170,6 +204,9 @@ export default function AccountFormModal({
                 name: name.trim(),
                 code: code.trim() || undefined,
                 category,
+                // Omitting storeId on update keeps the current branch. A drawer
+                // sends the one it belongs to; a shared account clears it.
+                ...(drawer ? { storeId } : account || sharedWallet ? { storeId: null } : {}),
             };
 
             if (account) {
@@ -334,6 +371,40 @@ export default function AccountFormModal({
                             </select>
                         </label>
                     </div>
+
+                    {!account && namedDrawer ? (
+                        <label className="flex min-h-touch items-center gap-2 text-sm text-gray-700">
+                            <input
+                                type="checkbox"
+                                aria-label={t.coa.sharedWallet}
+                                checked={sharedWallet}
+                                onChange={(event) => setSharedWallet(event.target.checked)}
+                            />
+                            {t.coa.sharedWallet}
+                        </label>
+                    ) : null}
+
+                    {drawer ? (
+                        <label className="block">
+                            <span className={`${compactDensity.formLabel} block mb-1`}>
+                                {t.coa.drawerBranch}
+                            </span>
+                            <select
+                                aria-label={t.coa.drawerBranch}
+                                value={storeId}
+                                onChange={(event) => setStoreId(event.target.value)}
+                                required
+                                className={compactDensity.formField}
+                            >
+                                <option value="">{t.coa.drawerBranch}</option>
+                                {stores.map((store) => (
+                                    <option key={store.id} value={store.id}>
+                                        {store.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    ) : null}
                 </div>
 
                 <ModalFooter>

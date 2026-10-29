@@ -1329,6 +1329,8 @@ export const crmHrMessages = {
             "department": "विभाग",
             "designation": "पदनाम",
             "basicSalary": "मूल वेतन",
+            "branch": "शाखा",
+            "branchRequired": "एक कर्मचारी के लिए एक शाखा चाहिए।",
             "status": "स्थिति",
             "nationalId": "राष्ट्रीय पहचान पत्र",
             "adding": "जोड़ा जा रहा है...",

@@ -8,6 +8,7 @@ import { useI18n } from '@/lib/i18n';
 import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { hasPermission, isOwner } from '@/lib/permissions';
 import { Button, Field, Input, Select, FormGrid, Alert } from '@/components/ui';
+import { useBranchScope } from '@/lib/branch-scope';
 
 /** The fields of a list row the edit form fills from. */
 export interface EditableEmployee {
@@ -21,6 +22,7 @@ export interface EditableEmployee {
     department_id?: string | null;
     designation_id?: string | null;
     basic_salary?: string | number | null;
+    store_id?: string | null;
 }
 
 interface EmployeeFormModalProps {
@@ -34,7 +36,7 @@ interface EmployeeFormModalProps {
 const emptyForm = {
     name: '', phone: '', email: '', nid: '',
     date_of_joining: '', department_id: '', designation_id: '',
-    basic_salary: '', status: 'ACTIVE',
+    basic_salary: '', status: 'ACTIVE', store_id: '',
 };
 
 function formFor(employee: EditableEmployee) {
@@ -48,11 +50,13 @@ function formFor(employee: EditableEmployee) {
         designation_id: employee.designation_id ?? '',
         basic_salary: employee.basic_salary != null ? String(employee.basic_salary) : '',
         status: 'ACTIVE',
+        store_id: employee.store_id ?? '',
     };
 }
 
 export default function EmployeeFormModal({ isOpen, employee, onClose, onSubmit }: EmployeeFormModalProps) {
     const { t } = useI18n();
+    const branch = useBranchScope();
     const editing = Boolean(employee);
     // The server drops `basic_salary` from a caller without VIEW_PAYROLL, so
     // showing the field to one would silently discard whatever they typed. An
@@ -69,21 +73,27 @@ export default function EmployeeFormModal({ isOpen, employee, onClose, onSubmit 
 
     useEffect(() => {
         if (isOpen) {
-            setFormData(employee ? formFor(employee) : { ...emptyForm });
+            const next = employee ? formFor(employee) : { ...emptyForm };
+            if (!next.store_id) next.store_id = branch.headerBranchId ?? '';
+            setFormData(next);
             setError('');
             api.getDepartments().then(setDepartments).catch(() => {});
             api.getDesignations().then(setDesignations).catch(() => {});
         }
-    }, [isOpen, employee]);
+    }, [isOpen, employee, branch.headerBranchId]);
 
     if (!isOpen) return null;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!formData.store_id) {
+            setError(t.employees.modal.branchRequired);
+            return;
+        }
         setError('');
         setLoading(true);
         try {
-            const payload: any = { name: formData.name, phone: formData.phone };
+            const payload: any = { name: formData.name, phone: formData.phone, storeId: formData.store_id };
             if (formData.email) payload.email = formData.email;
             if (formData.nid) payload.nid = formData.nid;
             if (formData.date_of_joining) payload.date_of_joining = formData.date_of_joining;
@@ -168,6 +178,21 @@ export default function EmployeeFormModal({ isOpen, employee, onClose, onSubmit 
                         <Field label={t.employees.modal.nationalId} hint={`(${t.common.optional})`}>
                             <Input type="text" value={formData.nid} onChange={set('nid')}
                                 placeholder={t.employees.modal.placeholders.nationalId} />
+                        </Field>
+
+                        <Field label={t.employees.modal.branch} required>
+                            <Select
+                                required
+                                aria-label={t.employees.modal.branch}
+                                value={formData.store_id}
+                                onChange={set('store_id')}
+                                disabled={branch.locked}
+                            >
+                                <option value="">{t.employees.modal.branch}</option>
+                                {branch.branches.map((store) => (
+                                    <option key={store.id} value={store.id}>{store.name}</option>
+                                ))}
+                            </Select>
                         </Field>
 
                         <Field label={t.employees.modal.department} hint={`(${t.common.optional})`}>

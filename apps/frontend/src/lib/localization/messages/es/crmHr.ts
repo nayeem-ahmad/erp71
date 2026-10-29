@@ -1329,6 +1329,8 @@ export const crmHrMessages = {
             "department": "Departamento",
             "designation": "Cargo",
             "basicSalary": "Salario base",
+            "branch": "Sucursal",
+            "branchRequired": "Un empleado necesita una sucursal.",
             "status": "Estado",
             "nationalId": "Documento nacional de identidad",
             "adding": "Añadiendo...",

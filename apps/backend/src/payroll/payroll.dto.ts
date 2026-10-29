@@ -3,6 +3,7 @@ import {
     IsString, IsUUID, Max, Min, ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 
 export class CreateSalaryComponentDto {
     @IsString()
@@ -103,11 +104,15 @@ export class CreatePayrollRunDto {
     kind?: string;
 
     @IsOptional() @IsString() label?: string;
+
+    @IsUUID()
+    storeId: string;
 }
 
 export class PayrollRunQueryDto {
     @IsOptional() @IsInt() @Min(2000) @Max(2200) @Type(() => Number) year?: number;
     @IsOptional() @IsString() status?: string;
+    @IsOptional() @IsStoreIdOrAll() storeId?: string;
 }
 
 export class CreatePayrollAdjustmentDto {

@@ -1329,6 +1329,8 @@ export const crmHrMessages = {
             department: 'شعبہ',
             designation: 'عہدہ',
             basicSalary: 'بنیادی تنخواہ',
+            branch: 'شاخ',
+            branchRequired: 'ملازم کو ایک شاخ چاہیے۔',
             status: 'حیثیت',
             nationalId: 'قومی شناختی نمبر',
             adding: 'شامل ہو رہا ہے...',

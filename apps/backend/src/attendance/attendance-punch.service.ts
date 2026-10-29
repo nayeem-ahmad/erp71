@@ -112,6 +112,10 @@ export class AttendancePunchService {
         const limit = Math.min(opts.limit ?? 50, 200);
 
         const where: any = { tenant_id: tenantId };
+        // The punch keeps the branch where the person clocked in. The list
+        // follows the employee's home branch, so a punch at the other branch
+        // still shows here and stays hidden from that other branch.
+        if (opts.storeId) where.employee = { store_id: opts.storeId };
         if (opts.employeeId) where.employee_id = opts.employeeId;
         if (opts.direction) where.direction = this.normaliseDirection(opts.direction);
         if (opts.startDate || opts.endDate) {
@@ -185,9 +189,13 @@ export class AttendancePunchService {
         return { punch, record };
     }
 
-    async update(tenantId: string, id: string, dto: UpdatePunchDto) {
+    async update(tenantId: string, id: string, dto: UpdatePunchDto, storeId?: string) {
         const existing = await this.db.attendancePunch.findFirst({
-            where: { id, tenant_id: tenantId },
+            where: {
+                id,
+                tenant_id: tenantId,
+                ...(storeId ? { employee: { store_id: storeId } } : {}),
+            },
         });
         if (!existing) throw new NotFoundException('In/out record not found.');
 
@@ -214,9 +222,13 @@ export class AttendancePunchService {
         return { punch, record };
     }
 
-    async remove(tenantId: string, id: string) {
+    async remove(tenantId: string, id: string, storeId?: string) {
         const existing = await this.db.attendancePunch.findFirst({
-            where: { id, tenant_id: tenantId },
+            where: {
+                id,
+                tenant_id: tenantId,
+                ...(storeId ? { employee: { store_id: storeId } } : {}),
+            },
         });
         if (!existing) throw new NotFoundException('In/out record not found.');
 

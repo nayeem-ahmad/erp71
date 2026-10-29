@@ -21,6 +21,8 @@ import AccountFormModal, {
     type AccountSubgroup,
 } from '@/components/accounting/AccountFormModal';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { BranchFilter } from '@/components/ui';
+import { useBranchScope } from '@/lib/branch-scope';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -171,6 +173,7 @@ function buildColumns(
 
 export default function ChartOfAccountsPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const [groups, setGroups] = useState<AccountGroup[]>([]);
     const [subgroups, setSubgroups] = useState<AccountSubgroup[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
@@ -191,8 +194,11 @@ export default function ChartOfAccountsPage() {
     }, []);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void loadAccounts();
-    }, [groupFilter, typeFilter, categoryFilter]);
+        // loadAccounts reads the latest filters and branch from this render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch.ready, branch.apiStoreId, groupFilter, typeFilter, categoryFilter]);
 
     // The subgroup filter is client-side: the accounts endpoint has no subgroupId param.
     useEffect(() => {
@@ -224,6 +230,7 @@ export default function ChartOfAccountsPage() {
                 groupId: groupFilter || undefined,
                 type: typeFilter || undefined,
                 category: categoryFilter || undefined,
+                storeId: branch.apiStoreId,
             });
             setAccounts(accountData);
         } catch (error) {
@@ -291,6 +298,7 @@ export default function ChartOfAccountsPage() {
                 )}
                 actions={(
                     <div className="flex flex-wrap gap-2">
+                        <BranchFilter scope={branch} />
                         <Link
                             href={routes.accounting.accountGroups}
                             className={`${compactDensity.btnSecondary} min-h-touch`}

@@ -472,6 +472,8 @@ export const salesMessages = {
             date: 'Date',
             deliverTo: 'Deliver To',
             challanDetails: 'Challan Details',
+            name: 'Name',
+            mobile: 'Mobile',
             address: 'Delivery Address',
             driver: 'Driver',
             vehicle: 'Vehicle No.',

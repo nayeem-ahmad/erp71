@@ -18,6 +18,7 @@ describe('@erp71/database runtime exports', () => {
         'seedDefaultPaymentMethods',
         'seedDefaultExpenseCategories',
         'linkDefaultPaymentMethodAccounts',
+        'ensureBranchCashDrawer',
         'bootstrapDefaultAccountingForTenant',
         'seedDemoAccount',
         'ensureInterBranchAccounts',

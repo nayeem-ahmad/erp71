@@ -801,23 +801,27 @@ async function main() {
                 })
             ).map((row) => row.code);
 
-            await prisma.account.upsert({
-                where: { tenant_id_name: { tenant_id: tenant.id, name } },
-                update: {},
-                create: {
-                    tenant_id: tenant.id,
-                    group_id: expensesGroup.id,
-                    subgroup_id: overheadSubgroup.id,
-                    name,
-                    code: nextAccountCode(
-                        expensesGroup.code,
-                        overheadSubgroup.code,
-                        takenAccountCodes,
-                    ),
-                    type: 'expense',
-                    category: 'general',
-                },
+            const existingAccount = await prisma.account.findFirst({
+                where: { tenant_id: tenant.id, name, store_id: null },
+                select: { id: true },
             });
+            if (!existingAccount) {
+                await prisma.account.create({
+                    data: {
+                        tenant_id: tenant.id,
+                        group_id: expensesGroup.id,
+                        subgroup_id: overheadSubgroup.id,
+                        name,
+                        code: nextAccountCode(
+                            expensesGroup.code,
+                            overheadSubgroup.code,
+                            takenAccountCodes,
+                        ),
+                        type: 'expense',
+                        category: 'general',
+                    },
+                });
+            }
         }
     }
 

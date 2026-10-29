@@ -41,6 +41,9 @@ export class CreateEmployeeDto {
     @IsOptional()
     @IsEnum(EmployeeStatusDto)
     status?: EmployeeStatusDto;
+
+    @IsUUID()
+    storeId: string;
 }
 
 export class UpdateEmployeeDto {
@@ -81,6 +84,10 @@ export class UpdateEmployeeDto {
     @IsOptional()
     @IsEnum(EmployeeStatusDto)
     status?: EmployeeStatusDto;
+
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
 }
 
 export class CreateDepartmentDto {

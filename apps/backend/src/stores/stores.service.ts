@@ -5,6 +5,7 @@ import { DatabaseService } from '../database/database.service';
 import { AuthCacheService } from '../database/auth-cache.service';
 import { TenantContext } from '../database/tenant.decorator';
 import { CreateStoreDto } from './create-store.dto';
+import { ensureBranchCashDrawer } from '@erp71/database';
 import { nextStoreCode } from './store-code.util';
 
 const VALID_PERMISSIONS = new Set<string>(Object.values(StorePermission));
@@ -79,6 +80,8 @@ export class StoresService {
                     where: { tenant_id_user_id: { tenant_id: ctx.tenantId, user_id: ctx.userId } },
                     include: { tenantRole: { include: { permissions: true } } },
                 });
+
+                await ensureBranchCashDrawer(tx, ctx.tenantId, created.id);
 
                 if (creator && creator.role !== UserRole.OWNER) {
                     const defaults = (creator.tenantRole?.permissions ?? [])

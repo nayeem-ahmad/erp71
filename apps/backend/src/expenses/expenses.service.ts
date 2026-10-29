@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { DatabaseService } from '../database/database.service';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
+import { cashPostErrorMessage, resolveBranchCashAccount } from '../accounting/cash-account';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import {
     CreateExpenseCategoryDto,
@@ -235,6 +236,17 @@ export class ExpensesService {
                 include: this.entryInclude(),
             });
 
+            // A branch cash expense credits that branch's drawer. An entry with
+            // no branch yet keeps the posting rule's cash account.
+            let overrideCreditAccountId: string | undefined;
+            if (paymentMode === 'cash' && entry.store_id) {
+                const resolved = await resolveBranchCashAccount(tx, tenantId, entry.store_id);
+                if ('error' in resolved) {
+                    throw new BadRequestException(cashPostErrorMessage(resolved.error));
+                }
+                overrideCreditAccountId = resolved.accountId;
+            }
+
             const posting = await autoPostFromRules({
                 tx,
                 tenantId,
@@ -250,10 +262,11 @@ export class ExpensesService {
                 storeId: entry.store_id ?? undefined,
                 // The rule debits General Operating Expense. A head with its own
                 // account charges that. Otherwise the category's account is
-                // used. Cash or bank still comes from the rule.
+                // used. Cash at a branch credits that branch's drawer.
                 ...((head.account_id ?? head.category.account_id)
                     ? { overrideDebitAccountId: head.account_id ?? head.category.account_id }
                     : {}),
+                ...(overrideCreditAccountId ? { overrideCreditAccountId } : {}),
             });
 
             return {

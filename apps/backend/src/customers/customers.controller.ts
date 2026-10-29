@@ -193,8 +193,11 @@ export class CustomersController {
      */
     @RequireAnyStorePermission(...CUSTOMER_READ)
     @Get('sales-reps')
-    async salesReps(@Tenant() tenant: TenantContext) {
-        return this.customersService.salesReps(tenant.tenantId);
+    async salesReps(@Tenant() tenant: TenantContext, @Query('storeId') storeId?: string) {
+        const branchId = await this.branchScope.resolveStoreId(tenant, storeId, {
+            permissions: CUSTOMER_READ,
+        });
+        return this.customersService.salesReps(tenant.tenantId, branchId);
     }
 
     @RequireAnyStorePermission(...CUSTOMER_READ)

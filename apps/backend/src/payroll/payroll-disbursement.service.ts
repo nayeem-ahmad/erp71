@@ -1,8 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
+import { cashPostErrorMessage, resolveBranchCashAccount } from '../accounting/cash-account';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
+import { assertPayrollBranchAccess, type PayrollBranchAccess } from './payroll-runs.service';
 
 /**
  * Paying an approved payroll run — HRIS Phase 7.
@@ -59,12 +61,14 @@ export class PayrollDisbursementService {
         runId: string,
         userId: string,
         dto: { payment_date?: string; payment_method?: string },
+        access?: PayrollBranchAccess,
     ) {
         const run = await this.db.payrollRun.findFirst({
             where: { id: runId, tenant_id: tenantId },
             include: { lines: { include: { employee: { select: { id: true, name: true, employee_code: true } } } } },
         });
         if (!run) throw new NotFoundException('Payroll run not found.');
+        assertPayrollBranchAccess(run, access);
         if (run.status !== 'APPROVED') {
             throw new BadRequestException('Only an approved payroll run can be disbursed.');
         }
@@ -79,6 +83,15 @@ export class PayrollDisbursementService {
 
         return this.db.$transaction(async (tx) => {
             const results: any[] = [];
+            const branchId = run.store_id ?? null;
+            let overrideCreditAccountId: string | undefined;
+            if (classifyPaymentMode(paymentMethod) === 'cash' && branchId) {
+                const resolved = await resolveBranchCashAccount(tx, tenantId, branchId);
+                if ('error' in resolved) {
+                    throw new BadRequestException(cashPostErrorMessage(resolved.error));
+                }
+                overrideCreditAccountId = resolved.accountId;
+            }
 
             for (const line of run.lines) {
                 const net = Number(line.net_pay);
@@ -124,6 +137,7 @@ export class PayrollDisbursementService {
                     date: periodDate,
                     partyType: 'EMPLOYEE',
                     partyId: line.employee_id,
+                    ...(branchId ? { storeId: branchId } : {}),
                 });
 
                 if (accrualPosting.voucherId) {
@@ -160,6 +174,8 @@ export class PayrollDisbursementService {
                     date: paymentDate,
                     partyType: 'EMPLOYEE',
                     partyId: line.employee_id,
+                    ...(branchId ? { storeId: branchId } : {}),
+                    ...(overrideCreditAccountId ? { overrideCreditAccountId } : {}),
                 });
 
                 results.push({
@@ -191,7 +207,7 @@ export class PayrollDisbursementService {
      * An employee with no bank details lands in `unpayable` rather than being
      * dropped: a silently short file is how somebody does not get paid.
      */
-    async buildDisbursementFile(tenantId: string, runId: string) {
+    async buildDisbursementFile(tenantId: string, runId: string, access?: PayrollBranchAccess) {
         const run = await this.db.payrollRun.findFirst({
             where: { id: runId, tenant_id: tenantId },
             include: {
@@ -202,6 +218,7 @@ export class PayrollDisbursementService {
             },
         });
         if (!run) throw new NotFoundException('Payroll run not found.');
+        assertPayrollBranchAccess(run, access);
         if (run.status === 'DRAFT') {
             throw new BadRequestException('Approve the payroll run before exporting a disbursement file.');
         }

@@ -23,6 +23,11 @@ export class RunSalaryAccrualDto {
     @Min(1)
     @Max(12)
     month: number;
+
+    /** Omitted: every branch the caller may see. Set: that branch's employees only. */
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
 }
 
 export class CreateSalaryPaymentDto {

@@ -18,6 +18,7 @@ describe('AccountingController — statement branch scope', () => {
         getFinancialKpis: jest.fn(),
         getFinancialTrends: jest.fn(),
         findVouchers: jest.fn(),
+        findVoucherById: jest.fn(),
     };
     const db = { userStorePermission: { findFirst: jest.fn() } };
     const branchScope = { resolveStoreId: jest.fn(), resolveStoreIds: jest.fn() };
@@ -70,6 +71,16 @@ describe('AccountingController — statement branch scope', () => {
         branchScope.resolveStoreIds.mockRejectedValue(new ForbiddenException());
         await expect(call(owner, { scope: 'compare', storeIds: 's1,foreign' })).rejects.toBeInstanceOf(ForbiddenException);
         expect(service[method]).not.toHaveBeenCalled();
+    });
+
+    it('findVoucherById passes the caller’s branch, so another branch’s voucher stays hidden', async () => {
+        branchScope.resolveStoreId.mockResolvedValue('s1');
+        service.findVoucherById.mockResolvedValue({ id: 'v1' });
+        await controller.findVoucherById(member, 'v1');
+        expect(branchScope.resolveStoreId).toHaveBeenCalledWith(member, undefined, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        expect(service.findVoucherById).toHaveBeenCalledWith('t1', 'v1', 's1');
     });
 
     it.each(statements)('%s: scope=company keeps the consolidated answer for the service', async (method, call) => {

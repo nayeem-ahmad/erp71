@@ -6,6 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
+import { cashPostErrorMessage, resolveBranchCashAccount } from '../accounting/cash-account';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
 import {
@@ -22,7 +23,7 @@ export class SalaryPaymentsService {
 
     async list(
         tenantId: string,
-        query: ListSalaryPaymentsQueryDto,
+        query: ListSalaryPaymentsQueryDto & { storeId?: string },
     ): Promise<PaginatedResult<any>> {
         const page = query.page ?? 1;
         const limit = Math.min(query.limit ?? 20, 100);
@@ -43,9 +44,13 @@ export class SalaryPaymentsService {
         return paginate(items, total, page, limit);
     }
 
-    async findOne(tenantId: string, id: string) {
+    async findOne(tenantId: string, id: string, storeId?: string) {
         const payment = await this.db.salaryPayment.findFirst({
-            where: { id, tenant_id: tenantId },
+            where: {
+                id,
+                tenant_id: tenantId,
+                ...this.homeBranch(storeId),
+            },
             include: this.paymentInclude(),
         });
         if (!payment) {
@@ -54,8 +59,8 @@ export class SalaryPaymentsService {
         return payment;
     }
 
-    async create(tenantId: string, userId: string, dto: CreateSalaryPaymentDto) {
-        await this.assertEmployeeExists(tenantId, dto.employeeId);
+    async create(tenantId: string, userId: string, dto: CreateSalaryPaymentDto, storeId?: string) {
+        await this.assertEmployeeExists(tenantId, dto.employeeId, storeId);
 
         // A period may be paid in instalments (or an advance), so no duplicate
         // check: each payment is a row that settles part of the accrued payable.
@@ -87,18 +92,35 @@ export class SalaryPaymentsService {
     }
 
     /** Settles the accrued payable: Dr Salary Payable / Cr <mode>, per employee. */
-    private postSalaryPayment(
+    private async postSalaryPayment(
         tx: Prisma.TransactionClient,
         tenantId: string,
         payment: { id: string; employee_id: string; amount: unknown; pay_period: string; payment_date: Date },
         paymentMethod: string,
     ) {
+        const employee = await tx.employee.findFirst({
+            where: { id: payment.employee_id, tenant_id: tenantId },
+            select: { store_id: true },
+        });
+        const storeId = employee?.store_id ?? null;
+        const mode = classifyPaymentMode(paymentMethod);
+        // No home branch yet: keep the posting rule's cash account. Once the
+        // employee has a branch, cash credits that branch's drawer.
+        let overrideCreditAccountId: string | undefined;
+        if (mode === 'cash' && storeId) {
+            const resolved = await resolveBranchCashAccount(tx, tenantId, storeId);
+            if ('error' in resolved) {
+                throw new BadRequestException(cashPostErrorMessage(resolved.error));
+            }
+            overrideCreditAccountId = resolved.accountId;
+        }
+
         return autoPostFromRules({
             tx,
             tenantId,
             eventType: 'salary_payment',
             conditionKey: 'payment_mode',
-            conditionValue: classifyPaymentMode(paymentMethod),
+            conditionValue: mode,
             sourceModule: 'salary-payments',
             sourceType: 'salary_payment',
             sourceId: payment.id,
@@ -107,6 +129,8 @@ export class SalaryPaymentsService {
             date: payment.payment_date,
             partyType: 'EMPLOYEE',
             partyId: payment.employee_id,
+            ...(storeId ? { storeId } : {}),
+            ...(overrideCreditAccountId ? { overrideCreditAccountId } : {}),
         });
     }
 
@@ -126,7 +150,12 @@ export class SalaryPaymentsService {
         const periodDate = new Date(Date.UTC(dto.year, dto.month, 0));
 
         const employees = await this.db.employee.findMany({
-            where: { tenant_id: tenantId, status: 'ACTIVE', deleted_at: null },
+            where: {
+                tenant_id: tenantId,
+                status: 'ACTIVE',
+                deleted_at: null,
+                ...(dto.storeId ? { store_id: dto.storeId } : {}),
+            },
         });
 
         return this.db.$transaction(async (tx) => {
@@ -163,6 +192,7 @@ export class SalaryPaymentsService {
                     date: periodDate,
                     partyType: 'EMPLOYEE',
                     partyId: employee.id,
+                    ...(employee.store_id ? { storeId: employee.store_id } : {}),
                 });
 
                 if (posting.voucherId) {
@@ -182,8 +212,8 @@ export class SalaryPaymentsService {
         });
     }
 
-    async update(tenantId: string, id: string, dto: UpdateSalaryPaymentDto) {
-        await this.findOne(tenantId, id);
+    async update(tenantId: string, id: string, dto: UpdateSalaryPaymentDto, storeId?: string) {
+        await this.findOne(tenantId, id, storeId);
 
         return this.db.$transaction(async (tx) => {
             const payment = await tx.salaryPayment.update({
@@ -214,8 +244,8 @@ export class SalaryPaymentsService {
         });
     }
 
-    async remove(tenantId: string, id: string) {
-        await this.findOne(tenantId, id);
+    async remove(tenantId: string, id: string, storeId?: string) {
+        await this.findOne(tenantId, id, storeId);
         return this.db.$transaction(async (tx) => {
             // Reverse the settlement voucher before deleting the payment, so
             // deleting a payment does not leave the payable understated.
@@ -224,8 +254,8 @@ export class SalaryPaymentsService {
         });
     }
 
-    async getSummary(tenantId: string, query: SalaryPaymentSummaryQueryDto) {
-        const where = this.buildDateWhere(tenantId, query.from, query.to);
+    async getSummary(tenantId: string, query: SalaryPaymentSummaryQueryDto & { storeId?: string }) {
+        const where = this.buildDateWhere(tenantId, query.from, query.to, query.storeId);
 
         const payments = await this.db.salaryPayment.findMany({
             where,
@@ -277,8 +307,12 @@ export class SalaryPaymentsService {
         };
     }
 
-    private buildWhere(tenantId: string, query: ListSalaryPaymentsQueryDto) {
-        const where: Record<string, any> = { tenant_id: tenantId };
+    private homeBranch(storeId?: string): Record<string, unknown> {
+        return storeId ? { employee: { store_id: storeId } } : {};
+    }
+
+    private buildWhere(tenantId: string, query: ListSalaryPaymentsQueryDto & { storeId?: string }) {
+        const where: Record<string, any> = { tenant_id: tenantId, ...this.homeBranch(query.storeId) };
         if (query.employeeId) where.employee_id = query.employeeId;
         if (query.payPeriod) where.pay_period = query.payPeriod;
 
@@ -288,8 +322,8 @@ export class SalaryPaymentsService {
         return where;
     }
 
-    private buildDateWhere(tenantId: string, from?: string, to?: string) {
-        const where: Record<string, any> = { tenant_id: tenantId };
+    private buildDateWhere(tenantId: string, from?: string, to?: string, storeId?: string) {
+        const where: Record<string, any> = { tenant_id: tenantId, ...this.homeBranch(storeId) };
         const dateFilter = this.buildDateRangeFilter(from, to);
         if (dateFilter) where.payment_date = dateFilter;
         return where;
@@ -311,9 +345,14 @@ export class SalaryPaymentsService {
         return Object.keys(filter).length > 0 ? filter : undefined;
     }
 
-    private async assertEmployeeExists(tenantId: string, employeeId: string) {
+    private async assertEmployeeExists(tenantId: string, employeeId: string, storeId?: string) {
         const employee = await this.db.employee.findFirst({
-            where: { id: employeeId, tenant_id: tenantId, deleted_at: null },
+            where: {
+                id: employeeId,
+                tenant_id: tenantId,
+                deleted_at: null,
+                ...(storeId ? { store_id: storeId } : {}),
+            },
         });
         if (!employee) {
             throw new BadRequestException('Employee not found.');

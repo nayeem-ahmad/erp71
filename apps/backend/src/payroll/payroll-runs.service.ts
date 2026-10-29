@@ -1,8 +1,40 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { OvertimeService } from '../attendance/overtime.service';
 import { SalaryStructuresService } from './salary-structures.service';
 import { buildPayslip, type Adjustment } from './payroll-calc.util';
+
+/**
+ * What the controller knows about the caller. Omitted means the historical
+ * callers (unit tests, scripts): a legacy run stays reachable. A real request
+ * always passes this, and `consolidated: false` refuses a run with no branch.
+ */
+export type PayrollBranchAccess = {
+    consolidated?: boolean;
+    storeId?: string;
+};
+
+/** A branch user sees adjustments only for employees at their branch. */
+function adjustmentHomeBranch(access?: PayrollBranchAccess): { employee?: { store_id?: string } } {
+    if (!access || access.consolidated !== false) return {};
+    return { employee: { store_id: access.storeId } };
+}
+
+export function assertPayrollBranchAccess(
+    run: { store_id?: string | null },
+    access?: PayrollBranchAccess,
+): void {
+    if (!access) return;
+    if (run.store_id == null) {
+        if (access.consolidated === false) {
+            throw new ForbiddenException('A payroll run with no branch needs permission to see every branch.');
+        }
+        return;
+    }
+    if (access.storeId && run.store_id !== access.storeId) {
+        throw new NotFoundException('Payroll run not found.');
+    }
+}
 
 /**
  * The payroll run — HRIS Phase 6.
@@ -26,10 +58,11 @@ export class PayrollRunsService {
         return new Date(Date.UTC(year, month, 0));
     }
 
-    async list(tenantId: string, opts: { year?: number; status?: string } = {}) {
+    async list(tenantId: string, opts: { year?: number; status?: string; storeId?: string } = {}) {
         const where: any = { tenant_id: tenantId };
         if (opts.year) where.year = opts.year;
         if (opts.status) where.status = opts.status;
+        if (opts.storeId) where.store_id = opts.storeId;
 
         return this.db.payrollRun.findMany({
             where,
@@ -38,7 +71,7 @@ export class PayrollRunsService {
         });
     }
 
-    async get(tenantId: string, id: string) {
+    async get(tenantId: string, id: string, access?: PayrollBranchAccess) {
         const run = await this.db.payrollRun.findFirst({
             where: { id, tenant_id: tenantId },
             include: {
@@ -52,6 +85,7 @@ export class PayrollRunsService {
             },
         });
         if (!run) throw new NotFoundException('Payroll run not found.');
+        assertPayrollBranchAccess(run, access);
         return run;
     }
 
@@ -63,12 +97,13 @@ export class PayrollRunsService {
      * re-run produce different pay with nobody being told.
      */
     async createDraft(tenantId: string, dto: {
-        year: number; month: number; kind?: string; label?: string;
+        year: number; month: number; kind?: string; label?: string; storeId?: string;
     }, createdBy?: string) {
+        if (!dto.storeId) throw new BadRequestException('A payroll run needs a branch.');
         const kind = dto.kind ?? 'REGULAR';
 
         const existing = await this.db.payrollRun.findFirst({
-            where: { tenant_id: tenantId, year: dto.year, month: dto.month, kind },
+            where: { tenant_id: tenantId, year: dto.year, month: dto.month, kind, store_id: dto.storeId },
         });
         if (existing) {
             throw new ConflictException(
@@ -88,6 +123,7 @@ export class PayrollRunsService {
                 kind,
                 label: dto.label ?? null,
                 status: 'DRAFT',
+                store_id: dto.storeId,
                 created_by: createdBy ?? null,
             },
         });
@@ -97,9 +133,10 @@ export class PayrollRunsService {
     }
 
     /** Recompute a draft. Refused once approved — that is what approval means. */
-    async recompute(tenantId: string, runId: string) {
+    async recompute(tenantId: string, runId: string, access?: PayrollBranchAccess) {
         const run = await this.db.payrollRun.findFirst({ where: { id: runId, tenant_id: tenantId } });
         if (!run) throw new NotFoundException('Payroll run not found.');
+        assertPayrollBranchAccess(run, access);
         if (run.status !== 'DRAFT') {
             throw new BadRequestException('Only a draft payroll run can be recomputed.');
         }
@@ -114,7 +151,12 @@ export class PayrollRunsService {
         const periodDate = this.periodDate(run.year, run.month);
 
         const employees = await this.db.employee.findMany({
-            where: { tenant_id: tenantId, status: 'ACTIVE', deleted_at: null },
+            where: {
+                tenant_id: tenantId,
+                status: 'ACTIVE',
+                deleted_at: null,
+                ...(run.store_id ? { store_id: run.store_id } : {}),
+            },
             select: { id: true },
         });
 
@@ -198,12 +240,13 @@ export class PayrollRunsService {
      * Marks the adjustments it consumed, so the same advance recovery cannot be
      * applied again by a later run — the reason `applied_run_id` exists.
      */
-    async approve(tenantId: string, runId: string, approverUserId: string) {
+    async approve(tenantId: string, runId: string, approverUserId: string, access?: PayrollBranchAccess) {
         const run = await this.db.payrollRun.findFirst({
             where: { id: runId, tenant_id: tenantId },
             include: { lines: { select: { employee_id: true } } },
         });
         if (!run) throw new NotFoundException('Payroll run not found.');
+        assertPayrollBranchAccess(run, access);
         if (run.status !== 'DRAFT') {
             throw new BadRequestException('Only a draft payroll run can be approved.');
         }
@@ -235,9 +278,10 @@ export class PayrollRunsService {
      * the run is paid: money has left the building and a draft cannot describe
      * that.
      */
-    async reopen(tenantId: string, runId: string) {
+    async reopen(tenantId: string, runId: string, access?: PayrollBranchAccess) {
         const run = await this.db.payrollRun.findFirst({ where: { id: runId, tenant_id: tenantId } });
         if (!run) throw new NotFoundException('Payroll run not found.');
+        assertPayrollBranchAccess(run, access);
         if (run.status === 'PAID') {
             throw new BadRequestException('A paid payroll run cannot be reopened.');
         }
@@ -257,9 +301,10 @@ export class PayrollRunsService {
         });
     }
 
-    async cancel(tenantId: string, runId: string) {
+    async cancel(tenantId: string, runId: string, access?: PayrollBranchAccess) {
         const run = await this.db.payrollRun.findFirst({ where: { id: runId, tenant_id: tenantId } });
         if (!run) throw new NotFoundException('Payroll run not found.');
+        assertPayrollBranchAccess(run, access);
         if (run.status === 'PAID') {
             throw new BadRequestException('A paid payroll run cannot be cancelled.');
         }
@@ -274,7 +319,7 @@ export class PayrollRunsService {
     }
 
     /** One employee's payslip, self-contained — every figure is on the line. */
-    async getPayslip(tenantId: string, runId: string, employeeId: string) {
+    async getPayslip(tenantId: string, runId: string, employeeId: string, access?: PayrollBranchAccess) {
         const line = await this.db.payrollLine.findFirst({
             where: { run_id: runId, tenant_id: tenantId, employee_id: employeeId },
             include: {
@@ -286,18 +331,19 @@ export class PayrollRunsService {
                         designation: { select: { name: true } },
                     },
                 },
-                run: { select: { id: true, year: true, month: true, kind: true, status: true, label: true } },
+                run: { select: { id: true, year: true, month: true, kind: true, status: true, label: true, store_id: true } },
             },
         });
         if (!line) throw new NotFoundException('Payslip not found.');
+        assertPayrollBranchAccess(line.run, access);
         return line;
     }
 
     // ── Adjustments ───────────────────────────────────────────────────────────
 
-    async listAdjustments(tenantId: string, year: number, month: number) {
+    async listAdjustments(tenantId: string, year: number, month: number, access?: PayrollBranchAccess) {
         return this.db.payrollAdjustment.findMany({
-            where: { tenant_id: tenantId, year, month },
+            where: { tenant_id: tenantId, year, month, ...adjustmentHomeBranch(access) },
             include: { employee: { select: { id: true, name: true, employee_code: true } } },
             orderBy: { created_at: 'desc' },
         });
@@ -306,9 +352,14 @@ export class PayrollRunsService {
     async createAdjustment(tenantId: string, dto: {
         employee_id: string; year: number; month: number;
         kind: string; name: string; amount: number; note?: string;
-    }, createdBy?: string) {
+    }, createdBy?: string, access?: PayrollBranchAccess) {
         const employee = await this.db.employee.findFirst({
-            where: { id: dto.employee_id, tenant_id: tenantId, deleted_at: null },
+            where: {
+                id: dto.employee_id,
+                tenant_id: tenantId,
+                deleted_at: null,
+                ...(access?.consolidated === false ? { store_id: access.storeId } : {}),
+            },
         });
         if (!employee) throw new NotFoundException('Employee not found.');
         if (dto.amount <= 0) {
@@ -322,9 +373,9 @@ export class PayrollRunsService {
         });
     }
 
-    async deleteAdjustment(tenantId: string, id: string) {
+    async deleteAdjustment(tenantId: string, id: string, access?: PayrollBranchAccess) {
         const adjustment = await this.db.payrollAdjustment.findFirst({
-            where: { id, tenant_id: tenantId },
+            where: { id, tenant_id: tenantId, ...adjustmentHomeBranch(access) },
         });
         if (!adjustment) throw new NotFoundException('Adjustment not found.');
         if (adjustment.applied_run_id) {

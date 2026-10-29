@@ -2,6 +2,9 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AccountingLedgerPage from './page';
 import { api } from '@/lib/api';
 import { selectAccount, selectedAccountLabel } from '@/test-utils/account-select';
+import { mockBranchScope } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 const replace = jest.fn();
 
@@ -57,6 +60,7 @@ jest.mock('@/lib/api', () => ({
 
 describe('AccountingLedgerPage — Story 30.8', () => {
     beforeEach(() => {
+        mockBranchScope();
         replace.mockReset();
         (api.getAccounts as jest.Mock).mockResolvedValue([
             { id: 'cash-1', name: 'Cash in Hand', code: '1010', type: 'asset', category: 'cash' },
@@ -116,6 +120,7 @@ describe('AccountingLedgerPage — Story 30.8', () => {
                 from: undefined,
                 to: undefined,
                 approvedOnly: false,
+                storeId: 'store-1',
             });
         });
 
@@ -131,6 +136,7 @@ describe('AccountingLedgerPage — Story 30.8', () => {
                 from: '2026-03-01',
                 to: '2026-03-31',
                 approvedOnly: false,
+                storeId: 'store-1',
             });
             expect(screen.getByText(/CR-00001/)).toBeInTheDocument();
             expect(screen.getByText('৳ 125.00 credit')).toBeInTheDocument();

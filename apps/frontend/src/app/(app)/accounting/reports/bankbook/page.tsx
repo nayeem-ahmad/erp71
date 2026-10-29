@@ -10,6 +10,8 @@ import {
     CompactStat,
 } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { BranchFilter } from '@/components/ui';
+import { useBranchScope } from '@/lib/branch-scope';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import AccountSelect from '@/components/accounting/AccountSelect';
 import { compactDensity } from '@/lib/ui/compact-density';
@@ -63,6 +65,7 @@ function defaultTo() {
 
 export default function BankbookPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const [data, setData] = useState<BookData | null>(null);
     const [fromDate, setFromDate] = useState(defaultFrom());
     const [toDate, setToDate] = useState(defaultTo());
@@ -74,9 +77,10 @@ export default function BankbookPage() {
     // approvalReady holds the first fetch until the tenant's approved-only
     // setting is known, so the report is never generated against the wrong value.
     useEffect(() => {
-        if (approvalReady) void load();
-
-    }, [fromDate, toDate, accountId, approvalReady, approvedOnly]);
+        if (approvalReady && branch.ready) void load();
+        // load reads the latest filters and branch from this render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fromDate, toDate, accountId, approvalReady, approvedOnly, branch.ready, branch.apiStoreId]);
 
     const load = async () => {
         setLoading(true);
@@ -86,6 +90,7 @@ export default function BankbookPage() {
                 from: fromDate || undefined,
                 to: toDate || undefined,
                 accountId: accountId || undefined,
+                storeId: branch.apiStoreId,
             });
             setData(result);
         } catch (err: any) {
@@ -137,6 +142,7 @@ export default function BankbookPage() {
                     t.accounting.reports.bankbook.title,
                     'accounting',
                 )}
+                actions={<BranchFilter scope={branch} />}
             />
             <AccountingToolbar>
                 <div className={compactDensity.filterBar}>

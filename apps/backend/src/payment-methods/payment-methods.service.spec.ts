@@ -287,6 +287,108 @@ describe('PaymentMethodsService', () => {
     });
   });
 
+  describe('cash drawer branch', () => {
+    const drawer = {
+      id: 'cf',
+      tenant_id: tenantId,
+      name: 'Main Cash (CF)',
+      category: 'cash',
+      store_id: 's1',
+    };
+    const message = 'A cash drawer can only be used at its own branch.';
+
+    it('refuses a cash drawer offered at every branch', async () => {
+      db.account.findUnique.mockResolvedValue(drawer);
+      await expect(service.create(tenantId, {
+        type: PaymentMethodType.CASH,
+        name: 'Cash',
+        account_id: drawer.id,
+        all_branches: true,
+      } as any)).rejects.toThrow(message);
+      expect(createMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses a cash drawer offered at another branch', async () => {
+      db.account.findUnique.mockResolvedValue(drawer);
+      await expect(service.create(tenantId, {
+        type: PaymentMethodType.CASH,
+        name: 'Cash',
+        account_id: drawer.id,
+        all_branches: false,
+        store_ids: ['s2'],
+      } as any)).rejects.toThrow(message);
+      expect(createMock).not.toHaveBeenCalled();
+    });
+
+    it('accepts a cash drawer offered only at its own branch', async () => {
+      db.account.findUnique.mockResolvedValue(drawer);
+      await service.create(tenantId, {
+        type: PaymentMethodType.CASH,
+        name: 'Cash',
+        account_id: drawer.id,
+        all_branches: false,
+        store_ids: ['s1'],
+      } as any);
+      expect(createMock.mock.calls[0][0].data.all_branches).toBe(false);
+    });
+
+    it('accepts a bank account offered at every branch', async () => {
+      db.account.findUnique.mockResolvedValue({
+        id: '110102',
+        tenant_id: tenantId,
+        name: 'Premier Bank',
+        category: 'bank',
+        store_id: null,
+      });
+      await service.create(tenantId, {
+        type: PaymentMethodType.BANK,
+        name: 'Bank',
+        account_id: '110102',
+        all_branches: true,
+      } as any);
+      expect(createMock).toHaveBeenCalled();
+    });
+
+    it('accepts a wallet account offered at every branch', async () => {
+      db.account.findUnique.mockResolvedValue({
+        id: 'bkash',
+        tenant_id: tenantId,
+        name: 'bKash Account',
+        category: 'cash',
+        store_id: null,
+      });
+      await service.create(tenantId, {
+        type: PaymentMethodType.MOBILE_WALLET,
+        name: 'bKash',
+        account_id: 'bkash',
+        all_branches: true,
+      } as any);
+      expect(createMock).toHaveBeenCalled();
+    });
+
+    it('refuses an update that offers a linked drawer at every branch', async () => {
+      findFirstMock.mockImplementation(({ where }: any) =>
+        Promise.resolve(where?.id ? {
+          id: 'pm-1',
+          tenant_id: tenantId,
+          type: PaymentMethodType.CASH,
+          name: 'Cash',
+          account_id: drawer.id,
+          is_active: true,
+          sort_order: 0,
+          show_on_entry: true,
+          all_branches: false,
+          stores: [{ store_id: 's1' }],
+          created_at: new Date(),
+          updated_at: new Date(),
+        } : null),
+      );
+      db.account.findUnique.mockResolvedValue(drawer);
+      await expect(service.update('pm-1', tenantId, { all_branches: true } as any)).rejects.toThrow(message);
+      expect(updateMock).not.toHaveBeenCalled();
+    });
+  });
+
   // Entry screens say where a tender's money lands before it is saved.
   describe('findAll()', () => {
     const row = (over: Record<string, unknown>) => ({
@@ -337,14 +439,14 @@ describe('PaymentMethodsService', () => {
   describe('findLinkableAccounts()', () => {
     it('scopes the lookup to the tenant and returns picker fields only', async () => {
       db.account.findMany.mockResolvedValue([
-        { id: 'acc-1', name: 'Cash in Hand', code: '110101', type: 'asset', category: 'cash' },
+        { id: 'acc-1', name: 'Cash in Hand', code: '110101', type: 'asset', category: 'cash', store_id: 'store-1' },
       ]);
 
       const result = await service.findLinkableAccounts(tenantId);
 
       expect(db.account.findMany.mock.calls[0][0].where).toEqual({ tenant_id: tenantId });
       expect(result).toEqual([
-        { id: 'acc-1', name: 'Cash in Hand', code: '110101', type: 'asset', category: 'cash' },
+        { id: 'acc-1', name: 'Cash in Hand', code: '110101', type: 'asset', category: 'cash', store_id: 'store-1' },
       ]);
     });
 

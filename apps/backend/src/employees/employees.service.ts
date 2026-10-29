@@ -117,7 +117,7 @@ export class EmployeesService {
         const assigned = await this.db.employee.count({
             where: { department_id: id, deleted_at: null },
         });
-        if (assigned > 0) throw new BadRequestException('Cannot delete a department that has employees assigned to it.');
+        if (assigned > 0) throw new BadRequestException('This department is still in use.');
 
         return this.db.department.update({ where: { id }, data: { deleted_at: new Date() } });
     }
@@ -165,7 +165,7 @@ export class EmployeesService {
         const assigned = await this.db.employee.count({
             where: { designation_id: id, deleted_at: null },
         });
-        if (assigned > 0) throw new BadRequestException('Cannot delete a designation that has employees assigned to it.');
+        if (assigned > 0) throw new BadRequestException('This designation is still in use.');
 
         return this.db.designation.update({ where: { id }, data: { deleted_at: new Date() } });
     }
@@ -173,6 +173,13 @@ export class EmployeesService {
     // ── Employees ─────────────────────────────────────────────────────────────
 
     async create(tenantId: string, dto: CreateEmployeeDto, viewer?: TenantContext) {
+        if (!dto.storeId) throw new BadRequestException('An employee needs a branch.');
+        const branch = await this.db.store.findFirst({
+            where: { id: dto.storeId, tenant_id: tenantId },
+            select: { id: true },
+        });
+        if (!branch) throw new NotFoundException('Branch not found.');
+
         const existing = await this.db.employee.findFirst({
             where: { tenant_id: tenantId, phone: dto.phone },
         });
@@ -189,7 +196,7 @@ export class EmployeesService {
 
         const employee_code = await this.generateEmployeeCode(tenantId);
         const seesSalary = await this.canSeeSalary(viewer);
-        const { nid, basic_salary, ...rest } = dto as CreateEmployeeDto & { basic_salary?: unknown };
+        const { nid, basic_salary, storeId, ...rest } = dto as CreateEmployeeDto & { basic_salary?: unknown };
 
         // Same rule as `update`: no VIEW_PAYROLL, no salary written. On create
         // there is nothing to overwrite, so this only drops a figure the caller
@@ -202,6 +209,7 @@ export class EmployeesService {
             data: {
                 tenant_id: tenantId,
                 employee_code,
+                store_id: storeId,
                 ...rest,
                 ...salaryPatch,
                 ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
@@ -213,7 +221,7 @@ export class EmployeesService {
 
     async findAll(
         tenantId: string,
-        opts?: { page?: number; limit?: number; search?: string; status?: string; departmentId?: string },
+        opts?: { page?: number; limit?: number; search?: string; status?: string; departmentId?: string; storeId?: string },
         viewer?: TenantContext,
     ): Promise<PaginatedResult<any>> {
         const page = opts?.page ?? 1;
@@ -223,6 +231,7 @@ export class EmployeesService {
         const where: any = { tenant_id: tenantId, deleted_at: null };
         if (opts?.status) where.status = opts.status;
         if (opts?.departmentId) where.department_id = opts.departmentId;
+        if (opts?.storeId) where.store_id = opts.storeId;
         if (opts?.search) {
             where.OR = [
                 { name: { contains: opts.search, mode: 'insensitive' } },
@@ -251,18 +260,18 @@ export class EmployeesService {
         );
     }
 
-    async findOne(tenantId: string, id: string, viewer?: TenantContext) {
+    async findOne(tenantId: string, id: string, viewer?: TenantContext, storeId?: string) {
         const employee = await this.db.employee.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...(storeId ? { store_id: storeId } : {}) },
             include: { department: true, designation: true, user: { select: EMPLOYEE_USER_SELECT } },
         });
         if (!employee) throw new NotFoundException('Employee not found');
         return stripPayrollFields(this.decryptEmployee(employee), await this.canSeeSalary(viewer));
     }
 
-    async update(tenantId: string, id: string, dto: UpdateEmployeeDto, viewer?: TenantContext) {
+    async update(tenantId: string, id: string, dto: UpdateEmployeeDto, viewer?: TenantContext, storeId?: string) {
         const employee = await this.db.employee.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...(storeId ? { store_id: storeId } : {}) },
         });
         if (!employee) throw new NotFoundException('Employee not found');
 
@@ -283,7 +292,14 @@ export class EmployeesService {
         }
 
         const seesSalary = await this.canSeeSalary(viewer);
-        const { nid, basic_salary, ...rest } = dto as UpdateEmployeeDto & { basic_salary?: unknown };
+        const { nid, basic_salary, storeId: nextStoreId, ...rest } = dto as UpdateEmployeeDto & { basic_salary?: unknown };
+        if (nextStoreId) {
+            const branch = await this.db.store.findFirst({
+                where: { id: nextStoreId, tenant_id: tenantId },
+                select: { id: true },
+            });
+            if (!branch) throw new NotFoundException('Branch not found.');
+        }
 
         // A caller who cannot *read* the salary cannot write it either. This is
         // not belt-and-braces: the employee edit form sends `basic_salary` on
@@ -301,6 +317,7 @@ export class EmployeesService {
             data: {
                 ...rest,
                 ...salaryPatch,
+                ...(nextStoreId ? { store_id: nextStoreId } : {}),
                 ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
             },
             include: { department: true, designation: true, user: { select: EMPLOYEE_USER_SELECT } },
@@ -308,9 +325,9 @@ export class EmployeesService {
         return stripPayrollFields(this.decryptEmployee(record), seesSalary);
     }
 
-    async remove(tenantId: string, id: string) {
+    async remove(tenantId: string, id: string, storeId?: string) {
         const employee = await this.db.employee.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...(storeId ? { store_id: storeId } : {}) },
         });
         if (!employee) throw new NotFoundException('Employee not found');
 
@@ -374,9 +391,9 @@ export class EmployeesService {
         });
     }
 
-    async linkUser(tenantId: string, id: string, userId: string) {
+    async linkUser(tenantId: string, id: string, userId: string, storeId?: string) {
         const employee = await this.db.employee.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...(storeId ? { store_id: storeId } : {}) },
         });
         if (!employee) throw new NotFoundException('Employee not found');
 
@@ -402,9 +419,9 @@ export class EmployeesService {
         return this.decryptEmployee(record);
     }
 
-    async unlinkUser(tenantId: string, id: string) {
+    async unlinkUser(tenantId: string, id: string, storeId?: string) {
         const employee = await this.db.employee.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...(storeId ? { store_id: storeId } : {}) },
         });
         if (!employee) throw new NotFoundException('Employee not found');
 
