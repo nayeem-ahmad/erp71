@@ -67,8 +67,14 @@ export function formatCurrency(
     const resolvedLocale = resolveFormatterLocale(locale);
     const localeConfig = getLocaleConfig(resolvedLocale);
     const value = amount == null ? 0 : Number(amount);
+    // Taka is grouped thousand / lac / crore (1,00,000 and 1,00,00,000). Bangla
+    // already does that via bn-BD; every other UI language uses en-IN so the
+    // digits stay Latin while the separators match how the figure is read.
+    const numberLocale = currency === 'BDT'
+        ? (resolvedLocale === 'bn' ? 'bn-BD' : 'en-IN')
+        : localeConfig.numberLocale;
 
-    return `${getCurrencySymbol(currency)} ${new Intl.NumberFormat(localeConfig.numberLocale, {
+    return `${getCurrencySymbol(currency)} ${new Intl.NumberFormat(numberLocale, {
         minimumFractionDigits,
         maximumFractionDigits,
     }).format(value)}`;

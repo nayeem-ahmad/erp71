@@ -44,7 +44,7 @@ describe('HR payroll cost report', () => {
     it('shows net pay in taka, not a bare number', async () => {
         render(<HrPayrollCostReportPage />);
 
-        expect(await screen.findByText('৳ 108,000.00')).toBeInTheDocument();
+        expect(await screen.findByText('৳ 1,08,000.00')).toBeInTheDocument();
         expect(screen.getByText('৳ 81,000.00')).toBeInTheDocument();
     });
 
