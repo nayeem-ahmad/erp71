@@ -1137,6 +1137,55 @@ describe('TaskDetailPanel description', () => {
         expect(screen.getByLabelText('Description', { selector: '[contenteditable]' })).toBeInTheDocument();
     });
 
+    it('attaches each screenshot pasted into the description, not the previous one', async () => {
+        // The attachments tab is open, so its paste listener is live too. It
+        // must not upload a second copy — Chrome's `files` list is still the
+        // previous screenshot after the editor has read the clipboard.
+        getProjectTask.mockResolvedValue(withDescription(null));
+        addTaskAttachment.mockImplementation(async (_id: string, body: { fileBase64: string }) => {
+            const bytes = Buffer.from(body.fileBase64.split(',')[1] ?? '', 'base64').toString();
+            return { id: bytes, file_url: `https://cdn/${bytes}.png`, file_name: `${bytes}.png` };
+        });
+        panel();
+        await openTab(/^Attachments/);
+        const editor = await edit();
+        const shotFile = (bytes: string) => new File([bytes], 'image.png', { type: 'image/png' });
+
+        const pasteShot = async (current: string, previous: string | null) => {
+            let stale = false;
+            const choose = () => (stale && previous ? shotFile(previous) : shotFile(current));
+            const clipboardData = {
+                getData: () => {
+                    stale = true;
+                    return '';
+                },
+                types: ['Files'],
+                get items() {
+                    const file = choose();
+                    return [{ kind: 'file', type: 'image/png', getAsFile: () => file }];
+                },
+                get files() {
+                    return [choose()];
+                },
+            };
+            const event = new Event('paste', { bubbles: true, cancelable: true });
+            Object.defineProperty(event, 'clipboardData', { value: clipboardData });
+            await act(async () => {
+                editor.dispatchEvent(event);
+            });
+        };
+
+        await pasteShot('one', null);
+        await waitFor(() => expect(addTaskAttachment).toHaveBeenCalledTimes(1));
+        await pasteShot('two', 'one');
+        await waitFor(() => expect(addTaskAttachment).toHaveBeenCalledTimes(2));
+
+        const decoded = (call: unknown[]) =>
+            Buffer.from(String((call[1] as { fileBase64: string }).fileBase64).split(',')[1] ?? '', 'base64').toString();
+        expect(decoded(addTaskAttachment.mock.calls[0])).toBe('one');
+        expect(decoded(addTaskAttachment.mock.calls[1])).toBe('two');
+    });
+
     it('attaches an image pasted into the description and links to it', async () => {
         getProjectTask.mockResolvedValue(withDescription(null));
         addTaskAttachment.mockResolvedValue({

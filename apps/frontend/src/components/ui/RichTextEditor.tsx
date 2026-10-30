@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Bold, Check, Code, ImagePlus, Italic, Link2, List, ListOrdered, Strikethrough, X } from 'lucide-react';
 import { useEditor, EditorContent, ReactNodeViewRenderer, type Editor } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
@@ -126,8 +126,11 @@ function nameClipboardImage(file: File): File {
 function imagesOnClipboard(data: DataTransfer | null): File[] {
     if (!data) return [];
     // `items` is the image the paste actually carries. `files` is consulted
-    // only when that list is empty: on some browsers it still holds the
-    // previous screenshot, under the same name.
+    // only when that list is empty: on Chrome (Windows screenshots in
+    // particular) it still holds the previous screenshot, under the same
+    // name. This has to run before anything calls `getData` — ProseMirror
+    // reads text/html first, and that read makes a later look at the same
+    // clipboard return the previous file.
     const fromItems = Array.from(data.items ?? [])
         .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
         .map((item) => item.getAsFile())
@@ -137,6 +140,54 @@ function imagesOnClipboard(data: DataTransfer | null): File[] {
             ? fromItems
             : Array.from(data.files ?? []).filter((file) => file.type.startsWith('image/'));
     return files.map(nameClipboardImage);
+}
+
+/**
+ * The text a spelling suggestion wants to insert.
+ *
+ * On an input or textarea, `data` is the word. In a contenteditable, the spec
+ * leaves `data` empty and puts the word on `dataTransfer` instead. Chrome has
+ * shipped both, and a grammar extension uses the same `insertReplacementText`
+ * event, so either source has to count.
+ */
+function replacementText(event: InputEvent): string {
+    if (event.data) return event.data;
+    const transfer = event.dataTransfer;
+    if (!transfer) return '';
+    return transfer.getData('text/plain') || transfer.getData('text') || '';
+}
+
+/**
+ * The misspelled word a suggestion is replacing.
+ *
+ * The spelling menu does not select the word first. Chrome reports the
+ * range on the event. A selection is the fallback (a test, or an extension
+ * that selected the word), and a caret expands to the word it sits in.
+ */
+function replacementRange(ed: Editor, event: InputEvent): { from: number; to: number } | null {
+    const ranges = typeof event.getTargetRanges === 'function' ? event.getTargetRanges() : [];
+    const target = ranges[0];
+    if (target) {
+        try {
+            const from = ed.view.posAtDOM(target.startContainer, target.startOffset);
+            const to = ed.view.posAtDOM(target.endContainer, target.endOffset);
+            if (from < to) return { from, to };
+        } catch {
+            // The range pointed at a node the document no longer has.
+        }
+    }
+    const { from, to } = ed.state.selection;
+    if (from !== to) return { from, to };
+    const $pos = ed.state.doc.resolve(from);
+    if (!$pos.parent.isTextblock) return null;
+    const text = $pos.parent.textContent;
+    let start = $pos.parentOffset;
+    let end = start;
+    while (start > 0 && !/\s/.test(text.charAt(start - 1))) start -= 1;
+    while (end < text.length && !/\s/.test(text.charAt(end))) end += 1;
+    if (start === end) return null;
+    const base = $pos.start();
+    return { from: base + start, to: base + end };
 }
 
 /**
@@ -216,6 +267,41 @@ export function RichTextEditor({
         disabled: Boolean(disabled),
     });
     pasteActions.current = { uploadImage, onImageDiscarded, disabled: Boolean(disabled) };
+    /**
+     * Image files taken off the clipboard in the capture phase, before
+     * ProseMirror's own paste handler calls `getData`. Without this, the
+     * upload that follows is the previous screenshot.
+     */
+    const capturedPaste = useRef<File[] | null>(null);
+    /**
+     * The suggestion just applied from `beforeinput`. The `input` event that
+     * follows carries the same word; applying it again would insert it twice.
+     */
+    const spellApplied = useRef<string | null>(null);
+    const applySpellReplacement = (event: Event): boolean => {
+        const input = event as InputEvent;
+        if (input.inputType !== 'insertReplacementText') return false;
+        const text = replacementText(input);
+        if (!text) return false;
+        const ed = editorRef.current;
+        if (!ed || ed.isDestroyed) return false;
+        if (event.type === 'input' && spellApplied.current === text) {
+            spellApplied.current = null;
+            return true;
+        }
+        const range = replacementRange(ed, input);
+        if (!range) return false;
+        // Already what the suggestion says — the browser, or the event that
+        // just ran, got there first.
+        if (ed.state.doc.textBetween(range.from, range.to) === text) return true;
+        // Cancel the browser's own edit. Left alone, it changes the DOM and
+        // ProseMirror redraws the document over it, so the suggestion flashes
+        // and the stored markdown never moves.
+        if (event.cancelable) event.preventDefault();
+        ed.view.dispatch(ed.state.tr.insertText(text, range.from, range.to));
+        spellApplied.current = text;
+        return true;
+    };
     const fileRef = useRef<HTMLInputElement>(null);
     /** Where a file chosen from the toolbar is inserted. The dialog can blur the editor. */
     const insertAt = useRef<number | undefined>(undefined);
@@ -240,6 +326,9 @@ export function RichTextEditor({
                 'aria-label': ariaLabel ?? '',
                 role: 'textbox',
                 'aria-multiline': 'true',
+                // Underlines are the browser's. The suggestion itself is
+                // applied in `applySpellReplacement` — ProseMirror does not.
+                spellcheck: 'true',
                 // The old textarea's `rows`, which has no meaning here.
                 style: `min-height: ${Math.max(rows, 2) * 1.5}rem`,
                 class: 'prose-editor px-3 py-2 text-sm focus:outline-none',
@@ -247,10 +336,33 @@ export function RichTextEditor({
             handlePaste: (_view, event) => handlePaste(event as ClipboardEvent),
             handleDrop: (view, event, _slice, moved) =>
                 handleDrop(view, event as DragEvent, moved),
+            handleDOMEvents: {
+                beforeinput: (_view, event) => applySpellReplacement(event),
+                input: (_view, event) => applySpellReplacement(event),
+            },
         },
         onUpdate: ({ editor }) => onChange(docToMarkdown(editor.state.doc)),
     });
     editorRef.current = editor;
+
+    useLayoutEffect(() => {
+        if (!editor) return;
+        let dom: HTMLElement;
+        try {
+            dom = editor.view.dom;
+        } catch {
+            // EditorContent mounts the view in its own layout effect, which
+            // has already run — this is only the first server render.
+            return;
+        }
+        const capture = (event: Event) => {
+            capturedPaste.current = imagesOnClipboard((event as ClipboardEvent).clipboardData);
+        };
+        // Capture, so this runs before ProseMirror's bubble handler reads
+        // `getData` and the clipboard starts answering with the last image.
+        dom.addEventListener('paste', capture, true);
+        return () => dom.removeEventListener('paste', capture, true);
+    }, [editor]);
 
     /*
      * Announced from an effect rather than from the upload itself, so a parent
@@ -385,9 +497,13 @@ export function RichTextEditor({
     }
 
     function handlePaste(event: ClipboardEvent): boolean {
+        // Prefer the capture-phase snapshot. Reading the clipboard again here
+        // is after ProseMirror's `getData`, which is when Chrome hands back
+        // the previous screenshot.
+        const files = capturedPaste.current ?? imagesOnClipboard(event.clipboardData);
+        capturedPaste.current = null;
         const { uploadImage: upload, disabled: off } = pasteActions.current;
         if (!upload || off) return false;
-        const files = imagesOnClipboard(event.clipboardData);
         // A paste carrying no image must still paste normally.
         if (files.length === 0) return false;
         const ed = editorRef.current;
