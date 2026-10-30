@@ -29,17 +29,6 @@ const DEFAULT_TTL_DAYS = 30;
  */
 const DEFAULT_SESSION_TTL_DAYS = 1;
 
-/**
- * A rotated token stays usable for this long after it was exchanged.
- *
- * Without it, two tabs that share one localStorage token and happen to renew at
- * the same moment would look exactly like a stolen-token replay. The frontend
- * de-dupes its own in-flight refreshes and holds a cross-tab Web Lock while it
- * renews, so this only has to cover the window between one tab writing the new
- * token and another reading it, which is over in milliseconds.
- */
-const REUSE_GRACE_MS = 60_000;
-
 /** Keep the recorded user agent from growing unbounded from a hostile client. */
 const MAX_USER_AGENT_LENGTH = 512;
 
@@ -119,17 +108,14 @@ export class RefreshTokenService {
     /**
      * Exchange a token for its successor.
      *
-     * Rotation is what makes a leaked token detectable: each one is good for a
-     * single exchange, so a second use outside the race window means two
-     * parties hold it.
-     *
-     * What that costs is the point of `family_id`. Revoking every session the
-     * user had was the textbook response, but it was reachable by accident —
-     * two browser contexts holding a copy of the same token renew on their own
-     * schedules, and whichever renewed second was read as an attacker. So the
-     * replay ends the *session* the token belongs to and leaves the other
-     * devices signed in. An attacker still loses the session they stole, and the
-     * owner's next request on the same family asks them to sign in again.
+     * Each exchange still mints a new row and chains `replaced_by`, so a dump of
+     * the table never hands the reader a live token. A second presentation of
+     * the same token — two tabs racing, or a hung refresh the client retries
+     * after the server already rotated — mints another sibling in the same
+     * family rather than treating the retry as theft. We only store hashes, so
+     * the original successor cannot be handed back; last writer in the browser
+     * wins, and other devices on other families stay signed in. The family's
+     * own TTL still caps how long any of those siblings last.
      */
     async rotate(raw: string, meta: AuditRequestMeta = {}): Promise<{ userId: string } & IssuedRefreshToken> {
         if (!raw || typeof raw !== 'string') {
@@ -149,11 +135,6 @@ export class RefreshTokenService {
         // A token issued before `family_id` existed has none, and is its own
         // family — it can revoke nothing but itself. See the column's comment.
         const familyId = existing.family_id ?? existing.id;
-
-        if (existing.used_at && Date.now() - existing.used_at.getTime() > REUSE_GRACE_MS) {
-            await this.revokeFamily(familyId);
-            throw new UnauthorizedException('Session revoked');
-        }
 
         const next = await this.issue(existing.user_id, meta, {
             familyId,

@@ -83,24 +83,25 @@ describe('Login UI Authentication Mapping', () => {
     expect(api.login).toHaveBeenCalledWith({
         identifier: 'admin@bmad.com',
         password: 'password123',
-        // The checkbox is unticked by default, and the flag now decides how long
-        // the session lasts rather than which storage it hides in.
-        remember_me: false,
+        // Ticked by default: a shopkeeper who never touches the box gets a
+        // month-long session rather than being asked to sign in again tomorrow.
+        remember_me: true,
     });
   });
 
-  it('asks for a long-lived session when "Remember me" is ticked', async () => {
+  it('asks for a day-long session when "Remember me" is unticked', async () => {
     const { api } = require('../../lib/api');
     render(<LoginPage />);
 
     fireEvent.change(screen.getByPlaceholderText(/name@company.com/i), { target: { value: 'admin@bmad.com' } });
     fireEvent.change(screen.getByPlaceholderText(/••••••••/i), { target: { value: 'password123' } });
+    expect(screen.getByRole('checkbox')).toBeChecked();
     fireEvent.click(screen.getByRole('checkbox'));
 
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
     expect(api.login).toHaveBeenCalledWith(
-        expect.objectContaining({ remember_me: true }),
+        expect.objectContaining({ remember_me: false }),
     );
   });
 
@@ -118,7 +119,7 @@ describe('Login UI Authentication Mapping', () => {
     expect(api.login).toHaveBeenCalledWith({
         identifier: '01712345678',
         password: 'password123',
-        remember_me: false,
+        remember_me: true,
     });
   });
 

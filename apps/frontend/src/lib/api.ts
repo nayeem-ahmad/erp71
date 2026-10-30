@@ -3773,7 +3773,7 @@ export const api = {
         }
         return body && 'data' in body ? body.data : body;
     }),
-    verify2FALogin: (userId: string, code: string, rememberMe = false) => fetch(`${API_BASE}/auth/2fa/verify`, {
+    verify2FALogin: (userId: string, code: string, rememberMe = true) => fetch(`${API_BASE}/auth/2fa/verify`, {
         method: 'POST',
         body: JSON.stringify({ userId, code, remember_me: rememberMe }),
         headers: { 'Content-Type': 'application/json' },

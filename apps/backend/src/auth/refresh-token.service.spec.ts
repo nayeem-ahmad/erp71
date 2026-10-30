@@ -177,7 +177,7 @@ describe('RefreshTokenService', () => {
             expect(db.refreshToken.updateMany).not.toHaveBeenCalled();
         });
 
-        it('keeps the original used_at when replaying inside the grace window', async () => {
+        it('keeps the original used_at when the same token is presented again', async () => {
             const firstUse = new Date(Date.now() - 2_000);
             db.refreshToken.findUnique.mockResolvedValue(storedToken({ used_at: firstUse }));
 
@@ -186,18 +186,21 @@ describe('RefreshTokenService', () => {
             expect(db.refreshToken.update.mock.calls[0][0].data.used_at).toBe(firstUse);
         });
 
-        it('ends the replayed session when a long-spent token comes back', async () => {
+        it('hands out another successor when a long-spent token comes back', async () => {
             db.refreshToken.findUnique.mockResolvedValue(
                 storedToken({ used_at: new Date(Date.now() - 10 * 60_000) }),
             );
 
-            await expect(service.rotate('raw-token')).rejects.toBeInstanceOf(UnauthorizedException);
+            const result = await service.rotate('raw-token');
 
-            expect(db.refreshToken.updateMany).toHaveBeenCalledWith({
-                where: { family_id: 'family-1', revoked_at: null },
-                data: { revoked_at: expect.any(Date) },
-            });
-            expect(db.refreshToken.create).not.toHaveBeenCalled();
+            // A hung refresh the server already processed, then retried after
+            // the old 60s grace, is indistinguishable from theft. Revoking the
+            // family was signing people out mid-task; mint another sibling
+            // instead. Last writer in the browser wins.
+            expect(result.userId).toBe('user-1');
+            expect(result.token).not.toBe('raw-token');
+            expect(db.refreshToken.create).toHaveBeenCalled();
+            expect(db.refreshToken.updateMany).not.toHaveBeenCalled();
         });
 
         it('leaves the user signed in on their other devices', async () => {
@@ -205,11 +208,12 @@ describe('RefreshTokenService', () => {
                 storedToken({ used_at: new Date(Date.now() - 10 * 60_000) }),
             );
 
-            await expect(service.rotate('raw-token')).rejects.toBeInstanceOf(UnauthorizedException);
+            await service.rotate('raw-token');
 
-            // The regression this whole change exists to stop: a stale token in
-            // one browser used to revoke by `user_id` and empty every device.
+            // A late retry used to revoke the family. It must not reach for
+            // `user_id` either — that emptied every device.
             const revocations = db.refreshToken.updateMany.mock.calls.map((call: any) => call[0].where);
+            expect(revocations).toHaveLength(0);
             expect(revocations).not.toContainEqual(
                 expect.objectContaining({ user_id: 'user-1' }),
             );
