@@ -88,10 +88,10 @@ describe('MobileSignInPanel', () => {
         expect(confirm).toHaveBeenCalledWith('123456');
         await waitFor(() => expect(onSuccess).toHaveBeenCalledWith({ access_token: 'x' }));
         // `remember_me` decides the session's lifetime, so the app's own exchange
-        // always states it — the panel defaults it off, like the login form.
+        // always states it — the panel defaults it on, like the login form.
         expect(mobileSignIn).toHaveBeenCalledWith({
             idToken: 'firebase-id-token',
-            remember_me: false,
+            remember_me: true,
         });
     });
 
@@ -127,7 +127,7 @@ describe('MobileSignInPanel', () => {
             idToken: 'firebase-id-token',
             email: 'owner@shop.com',
             name: undefined,
-            remember_me: false,
+            remember_me: true,
         });
         expect(sendCode).toHaveBeenCalledTimes(1);
     });
@@ -152,7 +152,7 @@ describe('MobileSignInPanel', () => {
             email: 'owner@shop.com',
             tenantName: 'Dhaka Retail Co.',
             planCode: 'STANDARD',
-            remember_me: false,
+            remember_me: true,
         }));
     });
 
@@ -160,11 +160,11 @@ describe('MobileSignInPanel', () => {
         const onSuccess = jest.fn();
         mobileSignIn.mockResolvedValue({ access_token: 'x' });
 
-        render(<MobileSignInPanel onSuccess={onSuccess} rememberMe />);
+        render(<MobileSignInPanel onSuccess={onSuccess} rememberMe={false} />);
         await verifyNumber();
 
         await waitFor(() => expect(mobileSignIn).toHaveBeenCalledWith(
-            expect.objectContaining({ remember_me: true }),
+            expect.objectContaining({ remember_me: false }),
         ));
     });
 

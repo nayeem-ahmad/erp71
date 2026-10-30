@@ -58,7 +58,8 @@ export type MobileSignInPanelProps = {
     /**
      * The surrounding form's "Remember me". Sent with the app's own exchange so
      * the session it mints lasts as long as the visitor asked for; a storefront
-     * passing its own `exchange` decides this for itself.
+     * passing its own `exchange` decides this for itself. Defaults on, matching
+     * the login form.
      */
     rememberMe?: boolean;
     /** 'signin' on the login page, 'signup' on the signup page. */
@@ -92,7 +93,7 @@ export default function MobileSignInPanel({
     onError,
     signUpFields,
     disabled = false,
-    rememberMe = false,
+    rememberMe = true,
     intent = 'signin',
     onAvailabilityChange,
 }: MobileSignInPanelProps) {
