@@ -61,6 +61,39 @@ const paste = (files: File[]) => {
     fireEvent.paste(surface(), { clipboardData: { files, getData: () => '' } });
 };
 
+const shot = (bytes: string) => new File([bytes], 'image.png', { type: 'image/png' });
+
+/**
+ * A paste whose clipboard answers with `current` until something reads
+ * `getData`, and with `previous` afterwards — Chrome once ProseMirror has
+ * looked at the HTML on the clipboard.
+ */
+const pasteScreenshot = async (target: HTMLElement, current: File, previous: File | null) => {
+    let stale = false;
+    const choose = () => (stale && previous ? previous : current);
+    const clipboardData = {
+        getData: () => {
+            stale = true;
+            return '';
+        },
+        types: ['Files'],
+        get items() {
+            const file = choose();
+            return [{ kind: 'file', type: 'image/png', getAsFile: () => file }];
+        },
+        get files() {
+            return [choose()];
+        },
+    };
+    const event = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', { value: clipboardData });
+    // The upload resolves on a microtask. Flush it here, or the swap of the
+    // blob URL for the stored one updates state outside the test's act.
+    await act(async () => {
+        target.dispatchEvent(event);
+    });
+};
+
 /**
  * Replaces what the editor holds with `text`, through ProseMirror's own paste
  * handling — the one path in jsdom that produces a real document.
@@ -130,6 +163,31 @@ describe('RichTextEditor image paste', () => {
         );
         expect(uploadImage).toHaveBeenCalledTimes(1);
         expect((uploadImage.mock.calls[0][0] as File).type).toBe('image/png');
+    });
+
+    /**
+     * Chrome on Windows keeps the previous screenshot on the clipboard once
+     * something reads `getData` — which ProseMirror does, for the HTML, before
+     * it asks the editor what to do with the paste. Two screenshots in a row
+     * were coming back as the first one, in the description and in Attachments.
+     */
+    it('uploads each pasted screenshot, not the previous one', async () => {
+        const uploadImage = jest.fn(async (file: File) => {
+            const bytes = await file.text();
+            return { url: `https://cdn/${bytes}.png`, name: `${bytes}.png` };
+        });
+        render(<Host uploadImage={uploadImage} />);
+
+        await pasteScreenshot(surface(), shot('one'), null);
+        await pasteScreenshot(surface(), shot('two'), shot('one'));
+
+        await waitFor(() => expect(uploadImage).toHaveBeenCalledTimes(2));
+        expect(await (uploadImage.mock.calls[0][0] as File).text()).toBe('one');
+        expect(await (uploadImage.mock.calls[1][0] as File).text()).toBe('two');
+        await waitFor(() => {
+            expect(latest).toContain('https://cdn/one.png');
+            expect(latest).toContain('https://cdn/two.png');
+        });
     });
 
     it('renames a clipboard screenshot so it is not another image.png', async () => {
@@ -307,6 +365,65 @@ describe('RichTextEditor image paste', () => {
                 expect.objectContaining({ url: 'https://cdn/x.png', id: 'a1' }),
             ),
         );
+    });
+});
+
+describe('RichTextEditor spelling suggestions', () => {
+    /** The word the suggestion replaces, the way Chrome reports it. */
+    const targetRange = (root: HTMLElement, word: string) => {
+        const text = root.querySelector('p')?.firstChild;
+        if (!text) throw new Error('no text');
+        const start = text.textContent?.indexOf(word) ?? -1;
+        return new StaticRange({
+            startContainer: text,
+            startOffset: start,
+            endContainer: text,
+            endOffset: start + word.length,
+        });
+    };
+
+    const suggest = async (root: HTMLElement, word: string, replacement: string, via: 'data' | 'transfer') => {
+        const event = new InputEvent('input', {
+            bubbles: true,
+            cancelable: true,
+            inputType: 'insertReplacementText',
+            data: via === 'data' ? replacement : '',
+        });
+        if (via === 'transfer') {
+            // jsdom has no DataTransfer constructor. The event only needs getData.
+            const transfer = {
+                getData: (type: string) => (type === 'text/plain' || type === 'text' ? replacement : ''),
+            };
+            Object.defineProperty(event, 'dataTransfer', { value: transfer });
+        }
+        Object.defineProperty(event, 'getTargetRanges', {
+            value: () => [targetRange(root, word)],
+        });
+        await act(async () => {
+            root.dispatchEvent(event);
+        });
+    };
+
+    it('replaces the misspelled word from insertReplacementText', async () => {
+        render(<Host initial="teh cat" />);
+        const root = surface();
+        await waitFor(() => expect(root.textContent).toContain('teh'));
+        expect(root).toHaveAttribute('spellcheck', 'true');
+
+        await suggest(root, 'teh', 'the', 'data');
+
+        await waitFor(() => expect(latest).toBe('the cat'));
+    });
+
+    it('reads the suggestion from dataTransfer when data is empty', async () => {
+        // A contenteditable reports the word on the transfer, not on `data`.
+        render(<Host initial="teh cat" />);
+        const root = surface();
+        await waitFor(() => expect(root.textContent).toContain('teh'));
+
+        await suggest(root, 'teh', 'the', 'transfer');
+
+        await waitFor(() => expect(latest).toBe('the cat'));
     });
 });
 

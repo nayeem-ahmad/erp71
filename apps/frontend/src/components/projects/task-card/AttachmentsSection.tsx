@@ -116,14 +116,23 @@ export default function AttachmentsSection({
 
     // Paste lands here when this tab is open and the paste was not into the
     // description. The description editor takes its own paste; this must not
-    // take it a second time.
+    // take it a second time. `files` on its own is the previous screenshot on
+    // Chrome, so an image item is preferred, and a paste whose target is a
+    // text node inside the editor is still the editor's.
     useEffect(() => {
         const onPaste = (event: ClipboardEvent) => {
             if (event.defaultPrevented) return;
-            const target = event.target;
-            if (target instanceof Element && target.closest('[data-rich-text-editor]')) return;
+            const node = event.target;
+            const target = node instanceof Element ? node : node instanceof Node ? node.parentElement : null;
+            if (target?.closest('[data-rich-text-editor]')) return;
             if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
-            const files = Array.from(event.clipboardData?.files ?? []).filter(
+            const data = event.clipboardData;
+            const fromItems = Array.from(data?.items ?? [])
+                .filter((item) => item.kind === 'file')
+                .map((item) => item.getAsFile())
+                .filter((file): file is File => file !== null);
+            const candidates = fromItems.length > 0 ? fromItems : Array.from(data?.files ?? []);
+            const files = candidates.filter(
                 (file) => file.type.startsWith('image/') || file.type === 'application/pdf',
             );
             if (files.length === 0) return;
