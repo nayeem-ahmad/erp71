@@ -288,7 +288,7 @@ describe('AuthService', () => {
             expect(issuedTokens.at(-1)?.options).toEqual({ rememberMe: true });
         });
 
-        it('carries an unticked box, which is the default the form posts', async () => {
+        it('carries an unticked box as a day-long session', async () => {
             await signIn({ identifier: 'owner@example.com', password: 'Dhaka-Shop-2026', remember_me: false });
 
             expect(issuedTokens.at(-1)?.options).toEqual({ rememberMe: false });

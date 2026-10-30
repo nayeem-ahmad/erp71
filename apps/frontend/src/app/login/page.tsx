@@ -24,7 +24,7 @@ function LoginPageContent() {
     // column by looking for an `@`.
     const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
-    const [rememberMe, setRememberMe] = useState(false);
+    const [rememberMe, setRememberMe] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isDemoLoading, setIsDemoLoading] = useState(false);
