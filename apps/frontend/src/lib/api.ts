@@ -3175,7 +3175,7 @@ export const api = {
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/suppliers/${id}/gl-ledger${query.toString() ? `?${query.toString()}` : ''}`).then(
-            (r: { transactions?: unknown[] } | unknown[]) => {
+            (r: { transactions?: unknown[]; supplier?: { id: string; name: string; phone?: string | null } } | unknown[]) => {
                 if (Array.isArray(r)) return { transactions: r, opening_balance: 0, closing_balance: 0, due_balance: 0 };
                 const transactions = r?.transactions ?? [];
                 return { ...r, transactions: Array.isArray(transactions) ? transactions : [] };
