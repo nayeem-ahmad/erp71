@@ -160,7 +160,7 @@ function replacementText(event: InputEvent): string {
 /**
  * The misspelled word a suggestion is replacing.
  *
- * The right-click menu does not select the word first. Chrome reports the
+ * The spelling menu does not select the word first. Chrome reports the
  * range on the event. A selection is the fallback (a test, or an extension
  * that selected the word), and a caret expands to the word it sits in.
  */
