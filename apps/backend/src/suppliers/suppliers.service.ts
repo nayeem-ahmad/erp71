@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { cashLegOverride, resolveCreditPaymentMethod, storedPaymentMethodAccountId } from '../accounting/payment-account.util';
 import { buildPartyLedger } from '../accounting/party-ledger.util';
+import { enrichSupplierLedgerWithPurchases } from './supplier-ledger-purchases.util';
 import { DatabaseService } from '../database/database.service';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
@@ -743,12 +744,18 @@ export class SuppliersService {
         });
         if (!supplier) throw new NotFoundException('Supplier not found');
 
-        const ledger = await buildPartyLedger(this.db, tenantId, 'SUPPLIER', id, {
-            from: params?.from,
-            to: params?.to,
-            increaseLabel: 'CREDIT_PURCHASE',
-            decreaseLabel: 'PAYMENT',
-        });
+        const ledger = await enrichSupplierLedgerWithPurchases(
+            this.db,
+            tenantId,
+            id,
+            await buildPartyLedger(this.db, tenantId, 'SUPPLIER', id, {
+                from: params?.from,
+                to: params?.to,
+                increaseLabel: 'CREDIT_PURCHASE',
+                decreaseLabel: 'PAYMENT',
+            }),
+            params,
+        );
 
         return {
             supplier: { id: supplier.id, name: supplier.name, phone: supplier.phone },

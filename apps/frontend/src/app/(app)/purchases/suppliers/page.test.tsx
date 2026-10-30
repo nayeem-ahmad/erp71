@@ -14,7 +14,9 @@ jest.mock('@/lib/api', () => ({
 }));
 
 jest.mock('next/link', () => {
-    return ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>;
+    return ({ children, href, ...rest }: { children: React.ReactNode; href: string } & Record<string, unknown>) => (
+        <a href={href} {...rest}>{children}</a>
+    );
 });
 
 // DataTable hides `hideOnMobile` columns (the code, the branch) on a narrow
@@ -133,6 +135,28 @@ describe('SuppliersPage', () => {
         await waitFor(() => {
             expect(screen.getByText('Dhaka Traders Ltd')).toBeInTheDocument();
         });
+    });
+
+    it('links each row to that supplier\'s ledger, already selected', async () => {
+        const { api } = require('@/lib/api');
+        api.getSuppliersPaged.mockResolvedValue({
+            items: [{
+                id: 'sup-1',
+                name: 'Fresh Farms',
+                store_id: 'store-1',
+                created_at: '2026-01-01T00:00:00Z',
+            }],
+            total: 1,
+            page: 1,
+            limit: 20,
+            pages: 1,
+        });
+        render(<SuppliersPage />);
+        const row = (await screen.findByText('Fresh Farms')).closest('tr')!;
+        expect(within(row).getByRole('link', { name: 'View supplier ledger' })).toHaveAttribute(
+            'href',
+            '/purchases/supplier-ledger?supplierId=sup-1',
+        );
     });
 
     it('handles empty state', async () => {

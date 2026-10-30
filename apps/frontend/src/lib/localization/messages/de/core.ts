@@ -1718,6 +1718,8 @@ export const coreMessages = {
         noTransactions: "Keine Transaktionen in diesem Zeitraum",
         directionPay: "An Lieferant zahlen",
         directionReceive: "Von Lieferant erhalten",
+        directionPurchase: "Einkauf",
+        columnTotal: "Summe",
         billStatuses: {
             UNPAID: "Unbezahlt",
             PARTIAL: "Teilweise bezahlt",
@@ -1731,10 +1733,12 @@ export const coreMessages = {
             serial: "Lfd. Nr.",
             direction: "Richtung",
             recordedBy: "Erfasst von",
-            amount: "Betrag",
+            purchaseTotal: "Einkaufssumme",
+            paid: "Bezahlt",
+            due: "Offen",
+            payment: "Zahlung",
             notes: "Notizen",
             balance: "Saldo",
-            status: "Rechnungsstatus",
         },
     },
     dashboardHome: {

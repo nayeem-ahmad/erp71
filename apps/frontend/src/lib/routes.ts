@@ -25,6 +25,8 @@ export const routes = {
         pos: '/sales/pos',
         customerPayments: '/sales/customer-payments',
         customerLedger: '/sales/customer-ledger',
+        customerLedgerFor: (id: string) =>
+            `/sales/customer-ledger?customerId=${encodeURIComponent(id)}` as const,
         delivery: '/sales/delivery',
         returns: '/sales/returns',
         returnNew: '/sales/returns/new',
@@ -86,6 +88,8 @@ export const routes = {
         purchaseInvoice: (id: string) => `/purchases/${id}/invoice` as const,
         supplierPayments: '/purchases/supplier-payments',
         supplierLedger: '/purchases/supplier-ledger',
+        supplierLedgerFor: (id: string) =>
+            `/purchases/supplier-ledger?supplierId=${encodeURIComponent(id)}` as const,
         orders: '/purchases/orders',
         orderDetail: (id: string) => `/purchases/orders/${id}` as const,
         orderInvoice: (id: string) => `/purchases/orders/${id}/invoice` as const,

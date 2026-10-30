@@ -12,6 +12,7 @@ export const customersMessages = {
         "evaluateFailed": "درجات کی جانچ ناکام ہو گئی۔",
         "emptyMessage": "کوئی گاہک نہیں ملا",
         "searchPlaceholder": "کوڈ، گاہک، گروپ، علاقے یا درجے سے تلاش کریں...",
+        "viewLedger": "گاہک کا کھاتہ دیکھیں",
         "columns": {
             "code": "کوڈ",
             "customer": "گاہک",

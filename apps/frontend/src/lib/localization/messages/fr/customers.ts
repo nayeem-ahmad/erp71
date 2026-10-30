@@ -12,6 +12,7 @@ export const customersMessages = {
         "evaluateFailed": "Échec de l'évaluation des segments.",
         "emptyMessage": "Aucun client trouvé",
         "searchPlaceholder": "Rechercher par code, client, groupe, territoire ou segment...",
+        "viewLedger": "Voir le grand livre du client",
         "columns": {
             "code": "Code",
             "customer": "Client",

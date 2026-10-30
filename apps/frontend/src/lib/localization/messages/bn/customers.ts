@@ -12,6 +12,7 @@ export const customersMessages = {
             evaluateFailed: "সেগমেন্ট মূল্যায়ন ব্যর্থ হয়েছে।",
             emptyMessage: "কোনো গ্রাহক পাওয়া যায়নি",
             searchPlaceholder: "কোড, গ্রাহক, গ্রুপ, টেরিটরি বা সেগমেন্ট অনুসন্ধান...",
+            viewLedger: "গ্রাহক লেজার দেখুন",
             columns: {
                 code: "কোড",
                 customer: "গ্রাহক",

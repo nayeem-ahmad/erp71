@@ -1718,6 +1718,8 @@ export const coreMessages = {
             noTransactions: "এই সময়কালে কোনো লেনদেন নেই",
             directionPay: "সরবরাহকারীকে প্রদান",
             directionReceive: "সরবরাহকারীর কাছ থেকে গ্রহণ",
+            directionPurchase: "ক্রয়",
+            columnTotal: "মোট",
             billStatuses: {
                 UNPAID: "অপরিশোধিত",
                 PARTIAL: "আংশিক পরিশোধিত",
@@ -1731,10 +1733,12 @@ export const coreMessages = {
                 serial: "সিরিয়াল",
                 direction: "দিক",
                 recordedBy: "রেকর্ড করেছেন",
-                amount: "পরিমাণ",
+                purchaseTotal: "ক্রয় মোট",
+                paid: "পরিশোধ",
+                due: "বকেয়া",
+                payment: "পেমেন্ট",
                 notes: "নোট",
                 balance: "ব্যালেন্স",
-                status: "বিলের অবস্থা",
             },
         },
         dashboardHome: {

@@ -204,6 +204,7 @@ export const purchasesMessages = {
         tableTitle: "Proveedores",
         emptyMessage: "Aún no hay proveedores. Añada su primer proveedor.",
         searchPlaceholder: "Buscar por nombre, código, teléfono o correo...",
+        viewLedger: "Ver el mayor del proveedor",
         columns: {
             code: "Código",
             supplier: "Proveedor",

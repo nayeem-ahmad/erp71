@@ -71,6 +71,7 @@ export async function enrichCustomerLedgerWithSales(
             debit: 0,
             credit: 0,
             sale_total: Number(sale.total_amount),
+            purchase_total: null,
             amount_paid: Number(sale.amount_paid),
             source_type: 'sale',
             source_id: sale.id,

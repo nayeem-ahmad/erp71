@@ -12,6 +12,7 @@ export const customersMessages = {
         "evaluateFailed": "वर्गों का मूल्यांकन नहीं हो सका।",
         "emptyMessage": "कोई ग्राहक नहीं मिला",
         "searchPlaceholder": "कोड, ग्राहक, समूह, क्षेत्र या वर्ग से खोजें...",
+        "viewLedger": "ग्राहक बहीखाता देखें",
         "columns": {
             "code": "कोड",
             "customer": "ग्राहक",

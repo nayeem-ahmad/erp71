@@ -27,19 +27,17 @@ type LedgerRow = {
     type?: string;
     payment_number?: string | null;
     amount?: number | string;
+    debit?: number | string;
+    credit?: number | string;
+    purchase_total?: number | string | null;
+    amount_paid?: number | string | null;
+    source_type?: string | null;
+    source_id?: string | null;
     balance_before?: number | string;
     balance_after: number | string;
     notes?: string | null;
     created_at: string;
     creator?: { name: string } | null;
-    bill?: {
-        payment_status: 'UNPAID' | 'PARTIAL' | 'PAID';
-        paid_amount: number;
-        total_amount: number;
-        balance_due: number;
-    };
-    allocations?: { purchaseId: string; purchaseNumber: string; amount: number }[];
-    unapplied_amount?: number;
 };
 
 const columnHelper = createColumnHelper<LedgerRow>();
@@ -78,10 +76,33 @@ function formatOpeningDate(value: string, locale: string) {
     });
 }
 
-function directionLabel(type: string | undefined, copy: { directionReceive: string; directionPay: string }) {
+function directionLabel(type: string | undefined, copy: { directionReceive: string; directionPay: string; directionPurchase: string }) {
     if (type === 'PAYMENT') return copy.directionPay;
     if (type === 'PAYOUT') return copy.directionReceive;
+    if (type === 'PURCHASE' || type === 'CREDIT_PURCHASE') return copy.directionPurchase;
     return type?.replace(/_/g, ' ') ?? '—';
+}
+
+function transactionRowsFromTable(table: { getFilteredRowModel: () => { rows: { original: LedgerRow }[] } }): LedgerRow[] {
+    return table.getFilteredRowModel().rows.map((row) => row.original).filter((row) => row.rowType === 'transaction');
+}
+
+function sumField(rows: LedgerRow[], key: 'purchase_total' | 'amount_paid' | 'debit' | 'credit'): number {
+    return rows.reduce((sum, row) => sum + Number(row[key] ?? 0), 0);
+}
+
+const dash = <span className="text-gray-400">—</span>;
+
+function moneyCell(value: number | string | null | undefined, locale: string, className?: string) {
+    const amount = Number(value ?? 0);
+    if (!amount) return dash;
+    return <span className={className}>{formatBDT(amount, { locale })}</span>;
+}
+
+function balanceClass(value: number): string | undefined {
+    if (value > 0) return 'text-danger';
+    if (value < 0) return 'text-emerald-600';
+    return undefined;
 }
 
 function SupplierLedgerContent() {
@@ -100,6 +121,7 @@ function SupplierLedgerContent() {
     const [openingBalance, setOpeningBalance] = useState(0);
     const [closingBalance, setClosingBalance] = useState(0);
     const [transactions, setTransactions] = useState<LedgerRow[]>([]);
+    const [ledgerSupplier, setLedgerSupplier] = useState<SupplierOption | null>(null);
 
     const loadSuppliers = useCallback(async () => {
         setLoadingSuppliers(true);
@@ -131,6 +153,7 @@ function SupplierLedgerContent() {
             setDueBalance(0);
             setOpeningBalance(0);
             setClosingBalance(0);
+            setLedgerSupplier(null);
             return;
         }
         const loadLedger = async () => {
@@ -142,6 +165,7 @@ function SupplierLedgerContent() {
                     from: fromDate || undefined,
                     to: toDate || undefined,
                 });
+                setLedgerSupplier('supplier' in data ? data.supplier ?? null : null);
                 setDueBalance(Number(data.due_balance ?? 0));
                 setOpeningBalance(Number(data.opening_balance ?? 0));
                 setClosingBalance(Number(data.closing_balance ?? data.opening_balance ?? 0));
@@ -155,6 +179,7 @@ function SupplierLedgerContent() {
             } catch (err) {
                 console.error(err);
                 setTransactions([]);
+                setLedgerSupplier(null);
                 setOpeningBalance(0);
                 setClosingBalance(0);
             } finally {
@@ -178,27 +203,29 @@ function SupplierLedgerContent() {
     const columns = useMemo<ColumnDef<LedgerRow, unknown>[]>(() => [
         columnHelper.accessor('created_at', {
             header: copy.columns.dateTime,
-            cell: (info) => {
-                const row = info.row.original;
-                if (row.rowType === 'opening') {
-                    return (
-                        <span className="text-sm font-bold text-gray-800">
-                            {formatOpeningDate(info.getValue(), locale)}
-                        </span>
-                    );
-                }
-                return <span className="text-sm text-gray-700">{formatDateTime(info.getValue(), locale)}</span>;
-            },
+            cell: (info) =>
+                info.row.original.rowType === 'opening'
+                    ? formatOpeningDate(info.getValue(), locale)
+                    : formatDateTime(info.getValue(), locale),
+            footer: () => copy.columnTotal,
             sortingFn: 'datetime',
             size: 150,
         }),
         columnHelper.accessor('payment_number', {
             header: copy.columns.serial,
             cell: (info) => {
-                if (info.row.original.rowType === 'opening') return <span className="text-gray-300">—</span>;
-                return (
-                    <span className="text-xs font-mono font-bold text-gray-700">{info.getValue() || '—'}</span>
-                );
+                const row = info.row.original;
+                if (row.rowType === 'opening') return dash;
+                const serial = info.getValue();
+                if (!serial) return dash;
+                if (row.source_type === 'purchase' && row.source_id) {
+                    return (
+                        <Link href={`/purchases/${row.source_id}`} className="text-blue-600 hover:underline">
+                            {serial}
+                        </Link>
+                    );
+                }
+                return serial;
             },
             size: 110,
         }),
@@ -228,107 +255,60 @@ function SupplierLedgerContent() {
         columnHelper.accessor((row) => row.creator?.name ?? '—', {
             id: 'recordedBy',
             header: copy.columns.recordedBy,
-            cell: (info) => {
-                if (info.row.original.rowType === 'opening') return <span className="text-gray-300">—</span>;
-                return <span className="text-sm text-gray-600">{info.getValue()}</span>;
-            },
+            cell: (info) => (info.row.original.rowType === 'opening' ? dash : info.getValue()),
             size: 140,
+            meta: { hideOnMobile: true },
         }),
-        columnHelper.accessor('amount', {
-            header: copy.columns.amount,
-            cell: (info) => {
-                const row = info.row.original;
-                if (row.rowType === 'opening') return <span className="text-gray-300">—</span>;
-                const isPayout = row.type === 'PAYOUT';
-                const isPayment = row.type === 'PAYMENT';
-                const amt = Number(info.getValue() ?? 0);
-                const signed = isPayout || row.type === 'CREDIT_PURCHASE';
-                return (
-                    <span className={`text-sm font-bold ${
-                        isPayout || row.type === 'CREDIT_PURCHASE'
-                            ? 'text-danger'
-                            : isPayment
-                              ? 'text-emerald-600'
-                              : 'text-gray-700'
-                    }`}>
-                        {signed && amt > 0 ? '+' : isPayment ? '−' : ''}{formatBDT(amt)}
-                    </span>
-                );
-            },
+        columnHelper.accessor('purchase_total', {
+            header: copy.columns.purchaseTotal,
+            cell: (info) => (info.row.original.rowType === 'opening' ? dash : moneyCell(info.getValue(), locale)),
+            footer: ({ table }) => moneyCell(sumField(transactionRowsFromTable(table), 'purchase_total'), locale),
             size: 120,
+            meta: { align: 'end', hideOnMobile: true },
+        }),
+        columnHelper.accessor('amount_paid', {
+            header: copy.columns.paid,
+            cell: (info) => (info.row.original.rowType === 'opening' ? dash : moneyCell(info.getValue(), locale)),
+            footer: ({ table }) => moneyCell(sumField(transactionRowsFromTable(table), 'amount_paid'), locale),
+            size: 110,
+            meta: { align: 'end', hideOnMobile: true },
+        }),
+        columnHelper.accessor('debit', {
+            id: 'due',
+            header: copy.columns.due,
+            cell: (info) => (info.row.original.rowType === 'opening' ? dash : moneyCell(info.getValue(), locale, 'text-danger')),
+            footer: ({ table }) => moneyCell(sumField(transactionRowsFromTable(table), 'debit'), locale, 'text-danger'),
+            size: 110,
+            meta: { align: 'end' },
+        }),
+        columnHelper.accessor('credit', {
+            id: 'payment',
+            header: copy.columns.payment,
+            cell: (info) => (info.row.original.rowType === 'opening' ? dash : moneyCell(info.getValue(), locale, 'text-emerald-600')),
+            footer: ({ table }) => moneyCell(sumField(transactionRowsFromTable(table), 'credit'), locale, 'text-emerald-600'),
+            size: 110,
+            meta: { align: 'end' },
         }),
         columnHelper.accessor('notes', {
             header: copy.columns.notes,
-            cell: (info) => {
-                if (info.row.original.rowType === 'opening') return <span className="text-gray-300">—</span>;
-                return <span className="text-sm text-gray-500 line-clamp-2">{info.getValue() || '—'}</span>;
-            },
+            cell: (info) => (info.row.original.rowType === 'opening' ? dash : info.getValue() || dash),
             size: 180,
-        }),
-        columnHelper.display({
-            id: 'status',
-            header: copy.columns.status,
-            cell: (info) => {
-                const row = info.row.original;
-                if (row.rowType === 'opening') return <span className="text-gray-300">—</span>;
-
-                if (row.bill) {
-                    const tone =
-                        row.bill.payment_status === 'PAID'
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : row.bill.payment_status === 'PARTIAL'
-                              ? 'bg-amber-50 text-amber-700'
-                              : 'bg-danger-light text-danger-text';
-                    return (
-                        <div className="text-xs">
-                            <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${tone}`}>
-                                {copy.billStatuses[row.bill.payment_status]}
-                            </span>
-                            {row.bill.payment_status !== 'PAID' && (
-                                <div className="text-gray-400 mt-0.5">
-                                    {copy.balanceDue}: {formatBDT(row.bill.balance_due)}
-                                </div>
-                            )}
-                        </div>
-                    );
-                }
-
-                if (row.type === 'PAYMENT') {
-                    if (row.allocations && row.allocations.length > 0) {
-                        return (
-                            <div className="text-xs text-gray-500">
-                                {copy.appliedTo}: {row.allocations.map((a) => a.purchaseNumber).join(', ')}
-                            </div>
-                        );
-                    }
-                    if ((row.unapplied_amount ?? 0) > 0.005) {
-                        return (
-                            <span className="inline-block px-1.5 py-0.5 rounded font-bold text-xs bg-orange-50 text-orange-700">
-                                {copy.unapplied}: {formatBDT(row.unapplied_amount ?? 0)}
-                            </span>
-                        );
-                    }
-                }
-
-                return <span className="text-gray-300">—</span>;
-            },
-            size: 160,
+            meta: { hideOnMobile: true },
         }),
         columnHelper.accessor('balance_after', {
             header: copy.columns.balance,
             cell: (info) => {
                 const v = Number(info.getValue());
-                return (
-                    <span className={`text-sm font-bold ${v > 0 ? 'text-danger' : v < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
-                        {formatBDT(v)}
-                    </span>
-                );
+                return <span className={balanceClass(v)}>{formatBDT(v, { locale })}</span>;
             },
+            footer: () => <span className={balanceClass(closingBalance)}>{formatBDT(closingBalance, { locale })}</span>,
             size: 120,
+            meta: { align: 'end' },
         }),
-    ], [copy, locale]);
+    ], [copy, locale, closingBalance]);
 
-    const selectedSupplier = suppliers.find((s) => s.id === supplierId) ?? null;
+    const selectedSupplier = suppliers.find((s) => s.id === supplierId)
+        ?? (ledgerSupplier?.id === supplierId ? ledgerSupplier : null);
 
     return (
         <PageShell>

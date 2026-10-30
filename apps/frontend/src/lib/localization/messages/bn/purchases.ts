@@ -204,6 +204,7 @@ export const purchasesMessages = {
             tableTitle: "সরবরাহকারী",
             emptyMessage: "এখনও কোনো সরবরাহকারী নেই। প্রথম সরবরাহকারী যোগ করুন।",
             searchPlaceholder: "নাম, কোড, ফোন বা ইমেইল দিয়ে অনুসন্ধান...",
+            viewLedger: "সরবরাহকারী লেজার দেখুন",
             columns: {
                 code: "কোড",
                 supplier: "সরবরাহকারী",

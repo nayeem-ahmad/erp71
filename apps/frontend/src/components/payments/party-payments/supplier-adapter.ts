@@ -1,6 +1,7 @@
 import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { routes } from '@/lib/routes';
 import { printSupplierPaymentReceipt } from '@/lib/supplier-payment-receipt';
 import type { OpenBill, PartyOption, PartyPayment, PartyPaymentsAdapter } from './types';
 
@@ -72,7 +73,7 @@ export const supplierPaymentsAdapter: PartyPaymentsAdapter = {
     // A supplier PAYMENT is money we paid; a PAYOUT is money they sent back.
     directionOf: (payment) => (payment.type === 'PAYOUT' ? 'receive' : 'pay'),
     partyOf: (payment) => payment.supplier ?? null,
-    ledgerHref: (partyId) => `/purchases/supplier-ledger?supplierId=${encodeURIComponent(partyId)}`,
+    ledgerHref: (partyId) => routes.purchases.supplierLedgerFor(partyId),
     listParties: async () => {
         const rows = await api.getSuppliers();
         return (Array.isArray(rows) ? rows : []) as PartyOption[];
