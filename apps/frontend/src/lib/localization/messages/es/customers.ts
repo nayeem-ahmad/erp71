@@ -12,6 +12,7 @@ export const customersMessages = {
         "evaluateFailed": "No se pudieron evaluar los segmentos.",
         "emptyMessage": "No se encontraron clientes",
         "searchPlaceholder": "Buscar por código, cliente, grupo, territorio o segmento...",
+        "viewLedger": "Ver el mayor del cliente",
         "columns": {
             "code": "Código",
             "customer": "Cliente",

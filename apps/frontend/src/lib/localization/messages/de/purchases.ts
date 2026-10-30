@@ -204,6 +204,7 @@ export const purchasesMessages = {
         tableTitle: "Lieferanten",
         emptyMessage: "Noch keine Lieferanten. Legen Sie Ihren ersten Lieferanten an.",
         searchPlaceholder: "Nach Name, Nummer, Telefon oder E-Mail suchen...",
+        viewLedger: "Lieferantenkonto anzeigen",
         columns: {
             code: "Code",
             supplier: "Lieferant",

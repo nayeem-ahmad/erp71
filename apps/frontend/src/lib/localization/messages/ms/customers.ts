@@ -12,6 +12,7 @@ export const customersMessages = {
             evaluateFailed: "Gagal menilai segmen.",
             emptyMessage: "Tiada pelanggan dijumpai",
             searchPlaceholder: "Cari mengikut kod, pelanggan, kumpulan, wilayah, atau segmen...",
+            viewLedger: "Lihat lejar pelanggan",
             columns: {
                 code: "Kod",
                 customer: "Pelanggan",

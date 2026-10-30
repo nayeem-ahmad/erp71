@@ -1718,6 +1718,8 @@ export const coreMessages = {
         noTransactions: 'اس مدت میں کوئی لین دین نہیں',
         directionPay: 'سپلائر کو ادا کریں',
         directionReceive: 'سپلائر سے وصول کریں',
+        directionPurchase: 'خرید',
+        columnTotal: 'کل',
         billStatuses: {
             UNPAID: 'غیر ادا شدہ',
             PARTIAL: 'جزوی ادا شدہ',
@@ -1731,10 +1733,12 @@ export const coreMessages = {
             serial: 'سیریل',
             direction: 'سمت',
             recordedBy: 'درج کرنے والا',
-            amount: 'رقم',
+            purchaseTotal: 'کل خرید',
+            paid: 'ادا شدہ',
+            due: 'واجب',
+            payment: 'ادائیگی',
             notes: 'نوٹس',
             balance: 'بیلنس',
-            status: 'بل کی حیثیت',
         },
     },
     dashboardHome: {

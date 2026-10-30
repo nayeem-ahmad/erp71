@@ -1,6 +1,7 @@
 import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { routes } from '@/lib/routes';
 import { printCustomerPaymentReceipt } from '@/lib/customer-payment-receipt';
 import type { PartyOption, PartyPayment, PartyPaymentsAdapter } from './types';
 
@@ -71,7 +72,7 @@ export const customerPaymentsAdapter: PartyPaymentsAdapter = {
     breadcrumbs: (t, title) => modulePageBreadcrumbs(t.dashboardHome.breadcrumbHome, t.sidebar.modules.sales, title, 'sales'),
     directionOf: (payment) => (payment.type === 'PAYOUT' ? 'pay' : 'receive'),
     partyOf: (payment) => payment.customer ?? null,
-    ledgerHref: (partyId) => `/sales/customer-ledger?customerId=${encodeURIComponent(partyId)}`,
+    ledgerHref: (partyId) => routes.sales.customerLedgerFor(partyId),
     listParties: async () => ((await api.getCustomers()) ?? []) as PartyOption[],
     listPayments: async ({ from, to, partyId, storeId }) => {
         const rows = await api.getCustomerCreditPayments({ from, to, customerId: partyId, storeId });

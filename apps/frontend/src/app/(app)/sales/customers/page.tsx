@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Users, Plus, Eye, Pencil, RefreshCw, Crown, AlertTriangle, UserCheck, Upload } from 'lucide-react';
+import { Users, Plus, Eye, Pencil, BookOpen, RefreshCw, Crown, AlertTriangle, UserCheck, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -16,6 +16,7 @@ import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import { BranchFilter, PageShell, Button, Field, Select, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { useServerList } from '@/hooks/useServerList';
 import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
+import { routes } from '@/lib/routes';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'customer_code', label: 'Customer Code', required: false },
@@ -301,13 +302,18 @@ export default function CustomersPage() {
                 cell: (info) => (
                     <RowActions>
                         <RowActionButton icon={<Eye />} label={t.common.view} href={`/sales/customers/${info.row.original.id}`} />
+                        <RowActionButton
+                            icon={<BookOpen />}
+                            label={t.customers.viewLedger}
+                            href={routes.sales.customerLedgerFor(info.row.original.id)}
+                        />
                         <RowActionButton icon={<Pencil />} label={t.common.edit} onClick={() => openEdit(info.row.original)} />
                     </RowActions>
                 ),
                 enableSorting: false,
                 enableColumnFilter: false,
                 enableResizing: false,
-                size: 90,
+                size: 120,
             }),
         ],
         [t, locale, showCredit],

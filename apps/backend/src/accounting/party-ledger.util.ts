@@ -19,6 +19,7 @@ export interface PartyLedgerRow {
     /** Natural-sign decrease (receipt / payment). */
     credit: number;
     sale_total: number | null;
+    purchase_total: number | null;
     amount_paid: number | null;
     source_type: string | null;
     source_id: string | null;
@@ -96,6 +97,7 @@ export async function buildPartyLedger(
             debit: delta > 0 ? delta : 0,
             credit: delta < 0 ? -delta : 0,
             sale_total: null,
+            purchase_total: null,
             amount_paid: null,
             source_type: line.voucher.source_type ?? null,
             source_id: line.voucher.source_id ?? null,

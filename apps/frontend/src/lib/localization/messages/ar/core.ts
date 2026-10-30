@@ -1718,6 +1718,8 @@ export const coreMessages = {
         noTransactions: 'لا توجد معاملات في هذه الفترة',
         directionPay: 'دفع إلى المورّد',
         directionReceive: 'استلام من المورّد',
+        directionPurchase: 'شراء',
+        columnTotal: 'الإجمالي',
         billStatuses: {
             UNPAID: 'غير مدفوعة',
             PARTIAL: 'مدفوعة جزئيًا',
@@ -1731,10 +1733,12 @@ export const coreMessages = {
             serial: 'التسلسل',
             direction: 'الاتجاه',
             recordedBy: 'سجّلها',
-            amount: 'المبلغ',
+            purchaseTotal: 'إجمالي المشتريات',
+            paid: 'المدفوع',
+            due: 'المستحق',
+            payment: 'الدفعة',
             notes: 'ملاحظات',
             balance: 'الرصيد',
-            status: 'حالة الفاتورة',
         },
     },
     dashboardHome: {
