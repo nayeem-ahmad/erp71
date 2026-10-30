@@ -204,6 +204,7 @@ export const purchasesMessages = {
             tableTitle: 'Pembekal',
             emptyMessage: 'Tiada pembekal lagi. Tambah pembekal pertama anda.',
             searchPlaceholder: 'Cari mengikut nama, kod, telefon, atau e-mel...',
+            viewLedger: 'Lihat lejar pembekal',
             columns: {
                 code: 'Kod',
                 supplier: 'Pembekal',

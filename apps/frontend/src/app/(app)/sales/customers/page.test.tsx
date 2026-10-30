@@ -7,7 +7,7 @@ import { mockBranchScope } from '@/test-utils/branch-scope';
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('next/link', () => {
-    const MockLink = ({ children, href }: any) => <a href={href}>{children}</a>;
+    const MockLink = ({ children, href, ...rest }: any) => <a href={href} {...rest}>{children}</a>;
     MockLink.displayName = 'Link';
     return MockLink;
 });
@@ -333,6 +333,15 @@ describe('CustomersPage — Customer Management', () => {
         await waitFor(() => {
             expect(screen.getAllByRole('button', { name: /^edit$/i })).toHaveLength(mockCustomers.length);
         });
+    });
+
+    it('links each row to that customer\'s ledger, already selected', async () => {
+        render(<CustomersPage />);
+        const row = (await screen.findByText('Alice Smith')).closest('tr')!;
+        expect(within(row).getByRole('link', { name: 'View customer ledger' })).toHaveAttribute(
+            'href',
+            '/sales/customer-ledger?customerId=cust-1',
+        );
     });
 
     it('opens the edit modal prefilled with that customer', async () => {

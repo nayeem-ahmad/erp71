@@ -12,6 +12,7 @@ export const customersMessages = {
         "evaluateFailed": "تعذّر تقييم الشرائح.",
         "emptyMessage": "لم يُعثر على عملاء",
         "searchPlaceholder": "ابحث بالرمز أو العميل أو المجموعة أو المنطقة أو الشريحة...",
+        "viewLedger": "عرض دفتر الزبون",
         "columns": {
             "code": "الرمز",
             "customer": "العميل",

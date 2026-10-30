@@ -7,6 +7,7 @@ function row(partial: Partial<PartyLedgerRow> & Pick<PartyLedgerRow, 'id' | 'typ
         debit: 0,
         credit: 0,
         sale_total: null,
+        purchase_total: null,
         amount_paid: null,
         source_type: null,
         source_id: null,

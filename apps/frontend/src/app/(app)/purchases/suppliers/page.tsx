@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Truck, Plus, Pencil, Trash2, Upload } from 'lucide-react';
+import { Truck, Plus, Pencil, Trash2, Upload, BookOpen } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { RowActions, RowActionButton } from '@/components/table';
 import PageShell from '@/components/ui/compact/PageShell';
@@ -16,6 +16,7 @@ import { formatDate } from '@/lib/format';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
+import { routes } from '@/lib/routes';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 
 const IMPORT_FIELDS: ImportField[] = [
@@ -222,6 +223,11 @@ export default function SuppliersPage() {
                 header: t.suppliers.columns.actions,
                 cell: (info) => (
                     <RowActions>
+                        <RowActionButton
+                            icon={<BookOpen />}
+                            label={t.suppliers.viewLedger}
+                            href={routes.purchases.supplierLedgerFor(info.row.original.id)}
+                        />
                         <RowActionButton icon={<Pencil />} label={t.common.edit} onClick={() => openEdit(info.row.original)} />
                         <RowActionButton
                             icon={<Trash2 />}
@@ -233,7 +239,7 @@ export default function SuppliersPage() {
                 ),
                 enableSorting: false,
                 enableResizing: false,
-                size: 90,
+                size: 120,
             }),
         ],
         [t, locale, branch.canSeeAll, branch.hidden, branchName],

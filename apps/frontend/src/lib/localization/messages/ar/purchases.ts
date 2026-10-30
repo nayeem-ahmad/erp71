@@ -204,6 +204,7 @@ export const purchasesMessages = {
         tableTitle: "المورّدون",
         emptyMessage: "لا يوجد مورّدون بعد. أضف أول مورّد.",
         searchPlaceholder: "ابحث بالاسم أو الرمز أو الهاتف أو البريد...",
+        viewLedger: "عرض دفتر المورّد",
         columns: {
             code: "الرمز",
             supplier: "المورّد",

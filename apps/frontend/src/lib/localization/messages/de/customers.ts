@@ -12,6 +12,7 @@ export const customersMessages = {
         "evaluateFailed": "Segmente konnten nicht ausgewertet werden.",
         "emptyMessage": "Keine Kunden gefunden",
         "searchPlaceholder": "Nach Code, Kunde, Gruppe, Gebiet oder Segment suchen...",
+        "viewLedger": "Kundenkonto anzeigen",
         "columns": {
             "code": "Code",
             "customer": "Kunde",

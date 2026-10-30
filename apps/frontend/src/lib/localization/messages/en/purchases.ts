@@ -204,6 +204,7 @@ export const purchasesMessages = {
         tableTitle: 'Suppliers',
         emptyMessage: 'No suppliers yet. Add your first supplier.',
         searchPlaceholder: 'Search by name, code, phone, or email...',
+        viewLedger: 'View supplier ledger',
         columns: {
             code: 'Code',
             supplier: 'Supplier',

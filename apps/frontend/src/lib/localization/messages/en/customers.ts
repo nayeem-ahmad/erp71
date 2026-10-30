@@ -12,6 +12,7 @@ export const customersMessages = {
         "evaluateFailed": "Failed to evaluate segments.",
         "emptyMessage": "No customers found",
         "searchPlaceholder": "Search by code, customer, group, territory, or segment...",
+        "viewLedger": "View customer ledger",
         "columns": {
             "code": "Code",
             "customer": "Customer",

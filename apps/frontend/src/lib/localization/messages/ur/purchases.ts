@@ -204,6 +204,7 @@ export const purchasesMessages = {
         tableTitle: "سپلائرز",
         emptyMessage: "ابھی کوئی سپلائر نہیں۔ اپنا پہلا سپلائر شامل کریں۔",
         searchPlaceholder: "نام، کوڈ، فون یا ای میل سے تلاش کریں...",
+        viewLedger: "سپلائر کا کھاتہ دیکھیں",
         columns: {
             code: "کوڈ",
             supplier: "سپلائر",
