@@ -31,6 +31,8 @@ export const marketingMessages = {
                 description: "Pengurusan perniagaan semua-dalam-satu — jualan, inventori, perakaunan, kedai dalam talian, dan pembayaran BDT. Mulakan dalam beberapa minit, sama ada kedai, kilang, atau firma perkhidmatan.",
                 startTrial: "Mulakan",
                 tryDemo: "Cuba Demo",
+                whatsappDemo: "Book a 15-min demo on WhatsApp",
+                setupHelp: "Help with setup included",
                 footnote: "Pelan berbayar sahaja · Lengkapkan pembayaran untuk mengaktifkan ruang kerja anda",
             },
             capabilities: {
@@ -186,6 +188,9 @@ export const marketingMessages = {
             ctaButton: "Pilih pelan",
             comingSoon: "Akan datang",
             paidPlansNote: "Pelan berbayar sahaja · Percubaan percuma dan peringkat percuma tidak tersedia buat sementara",
+            planHelpBefore: "Not sure which plan fits your shop? ",
+            planHelpLink: "WhatsApp us",
+            planHelpAfter: " and we'll set it up with you in 15 minutes.",
             premiumComingSoonNote: "Premium akan datang — hubungi sokongan jika anda memerlukan akses awal.",
         },
         contact: {

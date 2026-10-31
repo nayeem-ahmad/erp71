@@ -31,6 +31,8 @@ export const marketingMessages = {
             description: "सब कुछ एक जगह — बिक्री, इन्वेंट्री, लेखांकन, स्टोरफ़्रंट और BDT भुगतान। मिनटों में शुरू करें, चाहे आप दुकान, कारखाना या सेवा फ़र्म चलाते हों।",
             startTrial: "शुरू करें",
             tryDemo: "डेमो आज़माएँ",
+            whatsappDemo: "Book a 15-min demo on WhatsApp",
+            setupHelp: "Help with setup included",
             footnote: "केवल सशुल्क प्लान · अपना वर्कस्पेस सक्रिय करने के लिए चेकआउट पूरा करें",
         },
         capabilities: {
@@ -120,6 +122,9 @@ export const marketingMessages = {
         ctaButton: "प्लान चुनें",
         comingSoon: "जल्द आ रहा है",
         paidPlansNote: "केवल सशुल्क प्लान · मुफ़्त ट्रायल और मुफ़्त स्तर फ़िलहाल उपलब्ध नहीं",
+        planHelpBefore: "Not sure which plan fits your shop? ",
+        planHelpLink: "WhatsApp us",
+        planHelpAfter: " and we'll set it up with you in 15 minutes.",
         premiumComingSoonNote: "Premium जल्द आ रहा है — जल्दी पहुँच चाहिए तो सहायता से संपर्क करें।",
     },
     contact: {

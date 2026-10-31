@@ -31,6 +31,8 @@ export const marketingMessages = {
             description: "Une gestion tout-en-un — ventes, stock, comptabilité, boutique en ligne et paiements en BDT. Opérationnel en quelques minutes, que vous dirigiez un commerce, une usine ou une société de services.",
             startTrial: "Commencer",
             tryDemo: "Essayer la démo",
+            whatsappDemo: "Book a 15-min demo on WhatsApp",
+            setupHelp: "Help with setup included",
             footnote: "Offres payantes uniquement · Finalisez le paiement pour activer votre espace de travail",
         },
         capabilities: {
@@ -120,6 +122,9 @@ export const marketingMessages = {
         ctaButton: "Choisir une offre",
         comingSoon: "Bientôt disponible",
         paidPlansNote: "Offres payantes uniquement · Les essais gratuits et l'offre gratuite sont temporairement indisponibles",
+        planHelpBefore: "Not sure which plan fits your shop? ",
+        planHelpLink: "WhatsApp us",
+        planHelpAfter: " and we'll set it up with you in 15 minutes.",
         premiumComingSoonNote: "L'offre Premium arrive bientôt — contactez l'assistance si vous souhaitez un accès anticipé.",
     },
     contact: {

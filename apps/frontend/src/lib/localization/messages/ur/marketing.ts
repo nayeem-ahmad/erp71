@@ -31,7 +31,9 @@ export const marketingMessages = {
             description: "مکمل کاروباری انتظام — فروخت، انوینٹری، اکاؤنٹنگ، آن لائن دکان اور BDT ادائیگیاں۔ دکان ہو، فیکٹری ہو یا خدمات کا ادارہ — منٹوں میں شروع کریں۔",
             startTrial: "شروع کریں",
             tryDemo: "ڈیمو آزمائیں",
-            footnote: "صرف ادا شدہ پلانز · اپنا ورک اسپیس فعال کرنے کے لیے چیک آؤٹ مکمل کریں",
+            whatsappDemo: "Book a 15-min demo on WhatsApp",
+            setupHelp: "Help with setup included",
+            footnote: "صرف ادا شدہ پلانز · اپنا ورک اسپیস فعال کرنے کے لیے چیک آؤٹ مکمل کریں",
         },
         capabilities: {
             title: "پہلے دن سے آپ کو کیا ملتا ہے",
@@ -120,6 +122,9 @@ export const marketingMessages = {
         ctaButton: "پلان منتخب کریں",
         comingSoon: "جلد آ رہا ہے",
         paidPlansNote: "صرف ادا شدہ پلانز · مفت آزمائش اور مفت درجہ فی الحال دستیاب نہیں",
+        planHelpBefore: "Not sure which plan fits your shop? ",
+        planHelpLink: "WhatsApp us",
+        planHelpAfter: " and we'll set it up with you in 15 minutes.",
         premiumComingSoonNote: "پریمیم جلد آ رہا ہے — جلد رسائی درکار ہو تو سپورٹ سے رابطہ کریں۔",
     },
     contact: {
