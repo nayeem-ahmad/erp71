@@ -13,13 +13,17 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
+import { Meet71InviteService } from './meet71-invite.service';
 import { Meet71Actor, Meet71MembershipService } from './meet71-membership.service';
-import { AddMeet71AllowlistDto, PatchMeet71MemberDto, PatchMeet71RoomDto } from './meet71.dto';
+import { AddMeet71AllowlistDto, InviteMeet71Dto, PatchMeet71MemberDto, PatchMeet71RoomDto } from './meet71.dto';
 
 @Controller('admin/meet71')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
 export class Meet71AdminController {
-    constructor(private membership: Meet71MembershipService) {}
+    constructor(
+        private membership: Meet71MembershipService,
+        private invites: Meet71InviteService,
+    ) {}
 
     @Get()
     list() {
@@ -65,6 +69,16 @@ export class Meet71AdminController {
         @Request() req: { user?: Meet71Actor },
     ) {
         return this.membership.patchRoom(code, dto.createdByEmail, actorFromUser(req.user));
+    }
+
+    @Post('invites')
+    invite(@Body() dto: InviteMeet71Dto, @Request() req: { user?: Meet71Actor }) {
+        return this.invites.invite({
+            email: dto.email,
+            actorEmail: req.user?.email ?? '',
+            resend: dto.resend,
+            unlimited: true,
+        });
     }
 }
 

@@ -7,6 +7,7 @@ import { TransformInterceptor } from '../common/transform.interceptor';
 import { HttpExceptionFilter } from '../common/http-exception.filter';
 import { DatabaseService } from '../database/database.service';
 import { Meet71InternalController } from './meet71-internal.controller';
+import { Meet71InviteService } from './meet71-invite.service';
 import { Meet71MembershipService } from './meet71-membership.service';
 import { Meet71SsoService } from './meet71-sso.service';
 import { Meet71ServiceGuard } from './meet71-service.guard';
@@ -41,6 +42,7 @@ describe('Meet71InternalController', () => {
         patchRoom: jest.fn(),
     };
     const sso = { mint: jest.fn(), exchange: jest.fn() };
+    const invites = { invite: jest.fn() };
     const db = {
         meet71Member: { create: jest.fn(), findUnique: jest.fn() },
         meet71Room: {
@@ -63,6 +65,7 @@ describe('Meet71InternalController', () => {
                 Meet71ServiceGuard,
                 { provide: Meet71MembershipService, useValue: membership },
                 { provide: Meet71SsoService, useValue: sso },
+                { provide: Meet71InviteService, useValue: invites },
                 { provide: DatabaseService, useValue: db },
             ],
         }).compile();

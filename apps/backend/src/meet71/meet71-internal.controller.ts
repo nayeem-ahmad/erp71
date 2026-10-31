@@ -17,6 +17,7 @@ import {
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { DatabaseService } from '../database/database.service';
+import { Meet71InviteService } from './meet71-invite.service';
 import { Meet71Actor, Meet71MembershipService } from './meet71-membership.service';
 import { Meet71ServiceGuard } from './meet71-service.guard';
 import { Meet71SsoService } from './meet71-sso.service';
@@ -25,6 +26,7 @@ import {
     CreateMeet71RoomDto,
     ExchangeMeet71SsoDto,
     GoogleUpsertDto,
+    InternalInviteMeet71Dto,
     PatchMeet71MemberDto,
     PatchMeet71RoomDto,
 } from './meet71.dto';
@@ -36,6 +38,7 @@ export class Meet71InternalController {
     constructor(
         private membership: Meet71MembershipService,
         private sso: Meet71SsoService,
+        private invites: Meet71InviteService,
         private db: DatabaseService,
     ) {}
 
@@ -129,6 +132,15 @@ export class Meet71InternalController {
     @HttpCode(HttpStatus.NO_CONTENT)
     removeDenial(@Param('email') email: string, @Headers('x-meet71-actor-email') actorEmail?: string) {
         return this.membership.removeDenial(email, actorFromHeader(actorEmail));
+    }
+
+    @Post('invites')
+    invite(@Body() dto: InternalInviteMeet71Dto) {
+        return this.invites.invite({
+            email: dto.email,
+            actorEmail: dto.actorEmail,
+            resend: dto.resend,
+        });
     }
 }
 

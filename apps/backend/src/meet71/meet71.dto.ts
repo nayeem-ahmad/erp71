@@ -73,3 +73,17 @@ export class PatchMeet71MemberDto {
     @IsBoolean()
     isAdmin?: boolean;
 }
+
+export class InviteMeet71Dto {
+    @IsEmail()
+    email: string;
+
+    @IsOptional()
+    @IsBoolean()
+    resend?: boolean;
+}
+
+export class InternalInviteMeet71Dto extends InviteMeet71Dto {
+    @IsEmail()
+    actorEmail: string;
+}

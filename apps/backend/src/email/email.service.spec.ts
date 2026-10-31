@@ -191,5 +191,20 @@ describe('EmailService', () => {
 
             expect(credits.consume).not.toHaveBeenCalled();
         });
+
+        it('sendMeet71Invite is unbilled platform mail', async () => {
+            process.env.MEET71_PUBLIC_URL = 'https://meet.erp71.com';
+
+            await service.sendMeet71Invite('new@erp71.com', 'Actor <script>');
+
+            expect(credits.consume).not.toHaveBeenCalled();
+            expect(tenantIdentity.resolveEmailIdentity).toHaveBeenCalledWith(undefined);
+            const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+            expect(body.subject).toBe('You can now use Meet71');
+            expect(body.htmlContent).toContain('https://meet.erp71.com');
+            expect(body.htmlContent).toContain('You can use Meet71');
+            expect(body.htmlContent).toContain('Actor &lt;script&gt;');
+            expect(body.htmlContent).not.toContain('<script>');
+        });
     });
 });

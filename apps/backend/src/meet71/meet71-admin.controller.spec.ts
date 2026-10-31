@@ -9,6 +9,7 @@ import { HttpExceptionFilter } from '../common/http-exception.filter';
 import { DatabaseService } from '../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { Meet71AdminController } from './meet71-admin.controller';
+import { Meet71InviteService } from './meet71-invite.service';
 import { Meet71MembershipService } from './meet71-membership.service';
 
 const ADMIN = {
@@ -74,6 +75,7 @@ describe('Meet71AdminController', () => {
             providers: [
                 PlatformAdminGuard,
                 Meet71MembershipService,
+                { provide: Meet71InviteService, useValue: { invite: jest.fn() } },
                 { provide: DatabaseService, useValue: db },
                 { provide: AuditService, useValue: audit },
             ],
