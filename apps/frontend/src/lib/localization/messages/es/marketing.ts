@@ -31,6 +31,8 @@ export const marketingMessages = {
             description: "Gestión todo en uno: ventas, inventario, contabilidad, tienda en línea y pagos. Empiece en minutos, ya tenga un comercio, una fábrica o una empresa de servicios.",
             startTrial: "Empezar",
             tryDemo: "Probar la demo",
+            whatsappDemo: "Book a 15-min demo on WhatsApp",
+            setupHelp: "Help with setup included",
             footnote: "Solo planes de pago · Complete el pago para activar su espacio de trabajo",
         },
         capabilities: {
@@ -120,6 +122,9 @@ export const marketingMessages = {
         ctaButton: "Elegir un plan",
         comingSoon: "Próximamente",
         paidPlansNote: "Solo planes de pago · Las pruebas gratuitas y el plan gratuito no están disponibles temporalmente",
+        planHelpBefore: "Not sure which plan fits your shop? ",
+        planHelpLink: "WhatsApp us",
+        planHelpAfter: " and we'll set it up with you in 15 minutes.",
         premiumComingSoonNote: "Premium llegará pronto; contacte con soporte si necesita acceso anticipado.",
     },
     contact: {

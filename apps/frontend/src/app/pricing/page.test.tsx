@@ -61,6 +61,8 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+import { MARKETING_WHATSAPP_LINKS } from '@/lib/marketing/whatsapp';
+
 import PricingPage from './PricingClient';
 
 beforeEach(() => {
@@ -284,6 +286,15 @@ describe('PricingPage', () => {
     it('renders the footer brand', () => {
         render(<PricingPage />);
         expect(screen.getAllByAltText('ERP71').length).toBeGreaterThan(0);
+    });
+
+    it('offers WhatsApp help under the plan cards', () => {
+        render(<PricingPage />);
+        const link = screen.getByRole('link', { name: 'WhatsApp us' });
+        expect(link).toHaveAttribute('href', MARKETING_WHATSAPP_LINKS.pricing);
+        expect(link).toHaveAttribute('target', '_blank');
+        expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+        expect(screen.getByText(/Not sure which plan fits your shop\?/)).toBeInTheDocument();
     });
 
     it('renders the paid-plans-only note under plan cards', () => {

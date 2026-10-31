@@ -8,6 +8,7 @@ import { formatBDT } from '@/lib/format';
 import { CheckCircle2, Minus, ArrowRight, ChevronDown, ChevronUp, Sparkles, Upload } from 'lucide-react';
 import MarketingFooter from '@/components/marketing/MarketingFooter';
 import MarketingNav from '@/components/marketing/MarketingNav';
+import PricingPlanHelp from '@/components/marketing/PricingPlanHelp';
 import {
     buildAccountingEditionFromApi,
     buildMarketingPlansFromApi,
@@ -236,7 +237,9 @@ export default function PricingClient() {
                     })}
                 </div>
 
-                <p className="text-center text-sm text-gray-400 mt-8">
+                <PricingPlanHelp />
+
+                <p className="text-center text-sm text-gray-400 mt-4">
                     {m.paidPlansNote}
                 </p>
             </section>

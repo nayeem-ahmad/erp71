@@ -31,6 +31,8 @@ export const marketingMessages = {
             description: 'All-in-one business management — sales, inventory, accounting, storefront and payments. Go live in minutes, whether you run a shop, factory, or service firm.',
             startTrial: 'Get started',
             tryDemo: 'Try Demo',
+            whatsappDemo: 'Book a 15-min demo on WhatsApp',
+            setupHelp: 'Help with setup included',
             footnote: 'Paid plans only · Complete checkout to activate your workspace',
         },
         capabilities: {
@@ -120,6 +122,9 @@ export const marketingMessages = {
         ctaButton: 'Choose a plan',
         comingSoon: 'Coming soon',
         paidPlansNote: 'Paid plans only · Free trials and the free tier are temporarily unavailable',
+        planHelpBefore: 'Not sure which plan fits your shop? ',
+        planHelpLink: 'WhatsApp us',
+        planHelpAfter: " and we'll set it up with you in 15 minutes.",
         premiumComingSoonNote: 'Premium is coming soon — contact support if you need early access.',
     },
     contact: {
