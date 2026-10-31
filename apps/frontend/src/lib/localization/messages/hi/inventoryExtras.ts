@@ -411,6 +411,8 @@ export const inventoryExtrasMessages = {
                 "group": "समूह",
                 "brand": "ब्रांड",
                 "avgUnitCost": "औसत इकाई लागत",
+                "lastPurchasePrice": "अंतिम खरीद मूल्य",
+                "salesPrice": "विक्रय मूल्य",
                 "costBasis": "लागत आधार",
                 "totalQuantity": "कुल मात्रा",
                 "totalValue": "स्टॉक मूल्य"

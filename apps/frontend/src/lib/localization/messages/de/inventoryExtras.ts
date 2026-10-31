@@ -411,6 +411,8 @@ export const inventoryExtrasMessages = {
                 "group": "Gruppe",
                 "brand": "Marke",
                 "avgUnitCost": "Ø Stückkosten",
+                "lastPurchasePrice": "Letzter Einkaufspreis",
+                "salesPrice": "Verkaufspreis",
                 "costBasis": "Kostenbasis",
                 "totalQuantity": "Gesamtmenge",
                 "totalValue": "Bestandswert"

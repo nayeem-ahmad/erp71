@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
+import { PurchaseStatus } from '../purchases/purchase-status';
 import { referenceKey, resolveMovementReferences } from './movement-reference.util';
 import {
     GetInventoryValuationDto,
@@ -215,6 +216,12 @@ export class InventoryReportsService {
      * products.service.ts stamped the *selling* price there, so folding the
      * history in would drag averages toward retail. Opening stock entered since
      * carries a real cost, and reaches this report through the pool instead.
+     *
+     * Two extra figures sit beside that cost, and neither of them is it.
+     * `product.sellingPrice` is `Product.price` — the catalogue price POS,
+     * sales entry and the valuation report already sell at. `lastPurchasePrice`
+     * is the supplier's unit price on the newest posted purchase bill for the
+     * product (see getLastPurchasePrices), or null when there is no such bill.
      */
     async getStockOnHand(tenantId: string, query: GetStockOnHandDto) {
         const warehouses = await this.db.warehouse.findMany({
@@ -298,10 +305,12 @@ export class InventoryReportsService {
             orderBy: { name: 'asc' },
         });
 
-        const [poolCostByProduct, movementCostByProduct, latestCostByProduct] = await Promise.all([
+        const productIds = products.map((product) => product.id);
+        const [poolCostByProduct, movementCostByProduct, latestCostByProduct, lastPurchaseByProduct] = await Promise.all([
             this.getPoolCosts(tenantId),
             this.getWeightedAveragePurchaseCosts(tenantId, query),
             this.getLatestRecordedCosts(tenantId),
+            this.getLastPurchasePrices(tenantId, productIds, query),
         ]);
 
         const rows = products
@@ -317,6 +326,7 @@ export class InventoryReportsService {
                 const latestCost = latestCostByProduct.get(product.id);
                 const unitCost = averageCost ?? latestCost ?? null;
                 const costBasis = averageCost != null ? 'WEIGHTED_AVERAGE' : latestCost != null ? 'LATEST_COST' : 'UNCOSTED';
+                const lastPurchasePrice = lastPurchaseByProduct.get(product.id) ?? null;
 
                 return {
                     product: {
@@ -332,6 +342,7 @@ export class InventoryReportsService {
                     quantityByWarehouse,
                     totalQuantity,
                     averageUnitCost: unitCost,
+                    lastPurchasePrice,
                     costBasis,
                     // Value follows quantity column for column: the per-warehouse
                     // values below always add up to totalStockValue exactly.
@@ -421,6 +432,74 @@ export class InventoryReportsService {
             costs.set(row.product_id, cost / quantity);
         }
         return costs;
+    }
+
+    /**
+     * Supplier unit price on each product's newest posted purchase bill.
+     *
+     * The bill is the goods receipt in this model: recording a purchase writes
+     * the `PURCHASE_RECEIPT` movement, and `PurchaseItem.unit_cost` is the
+     * supplier's price. The movement's own `unit_cost` is the landed figure
+     * after freight allocation, which is a cost basis, not a purchase price.
+     * A received purchase order that never became a bill has no line here —
+     * its price lives only on `PurchaseOrderItem`, and that document does not
+     * record which warehouse took the goods.
+     *
+     * "Newest" is `purchase_date`, then `created_at`, then the line id so two
+     * bills on the same day resolve the same way every time. Cancelled bills
+     * are out, matching `ACTIVE_PURCHASE`. One query for the whole catalogue:
+     * a lookup per product is what turns this report into a timeout.
+     *
+     * Branch and warehouse follow the quantities above. The line's warehouse
+     * wins over the bill's (`null` means the bill's warehouse). A bill that
+     * never recorded either still belongs to its branch via `store_id`, so a
+     * branch filter does not blank those prices out. Neither filter set means
+     * the tenant-wide latest bill.
+     */
+    private async getLastPurchasePrices(tenantId: string, productIds: string[], query: GetStockOnHandDto) {
+        const prices = new Map<string, number>();
+        if (productIds.length === 0) return prices;
+
+        const warehouseFilter = query.warehouseId
+            ? Prisma.sql`AND COALESCE(pi.warehouse_id, p.warehouse_id) = ${query.warehouseId}`
+            : Prisma.empty;
+
+        // Same branch the stock columns already count: goods received into one
+        // of its warehouses. A bill with no warehouse at all is still that
+        // branch's purchase, so it stays in when only the branch is set.
+        const storeFilter = query.storeId
+            ? Prisma.sql`AND (
+                COALESCE(pi.warehouse_id, p.warehouse_id) IN (
+                    SELECT id FROM "Warehouse" WHERE tenant_id = ${tenantId} AND store_id = ${query.storeId}
+                )
+                OR (
+                    pi.warehouse_id IS NULL
+                    AND p.warehouse_id IS NULL
+                    AND p.store_id = ${query.storeId}
+                )
+            )`
+            : Prisma.empty;
+
+        const rows = await this.db.$queryRaw<{ product_id: string; unit_cost: number | null }[]>`
+            SELECT DISTINCT ON (pi.product_id)
+                pi.product_id,
+                pi.unit_cost::float8 AS unit_cost
+            FROM "PurchaseItem" pi
+            INNER JOIN "Purchase" p ON p.id = pi.purchase_id
+            WHERE p.tenant_id = ${tenantId}
+              AND p.status <> ${PurchaseStatus.CANCELLED}
+              AND pi.product_id IN (${Prisma.join(productIds)})
+              ${warehouseFilter}
+              ${storeFilter}
+            ORDER BY pi.product_id, p.purchase_date DESC, p.created_at DESC, pi.id DESC
+        `;
+
+        for (const row of rows) {
+            const unitCost = Number(row.unit_cost);
+            if (!Number.isFinite(unitCost)) continue;
+            prices.set(row.product_id, unitCost);
+        }
+        return prices;
     }
 
     /** The weighted-average pool per product — what a sale of it today would be costed at. */
