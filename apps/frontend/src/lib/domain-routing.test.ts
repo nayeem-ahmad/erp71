@@ -53,6 +53,11 @@ describe('isAppOnlyPath', () => {
         }
     });
 
+    it('claims the Meet71 bounce, which reads the JWT from this origin', () => {
+        expect(isAppOnlyPath('/meet71/sso')).toBe(true);
+        expect(isAppOnlyPath('/meet71')).toBe(true);
+    });
+
     it('leaves the marketing and public pages alone', () => {
         for (const path of ['/', '/pricing', '/blog', '/blog/some-post', '/contact', '/terms']) {
             expect(isAppOnlyPath(path)).toBe(false);

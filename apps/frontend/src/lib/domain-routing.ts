@@ -59,8 +59,9 @@ export type HostRoute =
  * The `(app)` route group — every signed-in page — plus the auth flows, which
  * end by writing credentials into the origin's storage and so must run on the
  * origin that will read them back. `/demo` is in the list for the same reason:
- * it signs the visitor into a sandbox tenant on arrival, and `/w/*` because it
- * reads the session to pick a workspace before forwarding into the app.
+ * it signs the visitor into a sandbox tenant on arrival, `/meet71/*` because
+ * the bounce page reads the JWT from this origin's localStorage, and `/w/*`
+ * because it reads the session to pick a workspace before forwarding into the app.
  *
  * Deliberately absent: `/store/*` (a shop's public storefront), `/q/*` and
  * `/s/*` (the quotation shortener) and `/r/*` (referral links, which forward to
@@ -101,6 +102,8 @@ const APP_ONLY_PREFIXES = [
     '/demo',
     '/forgot-password',
     '/login',
+    // Meet71 SSO bounce — reads the JWT from this origin's localStorage.
+    '/meet71',
     '/reset-password',
     '/select-account',
     '/signup',

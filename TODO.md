@@ -2122,6 +2122,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Meet71 SSO bounce page on app.erp71.com** — done 2026-11-01. Public `/meet71/sso` reads the JWT, mints via a dedicated helper (no `x-tenant-id`, never `handleExpiredSession`), and redirects only to an origin-checked `/api/auth/erp71/callback` or the hardcoded Meet71 origin. Login prefers `?redirect=/meet71/sso` over admin/onboarding. CSP `frame-ancestors 'self'`. `NEXT_PUBLIC_MEET71_ORIGIN` baked at image build.
+
 - [x] **Meet71 SSO mint HTTP, internal API, service guard, and Hermes deny** — done 2026-11-01. `POST /meet71/sso/code` (JwtAuthGuard, `@AllowWhenSuspended`, password-change allowlist, `@ThrottleAccount` 20/min). Internal `exchange` / `google-upsert` / read-only `GET membership` / rooms GET-POST-PATCH behind `Meet71ServiceGuard` (sha256 then timingSafeEqual, dual-accept previous secret) and `@SkipThrottle()`. In-repo Caddyfile 404s `/api/v1/internal/*` on `app.erp71.com` and `api.erp71.com` (api site-level proxy wrapped in `handle`). Runbook Hermes steps. Env: `MEET71_ERP71_SECRET`, `MEET71_ERP71_SECRET_PREVIOUS`, `MEET71_RETURN_ORIGINS`, `MEET71_PUBLIC_URL`.
 
 - [x] **Meet71 SSO mint, atomic exchange, sweeper** — done 2026-11-01. `Meet71SsoService` mints 60s hashed one-time codes, consumes them with compare-and-set PKCE+return_url SQL, and sweeps expired/used rows every 5 minutes (`meet71.sso-sweep`). Deny after consume still returns `MEET71_INVALID_CODE`. Six mocked-Prisma cases in `meet71-sso.service.spec.ts`; cron registry length 28.

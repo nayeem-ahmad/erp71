@@ -97,4 +97,14 @@ describe('middleware', () => {
             expect(response.headers.get('x-middleware-rewrite')).toBeNull();
         }
     });
+
+    it('sets frame-ancestors self on the Meet71 bounce page', () => {
+        const response = middleware(request('localhost:3000', '/meet71/sso'));
+        expect(response.headers.get('Content-Security-Policy')).toBe("frame-ancestors 'self'");
+    });
+
+    it('does not set frame-ancestors on other pages', () => {
+        const response = middleware(request('localhost:3000', '/login'));
+        expect(response.headers.get('Content-Security-Policy')).toBeNull();
+    });
 });

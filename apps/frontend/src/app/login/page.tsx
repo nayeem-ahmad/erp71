@@ -43,6 +43,7 @@ function LoginPageContent() {
     // until then a submit would natively reload the page. See useHydrated.
     const hydrated = useHydrated();
     const postAuthPath = safeAppPath(searchParams.get('redirect'), routes.home);
+    const preferMeet71Sso = postAuthPath === '/meet71/sso';
     // A workspace named in the URL — set by `/w/<slug>` links, and by anything
     // that wants a shop owner with several shops to land in a specific one.
     const workspaceSlug = normalizeWorkspaceSlug(searchParams.get('workspace'));
@@ -78,6 +79,11 @@ function LoginPageContent() {
             if (postAuthPath !== routes.home) params.set('redirect', postAuthPath);
             const query = params.toString();
             return query ? `${routes.selectAccount}?${query}` : routes.selectAccount;
+        }
+        // Meet71 bounce: once tokens are stored, go back to mint rather than
+        // the admin console, referrals portal, or onboarding wizard.
+        if (preferMeet71Sso) {
+            return postAuthPath;
         }
         if (redirectTo === routes.home) {
             return postAuthPath;
@@ -178,7 +184,8 @@ function LoginPageContent() {
             const { redirectTo } = await storeAuthResponse(authRes, { workspaceSlug });
             // A first-time Google account has no workspace yet — the wizard
             // collects the organization details a password signup asks for upfront.
-            router.push(authRes?.requires_workspace ? routes.onboarding : resolveDestination(redirectTo));
+            // Meet71 SSO is an exception: finish the bounce before onboarding.
+            router.push(resolveDestination(authRes?.requires_workspace ? routes.onboarding : redirectTo));
         } catch (err: any) {
             setError(err.message || t.auth.login.googleFailed);
         } finally {
@@ -196,7 +203,7 @@ function LoginPageContent() {
             return;
         }
         const { redirectTo } = await storeAuthResponse(authRes, { workspaceSlug });
-        router.push(authRes?.requires_workspace ? routes.onboarding : resolveDestination(redirectTo));
+        router.push(resolveDestination(authRes?.requires_workspace ? routes.onboarding : redirectTo));
     };
 
     const handleDemoLogin = async () => {
