@@ -206,5 +206,16 @@ describe('EmailService', () => {
             expect(body.htmlContent).toContain('Actor &lt;script&gt;');
             expect(body.htmlContent).not.toContain('<script>');
         });
+
+        it('sendMeet71Invite throws on transport failure', async () => {
+            (global.fetch as jest.Mock).mockResolvedValue({
+                ok: false,
+                status: 500,
+                text: async () => 'boom',
+            });
+
+            await expect(service.sendMeet71Invite('new@erp71.com', 'Actor')).rejects.toThrow('Brevo API 500');
+            expect(credits.consume).not.toHaveBeenCalled();
+        });
     });
 });

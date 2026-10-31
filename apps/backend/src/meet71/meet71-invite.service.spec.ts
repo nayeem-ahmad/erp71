@@ -241,4 +241,34 @@ describe('Meet71InviteService', () => {
         expect(email.sendMeet71Invite).toHaveBeenCalledWith('new@erp71.com', 'Actor');
         expect(actor.invites_used).toBe(3);
     });
+
+    it('mail failure returns emailSent false with member still inserted', async () => {
+        email.sendMeet71Invite.mockRejectedValue(new Error('Email is not configured'));
+
+        const result = await service.invite({
+            email: 'new@erp71.com',
+            actorEmail: ACTOR_EMAIL,
+        });
+
+        expect(db.meet71Member.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                email: 'new@erp71.com',
+                can_create_room: false,
+                invite_quota: 0,
+            }),
+        });
+        expect(actor.invites_used).toBe(3);
+        expect(result).toEqual({
+            email: 'new@erp71.com',
+            invitesRemaining: 2,
+            emailSent: false,
+        });
+        expect(audit.log).toHaveBeenCalledWith(
+            'MEET71_INVITE',
+            'Meet71Member',
+            { tenantId: undefined },
+            'new@erp71.com',
+            expect.objectContaining({ emailSent: false }),
+        );
+    });
 });
