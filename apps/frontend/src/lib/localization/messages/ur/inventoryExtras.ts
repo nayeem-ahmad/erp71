@@ -411,6 +411,8 @@ export const inventoryExtrasMessages = {
                 "group": "گروپ",
                 "brand": "برانڈ",
                 "avgUnitCost": "اوسط فی یونٹ لاگت",
+                "lastPurchasePrice": "آخری خریداری قیمت",
+                "salesPrice": "فروخت کی قیمت",
                 "costBasis": "لاگت کی بنیاد",
                 "totalQuantity": "کل مقدار",
                 "totalValue": "اسٹاک مالیت"

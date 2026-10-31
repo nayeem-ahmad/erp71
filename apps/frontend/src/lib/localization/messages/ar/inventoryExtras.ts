@@ -411,6 +411,8 @@ export const inventoryExtrasMessages = {
                 "group": "المجموعة",
                 "brand": "العلامة التجارية",
                 "avgUnitCost": "متوسط تكلفة الوحدة",
+                "lastPurchasePrice": "آخر سعر شراء",
+                "salesPrice": "سعر البيع",
                 "costBasis": "أساس التكلفة",
                 "totalQuantity": "إجمالي الكمية",
                 "totalValue": "قيمة المخزون"
