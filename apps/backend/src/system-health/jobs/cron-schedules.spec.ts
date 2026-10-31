@@ -50,7 +50,7 @@ function scheduledMethods(): ScheduledMethod[] {
             // The decorated method runs to the next line closing a class member.
             const rest = source.slice(match.index! + match[0].length);
             const body = rest.slice(0, rest.search(/^ {4}\}/m));
-            const job = /JOB_NAMES\.([A-Z_]+)/.exec(body)?.[1] as keyof typeof JOB_NAMES | undefined;
+            const job = /JOB_NAMES\.([A-Z0-9_]+)/.exec(body)?.[1] as keyof typeof JOB_NAMES | undefined;
             found.push({
                 file: file.slice(SRC.length + 1),
                 expression: resolveExpression(match[1]),
@@ -74,9 +74,9 @@ describe('scheduled jobs', () => {
     const methods = scheduledMethods();
 
     it('finds every @Cron in the backend', () => {
-        // 23 tracked jobs, plus external sync, the platform ledger sync and the
+        // 24 tracked jobs, plus external sync, the platform ledger sync and the
         // two blog publishers. A new one should land in the table in job-names.ts.
-        expect(methods).toHaveLength(27);
+        expect(methods).toHaveLength(28);
     });
 
     it('runs every @Cron on Bangladesh time', () => {

@@ -2122,6 +2122,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Meet71 SSO mint, atomic exchange, sweeper** — done 2026-11-01. `Meet71SsoService` mints 60s hashed one-time codes, consumes them with compare-and-set PKCE+return_url SQL, and sweeps expired/used rows every 5 minutes (`meet71.sso-sweep`). Deny after consume still returns `MEET71_INVALID_CODE`. Six mocked-Prisma cases in `meet71-sso.service.spec.ts`; cron registry length 28.
+
 - [x] **Meet71 membership matching service** — done 2026-11-01. `Meet71MembershipService` (read-only `evaluate`, deny-wins, `upsertOnSignIn` that never resets invited flags) plus `Meet71Module` (service only, no HTTP). Seven mocked-Prisma cases in `meet71-membership.service.spec.ts`.
 
 - [x] **Meet71 membership tables and bootstrap seed** — done 2026-11-01. Prisma models `Meet71AllowEntry` / `Meet71Member` / `Meet71DenyEntry` / `Meet71SsoCode` / `Meet71Room` plus `User.meet71Members`. Create-only `seedMeet71` inserts `nayeem.ahmad@gmail.com` as admin (unlimited invites, create-room) and standing rooms `otb` / `ishraak` without resetting quota or re-owning rooms on later boots. Wired as `db:seed:meet71` in db-prepare.sh after `db:seed:platform`.
