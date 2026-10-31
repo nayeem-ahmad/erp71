@@ -522,6 +522,7 @@ export const coreMessages = {
             creditTopups: 'شحن الرصيد',
             users: 'مستخدمو المنصة',
             platformStaff: 'الموظفون',
+            meet71: 'Meet71',
             platformAccountingOverview: 'ملخص الدفاتر',
             platformAccountingExpenses: 'مصروفات المنصة',
             platformAccountingLedger: 'دفتر أستاذ المنصة',

@@ -39,6 +39,7 @@ describe('canPlatformRoleOpenPath', () => {
 
     it.each([
         '/admin/users',
+        '/admin/meet71',
         '/admin/tenants/ledger',
         '/admin/tenants/reminders',
         '/admin/tenants/payments',

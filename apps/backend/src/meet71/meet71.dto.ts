@@ -1,4 +1,4 @@
-import { Equals, IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { Equals, IsBoolean, IsEmail, IsInt, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class MintMeet71SsoCodeDto {
     @IsString()
@@ -52,4 +52,24 @@ export class CreateMeet71RoomDto {
 export class PatchMeet71RoomDto {
     @IsEmail()
     createdByEmail: string;
+}
+
+export class AddMeet71AllowlistDto {
+    @IsString()
+    @IsNotEmpty()
+    pattern: string;
+}
+
+export class PatchMeet71MemberDto {
+    @IsOptional()
+    @IsBoolean()
+    canCreateRoom?: boolean;
+
+    @IsOptional()
+    @IsInt()
+    inviteQuota?: number;
+
+    @IsOptional()
+    @IsBoolean()
+    isAdmin?: boolean;
 }

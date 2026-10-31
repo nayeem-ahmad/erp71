@@ -271,6 +271,18 @@ does not replace this deny.
 The in-repo `Caddyfile` already mirrors this deny with the compose service
 name `backend`.
 
+### Platform admin Meet71 nav node
+
+`admin.meet71` is in `NAV_REGISTRY` and `DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT`,
+but a saved `platform_admin_layout` is returned verbatim — the registry is
+not merged on boot. After deploy, dry-run first, then write:
+
+```bash
+cd /opt/erp71
+npx tsx packages/database/prisma/sync-nav-layout.ts --nodes=admin.meet71 --dry-run
+npx tsx packages/database/prisma/sync-nav-layout.ts --nodes=admin.meet71
+```
+
 ---
 
 ## Pre-Deployment Checklist

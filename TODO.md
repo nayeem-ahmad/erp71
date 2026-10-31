@@ -2122,6 +2122,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Meet71 platform admin console** — done 2026-11-01. `/admin/meet71` (JwtAuthGuard + PlatformAdminGuard, not support-engineer) lists allowlist/members/denials, POST/DELETE allowlist, PATCH/DELETE members (domain-covered delete inserts lowercase `Meet71DenyEntry`), DELETE denials, PATCH room owner. Same writes on `/internal/meet71/*`. Denied exact-email allowlist is `403 MEET71_DENIED`. Invites omitted (Task 7). Nav node `admin.meet71` (Video). After deploy: `npx tsx packages/database/prisma/sync-nav-layout.ts --nodes=admin.meet71` (dry-run first).
+
 - [x] **Meet71 SSO bounce page on app.erp71.com** — done 2026-11-01. Public `/meet71/sso` reads the JWT, mints via a dedicated helper (no `x-tenant-id`, never `handleExpiredSession`), and redirects only to an origin-checked `/api/auth/erp71/callback` or the hardcoded Meet71 origin. Login prefers `?redirect=/meet71/sso` over admin/onboarding. CSP `frame-ancestors 'self'`. `NEXT_PUBLIC_MEET71_ORIGIN` baked at image build.
 
 - [x] **Meet71 SSO mint HTTP, internal API, service guard, and Hermes deny** — done 2026-11-01. `POST /meet71/sso/code` (JwtAuthGuard, `@AllowWhenSuspended`, password-change allowlist, `@ThrottleAccount` 20/min). Internal `exchange` / `google-upsert` / read-only `GET membership` / rooms GET-POST-PATCH behind `Meet71ServiceGuard` (sha256 then timingSafeEqual, dual-accept previous secret) and `@SkipThrottle()`. In-repo Caddyfile 404s `/api/v1/internal/*` on `app.erp71.com` and `api.erp71.com` (api site-level proxy wrapped in `handle`). Runbook Hermes steps. Env: `MEET71_ERP71_SECRET`, `MEET71_ERP71_SECRET_PREVIOUS`, `MEET71_RETURN_ORIGINS`, `MEET71_PUBLIC_URL`.

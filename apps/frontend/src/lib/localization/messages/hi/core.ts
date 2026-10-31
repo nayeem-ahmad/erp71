@@ -522,6 +522,7 @@ export const coreMessages = {
             creditTopups: "क्रेडिट टॉप-अप",
             users: "प्लेटफ़ॉर्म उपयोगकर्ता",
             platformStaff: "स्टाफ़",
+            meet71: "Meet71",
             platformAccountingOverview: "बहीखाता सार",
             platformAccountingExpenses: "प्लेटफ़ॉर्म व्यय",
             platformAccountingLedger: "प्लेटफ़ॉर्म खाता बही",

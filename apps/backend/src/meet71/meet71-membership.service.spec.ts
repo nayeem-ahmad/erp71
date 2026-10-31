@@ -4,25 +4,47 @@ function fakeDb() {
     return {
         meet71DenyEntry: {
             findUnique: jest.fn(),
+            findMany: jest.fn(),
+            upsert: jest.fn(),
+            deleteMany: jest.fn(),
         },
         meet71AllowEntry: {
             findMany: jest.fn(),
+            findUnique: jest.fn(),
+            upsert: jest.fn(),
+            delete: jest.fn(),
+            deleteMany: jest.fn(),
         },
         meet71Member: {
             findUnique: jest.fn(),
+            findMany: jest.fn(),
             create: jest.fn(),
             update: jest.fn(),
+            upsert: jest.fn(),
+            deleteMany: jest.fn(),
         },
+        meet71Room: {
+            findUnique: jest.fn(),
+            update: jest.fn(),
+        },
+        $transaction: jest.fn(),
     };
+}
+
+function fakeAudit() {
+    return { log: jest.fn().mockResolvedValue(undefined) };
 }
 
 describe('Meet71MembershipService', () => {
     let db: ReturnType<typeof fakeDb>;
+    let audit: ReturnType<typeof fakeAudit>;
     let service: Meet71MembershipService;
 
     beforeEach(() => {
         db = fakeDb();
-        service = new Meet71MembershipService(db as never);
+        audit = fakeAudit();
+        db.$transaction.mockImplementation(async (fn: (tx: typeof db) => Promise<unknown>) => fn(db));
+        service = new Meet71MembershipService(db as never, audit as never);
     });
 
     it('matches exact email case-insensitively', () => {
@@ -153,5 +175,36 @@ describe('Meet71MembershipService', () => {
             where: { email: 'invited@erp71.com' },
             data: { display_name: 'New Name' },
         });
+    });
+
+    it('DELETE member covered only by @domain inserts Meet71DenyEntry lowercase', async () => {
+        db.meet71Member.deleteMany.mockResolvedValue({ count: 1 });
+        db.meet71AllowEntry.deleteMany.mockResolvedValue({ count: 0 });
+        db.meet71AllowEntry.findMany.mockResolvedValue([{ pattern: '@erp71.com' }]);
+        db.meet71DenyEntry.upsert.mockResolvedValue({ id: 'deny-1', email: 'blocked@erp71.com' });
+
+        await service.deleteMember('Blocked@ERP71.com', { userId: 'admin-1', email: 'nayeem.ahmad@gmail.com' });
+
+        expect(db.meet71DenyEntry.upsert).toHaveBeenCalledWith({
+            where: { email: 'blocked@erp71.com' },
+            create: { email: 'blocked@erp71.com', created_by: 'nayeem.ahmad@gmail.com' },
+            update: {},
+        });
+        expect(audit.log).toHaveBeenCalledWith(
+            'MEET71_DENY_ADD',
+            'Meet71DenyEntry',
+            expect.objectContaining({ tenantId: undefined }),
+            'deny-1',
+            expect.objectContaining({ email: 'blocked@erp71.com' }),
+        );
+    });
+
+    it('addAllowlist of a denied exact email throws MEET71_DENIED', async () => {
+        db.meet71DenyEntry.findUnique.mockResolvedValue({ email: 'blocked@erp71.com' });
+
+        await expect(
+            service.addAllowlist('Blocked@ERP71.com', { email: 'nayeem.ahmad@gmail.com' }),
+        ).rejects.toMatchObject({ response: { code: 'MEET71_DENIED' } });
+        expect(db.meet71AllowEntry.upsert).not.toHaveBeenCalled();
     });
 });

@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { ForbiddenException, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { TransformInterceptor } from '../common/transform.interceptor';
@@ -32,6 +32,13 @@ describe('Meet71InternalController', () => {
     const membership = {
         evaluate: jest.fn(),
         upsertOnSignIn: jest.fn(),
+        listAdmin: jest.fn(),
+        addAllowlist: jest.fn(),
+        removeAllowlist: jest.fn(),
+        patchMember: jest.fn(),
+        deleteMember: jest.fn(),
+        removeDenial: jest.fn(),
+        patchRoom: jest.fn(),
     };
     const sso = { mint: jest.fn(), exchange: jest.fn() };
     const db = {
@@ -100,6 +107,20 @@ describe('Meet71InternalController', () => {
         expect(membership.evaluate).toHaveBeenCalledWith('new@erp71.com');
         expect(membership.upsertOnSignIn).not.toHaveBeenCalled();
         expect(db.meet71Member.create).not.toHaveBeenCalled();
+    });
+
+    it('PUT allowlist of a denied email is 403 MEET71_DENIED', async () => {
+        membership.addAllowlist.mockRejectedValue(
+            new ForbiddenException({ code: 'MEET71_DENIED', message: 'This email is blocked on Meet71.' }),
+        );
+
+        const res = await request(app.getHttpServer())
+            .put('/internal/meet71/allowlist')
+            .set('X-Meet71-Service-Key', SECRET)
+            .send({ pattern: 'blocked@erp71.com' })
+            .expect(403);
+
+        expect(res.body.error).toMatchObject({ code: 'MEET71_DENIED' });
     });
 
     it('in-repo Caddyfile 404s path /api/v1/internal/* on api.erp71.com and app.erp71.com', () => {

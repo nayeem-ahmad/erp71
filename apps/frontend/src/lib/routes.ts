@@ -331,6 +331,7 @@ export const routes = {
         // bKash payments for SMS, WhatsApp and email credits, verified by hand.
         creditTopups: '/admin/credit-topups',
         users: '/admin/users',
+        meet71: '/admin/meet71',
         // The platform's own books. Deliberately `/admin/accounting`, not a
         // second entrance to `/accounting` — that one is a shop's ledger and
         // needs a workspace, a plan and a store; this one needs none of them.
