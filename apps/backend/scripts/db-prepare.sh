@@ -324,6 +324,11 @@ step sync:nav-expense-heads \
 step db:seed:platform \
     npm run db:seed:platform --workspace=@erp71/database
 
+# db:seed:meet71 — create-only admin + standing rooms. Safe on every boot:
+# it never rewrites invite_quota / invites_used or re-owns rooms.
+step db:seed:meet71 \
+    npm run db:seed:meet71 --workspace=@erp71/database
+
 # sync:accounting runs on every prepare, after db:seed:platform so it also
 # covers anything the seed just created. It is idempotent and additive-only (see
 # prisma/sync-accounting.ts), and it is the ONLY thing that carries new default

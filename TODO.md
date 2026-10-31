@@ -2122,6 +2122,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Meet71 membership tables and bootstrap seed** — done 2026-11-01. Prisma models `Meet71AllowEntry` / `Meet71Member` / `Meet71DenyEntry` / `Meet71SsoCode` / `Meet71Room` plus `User.meet71Members`. Create-only `seedMeet71` inserts `nayeem.ahmad@gmail.com` as admin (unlimited invites, create-room) and standing rooms `otb` / `ishraak` without resetting quota or re-owning rooms on later boots. Wired as `db:seed:meet71` in db-prepare.sh after `db:seed:platform`.
+
 - [x] **Customers and suppliers lists open that party's ledger from the actions column** — done 2026-10-30. Each customer row links to `/sales/customer-ledger?customerId=…`; each supplier row to `/purchases/supplier-ledger?supplierId=…`. The ledger page keeps that party selected (customer ledger already did; supplier ledger now names them from the GL payload if the picker list has not caught up). No extra picker step.
 
 - [x] **Supplier ledger splits Due and Payment, shows purchase total and paid, and injects recorded bills missing from AP** — done 2026-10-30. Same columns as the customer ledger: Due (GL increase), Payment (GL decrease), Purchase total and Paid on the bill row only (`Purchase.total_amount` / `Purchase.paid_amount`). The at-counter paid-leg (same `source_id`) stays blank on total/paid so the footer does not double-count. Fully paid bills already appear as bill + payment because purchases always post AP; a `RECORDED` purchase with no AP line is injected as a zero-due `PURCHASE` row. Column totals in the table footer; Balance footer is closing. Bill Status column dropped (GL payload never sent it). Purchase posting unchanged. Cancelled and no-supplier bills stay out.
