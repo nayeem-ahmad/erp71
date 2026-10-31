@@ -192,6 +192,85 @@ Its own deploy (push to `main` in its repo, or
 `cd /opt/meet71 && bash scripts/deploy.sh`) builds and restarts only the
 `meet71` compose project.
 
+### Deny public access to `/api/v1/internal/*`
+
+Meet71 talks to ERP71 over the private `erp71_default` Docker network
+(`http://backend:4000`). Internal routes (`/api/v1/internal/meet71/*`) are
+gated by `X-Meet71-Service-Key`, but that secret is not a substitute for
+keeping them off the public internet. Production deny is on **Hermes**
+(`/opt/hermes/caddy/Caddyfile`), not only the in-repo `Caddyfile` (that file
+is the `standalone-edge` profile). Dual-accept of `MEET71_ERP71_SECRET_PREVIOUS`
+does not replace this deny.
+
+1. Backup:
+
+   ```bash
+   cp /opt/hermes/caddy/Caddyfile /opt/hermes/caddy/Caddyfile.bak-$(date +%Y%m%d)
+   ```
+
+2. In **both** `app.erp71.com` and `api.erp71.com` blocks, insert **before**
+   `reverse_proxy`:
+
+   ```caddy
+   @meet71internal path /api/v1/internal/*
+   handle @meet71internal {
+   	respond 404
+   }
+   ```
+
+   For `app.erp71.com` this sits **above** the existing `handle /api/v1/*`
+   (Caddy first-match):
+
+   ```
+   app.erp71.com {
+   	encode zstd gzip
+   	@meet71internal path /api/v1/internal/*
+   	handle @meet71internal {
+   		respond 404
+   	}
+   	handle /api/v1/* {
+   		reverse_proxy erp71-backend-1:4000 {
+   			flush_interval -1
+   		}
+   	}
+   	handle {
+   		reverse_proxy erp71-frontend-1:3000
+   	}
+   }
+   ```
+
+   Live `api.erp71.com` is a site-level `reverse_proxy` with **no** `handle`
+   blocks. Inserting `@meet71internal handle` next to that proxy mixes Caddy
+   routing models. Wrap the proxy:
+
+   ```
+   api.erp71.com {
+   	encode zstd gzip
+   	@meet71internal path /api/v1/internal/*
+   	handle @meet71internal {
+   		respond 404
+   	}
+   	handle {
+   		reverse_proxy erp71-backend-1:4000
+   	}
+   }
+   ```
+
+3. `caddy validate --config /opt/hermes/caddy/Caddyfile`
+4. `caddy reload`
+5. Confirm 404 on both public hosts:
+
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' https://api.erp71.com/api/v1/internal/meet71/membership
+   curl -s -o /dev/null -w '%{http_code}\n' https://app.erp71.com/api/v1/internal/meet71/membership
+   ```
+
+   Both must print `404`. After Hermes is live, the only path to these
+   routes is Docker DNS `backend:4000` (prod container `erp71-backend-1`).
+
+The in-repo `Caddyfile` already mirrors this deny with the compose service
+name `backend`.
+
 ---
 
 ## Pre-Deployment Checklist

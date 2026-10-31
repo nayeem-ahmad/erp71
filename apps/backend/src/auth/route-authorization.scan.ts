@@ -53,6 +53,7 @@ const PURPOSE_GUARDS = new Set([
     'JobSeekerGuard',
     'MetricsTokenGuard',
     'ApiKeyGuard',
+    'Meet71ServiceGuard',
 ]);
 
 function guardNames(target: object | undefined): string[] {

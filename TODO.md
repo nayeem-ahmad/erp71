@@ -2122,6 +2122,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Meet71 SSO mint HTTP, internal API, service guard, and Hermes deny** — done 2026-11-01. `POST /meet71/sso/code` (JwtAuthGuard, `@AllowWhenSuspended`, password-change allowlist, `@ThrottleAccount` 20/min). Internal `exchange` / `google-upsert` / read-only `GET membership` / rooms GET-POST-PATCH behind `Meet71ServiceGuard` (sha256 then timingSafeEqual, dual-accept previous secret) and `@SkipThrottle()`. In-repo Caddyfile 404s `/api/v1/internal/*` on `app.erp71.com` and `api.erp71.com` (api site-level proxy wrapped in `handle`). Runbook Hermes steps. Env: `MEET71_ERP71_SECRET`, `MEET71_ERP71_SECRET_PREVIOUS`, `MEET71_RETURN_ORIGINS`, `MEET71_PUBLIC_URL`.
+
 - [x] **Meet71 SSO mint, atomic exchange, sweeper** — done 2026-11-01. `Meet71SsoService` mints 60s hashed one-time codes, consumes them with compare-and-set PKCE+return_url SQL, and sweeps expired/used rows every 5 minutes (`meet71.sso-sweep`). Deny after consume still returns `MEET71_INVALID_CODE`. Six mocked-Prisma cases in `meet71-sso.service.spec.ts`; cron registry length 28.
 
 - [x] **Meet71 membership matching service** — done 2026-11-01. `Meet71MembershipService` (read-only `evaluate`, deny-wins, `upsertOnSignIn` that never resets invited flags) plus `Meet71Module` (service only, no HTTP). Seven mocked-Prisma cases in `meet71-membership.service.spec.ts`.
