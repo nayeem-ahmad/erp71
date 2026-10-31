@@ -2122,6 +2122,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Meet71 membership matching service** — done 2026-11-01. `Meet71MembershipService` (read-only `evaluate`, deny-wins, `upsertOnSignIn` that never resets invited flags) plus `Meet71Module` (service only, no HTTP). Seven mocked-Prisma cases in `meet71-membership.service.spec.ts`.
+
 - [x] **Meet71 membership tables and bootstrap seed** — done 2026-11-01. Prisma models `Meet71AllowEntry` / `Meet71Member` / `Meet71DenyEntry` / `Meet71SsoCode` / `Meet71Room` plus `User.meet71Members`. Create-only `seedMeet71` inserts `nayeem.ahmad@gmail.com` as admin (unlimited invites, create-room) and standing rooms `otb` / `ishraak` without resetting quota or re-owning rooms on later boots. Wired as `db:seed:meet71` in db-prepare.sh after `db:seed:platform`.
 
 - [x] **Customers and suppliers lists open that party's ledger from the actions column** — done 2026-10-30. Each customer row links to `/sales/customer-ledger?customerId=…`; each supplier row to `/purchases/supplier-ledger?supplierId=…`. The ledger page keeps that party selected (customer ledger already did; supplier ledger now names them from the GL payload if the picker list has not caught up). No extra picker step.
