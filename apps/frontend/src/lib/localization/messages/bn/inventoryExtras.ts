@@ -411,6 +411,8 @@ export const inventoryExtrasMessages = {
                     group: "গ্রুপ",
                     brand: "ব্র্যান্ড",
                     avgUnitCost: "গড় একক খরচ",
+                    lastPurchasePrice: "শেষ ক্রয়মূল্য",
+                    salesPrice: "বিক্রয় মূল্য",
                     costBasis: "খরচের ভিত্তি",
                     totalQuantity: "মোট পরিমাণ",
                     totalValue: "স্টক মূল্য"

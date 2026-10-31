@@ -46,6 +46,20 @@ jest.mock('@/components/data-table', () => ({
             <div data-testid="empty-message">{emptyMessage}</div>
             <div data-testid="row-count">{data.length}</div>
             <div data-testid="column-headers">{columns.map((column) => column.header).join('|')}</div>
+            {data.map((row, index) => (
+                <div key={index} data-testid={`row-${index}`}>
+                    {columns.map((column) => {
+                        const id = column.id ?? column.accessorKey;
+                        const value = typeof column.accessorFn === 'function'
+                            ? column.accessorFn(row, index)
+                            : row[column.accessorKey ?? id];
+                        const rendered = typeof column.cell === 'function'
+                            ? column.cell({ getValue: () => value, row: { original: row } })
+                            : value;
+                        return <span key={id} data-testid={`cell-${index}-${id}`}>{rendered}</span>;
+                    })}
+                </div>
+            ))}
         </div>
     ),
 }));
@@ -65,18 +79,20 @@ const mockReport = {
     ],
     rows: [
         {
-            product: { id: 'p1', name: 'Rice 5kg', sku: 'RICE5', brand: null, group: { id: 'g1', name: 'Grocery' }, subgroup: null },
+            product: { id: 'p1', name: 'Rice 5kg', sku: 'RICE5', sellingPrice: 620, brand: null, group: { id: 'g1', name: 'Grocery' }, subgroup: null },
             quantityByWarehouse: { 'wh-1': 30, 'wh-2': 20 },
             totalQuantity: 50,
             averageUnitCost: 545,
+            lastPurchasePrice: 480,
             costBasis: 'WEIGHTED_AVERAGE',
             totalStockValue: 27250,
         },
         {
-            product: { id: 'p2', name: 'Salt', sku: 'SALT', brand: null, group: null, subgroup: null },
+            product: { id: 'p2', name: 'Salt', sku: 'SALT', sellingPrice: 40, brand: null, group: null, subgroup: null },
             quantityByWarehouse: { 'wh-1': 0, 'wh-2': 5 },
             totalQuantity: 5,
             averageUnitCost: null,
+            lastPurchasePrice: null,
             costBasis: 'UNCOSTED',
             totalStockValue: 0,
         },
@@ -125,8 +141,19 @@ describe('StockOnHandPage', () => {
             expect(headers).toContain('Dhaka Main');
             expect(headers).toContain('Chattogram');
             expect(headers).toContain('Total Qty');
+            expect(headers).toContain('Avg Unit Cost');
+            expect(headers).toContain('Last Purchase Price');
+            expect(headers).toContain('Sales Price');
             expect(headers).toContain('Stock Value');
         });
+    });
+
+    it('formats last purchase price and sales price, and shows a dash when nothing was purchased', async () => {
+        render(<StockOnHandPage />);
+        await waitFor(() => expect(screen.getByTestId('cell-0-lastPurchasePrice')).toHaveTextContent('৳ 480.00'));
+        expect(screen.getByTestId('cell-0-salesPrice')).toHaveTextContent('৳ 620.00');
+        expect(screen.getByTestId('cell-1-lastPurchasePrice')).toHaveTextContent('-');
+        expect(screen.getByTestId('cell-1-salesPrice')).toHaveTextContent('৳ 40.00');
     });
 
     it('renders summary KPI cards', async () => {

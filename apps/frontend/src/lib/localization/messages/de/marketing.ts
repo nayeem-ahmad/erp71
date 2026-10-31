@@ -31,6 +31,8 @@ export const marketingMessages = {
             description: "Alles in einem — Verkauf, Lagerbestand, Buchhaltung, Onlineshop und BDT-Zahlungen. In Minuten startklar, ob Laden, Fabrik oder Dienstleistungsbetrieb.",
             startTrial: "Loslegen",
             tryDemo: "Demo testen",
+            whatsappDemo: "Book a 15-min demo on WhatsApp",
+            setupHelp: "Help with setup included",
             footnote: "Nur kostenpflichtige Tarife · Schließen Sie den Kauf ab, um Ihren Arbeitsbereich zu aktivieren",
         },
         capabilities: {
@@ -120,6 +122,9 @@ export const marketingMessages = {
         ctaButton: "Tarif wählen",
         comingSoon: "Demnächst",
         paidPlansNote: "Nur kostenpflichtige Tarife · Kostenlose Testphasen und der Gratis-Tarif sind vorübergehend nicht verfügbar",
+        planHelpBefore: "Not sure which plan fits your shop? ",
+        planHelpLink: "WhatsApp us",
+        planHelpAfter: " and we'll set it up with you in 15 minutes.",
         premiumComingSoonNote: "Premium kommt bald — wenden Sie sich an den Support, wenn Sie frühen Zugang brauchen.",
     },
     contact: {

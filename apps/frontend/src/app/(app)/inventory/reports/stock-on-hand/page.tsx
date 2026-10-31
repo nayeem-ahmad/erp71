@@ -23,6 +23,8 @@ interface StockOnHandRow {
         id: string;
         name: string;
         sku?: string | null;
+        /** Catalogue sales price (`Product.price`), the same figure POS sells at. */
+        sellingPrice?: number | null;
         brand?: { id: string; name: string } | null;
         group?: { id: string; name: string } | null;
         subgroup?: { id: string; name: string } | null;
@@ -30,6 +32,8 @@ interface StockOnHandRow {
     quantityByWarehouse: Record<string, number>;
     totalQuantity: number;
     averageUnitCost: number | null;
+    /** Supplier unit price on the newest posted purchase. Null when there is no bill. */
+    lastPurchasePrice: number | null;
     costBasis: CostBasis;
     totalStockValue: number;
 }
@@ -227,6 +231,21 @@ export default function StockOnHandPage() {
                     const value = info.row.original.averageUnitCost;
                     return value == null ? <span className="text-xs text-gray-400">-</span> : formatBDT(value);
                 },
+                size: 120,
+            }),
+            columnHelper.accessor((row) => row.lastPurchasePrice ?? '', {
+                id: 'lastPurchasePrice',
+                header: strings.columns.lastPurchasePrice,
+                cell: (info) => {
+                    const value = info.row.original.lastPurchasePrice;
+                    return value == null ? <span className="text-xs text-gray-400">-</span> : formatBDT(value);
+                },
+                size: 150,
+            }),
+            columnHelper.accessor((row) => row.product.sellingPrice ?? 0, {
+                id: 'salesPrice',
+                header: strings.columns.salesPrice,
+                cell: (info) => formatBDT(Number(info.getValue() || 0)),
                 size: 120,
             }),
             columnHelper.accessor('costBasis', {

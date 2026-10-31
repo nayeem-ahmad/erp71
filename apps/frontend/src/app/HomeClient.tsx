@@ -8,9 +8,11 @@ import {
 } from 'lucide-react';
 import MarketingFooter from '@/components/marketing/MarketingFooter';
 import MarketingNav from '@/components/marketing/MarketingNav';
+import PricingPlanHelp from '@/components/marketing/PricingPlanHelp';
 import {
     FEATURES, MODULES, PAYMENT_METHODS, USE_CASES,
 } from '@/lib/marketing/content';
+import { MARKETING_WHATSAPP_LINKS } from '@/lib/marketing/whatsapp';
 import { buildMarketingPlansFromApi, type PublicPlanFromApi } from '@/lib/marketing/plans';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
@@ -106,7 +108,7 @@ export default function HomeClient() {
                         <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
                             {m.hero.description}
                         </p>
-                        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
+                        <div className="flex flex-col sm:flex-row sm:flex-wrap items-center justify-center gap-4 pt-2">
                             <Link
                                 href="/signup"
                                 className="group bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-10 rounded-2xl shadow-lg shadow-blue-200 transition-all flex items-center gap-3 w-full sm:w-auto justify-center"
@@ -114,6 +116,14 @@ export default function HomeClient() {
                                 {m.hero.startTrial}
                                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 rtl:-scale-x-100 rtl:group-hover:-translate-x-1 transition-transform" />
                             </Link>
+                            <a
+                                href={MARKETING_WHATSAPP_LINKS.home}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="bg-white hover:bg-gray-50 text-gray-700 font-bold py-4 px-6 sm:px-10 rounded-2xl border border-gray-200 transition-colors w-full sm:w-auto max-w-full text-center flex items-center justify-center min-h-touch leading-snug"
+                            >
+                                {m.hero.whatsappDemo}
+                            </a>
                             {demoAvailable && (
                                 <Link
                                     href="/demo"
@@ -124,7 +134,10 @@ export default function HomeClient() {
                                 </Link>
                             )}
                         </div>
-                        <p className="text-sm text-gray-400">{m.hero.footnote}</p>
+                        <div className="space-y-1">
+                            <p className="text-sm text-gray-400">{m.hero.footnote}</p>
+                            <p className="text-sm font-medium text-gray-600">{m.hero.setupHelp}</p>
+                        </div>
                         <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                             {m.trustBadges.map((badge) => (
                                 <span key={badge} className="text-xs font-semibold text-gray-500 bg-white border border-gray-200 px-3 py-1 rounded-full">
@@ -336,7 +349,8 @@ export default function HomeClient() {
                             </div>
                         ))}
                     </div>
-                    <div className="text-center mt-8">
+                    <PricingPlanHelp />
+                    <div className="text-center mt-6">
                         <Link
                             href="/pricing"
                             className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-semibold text-sm transition-colors"

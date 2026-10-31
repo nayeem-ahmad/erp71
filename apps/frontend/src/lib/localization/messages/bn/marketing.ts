@@ -31,6 +31,8 @@ export const marketingMessages = {
                 description: "অল-ইন-ওয়ান ব্যবসা ব্যবস্থাপনা — বিক্রয়, ইনভেন্টরি, হিসাব, স্টোরফ্রন্ট ও BDT পেমেন্ট। দোকান, কারখানা বা সেবা প্রতিষ্ঠান — যেকোনো ব্যবসায় কয়েক মিনিটেই লাইভ হন।",
                 startTrial: "শুরু করুন",
                 tryDemo: "ডেমো দেখুন",
+                whatsappDemo: "১৫ মিনিটের ডেমো নিন, WhatsApp করুন",
+                setupHelp: "সেটআপে আমরা সাথে থাকব",
                 footnote: "শুধু পেইড প্ল্যান · ওয়ার্কস্পেস সক্রিয় করতে চেকআউট সম্পন্ন করুন",
             },
             capabilities: {
@@ -186,6 +188,9 @@ export const marketingMessages = {
             ctaButton: "প্ল্যান বেছে নিন",
             comingSoon: "শীঘ্রই আসছে",
             paidPlansNote: "শুধু পেইড প্ল্যান · ফ্রি ট্রায়াল ও ফ্রি টিয়ার সাময়িকভাবে বন্ধ",
+            planHelpBefore: "কোন প্ল্যান আপনার দোকানের জন্য ঠিক, বুঝতে পারছেন না? ",
+            planHelpLink: "WhatsApp করুন",
+            planHelpAfter: "। ১৫ মিনিটে আমরা একসাথে সেট করে দেব।",
             premiumComingSoonNote: "Premium শীঘ্রই আসছে — আগাম অ্যাক্সেস দরকার হলে সাপোর্টে যোগাযোগ করুন।",
         },
         contact: {

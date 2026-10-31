@@ -411,6 +411,8 @@ export const inventoryExtrasMessages = {
                     group: "Kumpulan",
                     brand: "Jenama",
                     avgUnitCost: "Kos Unit Purata",
+                    lastPurchasePrice: "Harga belian terakhir",
+                    salesPrice: "Harga jualan",
                     costBasis: "Asas Kos",
                     totalQuantity: "Jumlah Kuantiti",
                     totalValue: "Nilai Stok"

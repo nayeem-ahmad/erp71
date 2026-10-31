@@ -31,6 +31,8 @@ export const marketingMessages = {
             description: "إدارة أعمال متكاملة — مبيعات ومخزون ومحاسبة ومتجر إلكتروني ومدفوعات بالتاكا. ابدأ خلال دقائق، سواء كنت تدير متجرًا أو مصنعًا أو شركة خدمات.",
             startTrial: "ابدأ الآن",
             tryDemo: "جرّب العرض التجريبي",
+            whatsappDemo: "Book a 15-min demo on WhatsApp",
+            setupHelp: "Help with setup included",
             footnote: "الباقات المدفوعة فقط · أكمل الدفع لتفعيل مساحة عملك",
         },
         capabilities: {
@@ -120,6 +122,9 @@ export const marketingMessages = {
         ctaButton: "اختر باقة",
         comingSoon: "قريبًا",
         paidPlansNote: "الباقات المدفوعة فقط · التجارب المجانية والباقة المجانية غير متاحة مؤقتًا",
+        planHelpBefore: "Not sure which plan fits your shop? ",
+        planHelpLink: "WhatsApp us",
+        planHelpAfter: " and we'll set it up with you in 15 minutes.",
         premiumComingSoonNote: "باقة بريميوم قريبًا — تواصل مع الدعم إن كنت بحاجة إلى وصول مبكر.",
     },
     contact: {

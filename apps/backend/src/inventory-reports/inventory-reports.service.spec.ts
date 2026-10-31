@@ -2,6 +2,24 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DatabaseService } from '../database/database.service';
 import { InventoryReportsService } from './inventory-reports.service';
 
+/** Tagged-template SQL plus nested `Prisma.sql` fragments, as one string. */
+function sqlText(call: unknown[]): string {
+    const flatten = (value: unknown): string => {
+        if (value == null) return '';
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+        const sql = value as { strings?: readonly string[]; values?: readonly unknown[] };
+        if (sql.strings) {
+            return sql.strings
+                .map((chunk, index) => chunk + (sql.values && index < sql.values.length ? flatten(sql.values[index]) : ''))
+                .join('');
+        }
+        return '';
+    };
+
+    const strings = call[0] as readonly string[];
+    return strings.map((chunk, index) => chunk + (index + 1 < call.length ? flatten(call[index + 1]) : '')).join('');
+}
+
 describe('InventoryReportsService', () => {
     let service: InventoryReportsService;
     let db: any;
@@ -449,6 +467,62 @@ describe('InventoryReportsService', () => {
                     where: expect.objectContaining({ type: { not: 'SERVICE' } }),
                 }),
             );
+        });
+
+        /**
+         * Last purchase price is the supplier's unit price on the newest posted
+         * bill, not the weighted-average cost beside it. A product with stock
+         * and a catalogue price but no bill still has to come back, with the
+         * price left blank.
+         */
+        it('reports the latest posted purchase price and the catalogue sales price', async () => {
+            db.product.findMany.mockResolvedValue([
+                product('p1', 'Rice', [{ warehouse_id: 'wh-1', quantity: 4 }]),
+                product('p2', 'Salt', [{ warehouse_id: 'wh-1', quantity: 1 }]),
+            ]);
+            db.$queryRaw.mockImplementation((strings: readonly string[], ...values: unknown[]) => {
+                const text = sqlText([strings, ...values]);
+                if (text.includes('PurchaseItem')) {
+                    return Promise.resolve([{ product_id: 'p1', unit_cost: 80 }]);
+                }
+                return Promise.resolve([]);
+            });
+
+            const result = await service.getStockOnHand('tenant-1', {});
+
+            expect(result.rows.find((row) => row.product.id === 'p1')).toMatchObject({
+                lastPurchasePrice: 80,
+                product: { sellingPrice: 100 },
+            });
+            expect(result.rows.find((row) => row.product.id === 'p2')).toMatchObject({
+                lastPurchasePrice: null,
+                product: { sellingPrice: 100 },
+            });
+
+            const purchaseCalls = db.$queryRaw.mock.calls.filter((call: unknown[]) => sqlText(call).includes('PurchaseItem'));
+            expect(purchaseCalls).toHaveLength(1);
+            const purchaseSql = sqlText(purchaseCalls[0]);
+            expect(purchaseSql).toContain('tenant-1');
+            expect(purchaseSql).toContain('CANCELLED');
+            expect(purchaseSql).toContain('purchase_date DESC');
+            expect(purchaseSql).toContain('created_at DESC');
+            expect(purchaseSql).toContain('p1');
+            expect(purchaseSql).toContain('p2');
+        });
+
+        it('scopes the last purchase price to the branch and warehouse being reported', async () => {
+            db.product.findMany.mockResolvedValue([
+                product('p1', 'Rice', [{ warehouse_id: 'wh-2', quantity: 4 }]),
+            ]);
+
+            await service.getStockOnHand('tenant-1', { storeId: 'store-1', warehouseId: 'wh-2' });
+
+            const purchaseSql = db.$queryRaw.mock.calls
+                .map((call: unknown[]) => sqlText(call))
+                .find((text: string) => text.includes('PurchaseItem'));
+            expect(purchaseSql).toContain('store-1');
+            expect(purchaseSql).toContain('wh-2');
+            expect(purchaseSql).toContain('COALESCE(pi.warehouse_id, p.warehouse_id)');
         });
     });
 

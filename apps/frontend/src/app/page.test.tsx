@@ -24,6 +24,8 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+import { MARKETING_WHATSAPP_LINKS } from '@/lib/marketing/whatsapp';
+
 import HomePage from './HomeClient';
 
 beforeEach(() => {
@@ -61,6 +63,35 @@ describe('HomePage', () => {
     it('offers Try Demo in the hero while the platform admin leaves it on', async () => {
         render(<HomePage />);
         expect(await screen.findByRole('link', { name: /try demo/i })).toHaveAttribute('href', '/demo');
+    });
+
+    it('keeps the signup button and adds a WhatsApp demo beside it', () => {
+        render(<HomePage />);
+        const start = screen.getAllByRole('link', { name: /^get started$/i })
+            .find((link) => link.getAttribute('href') === '/signup');
+        const demo = screen.getByRole('link', { name: 'Book a 15-min demo on WhatsApp' });
+
+        expect(start).toBeTruthy();
+        expect(demo).toHaveAttribute('href', MARKETING_WHATSAPP_LINKS.home);
+        expect(demo).toHaveAttribute('target', '_blank');
+        expect(demo).toHaveAttribute('rel', 'noopener noreferrer');
+        expect(start!.compareDocumentPosition(demo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('puts setup reassurance directly under the paid-plans footnote', () => {
+        render(<HomePage />);
+        const footnote = screen.getByText('Paid plans only · Complete checkout to activate your workspace');
+        expect(footnote.nextElementSibling).toHaveTextContent('Help with setup included');
+    });
+
+    it('offers WhatsApp help under the pricing cards', () => {
+        render(<HomePage />);
+        const link = screen.getByRole('link', { name: 'WhatsApp us' });
+        expect(link).toHaveAttribute('href', MARKETING_WHATSAPP_LINKS.pricing);
+        expect(link).toHaveAttribute('target', '_blank');
+        expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+        expect(screen.getByText(/Not sure which plan fits your shop\?/)).toBeInTheDocument();
+        expect(screen.getByText(/set it up with you in 15 minutes/)).toBeInTheDocument();
     });
 
     it('drops the hero Try Demo link once the platform admin switches it off', async () => {
