@@ -51,6 +51,7 @@ function fakeDb() {
         },
         meet71Room: {
             findUnique: jest.fn(),
+            findMany: jest.fn(),
             update: jest.fn(),
         },
         $transaction: jest.fn(),
@@ -68,6 +69,7 @@ describe('Meet71AdminController', () => {
         db.meet71AllowEntry.findMany.mockResolvedValue([]);
         db.meet71Member.findMany.mockResolvedValue([]);
         db.meet71DenyEntry.findMany.mockResolvedValue([]);
+        db.meet71Room.findMany.mockResolvedValue([]);
         audit.log.mockResolvedValue(undefined);
 
         const module = await Test.createTestingModule({
@@ -106,7 +108,7 @@ describe('Meet71AdminController', () => {
 
         const res = await request(app.getHttpServer()).get('/admin/meet71').expect(200);
 
-        expect(res.body.data).toEqual({ entries: [], members: [], denials: [] });
+        expect(res.body.data).toEqual({ entries: [], members: [], denials: [], rooms: [] });
     });
 
     it('support engineer GET /admin/meet71 is 403', async () => {
