@@ -41,6 +41,12 @@ export type Meet71DenialView = {
     createdAt: Date;
 };
 
+export type Meet71RoomView = {
+    code: string;
+    createdByEmail: string;
+    createdAt: Date;
+};
+
 type MemberRow = {
     display_name: string | null;
     is_admin: boolean;
@@ -123,11 +129,17 @@ export class Meet71MembershipService {
         return this.toMembership(e, existing);
     }
 
-    async listAdmin(): Promise<{ entries: Meet71AllowlistView[]; members: Meet71MemberView[]; denials: Meet71DenialView[] }> {
-        const [entries, members, denials] = await Promise.all([
+    async listAdmin(): Promise<{
+        entries: Meet71AllowlistView[];
+        members: Meet71MemberView[];
+        denials: Meet71DenialView[];
+        rooms: Meet71RoomView[];
+    }> {
+        const [entries, members, denials, rooms] = await Promise.all([
             this.db.meet71AllowEntry.findMany({ orderBy: { created_at: 'asc' } }),
             this.db.meet71Member.findMany({ orderBy: { email: 'asc' } }),
             this.db.meet71DenyEntry.findMany({ orderBy: { created_at: 'asc' } }),
+            this.db.meet71Room.findMany({ orderBy: { created_at: 'desc' }, take: 100 }),
         ]);
         return {
             entries: entries.map((row) => this.toAllowEntry(row)),
@@ -135,6 +147,11 @@ export class Meet71MembershipService {
             denials: denials.map((row) => ({
                 email: row.email,
                 createdBy: row.created_by,
+                createdAt: row.created_at,
+            })),
+            rooms: rooms.map((row) => ({
+                code: row.code,
+                createdByEmail: row.created_by_email,
                 createdAt: row.created_at,
             })),
         };
