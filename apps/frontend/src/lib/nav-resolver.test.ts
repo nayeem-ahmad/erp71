@@ -324,6 +324,7 @@ describe('nav-resolver', () => {
             '/admin/platform-settings/navigation',
             '/admin/platform-settings/ai',
             '/admin/platform-settings/feedback-automation',
+            '/admin/meet71',
         ]);
 
         const platform = subgroup('Platform');
