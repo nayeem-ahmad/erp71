@@ -95,14 +95,10 @@ services:
     expose:
       - "3000"
 
-  # Standalone edge proxy. Disabled by default via a Compose profile because
-  # on a shared host an existing reverse proxy already owns ports 80/443 and
-  # routes app./api. to the frontend/backend containers. Enable for a
-  # dedicated host with: `docker compose --profile standalone-edge up -d`.
+  # Public edge. Owns host 80/443. Neighbor site blocks are bind-mounted
+  # from ./Caddyfile.neighbors (VPS-only, gitignored).
   caddy:
     image: caddy:2.9-alpine
-    profiles:
-      - standalone-edge
     depends_on:
       - frontend
       - backend

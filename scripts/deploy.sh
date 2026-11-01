@@ -44,6 +44,10 @@ compose() {
   docker compose -p "$COMPOSE_PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
 
+# Fail-closed neighbors, extra-net attach, Caddy reload/recreate.
+# shellcheck source=caddy-edge.sh
+source "$REPO_ROOT/scripts/caddy-edge.sh"
+
 # Bake the deployed commit into the images (backend GIT_SHA build arg) so the
 # running app can report exactly what is live. Shell env overrides --env-file
 # for Compose interpolation, so this wins without touching .env.production.
@@ -89,28 +93,14 @@ if ! compose run --rm --no-deps -T backend sh apps/backend/scripts/db-prepare.sh
   exit 1
 fi
 
-# Neighbor Caddyfile is gitignored and bind-mounted. Docker turns a missing
-# file mount into a directory; a comment stub keeps `import` valid while
-# Caddy is still behind standalone-edge. After Caddy is the edge, this
-# helper becomes fail-closed (no stub).
-ensure_neighbors_file() {
-  local f="$REPO_ROOT/Caddyfile.neighbors"
-  if [ -d "$f" ]; then
-    echo "ERROR: $f is a directory. Docker creates that when the bind mount" >&2
-    echo "is missing; remove it and re-run. Neighbor config lives on the VPS." >&2
-    exit 1
-  fi
-  if [ ! -f "$f" ]; then
-    printf '# Neighbor site blocks. Not in git. See docs/ops/deployment-runbook.md.\n' > "$f"
-    chmod 600 "$f"
-  fi
-}
-
 # 3. Swap. Compose recreates the containers whose image changed; the new
-#    backend's start command finds the marker from step 2.
+#    backend's start command finds the marker from step 2. Caddy is in this
+#    compose file (public 80/443); a missing neighbors file must abort before
+#    `up -d` so we never start the edge without JobXprss / Scrum71 / yt2mp3.
 echo "==> Starting the new containers"
 ensure_neighbors_file
 compose up -d
+attach_caddy_extra_networks
 
 # 4. Wait for the new backend to report healthy (the healthcheck in
 #    docker-compose.prod.yml). Normally a few seconds of Nest boot; the timeout
@@ -171,27 +161,11 @@ wait_for_backend_healthy() {
   done
 }
 
-# Shared-host VPS: Hermes Caddy must share the compose network to reach
-# erp71-frontend-1 / erp71-backend-1 (otherwise app.erp71.com returns 502).
-ERP71_NETWORK="${COMPOSE_PROJECT}_default"
-attach_caddy() {
-  local caddy running
-  # Read once, then match: piping `docker ps` into `grep -q` under pipefail
-  # can report a match as a failure when grep exits before docker finishes.
-  running="$(docker ps --format '{{.Names}}')"
-  for caddy in hermes-webui-proxy hermes-caddy-1; do
-    if grep -qx "$caddy" <<<"$running"; then
-      echo "==> Attaching $caddy to $ERP71_NETWORK"
-      docker network connect "$ERP71_NETWORK" "$caddy" 2>/dev/null || true
-    fi
-  done
-}
-
 echo "==> Waiting for the new backend to report healthy"
 if ! wait_for_backend_healthy; then
-  # Attach anyway: whatever is up (the frontend, at least) must stay reachable
+  # Extra nets drop on Caddy recreate; re-attach so neighbors stay reachable
   # while someone looks at this.
-  attach_caddy
+  attach_caddy_extra_networks
   echo "==> Last backend log lines" >&2
   compose logs --tail=80 backend >&2 || true
   compose ps >&2 || true
@@ -200,7 +174,8 @@ if ! wait_for_backend_healthy; then
   exit 1
 fi
 
-attach_caddy
+echo "==> Syncing Caddy config (reload, or recreate if a bind-mount inode is stale)"
+sync_caddy_config
 
 # Keep Docker's build cache from filling the disk. The VPS root sat at 81%
 # with build cache most of what was reclaimable, and every deploy adds a full

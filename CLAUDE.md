@@ -45,7 +45,7 @@ Manual deploys are still available for redeploys, rollbacks, or shipping a non-`
 ssh root@66.116.236.127 'cd /opt/erp71 && ./scripts/deploy.sh main'
 ```
 
-`scripts/deploy.sh` is idempotent: fetches/fast-forwards `main`, syncs erp71.com URLs into `.env.production`, rebuilds the stack via `docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml up -d --build`, and reattaches the shared Hermes Caddy to the `erp71_default` network (until the ERP71 Caddy cutover in `docs/superpowers/specs/2026-11-01-erp71-caddy-replaces-hermes.md`). Full runbook: `docs/ops/deployment-runbook.md`.
+`scripts/deploy.sh` is idempotent: fetches/fast-forwards `main`, syncs erp71.com URLs into `.env.production`, rebuilds the stack via `docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml up -d --build`, fail-closes if `Caddyfile.neighbors` is missing, reloads compose Caddy (`erp71-caddy-1`), and re-attaches extra neighbor networks from `/opt/erp71/caddy-extra-networks`. Full runbook: `docs/ops/deployment-runbook.md`.
 
 ---
 

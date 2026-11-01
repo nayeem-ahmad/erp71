@@ -26,8 +26,8 @@
 set -euo pipefail
 
 STEP="${1:-status}"
-CADDYFILE=/opt/hermes/caddy/Caddyfile
-CADDY_CONTAINER=hermes-webui-proxy
+CADDYFILE=/opt/erp71/Caddyfile
+CADDY_CONTAINER=erp71-caddy-1
 CADDY_IMAGE=caddy:2.9-alpine
 ENV_FILE=/opt/erp71/.env.production
 DB_CONTAINER=erp71-db-1
@@ -38,61 +38,11 @@ psql_db() {
 }
 
 caddy_app_api_route() {
-    if grep -q 'handle /api/v1/\*' "$CADDYFILE"; then
-        echo "already applied: app.erp71.com has a /api/v1 route"
-        return 0
-    fi
-    cp -p "$CADDYFILE" "$CADDYFILE.bak-$TS-pre-app-api-route"
-    echo "backup: $CADDYFILE.bak-$TS-pre-app-api-route"
-
-    python3 - "$CADDYFILE" /tmp/Caddyfile.app-api-route <<'EOF'
-import sys
-src, dst = sys.argv[1], sys.argv[2]
-s = open(src).read()
-old = "app.erp71.com {\n\tencode zstd gzip\n\treverse_proxy erp71-frontend-1:3000\n}\n"
-new = (
-    "app.erp71.com {\n"
-    "\tencode zstd gzip\n"
-    "\t# The browser app calls its own origin for the API: no CORS preflight and\n"
-    "\t# one shared connection. Straight to the backend, not through the Next\n"
-    "\t# rewrite. flush_interval -1 keeps the support SSE stream unbuffered.\n"
-    "\thandle /api/v1/* {\n"
-    "\t\treverse_proxy erp71-backend-1:4000 {\n"
-    "\t\t\tflush_interval -1\n"
-    "\t\t}\n"
-    "\t}\n"
-    "\thandle {\n"
-    "\t\treverse_proxy erp71-frontend-1:3000\n"
-    "\t}\n"
-    "}\n"
-)
-if s.count(old) != 1:
-    sys.exit("app.erp71.com block is not in the expected shape; edit it by hand (see docs/ops/deployment-runbook.md)")
-open(dst, "w").write(s.replace(old, new))
-EOF
-
-    docker run --rm -v /tmp/Caddyfile.app-api-route:/etc/caddy/Caddyfile:ro "$CADDY_IMAGE" \
-        caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-
-    # The Caddyfile is bind-mounted as a single file: write through the same
-    # inode (cat >) rather than replacing it (mv, sed -i), or the container
-    # keeps reading the old one.
-    cat /tmp/Caddyfile.app-api-route > "$CADDYFILE"
-    docker exec "$CADDY_CONTAINER" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
-    rm -f /tmp/Caddyfile.app-api-route
-
-    # Next adds "Accept-Encoding" to Vary on the rewrite path; the backend
-    # answering directly does not. So a bare "vary: Origin" proves the route.
-    sleep 2
-    local vary
-    vary="$(curl -s -o /dev/null -D - --resolve app.erp71.com:443:127.0.0.1 https://app.erp71.com/api/v1/health | tr -d '\r' | grep -i '^vary:' || true)"
-    echo "app.erp71.com/api/v1/health -> ${vary:-<no vary header>}"
-    if [ "$(printf '%s' "$vary" | tr 'A-Z' 'a-z')" = "vary: origin" ]; then
-        echo "OK: the API is served directly on app.erp71.com"
-    else
-        echo "WARNING: response still looks like it came through Next; check the Caddyfile" >&2
-    fi
-    echo "undo: cat $CADDYFILE.bak-$TS-pre-app-api-route > $CADDYFILE && docker exec $CADDY_CONTAINER caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile"
+    echo "already applied: app.erp71.com /api/v1/* lives in the git Caddyfile ($CADDYFILE),"
+    echo "served by $CADDY_CONTAINER. Do not edit Hermes. To reload after a Caddyfile"
+    echo "edit, run scripts/deploy.sh (sync_caddy_config) or, from /opt/erp71:"
+    echo "  source scripts/caddy-edge.sh && sync_caddy_config"
+    return 0
 }
 
 metrics_token() {
