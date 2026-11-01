@@ -370,6 +370,22 @@ ${details}
         });
     }
 
+    /** Platform mail (no tenant debit) telling someone they can use Meet71. */
+    async sendMeet71Invite(to: string, inviterName: string): Promise<void> {
+        const meetUrl = process.env.MEET71_PUBLIC_URL ?? 'https://meet.erp71.com';
+        await this.send(
+            {
+                to,
+                subject: 'You can now use Meet71',
+                html: `<h2>You can now use Meet71</h2>
+<p><strong>${escapeHtml(inviterName)}</strong> added you to Meet71, the ERP71 video meetings app.</p>
+<p>You can use Meet71 at <a href="${meetUrl}">${meetUrl}</a>.</p>
+<p>Sign in with Google or ERP71. This grants platform access. It is not a link to a specific meeting.</p>`,
+            },
+            { throwOnError: true },
+        );
+    }
+
     async sendSubscriptionExpiryWarning(to: string, tenantName: string, daysLeft: number, expiresAt: Date): Promise<void> {
         const { frontendUrl } = await this.getTransportConfig();
         await this.send({

@@ -77,6 +77,7 @@ services:
         # the single-domain behaviour; see .env.production.example.
         NEXT_PUBLIC_MARKETING_URL: ${NEXT_PUBLIC_MARKETING_URL:-}
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
+        NEXT_PUBLIC_MEET71_ORIGIN: ${NEXT_PUBLIC_MEET71_ORIGIN:-https://meet.erp71.com}
     env_file:
       - .env.production
     environment:

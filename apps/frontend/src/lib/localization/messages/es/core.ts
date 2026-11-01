@@ -522,6 +522,7 @@ export const coreMessages = {
             creditTopups: "Recargas de créditos",
             users: "Usuarios de la plataforma",
             platformStaff: "Personal",
+            meet71: "Meet71",
             platformAccountingOverview: "Resumen de libros",
             platformAccountingExpenses: "Gastos de plataforma",
             platformAccountingLedger: "Libro mayor",

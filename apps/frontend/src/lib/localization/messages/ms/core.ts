@@ -521,6 +521,7 @@ export const coreMessages = {
                 creditTopups: "Tambah Nilai Kredit",
                 users: "Pengguna Platform",
                 platformStaff: "Staf",
+                meet71: "Meet71",
                 platformAccountingOverview: "Ringkasan Buku",
                 platformAccountingExpenses: "Perbelanjaan Platform",
                 platformAccountingLedger: "Lejar Platform",

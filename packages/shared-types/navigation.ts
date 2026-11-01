@@ -350,6 +350,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'admin.channels': { id: 'admin.channels', kind: 'subgroup', icon: 'MessageSquare', labelKey: 'sidebar.sections.adminChannels' },
   'admin.platform': { id: 'admin.platform', kind: 'subgroup', icon: 'Settings', labelKey: 'sidebar.sections.adminPlatform' },
   'admin.users': { id: 'admin.users', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.platformStaff', href: '/admin/users' },
+  'admin.meet71': { id: 'admin.meet71', kind: 'link', icon: 'Video', labelKey: 'sidebar.items.meet71', href: '/admin/meet71' },
   'admin.referrals': { id: 'admin.referrals', kind: 'link', icon: 'Gift', labelKey: 'sidebar.items.referrals', href: '/admin/referrals' },
   'admin.url-shortener': { id: 'admin.url-shortener', kind: 'link', icon: 'Link2', labelKey: 'sidebar.items.shortLinks', href: '/admin/url-shortener' },
   'admin.blog': { id: 'admin.blog', kind: 'link', icon: 'Newspaper', labelKey: 'sidebar.items.blog', href: '/admin/blog' },
@@ -805,6 +806,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
  * and, from 2026-09-20, `projects.stories` alongside them — the same one node
  * the tenant layout takes, since one set of pages serves both consoles. Likewise
  * `projects.epics` from 2026-09-24.
+ *
+ * Meet71 console: `npx tsx packages/database/prisma/sync-nav-layout.ts --nodes=admin.meet71`
+ * (dry-run first). Not on boot.
  */
 export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin', null, 0),
@@ -858,6 +862,7 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.platform-settings.navigation', 'admin.platform', 8),
   layoutNode('admin.platform-settings.ai', 'admin.platform', 9),
   layoutNode('admin.platform-settings.feedback-automation', 'admin.platform', 10),
+  layoutNode('admin.meet71', 'admin.platform', 11),
 
   // The platform team's own project workspace. Same nodes as the tenant module —
   // one set of pages serves both — hung off the admin console instead of a shop

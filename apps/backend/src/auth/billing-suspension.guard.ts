@@ -27,6 +27,7 @@ const ALWAYS_ALLOWED_PREFIXES = [
     'contact',
     'feedback',
     'health',
+    'meet71',     // Meet71 is a separate product; a frozen shop must not strand meetings
 ];
 
 /**

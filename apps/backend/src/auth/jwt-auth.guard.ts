@@ -9,17 +9,23 @@ import { AUTH_SCOPE_APP, resolveAuthScope } from './token-scope';
  * shell cannot render the "set your password" screen without knowing who it is
  * talking to, `tenants/password-policy` because that screen shows the
  * workspace's own rules as a live checklist, `auth/change-password` because it
- * is the way out, and `auth/logout` because refusing to let someone leave is
- * not a security property.
+ * is the way out, `auth/logout` because refusing to let someone leave is
+ * not a security property, and `meet71/sso/code` because Meet71 is a separate
+ * product and a forced ERP password change must not strand meetings.
  *
  * Compared against the path with the global prefix stripped, so it does not
  * silently stop matching if `api/v1` is ever versioned up.
+ *
+ * `meet71/sso/code` is here because Meet71 is a separate product: an employee
+ * held to changing their ERP password must still be able to silent-SSO into a
+ * meeting.
  */
 const PASSWORD_CHANGE_ALLOWLIST = new Set([
     'auth/me',
     'auth/change-password',
     'auth/logout',
     'tenants/password-policy',
+    'meet71/sso/code',
 ]);
 
 /** `/api/v1/auth/me?x=1` → `auth/me`. */

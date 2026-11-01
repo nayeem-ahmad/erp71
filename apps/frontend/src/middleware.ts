@@ -25,17 +25,26 @@ export function middleware(request: NextRequest) {
         readDomainConfig(),
     );
 
+    let response: NextResponse;
     if (route.kind === 'redirect') {
-        return NextResponse.redirect(route.url, route.status);
-    }
-
-    if (route.kind === 'rewrite') {
+        response = NextResponse.redirect(route.url, route.status);
+    } else if (route.kind === 'rewrite') {
         const url = request.nextUrl.clone();
         url.pathname = route.pathname;
-        return NextResponse.rewrite(url);
+        response = NextResponse.rewrite(url);
+    } else {
+        response = NextResponse.next();
     }
 
-    return NextResponse.next();
+    // Defense in depth: this page holds the ERP71 JWT in first-party
+    // localStorage. `frame-ancestors 'self'` stops a future implementer from
+    // turning silent SSO into a hidden iframe (which would not see the JWT
+    // anyway — partitioned storage — but must not be attempted).
+    if (request.nextUrl.pathname === '/meet71/sso' || request.nextUrl.pathname === '/meet71/sso/') {
+        response.headers.set('Content-Security-Policy', "frame-ancestors 'self'");
+    }
+
+    return response;
 }
 
 export const config = {

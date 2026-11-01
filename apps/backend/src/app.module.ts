@@ -144,6 +144,7 @@ import { ShortLinksModule } from './short-links/short-links.module';
 import { BlogModule } from './blog/blog.module';
 import { TenantBlogModule } from './tenant-blog/tenant-blog.module';
 import { SocialMediaModule } from './social-media/social-media.module';
+import { Meet71Module } from './meet71/meet71.module';
 
 @Module({
     imports: [
@@ -292,6 +293,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         BlogModule,
         TenantBlogModule,
         SocialMediaModule,
+        Meet71Module,
     ],
     controllers: [],
     providers: [
