@@ -53,9 +53,10 @@ apex can serve it instead:
 
 1. **DNS.** `A` records for `erp71.com` and `www.erp71.com` pointing at
    `66.116.236.127`. Confirm with `dig +short erp71.com`.
-2. **Reverse proxy.** The shared Hermes Caddyfile (`/opt/hermes/caddy/Caddyfile`)
-   needs an `erp71.com, www.erp71.com` block on the same upstream as the app
-   host. Back it up, edit, `caddy validate`, `caddy reload`:
+2. **Reverse proxy.** The in-repo `Caddyfile` (loaded by `erp71-caddy-1`)
+   already has an `erp71.com, www.erp71.com` block on the same upstream as the
+   app host. To change it, edit `/opt/erp71/Caddyfile` **in place** and run
+   `sync_caddy_config` (see `scripts/caddy-edge.sh`). The block:
 
    ```
    erp71.com, www.erp71.com {
@@ -125,8 +126,7 @@ Calling the page's own origin removes both. The route skips the frontend's
 Node process, which adds a hop and buffers request bodies — the external-sync
 snapshot upload is up to 100 MB.
 
-In the shared Hermes Caddyfile (`/opt/hermes/caddy/Caddyfile`), this replaces
-the plain `app.erp71.com` block:
+In the in-repo `Caddyfile` (production, `erp71-caddy-1`), `app.erp71.com` is:
 
 ```
 app.erp71.com {
@@ -143,10 +143,11 @@ app.erp71.com {
 ```
 
 `flush_interval -1` keeps the support page's Server-Sent Events stream
-unbuffered. The file serves five apps, so a bad reload takes all of them down:
-back it up (`Caddyfile.bak-YYYYMMDD`), edit, `caddy validate`, then
-`caddy reload`. The in-repo `Caddyfile` (the `standalone-edge` profile) carries
-the same block with the compose service names.
+unbuffered. Caddy also serves Meet71 and the neighbor apps imported from
+`Caddyfile.neighbors`, so a bad *restart* takes all of them down. A failed
+`caddy reload` keeps the previous config in memory. Edit in place, then
+`sync_caddy_config` (cmp both bind mounts, validate, reload or recreate +
+extra-net attach). Never a bare `caddy reload` after `mv` / `sed -i`.
 
 **Order.** The Caddy route goes live first, then the frontend switch ships:
 `scripts/sync-erp71-env-urls.sh` sets `NEXT_PUBLIC_API_BASE` and
@@ -182,8 +183,8 @@ What ERP71 operators need to know:
   `docker compose -p erp71 down` cannot remove the network while they are
   attached; `up -d` and `scripts/deploy.sh` are unaffected.
 - **It has a `meet.erp71.com` block in the in-repo `Caddyfile`** (`/rtc*` →
-  `meet71-livekit-1:7880`, rest → `meet71-app-1:3000`). Until cutover, Hermes
-  still serves a copy of that block. After cutover the git file is the edge.
+  `meet71-livekit-1:7880`, rest → `meet71-app-1:3000`). That git file is the
+  public edge.
 - **It owns host ports `7881/tcp` and `7882/udp`** (LiveKit WebRTC media).
 - **No database.** It does not touch Postgres.
 
@@ -196,85 +197,20 @@ Its own deploy (push to `main` in its repo, or
 Meet71 talks to ERP71 over the private `erp71_default` Docker network
 (`http://backend:4000`). Internal routes (`/api/v1/internal/meet71/*`) are
 gated by `X-Meet71-Service-Key`, but that secret is not a substitute for
-keeping them off the public internet. Production deny today is on **Hermes**
-(`/opt/hermes/caddy/Caddyfile`) — and Hermes does not have this block yet, so
-public probes return 401 from Nest. The in-repo `Caddyfile` already 404s
-`/api/v1/internal/*` on `app.erp71.com` and `api.erp71.com`; after the
-cutover in `docs/superpowers/specs/2026-11-01-erp71-caddy-replaces-hermes.md`
-that file is what production loads. Dual-accept of `MEET71_ERP71_SECRET_PREVIOUS`
-does not replace this deny.
+keeping them off the public internet. Production deny is the in-repo
+`Caddyfile` loaded by `erp71-caddy-1`: it 404s `/api/v1/internal/*` on
+`app.erp71.com` and `api.erp71.com` before `reverse_proxy`. Dual-accept of
+`MEET71_ERP71_SECRET_PREVIOUS` does not replace this deny.
 
-Until cutover, the Hermes steps below still apply. After cutover, skip them:
-the in-repo file is the edge.
+Confirm 404 on both public hosts:
 
-1. Backup:
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://api.erp71.com/api/v1/internal/meet71/membership
+curl -s -o /dev/null -w '%{http_code}\n' https://app.erp71.com/api/v1/internal/meet71/membership
+```
 
-   ```bash
-   cp /opt/hermes/caddy/Caddyfile /opt/hermes/caddy/Caddyfile.bak-$(date +%Y%m%d)
-   ```
-
-2. In **both** `app.erp71.com` and `api.erp71.com` blocks, insert **before**
-   `reverse_proxy`:
-
-   ```caddy
-   @meet71internal path /api/v1/internal/*
-   handle @meet71internal {
-   	respond 404
-   }
-   ```
-
-   For `app.erp71.com` this sits **above** the existing `handle /api/v1/*`
-   (Caddy first-match):
-
-   ```
-   app.erp71.com {
-   	encode zstd gzip
-   	@meet71internal path /api/v1/internal/*
-   	handle @meet71internal {
-   		respond 404
-   	}
-   	handle /api/v1/* {
-   		reverse_proxy erp71-backend-1:4000 {
-   			flush_interval -1
-   		}
-   	}
-   	handle {
-   		reverse_proxy erp71-frontend-1:3000
-   	}
-   }
-   ```
-
-   Live `api.erp71.com` is a site-level `reverse_proxy` with **no** `handle`
-   blocks. Inserting `@meet71internal handle` next to that proxy mixes Caddy
-   routing models. Wrap the proxy:
-
-   ```
-   api.erp71.com {
-   	encode zstd gzip
-   	@meet71internal path /api/v1/internal/*
-   	handle @meet71internal {
-   		respond 404
-   	}
-   	handle {
-   		reverse_proxy erp71-backend-1:4000
-   	}
-   }
-   ```
-
-3. `caddy validate --config /opt/hermes/caddy/Caddyfile`
-4. `caddy reload`
-5. Confirm 404 on both public hosts:
-
-   ```bash
-   curl -s -o /dev/null -w '%{http_code}\n' https://api.erp71.com/api/v1/internal/meet71/membership
-   curl -s -o /dev/null -w '%{http_code}\n' https://app.erp71.com/api/v1/internal/meet71/membership
-   ```
-
-   Both must print `404`. After Hermes is live, the only path to these
-   routes is Docker DNS `backend:4000` (prod container `erp71-backend-1`).
-
-The in-repo `Caddyfile` already mirrors this deny with the compose service
-name `backend`.
+Both must print `404`. The only path to these routes is Docker DNS
+`backend:4000` (prod container `erp71-backend-1`).
 
 ### Platform admin Meet71 nav node
 
@@ -339,7 +275,7 @@ ssh root@66.116.236.127 'cd /opt/erp71 && ./scripts/deploy.sh main'
 7. Waits for the backend container to report `healthy` (the compose healthcheck
    on `/api/v1/health`), up to 6 minutes. If it does not, prints the backend's
    last log lines and exits non-zero.
-8. Reattaches the shared **Hermes** Caddy to the `erp71_default` network (otherwise `app.erp71.com` returns 502)
+8. Fail-closes if `/opt/erp71/Caddyfile.neighbors` is missing, a directory, or has no site blocks (restore from `/root/caddy-cutover-*-neighbors.bak`). Starts compose Caddy (`erp71-caddy-1`), re-attaches extra nets from `/opt/erp71/caddy-extra-networks`, then `sync_caddy_config` (cmp both bind mounts; validate; reload or `--force-recreate` + extra-net attach)
 9. Trims Docker's build cache to 8 GB (`docker builder prune`); images and containers are not touched
 10. Prints `docker compose ... ps`
 
@@ -515,7 +451,9 @@ the backend's marker cannot tell the database was replaced.
 
 | Role | Action |
 |---|---|
-| Frontend 502 | Confirm Hermes Caddy is attached to `erp71_default` (`docker network connect erp71_default hermes-caddy-1`); check `docker compose ... ps` |
+| Frontend 502 | Confirm `erp71-caddy-1` is up and on `erp71_default` plus every net in `/opt/erp71/caddy-extra-networks` (`docker network connect <net> erp71-caddy-1`); check `docker compose ... ps` |
+| Neighbor 502 (JobXprss / Scrum71 / yt2mp3 / profiles) | Same extra-net attach; confirm `/opt/erp71/Caddyfile.neighbors` still has site blocks; `sync_caddy_config` |
+| Rolling Caddy back to Hermes | Revert the "drop standalone-edge" commit on **`origin/main`** (or re-add `profiles: [standalone-edge]` on `caddy`) and disable GitHub Actions "Deploy to VPS" **before** starting Hermes. A VPS-only checkout is not a rollback — the next auto-deploy would bind 80/443 again. Then `docker stop`/`rm -f erp71-caddy-1` (keep `erp71_caddy_data`), wait until 80/443 are free, `docker start hermes-webui-proxy hermes-webui-static`, reconnect the nets in `/root/caddy-cutover-*-hermes-nets.txt`, `systemctl enable --now hermes-gateway.service`. |
 | Backend down | `docker compose -p erp71 ... logs --tail=100 backend`; check `/api/v1/health`; `docker compose ... ps` shows the backend `(healthy)`, `(health: starting)` or `(unhealthy)`. A backend stuck in `starting` is usually preparing the database itself — its log shows `db-prepare:` lines |
 | DB issues | Check the `db` container logs + disk on the VPS; restore from backup if needed |
 | Payment webhook failing | Check SSL Wireless / bKash / Nagad dashboards |

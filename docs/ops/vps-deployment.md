@@ -64,53 +64,31 @@ Create these `A` records and point them to the VPS IP:
 
 TLS issuance will fail until each name resolves to the VPS.
 
-## Shared host (integrated reverse proxy)
+## Public edge (this stack's Caddy)
 
-On a host that already runs another reverse proxy owning ports 80/443 (the
-production VPS at `66.116.236.127` still runs the shared **Hermes** Caddy
-until the cutover in `docs/superpowers/specs/2026-11-01-erp71-caddy-replaces-hermes.md`), do **not**
-start this stack's own `caddy` service — it is gated behind the
-`standalone-edge` Compose profile and skipped by default. After that cutover,
-ERP71's compose Caddy is the public edge. Until then:
+This VPS *is* the public reverse proxy. Compose service `caddy`
+(`erp71-caddy-1`, image `caddy:2.9-alpine`) binds host 80/443. ERP71 and
+Meet71 site blocks live in git `Caddyfile`. Neighbor apps (JobXprss, Scrum71,
+yt2mp3, profiles) live in `/opt/erp71/Caddyfile.neighbors` (gitignored,
+chmod 600). `scripts/deploy.sh` fail-closes if that file is missing, a
+directory, or has no site blocks; restore from
+`/root/caddy-cutover-*-neighbors.bak`. Extra docker networks are listed in
+`/opt/erp71/caddy-extra-networks` and re-attached after every Caddy recreate.
 
-1. Deploy without the edge proxy: `docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build` (starts `db`, `backend`, `frontend` only).
-2. Ensure the existing proxy shares a Docker network with these containers so it can resolve them by name (`erp71-frontend-1`, `erp71-backend-1`). `scripts/deploy.sh` reattaches it on every deploy.
-3. Add site blocks to the existing proxy's Caddyfile (back it up first, `caddy validate`, then `caddy reload`):
+Do not start a second proxy on 80/443. Do not `docker compose down` the whole
+`erp71` project — Meet71 and neighbors share `erp71_default`.
 
-   ```
-   erp71.com, www.erp71.com {
-   	encode zstd gzip
-   	reverse_proxy erp71-frontend-1:3000
-   }
-   app.erp71.com {
-   	encode zstd gzip
-   	handle /api/v1/* {
-   		reverse_proxy erp71-backend-1:4000 {
-   			flush_interval -1
-   		}
-   	}
-   	handle {
-   		reverse_proxy erp71-frontend-1:3000
-   	}
-   }
-   api.erp71.com {
-   	encode zstd gzip
-   	reverse_proxy erp71-backend-1:4000
-   }
-   ```
+To reload after editing the git Caddyfile or neighbors **in place**
+(`cat >` / `tee`, never `mv`): run `scripts/deploy.sh`, or the
+`sync_caddy_config` wrapper in `shared-vps-second-app.md` (defines `compose()`
+before sourcing `scripts/caddy-edge.sh`). A bare `source scripts/caddy-edge.sh`
+without `compose()` cannot recreate Caddy after an inode change.
 
-   The marketing pair and the app point at the same upstream on purpose — one
-   Next.js container serves both, and it reads `Host` to decide which site a
-   request is for. Caddy passes `Host` through unchanged by default, so nothing
-   extra is needed; a proxy that rewrites it must send the original in
-   `X-Forwarded-Host`.
-
-   `/api/v1/*` on the app host goes to the backend because the browser calls
-   its own origin for the API — see the runbook's
-   [API on the app domain](./deployment-runbook.md#api-on-the-app-domain).
-
-For a dedicated host, enable this stack's own proxy instead:
-`docker compose --profile standalone-edge -f docker-compose.prod.yml up -d`.
+The marketing pair and the app point at the same frontend upstream on purpose
+— one Next.js container serves both, and it reads `Host`. Caddy passes `Host`
+through unchanged. `/api/v1/*` on the app host goes to the backend because the
+browser calls its own origin — see the runbook's
+[API on the app domain](./deployment-runbook.md#api-on-the-app-domain).
 
 ## Verification
 
