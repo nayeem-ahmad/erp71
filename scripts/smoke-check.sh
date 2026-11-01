@@ -7,8 +7,8 @@
 
 set -euo pipefail
 
-API_BASE="${API_BASE:-https://api.nayeemahmad.com}"
-APP_BASE="${APP_BASE:-https://app.nayeemahmad.com}"
+API_BASE="${API_BASE:-https://api.erp71.com}"
+APP_BASE="${APP_BASE:-https://app.erp71.com}"
 
 echo "Checking API health at ${API_BASE}/api/v1/health ..."
 health_json="$(curl -fsS "${API_BASE}/api/v1/health")"

@@ -47,3 +47,20 @@ api.erp71.com {
         reverse_proxy backend:4000
     }
 }
+
+# Meet71 (compose project meet71 on erp71_default). Container names, not
+# service names: Caddy is in project erp71, so `app` would be ambiguous.
+meet.erp71.com {
+    handle /rtc* {
+        reverse_proxy meet71-livekit-1:7880
+    }
+    handle {
+        encode zstd gzip
+        reverse_proxy meet71-app-1:3000
+    }
+}
+
+# Neighbor apps. File is gitignored and lives only on the VPS.
+# Pre-cutover deploy.sh may write a comment-only stub; after Caddy is the
+# edge, a missing/empty file fails the deploy (see ensure_neighbors_file).
+import Caddyfile.neighbors

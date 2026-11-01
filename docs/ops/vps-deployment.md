@@ -67,9 +67,11 @@ TLS issuance will fail until each name resolves to the VPS.
 ## Shared host (integrated reverse proxy)
 
 On a host that already runs another reverse proxy owning ports 80/443 (the
-production VPS at `66.116.236.127` runs the shared **Hermes** Caddy), do **not**
+production VPS at `66.116.236.127` still runs the shared **Hermes** Caddy
+until the cutover in `docs/superpowers/specs/2026-11-01-erp71-caddy-replaces-hermes.md`), do **not**
 start this stack's own `caddy` service — it is gated behind the
-`standalone-edge` Compose profile and skipped by default. Instead:
+`standalone-edge` Compose profile and skipped by default. After that cutover,
+ERP71's compose Caddy is the public edge. Until then:
 
 1. Deploy without the edge proxy: `docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build` (starts `db`, `backend`, `frontend` only).
 2. Ensure the existing proxy shares a Docker network with these containers so it can resolve them by name (`erp71-frontend-1`, `erp71-backend-1`). `scripts/deploy.sh` reattaches it on every deploy.
