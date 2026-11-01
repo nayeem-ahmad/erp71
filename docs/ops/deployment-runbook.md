@@ -178,13 +178,12 @@ Meet71 (video meetings, repo `nayeem-ahmad/meet71`) runs beside ERP71 at
 What ERP71 operators need to know:
 
 - **It joins `erp71_default`.** Containers `meet71-app-1` and
-  `meet71-livekit-1` sit on ERP71's network so the shared Hermes Caddy can
-  reach them. `docker compose -p erp71 down` cannot remove the network
-  while they are attached; `up -d` and `scripts/deploy.sh` are unaffected.
-- **It has a block in the Hermes Caddyfile**, marked
-  `# meet71: managed by /opt/meet71/scripts/deploy.sh`. Its deploy appends the
-  block once (backup, in-place append, `caddy validate`, restore on failure)
-  and never edits the file again. Keep the block when tidying the file.
+  `meet71-livekit-1` sit on ERP71's network so Caddy can reach them.
+  `docker compose -p erp71 down` cannot remove the network while they are
+  attached; `up -d` and `scripts/deploy.sh` are unaffected.
+- **It has a `meet.erp71.com` block in the in-repo `Caddyfile`** (`/rtc*` →
+  `meet71-livekit-1:7880`, rest → `meet71-app-1:3000`). Until cutover, Hermes
+  still serves a copy of that block. After cutover the git file is the edge.
 - **It owns host ports `7881/tcp` and `7882/udp`** (LiveKit WebRTC media).
 - **No database.** It does not touch Postgres.
 
@@ -197,10 +196,16 @@ Its own deploy (push to `main` in its repo, or
 Meet71 talks to ERP71 over the private `erp71_default` Docker network
 (`http://backend:4000`). Internal routes (`/api/v1/internal/meet71/*`) are
 gated by `X-Meet71-Service-Key`, but that secret is not a substitute for
-keeping them off the public internet. Production deny is on **Hermes**
-(`/opt/hermes/caddy/Caddyfile`), not only the in-repo `Caddyfile` (that file
-is the `standalone-edge` profile). Dual-accept of `MEET71_ERP71_SECRET_PREVIOUS`
+keeping them off the public internet. Production deny today is on **Hermes**
+(`/opt/hermes/caddy/Caddyfile`) — and Hermes does not have this block yet, so
+public probes return 401 from Nest. The in-repo `Caddyfile` already 404s
+`/api/v1/internal/*` on `app.erp71.com` and `api.erp71.com`; after the
+cutover in `docs/superpowers/specs/2026-11-01-erp71-caddy-replaces-hermes.md`
+that file is what production loads. Dual-accept of `MEET71_ERP71_SECRET_PREVIOUS`
 does not replace this deny.
+
+Until cutover, the Hermes steps below still apply. After cutover, skip them:
+the in-repo file is the edge.
 
 1. Backup:
 

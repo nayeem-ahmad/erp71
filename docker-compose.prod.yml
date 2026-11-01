@@ -111,6 +111,7 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./Caddyfile.neighbors:/etc/caddy/Caddyfile.neighbors:ro
       - caddy_data:/data
       - caddy_config:/config
     restart: unless-stopped

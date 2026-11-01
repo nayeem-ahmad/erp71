@@ -89,9 +89,27 @@ if ! compose run --rm --no-deps -T backend sh apps/backend/scripts/db-prepare.sh
   exit 1
 fi
 
+# Neighbor Caddyfile is gitignored and bind-mounted. Docker turns a missing
+# file mount into a directory; a comment stub keeps `import` valid while
+# Caddy is still behind standalone-edge. After Caddy is the edge, this
+# helper becomes fail-closed (no stub).
+ensure_neighbors_file() {
+  local f="$REPO_ROOT/Caddyfile.neighbors"
+  if [ -d "$f" ]; then
+    echo "ERROR: $f is a directory. Docker creates that when the bind mount" >&2
+    echo "is missing; remove it and re-run. Neighbor config lives on the VPS." >&2
+    exit 1
+  fi
+  if [ ! -f "$f" ]; then
+    printf '# Neighbor site blocks. Not in git. See docs/ops/deployment-runbook.md.\n' > "$f"
+    chmod 600 "$f"
+  fi
+}
+
 # 3. Swap. Compose recreates the containers whose image changed; the new
 #    backend's start command finds the marker from step 2.
 echo "==> Starting the new containers"
+ensure_neighbors_file
 compose up -d
 
 # 4. Wait for the new backend to report healthy (the healthcheck in
