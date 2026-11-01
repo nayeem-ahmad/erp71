@@ -138,4 +138,20 @@ describe('Meet71InternalController', () => {
             expect(proxy).toBeGreaterThan(deny);
         }
     });
+
+    it('in-repo Caddyfile reverse-proxies meet.erp71.com /rtc* to LiveKit and the rest to the app', () => {
+        const caddyfile = fs.readFileSync(path.join(__dirname, '../../../../Caddyfile'), 'utf8');
+        const block = siteBlock(caddyfile, 'meet.erp71.com');
+        const rtc = block.indexOf('handle /rtc*');
+        const livekit = block.indexOf('reverse_proxy meet71-livekit-1:7880');
+        const app = block.indexOf('reverse_proxy meet71-app-1:3000');
+        expect(rtc).toBeGreaterThanOrEqual(0);
+        expect(livekit).toBeGreaterThan(rtc);
+        expect(app).toBeGreaterThan(livekit);
+    });
+
+    it('in-repo Caddyfile imports Caddyfile.neighbors', () => {
+        const caddyfile = fs.readFileSync(path.join(__dirname, '../../../../Caddyfile'), 'utf8');
+        expect(caddyfile).toMatch(/^import Caddyfile\.neighbors\s*$/m);
+    });
 });

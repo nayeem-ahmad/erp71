@@ -20,11 +20,11 @@ Returns `"status": "degraded"` if the DB is unreachable. Configure your uptime m
 
 1. Sign up at https://betterstack.com/uptime
 2. **Add Monitor** → HTTP monitor
-   - URL: `https://api.nayeemahmad.com/api/v1/health`
+   - URL: `https://api.erp71.com/api/v1/health`
    - Check interval: **1 minute**
    - Alert on: status not `ok` OR HTTP status ≠ 200
 3. Add a second monitor for the frontend:
-   - URL: `https://app.nayeemahmad.com/`
+   - URL: `https://app.erp71.com/`
    - Check interval: **1 minute**
 4. Set up **escalation policy**: notify via email immediately, then SMS after 5 min if unacknowledged
 5. Connect to your **status page** (BetterStack provides this free)
@@ -77,7 +77,7 @@ In Supabase Dashboard → Observability → Alerts:
 ./scripts/smoke-check.sh
 
 # Or manually:
-curl -s https://api.nayeemahmad.com/api/v1/health | python3 -m json.tool
+curl -s https://api.erp71.com/api/v1/health | python3 -m json.tool
 
 # DB connection count
 psql $DIRECT_URL -c "SELECT count(*) FROM pg_stat_activity WHERE state='active';"

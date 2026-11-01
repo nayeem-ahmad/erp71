@@ -59,6 +59,11 @@ next-env.d.ts
 # Brainstorming visual companion
 .superpowers/
 
+# VPS-only neighbor site blocks (bcrypt, other-app coupling)
+/Caddyfile.neighbors
+# Extra docker networks to attach after every Caddy recreate (written at cutover)
+/caddy-extra-networks
+
 # Local DB dumps (never commit — contains live customer data)
 /backups/
 *.dump
