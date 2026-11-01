@@ -102,6 +102,12 @@ export function meet71BounceWithoutSession(
     return { kind: 'meet71', url: meet71NoneUrl(allowedOrigin) };
 }
 
+function isMeet71MintFailure(
+    result: Meet71MintResult,
+): result is Extract<Meet71MintResult, { ok: false }> {
+    return result.ok === false;
+}
+
 export function meet71BounceAfterMint(opts: {
     prompt: 'none' | 'login';
     result: Meet71MintResult;
@@ -111,17 +117,18 @@ export function meet71BounceAfterMint(opts: {
     email?: string;
 }): Meet71BounceDestination {
     const none: Meet71BounceDestination = { kind: 'meet71', url: meet71NoneUrl(opts.allowedOrigin) };
+    const result = opts.result;
 
-    if (opts.result.ok) {
+    if (!isMeet71MintFailure(result)) {
         const callback = assertedCallback(opts.returnUrl, opts.allowedOrigin);
         if (!callback) return none;
         return {
             kind: 'meet71',
-            url: withCodeAndState(callback, opts.result.code, opts.state),
+            url: withCodeAndState(callback, result.code, opts.state),
         };
     }
 
-    switch (opts.result.reason) {
+    switch (result.reason) {
         case 'not-allowed':
             return { kind: 'meet71', url: meet71NotAllowedUrl(opts.allowedOrigin, opts.email) };
         case 'password-change-required':
