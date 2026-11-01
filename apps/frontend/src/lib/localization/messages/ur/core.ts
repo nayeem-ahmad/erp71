@@ -522,6 +522,7 @@ export const coreMessages = {
             creditTopups: 'کریڈٹ ٹاپ اپ',
             users: 'پلیٹ فارم کے صارفین',
             platformStaff: 'عملہ',
+            meet71: 'Meet71',
             platformAccountingOverview: 'کھاتوں کا خلاصہ',
             platformAccountingExpenses: 'پلیٹ فارم اخراجات',
             platformAccountingLedger: 'پلیٹ فارم کھاتہ',

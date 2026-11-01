@@ -21,6 +21,10 @@ erp71.com, www.erp71.com {
 # Server-Sent Events stream unbuffered.
 app.erp71.com {
     encode zstd gzip
+    @meet71internal path /api/v1/internal/*
+    handle @meet71internal {
+        respond 404
+    }
     handle /api/v1/* {
         reverse_proxy backend:4000 {
             flush_interval -1
@@ -35,5 +39,11 @@ app.erp71.com {
 # API-key clients and the payment gateways' callbacks.
 api.erp71.com {
     encode zstd gzip
-    reverse_proxy backend:4000
+    @meet71internal path /api/v1/internal/*
+    handle @meet71internal {
+        respond 404
+    }
+    handle {
+        reverse_proxy backend:4000
+    }
 }

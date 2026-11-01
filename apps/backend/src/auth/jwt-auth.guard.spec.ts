@@ -113,7 +113,8 @@ describe('JwtAuthGuard', () => {
             '/api/v1/auth/change-password',
             '/api/v1/auth/logout',
             '/api/v1/tenants/password-policy',
-        ])('admits %s — the four endpoints the gate itself needs', (url) => {
+            '/api/v1/meet71/sso/code',
+        ])('admits %s — the endpoints the gate itself needs', (url) => {
             expect(guard.handleRequest(null, pending, null, contextFor(url))).toBe(pending);
         });
 

@@ -81,7 +81,8 @@ describe('BillingSuspensionGuard', () => {
         '/api/v1/auth/login',
         '/api/v1/admin/tenants/tenant-1/payments',
         '/api/v1/support/tickets',
-    ])('leaves %s open — it is how the suspension gets lifted', async (path) => {
+        '/api/v1/meet71/sso/code',
+    ])('leaves %s open — it is how the suspension gets lifted, or Meet71 SSO', async (path) => {
         db.tenant.findUnique.mockResolvedValue(suspended);
 
         await expect(guard.canActivate(makeContext(request({ path })))).resolves.toBe(true);

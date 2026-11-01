@@ -649,6 +649,7 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRe
         throw new ApiError(message, response.status, code);
     }
 
+    if (response.status === 204) return {};
     return response.json();
 }
 
@@ -4607,6 +4608,34 @@ export const api = {
         }),
     sendPlatformAdminUserResetEmail: (userId: string) =>
         fetchWithAuth(`/admin/users/${userId}/send-reset-email`, { method: 'POST' }),
+    getMeet71Admin: () => fetchWithAuth('/admin/meet71'),
+    addMeet71Allowlist: (pattern: string) =>
+        fetchWithAuth('/admin/meet71/allowlist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pattern }),
+        }),
+    deleteMeet71Allowlist: (id: string) =>
+        fetchWithAuth(`/admin/meet71/allowlist/${id}`, { method: 'DELETE' }),
+    patchMeet71Member: (
+        email: string,
+        data: { canCreateRoom?: boolean; inviteQuota?: number; isAdmin?: boolean },
+    ) =>
+        fetchWithAuth(`/admin/meet71/members/${encodeURIComponent(email)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
+    deleteMeet71Member: (email: string) =>
+        fetchWithAuth(`/admin/meet71/members/${encodeURIComponent(email)}`, { method: 'DELETE' }),
+    deleteMeet71Denial: (email: string) =>
+        fetchWithAuth(`/admin/meet71/denials/${encodeURIComponent(email)}`, { method: 'DELETE' }),
+    patchMeet71Room: (code: string, createdByEmail: string) =>
+        fetchWithAuth(`/admin/meet71/rooms/${encodeURIComponent(code)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ createdByEmail }),
+        }),
     /** Archived referees are excluded unless `include_archived` is set. */
     getAdminReferees: (params?: { include_archived?: boolean }) => {
         const suffix = params?.include_archived ? '?include_archived=true' : '';

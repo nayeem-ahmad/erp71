@@ -4,6 +4,7 @@ import LoginPage from './page';
 import { getWorkspaceItem } from '@/lib/session-store';
 
 const pushMock = jest.fn();
+const searchParamsGet = jest.fn().mockReturnValue(null);
 
 jest.mock('next/navigation', () => ({
   useRouter() {
@@ -11,7 +12,7 @@ jest.mock('next/navigation', () => ({
   },
   useSearchParams() {
     return {
-      get: jest.fn().mockReturnValue(null),
+      get: searchParamsGet,
     };
   },
 }));
@@ -250,5 +251,27 @@ describe('Login UI Authentication Mapping', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /sign in/i })).not.toBeDisabled();
     });
+  });
+
+  it('prefers /meet71/sso over the admin console after sign-in', async () => {
+    searchParamsGet.mockImplementation((key: string) => (key === 'redirect' ? '/meet71/sso' : null));
+    const { api } = require('../../lib/api');
+    api.login.mockResolvedValueOnce({ access_token: 't-admin' });
+    api.getMe.mockResolvedValueOnce({
+      is_platform_admin: true,
+      platform_role: 'ADMIN',
+      tenants: [],
+    });
+
+    render(<LoginPage />);
+    fireEvent.change(screen.getByPlaceholderText(/name@company.com/i), { target: { value: 'nayeem.ahmad@gmail.com' } });
+    fireEvent.change(screen.getByPlaceholderText(/••••••••/i), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith('/meet71/sso');
+    });
+
+    searchParamsGet.mockReturnValue(null);
   });
 });

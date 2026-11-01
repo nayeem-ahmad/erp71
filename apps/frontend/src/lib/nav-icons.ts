@@ -89,9 +89,10 @@ import {
     Factory,
     Timer,
     Warehouse,
+    Video,
 } from 'lucide-react';
 
-const NAV_ICON_MAP: Record<string, LucideIcon> = {
+export const NAV_ICON_MAP: Record<string, LucideIcon> = {
     Activity,
     LayoutDashboard,
     LayoutList,
@@ -181,6 +182,7 @@ const NAV_ICON_MAP: Record<string, LucideIcon> = {
     Briefcase,
     UserSearch,
     Menu,
+    Video,
 };
 
 export function resolveNavIcon(name: string): LucideIcon {
