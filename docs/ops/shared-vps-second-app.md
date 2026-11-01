@@ -75,7 +75,7 @@ url encoded: my%2Bp%40ss
 The new app must join the existing Docker network so it can reach:
 
 - the shared Postgres container
-- ERP71's Caddy (`erp71-caddy-1`), if that Caddy will proxy to it. Until the Hermes cutover (see `docs/superpowers/specs/2026-11-01-erp71-caddy-replaces-hermes.md`), the live proxy is still `hermes-webui-proxy`.
+- ERP71's Caddy (`erp71-caddy-1`), if that Caddy will proxy to it.
 
 In the new app's production compose file, declare the existing network as external:
 
@@ -172,15 +172,15 @@ docker compose --env-file .env.production -f docker-compose.prod.yml run --rm ap
 
 Do not run any migration command against the ERP71 schema or database.
 
-## 6. Reuse the existing Caddy instance
+## 6. Reuse ERP71 Caddy (`erp71-caddy-1`)
 
-ERP71 + Meet71 site blocks live in git `/opt/erp71/Caddyfile`. **Second apps go in `/opt/erp71/Caddyfile.neighbors`** (gitignored; yt2mp3 basic_auth lives there). Until the Hermes cutover, the live proxy is still `hermes-webui-proxy`; after cutover it is `erp71-caddy-1`. See `docs/superpowers/specs/2026-11-01-erp71-caddy-replaces-hermes.md`.
+ERP71 + Meet71 site blocks live in git `/opt/erp71/Caddyfile`. **Second apps go in `/opt/erp71/Caddyfile.neighbors`** (gitignored; yt2mp3 basic_auth lives there). The public edge is compose Caddy `erp71-caddy-1`. Do not bind 80/443 on the new app.
 
 To publish the new app publicly:
 
 1. deploy the new app container first
 2. add a new site block to `/opt/erp71/Caddyfile.neighbors` **in place** (`cat >` / `tee`, never `mv` a tempfile over the path — the file is a single-file bind mount)
-3. `caddy validate` then reload (or recreate Caddy if the inode changed)
+3. reload via `sync_caddy_config` (cmp both mounts, validate, reload or recreate + extra-net attach)
 
 Example site block for a frontend app:
 
@@ -191,18 +191,27 @@ newapp.example.com {
 }
 ```
 
-Use the **container name** as Hermes did (`jobxprss-web`, not a guessed compose service name), unless the app is in the `erp71` compose project.
+Use the **container name** (`jobxprss-web`, not a guessed compose service name), unless the app is in the `erp71` compose project.
 
-This works only if the new app service is attached to a Docker network ERP71's Caddy is on (`erp71_default`, plus extras listed in `/opt/erp71/caddy-extra-networks` after cutover).
+This works only if the new app service is attached to a Docker network ERP71's Caddy is on (`erp71_default`, or the app's own net **and** that net listed in `/opt/erp71/caddy-extra-networks`). After adding a net:
+
+```bash
+echo 'newapp_default' >> /opt/erp71/caddy-extra-networks
+docker network connect newapp_default erp71-caddy-1
+```
 
 After updating neighbors **in place**:
 
 ```bash
 cd /opt/erp71
-docker compose --env-file .env.production -f docker-compose.prod.yml exec caddy caddy reload --config /etc/caddy/Caddyfile
+COMPOSE_PROJECT=erp71 REPO_ROOT=/opt/erp71 bash -c '
+  compose() { docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml "$@"; }
+  source scripts/caddy-edge.sh
+  sync_caddy_config
+'
 ```
 
-If reload fails or the bind mount is stale, see the cutover spec (`sync_caddy_config`). Do not run `perf-server-steps.sh caddy-app-api-route` (it still rewrites Hermes).
+A bare `docker compose … exec caddy caddy reload` is wrong after an editor rename-write. Do not run `perf-server-steps.sh caddy-app-api-route` (the route is already in git).
 
 ## 7. DNS records
 

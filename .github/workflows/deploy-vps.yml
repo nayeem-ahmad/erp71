@@ -49,6 +49,12 @@ jobs:
           script: |
             set -euo pipefail
             cd /opt/erp71
+            # Pull first so this SSH runs the commit's deploy.sh. Otherwise the
+            # in-memory pre-pull script (no extra-net attach) would compose-up
+            # Caddy, drop neighbor networks, and still go green on ERP71 health.
+            git fetch origin ${{ steps.target.outputs.branch }}
+            git checkout ${{ steps.target.outputs.branch }}
+            git pull --ff-only origin ${{ steps.target.outputs.branch }}
             bash scripts/deploy.sh ${{ steps.target.outputs.branch }}
 
             # The commit we just tried to ship. deploy.sh bakes this into the

@@ -3,7 +3,7 @@
 #
 # Usage:
 #   ./scripts/smoke-check.sh
-#   API_BASE=https://api.nayeemahmad.com APP_BASE=https://app.nayeemahmad.com ./scripts/smoke-check.sh
+#   API_BASE=https://api.erp71.com APP_BASE=https://app.erp71.com ./scripts/smoke-check.sh
 
 set -euo pipefail
 
