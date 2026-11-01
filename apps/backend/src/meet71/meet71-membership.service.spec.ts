@@ -25,6 +25,7 @@ function fakeDb() {
         },
         meet71Room: {
             findUnique: jest.fn(),
+            findMany: jest.fn(),
             update: jest.fn(),
         },
         $transaction: jest.fn(),
@@ -197,6 +198,25 @@ describe('Meet71MembershipService', () => {
             'deny-1',
             expect.objectContaining({ email: 'blocked@erp71.com' }),
         );
+    });
+
+    it('listAdmin includes rooms newest first', async () => {
+        const createdAt = new Date('2026-11-01T14:22:00.000Z');
+        db.meet71AllowEntry.findMany.mockResolvedValue([]);
+        db.meet71Member.findMany.mockResolvedValue([]);
+        db.meet71DenyEntry.findMany.mockResolvedValue([]);
+        db.meet71Room.findMany.mockResolvedValue([
+            { code: 'kxp-4n2m-q8r', created_by_email: 'sara@erp71.com', created_at: createdAt },
+            { code: 'otb', created_by_email: 'nayeem.ahmad@gmail.com', created_at: new Date('2026-01-01') },
+        ]);
+
+        const out = await service.listAdmin();
+
+        expect(out.rooms).toEqual([
+            { code: 'kxp-4n2m-q8r', createdByEmail: 'sara@erp71.com', createdAt },
+            { code: 'otb', createdByEmail: 'nayeem.ahmad@gmail.com', createdAt: new Date('2026-01-01') },
+        ]);
+        expect(db.meet71Room.findMany).toHaveBeenCalledWith({ orderBy: { created_at: 'desc' }, take: 100 });
     });
 
     it('addAllowlist of a denied exact email throws MEET71_DENIED', async () => {
