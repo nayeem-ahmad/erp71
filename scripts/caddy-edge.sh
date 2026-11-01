@@ -80,6 +80,24 @@ caddy_mount_matches() {
   docker exec "$(caddy_container)" cat "$container_path" | cmp -s - "$host_path"
 }
 
+wait_caddy_running() {
+  local container timeout="${CADDY_READY_TIMEOUT:-30}" waited=0 status
+  container="$(caddy_container)"
+  while [ "$waited" -lt "$timeout" ]; do
+    status="$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null || echo gone)"
+    if [ "$status" = running ] \
+      && docker port "$container" 80 >/dev/null 2>&1 \
+      && docker port "$container" 443 >/dev/null 2>&1; then
+      echo "==> $container running on 80/443 after ${waited}s"
+      return 0
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  echo "ERROR: $container is '${status:-gone}' after ${timeout}s (80/443 not published)." >&2
+  return 1
+}
+
 validate_host_caddyfiles() {
   docker run --rm \
     -v "${REPO_ROOT}/Caddyfile:/etc/caddy/Caddyfile:ro" \
@@ -90,6 +108,7 @@ validate_host_caddyfiles() {
 
 sync_caddy_config() {
   local container stale=0
+  ensure_neighbors_file
   container="$(caddy_container)"
   if ! caddy_mount_matches /etc/caddy/Caddyfile "${REPO_ROOT}/Caddyfile"; then
     echo "==> Caddyfile bind mount is stale (inode changed)"
@@ -107,6 +126,7 @@ sync_caddy_config() {
     fi
     echo "==> Recreating caddy to pick up new bind-mount inodes"
     compose up -d --force-recreate caddy
+    wait_caddy_running || exit 1
     attach_caddy_extra_networks
     return 0
   fi

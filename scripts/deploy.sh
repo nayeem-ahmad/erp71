@@ -100,6 +100,7 @@ fi
 echo "==> Starting the new containers"
 ensure_neighbors_file
 compose up -d
+wait_caddy_running || exit 1
 attach_caddy_extra_networks
 
 # 4. Wait for the new backend to report healthy (the healthcheck in

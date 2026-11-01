@@ -40,8 +40,8 @@ psql_db() {
 caddy_app_api_route() {
     echo "already applied: app.erp71.com /api/v1/* lives in the git Caddyfile ($CADDYFILE),"
     echo "served by $CADDY_CONTAINER. Do not edit Hermes. To reload after a Caddyfile"
-    echo "edit, run scripts/deploy.sh (sync_caddy_config) or, from /opt/erp71:"
-    echo "  source scripts/caddy-edge.sh && sync_caddy_config"
+    echo "edit, run scripts/deploy.sh, or the sync_caddy_config wrapper in"
+    echo "docs/ops/shared-vps-second-app.md (it defines compose() first)."
     return 0
 }
 

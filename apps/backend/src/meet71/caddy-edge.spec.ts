@@ -52,6 +52,14 @@ describe('PR3: compose Caddy is the public edge', () => {
         expect(sh).not.toMatch(/Neighbor site blocks\. Not in git/);
     });
 
+    it('Deploy to VPS pulls the new commit before running deploy.sh', () => {
+        const yml = fs.readFileSync(path.join(REPO, '.github/workflows/deploy-vps.yml'), 'utf8');
+        const pull = yml.indexOf('git pull --ff-only origin');
+        const run = yml.indexOf('bash scripts/deploy.sh');
+        expect(pull).toBeGreaterThanOrEqual(0);
+        expect(run).toBeGreaterThan(pull);
+    });
+
     it('smoke-check defaults to api.erp71.com / app.erp71.com', () => {
         const sh = fs.readFileSync(SMOKE, 'utf8');
         expect(sh).toMatch(/API_BASE="\$\{API_BASE:-https:\/\/api\.erp71\.com\}"/);
@@ -157,3 +165,156 @@ exit 0
         });
     });
 });
+
+const HOST_CADDY = 'erp71.com {\n\treverse_proxy frontend:3000\n}\nimport Caddyfile.neighbors\n';
+const HOST_NEIGHBORS = 'scrum71.nayeemahmad.com {\n\treverse_proxy scrum71:80\n}\n';
+
+function writeFakeDocker(
+    dir: string,
+    opts: { containerCaddy: string; containerNeighbors: string; hostValidateExit?: number; inspectStatus?: string },
+) {
+    const bin = path.join(dir, 'bin');
+    fs.mkdirSync(bin);
+    const log = path.join(dir, 'docker.log');
+    fs.writeFileSync(path.join(dir, 'container-Caddyfile'), opts.containerCaddy);
+    fs.writeFileSync(path.join(dir, 'container-neighbors'), opts.containerNeighbors);
+    const hostValidateExit = opts.hostValidateExit ?? 0;
+    const inspectStatus = opts.inspectStatus ?? 'running';
+    fs.writeFileSync(
+        path.join(bin, 'docker'),
+        `#!/usr/bin/env bash
+echo "docker $*" >> "${log}"
+if [ "$1" = exec ] && [ "$3" = cat ]; then
+  case "$4" in
+    /etc/caddy/Caddyfile) cat "${dir}/container-Caddyfile" ;;
+    /etc/caddy/Caddyfile.neighbors) cat "${dir}/container-neighbors" ;;
+    *) exit 1 ;;
+  esac
+  exit 0
+fi
+if [ "$1" = run ]; then
+  exit ${hostValidateExit}
+fi
+if [ "$1" = exec ] && [ "$3" = caddy ]; then
+  exit 0
+fi
+if [ "$1" = inspect ]; then
+  echo "${inspectStatus}"
+  exit 0
+fi
+if [ "$1" = port ]; then
+  echo "0.0.0.0:\$3"
+  exit 0
+fi
+if [ "$1" = network ]; then
+  exit 0
+fi
+exit 0
+`,
+    );
+    fs.chmodSync(path.join(bin, 'docker'), 0o755);
+    return { bin, log };
+}
+
+function seedHostCaddy(dir: string, neighbors = HOST_NEIGHBORS) {
+    fs.writeFileSync(path.join(dir, 'Caddyfile'), HOST_CADDY);
+    fs.writeFileSync(path.join(dir, 'Caddyfile.neighbors'), neighbors);
+    fs.writeFileSync(path.join(dir, 'caddy-extra-networks'), 'jobxprss_default\n');
+}
+
+describe('sync_caddy_config', () => {
+    const source = `set -euo pipefail; source "${CADDY_EDGE}"`;
+
+    it('exits 1 on comment-only neighbors before touching docker', () => {
+        withTempRepo((dir) => {
+            seedHostCaddy(dir, '# stub\n');
+            const { bin, log } = writeFakeDocker(dir, {
+                containerCaddy: HOST_CADDY,
+                containerNeighbors: '# stub\n',
+            });
+            const r = bash(
+                `export PATH="${bin}:$PATH"; ${source}; compose() { echo "compose $*" >> "${dir}/compose.log"; }; REPO_ROOT="${dir}" COMPOSE_PROJECT=erp71 sync_caddy_config`,
+                { REPO_ROOT: dir },
+            );
+            expect(r.status).toBe(1);
+            expect(r.stderr).toMatch(/site block/);
+            expect(fs.existsSync(log) ? fs.readFileSync(log, 'utf8') : '').toBe('');
+        });
+    });
+
+    it('reloads when both bind mounts match', () => {
+        withTempRepo((dir) => {
+            seedHostCaddy(dir);
+            const { bin, log } = writeFakeDocker(dir, {
+                containerCaddy: HOST_CADDY,
+                containerNeighbors: HOST_NEIGHBORS,
+            });
+            const r = bash(
+                `export PATH="${bin}:$PATH"; ${source}; compose() { echo "compose $*" >> "${dir}/compose.log"; }; REPO_ROOT="${dir}" COMPOSE_PROJECT=erp71 sync_caddy_config`,
+                { REPO_ROOT: dir },
+            );
+            expect(r.status).toBe(0);
+            const logText = fs.readFileSync(log, 'utf8');
+            expect(logText).toMatch(/caddy validate/);
+            expect(logText).toMatch(/caddy reload/);
+            expect(fs.existsSync(path.join(dir, 'compose.log'))).toBe(false);
+        });
+    });
+
+    it('recreates then attaches extra nets when a mount is stale', () => {
+        withTempRepo((dir) => {
+            seedHostCaddy(dir);
+            const { bin, log } = writeFakeDocker(dir, {
+                containerCaddy: 'stale caddyfile\n',
+                containerNeighbors: HOST_NEIGHBORS,
+            });
+            const r = bash(
+                `export PATH="${bin}:$PATH"; ${source}; compose() { echo "compose $*" >> "${dir}/compose.log"; }; REPO_ROOT="${dir}" COMPOSE_PROJECT=erp71 sync_caddy_config`,
+                { REPO_ROOT: dir },
+            );
+            expect(r.status).toBe(0);
+            expect(fs.readFileSync(path.join(dir, 'compose.log'), 'utf8')).toMatch(
+                /up -d --force-recreate caddy/,
+            );
+            const logText = fs.readFileSync(log, 'utf8');
+            expect(logText).toMatch(/network connect jobxprss_default erp71-caddy-1/);
+            expect(logText).not.toMatch(/caddy reload/);
+        });
+    });
+
+    it('does not recreate when host validate fails', () => {
+        withTempRepo((dir) => {
+            seedHostCaddy(dir);
+            const { bin } = writeFakeDocker(dir, {
+                containerCaddy: 'stale\n',
+                containerNeighbors: HOST_NEIGHBORS,
+                hostValidateExit: 1,
+            });
+            const r = bash(
+                `export PATH="${bin}:$PATH"; ${source}; compose() { echo "compose $*" >> "${dir}/compose.log"; }; REPO_ROOT="${dir}" COMPOSE_PROJECT=erp71 sync_caddy_config`,
+                { REPO_ROOT: dir },
+            );
+            expect(r.status).toBe(1);
+            expect(r.stderr).toMatch(/validate failed/);
+            expect(fs.existsSync(path.join(dir, 'compose.log'))).toBe(false);
+        });
+    });
+
+    it('fails the deploy if recreated Caddy is not running on 80/443', () => {
+        withTempRepo((dir) => {
+            seedHostCaddy(dir);
+            const { bin } = writeFakeDocker(dir, {
+                containerCaddy: 'stale\n',
+                containerNeighbors: HOST_NEIGHBORS,
+                inspectStatus: 'restarting',
+            });
+            const r = bash(
+                `export PATH="${bin}:$PATH" CADDY_READY_TIMEOUT=1; ${source}; compose() { echo "compose $*" >> "${dir}/compose.log"; }; REPO_ROOT="${dir}" COMPOSE_PROJECT=erp71 sync_caddy_config`,
+                { REPO_ROOT: dir, CADDY_READY_TIMEOUT: '1' },
+            );
+            expect(r.status).toBe(1);
+            expect(r.stderr).toMatch(/80\/443|not running|restarting/i);
+        });
+    });
+});
+

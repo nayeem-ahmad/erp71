@@ -79,9 +79,10 @@ Do not start a second proxy on 80/443. Do not `docker compose down` the whole
 `erp71` project — Meet71 and neighbors share `erp71_default`.
 
 To reload after editing the git Caddyfile or neighbors **in place**
-(`cat >` / `tee`, never `mv`): run `scripts/deploy.sh`, or from `/opt/erp71`
-source `scripts/caddy-edge.sh` and call `sync_caddy_config` (cmp both mounts,
-validate, reload or `--force-recreate` + extra-net attach).
+(`cat >` / `tee`, never `mv`): run `scripts/deploy.sh`, or the
+`sync_caddy_config` wrapper in `shared-vps-second-app.md` (defines `compose()`
+before sourcing `scripts/caddy-edge.sh`). A bare `source scripts/caddy-edge.sh`
+without `compose()` cannot recreate Caddy after an inode change.
 
 The marketing pair and the app point at the same frontend upstream on purpose
 — one Next.js container serves both, and it reads `Host`. Caddy passes `Host`
