@@ -202,17 +202,17 @@ export default function AdminMeet71Page() {
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="text-left text-xs text-gray-500">
-                                        <th className="py-1.5 pr-3 font-medium">{m.allowlist.columns.pattern}</th>
-                                        <th className="py-1.5 pr-3 font-medium">{m.allowlist.columns.kind}</th>
+                                    <tr className="text-start text-xs text-gray-500">
+                                        <th className="py-1.5 pe-3 font-medium">{m.allowlist.columns.pattern}</th>
+                                        <th className="py-1.5 pe-3 font-medium">{m.allowlist.columns.kind}</th>
                                         <th className="py-1.5 font-medium">{t.common.actions}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {entries.map((entry) => (
                                         <tr key={entry.id} className="border-t border-gray-100">
-                                            <td className="py-2 pr-3 font-medium text-gray-900">{entry.pattern}</td>
-                                            <td className="py-2 pr-3 text-gray-600">
+                                            <td className="py-2 pe-3 font-medium text-gray-900">{entry.pattern}</td>
+                                            <td className="py-2 pe-3 text-gray-600">
                                                 {m.allowlist.kinds[entry.kind as 'EMAIL' | 'DOMAIN'] ?? entry.kind}
                                             </td>
                                             <td className="py-2">
@@ -243,24 +243,24 @@ export default function AdminMeet71Page() {
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="text-left text-xs text-gray-500">
-                                        <th className="py-1.5 pr-3 font-medium">{m.members.columns.email}</th>
-                                        <th className="hidden py-1.5 pr-3 font-medium md:table-cell">{m.members.columns.name}</th>
-                                        <th className="py-1.5 pr-3 font-medium">{m.members.columns.admin}</th>
-                                        <th className="py-1.5 pr-3 font-medium">{m.members.columns.createRoom}</th>
-                                        <th className="py-1.5 pr-3 font-medium">{m.members.columns.inviteQuota}</th>
-                                        <th className="hidden py-1.5 pr-3 font-medium md:table-cell">{m.members.columns.used}</th>
+                                    <tr className="text-start text-xs text-gray-500">
+                                        <th className="py-1.5 pe-3 font-medium">{m.members.columns.email}</th>
+                                        <th className="hidden py-1.5 pe-3 font-medium md:table-cell">{m.members.columns.name}</th>
+                                        <th className="py-1.5 pe-3 font-medium">{m.members.columns.admin}</th>
+                                        <th className="py-1.5 pe-3 font-medium">{m.members.columns.createRoom}</th>
+                                        <th className="py-1.5 pe-3 font-medium">{m.members.columns.inviteQuota}</th>
+                                        <th className="hidden py-1.5 pe-3 font-medium md:table-cell">{m.members.columns.used}</th>
                                         <th className="py-1.5 font-medium">{t.common.actions}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {members.map((member) => (
                                         <tr key={member.email} className="border-t border-gray-100">
-                                            <td className="py-2 pr-3 font-medium text-gray-900">{member.email}</td>
-                                            <td className="hidden py-2 pr-3 text-gray-600 md:table-cell">
+                                            <td className="py-2 pe-3 font-medium text-gray-900">{member.email}</td>
+                                            <td className="hidden py-2 pe-3 text-gray-600 md:table-cell">
                                                 {member.displayName || '—'}
                                             </td>
-                                            <td className="py-2 pr-3">
+                                            <td className="py-2 pe-3">
                                                 <Switch
                                                     checked={member.isAdmin}
                                                     aria-label={m.members.columns.admin}
@@ -269,7 +269,7 @@ export default function AdminMeet71Page() {
                                                     }
                                                 />
                                             </td>
-                                            <td className="py-2 pr-3">
+                                            <td className="py-2 pe-3">
                                                 <Switch
                                                     checked={member.canCreateRoom}
                                                     aria-label={m.members.columns.createRoom}
@@ -278,7 +278,7 @@ export default function AdminMeet71Page() {
                                                     }
                                                 />
                                             </td>
-                                            <td className="py-2 pr-3">
+                                            <td className="py-2 pe-3">
                                                 <form
                                                     className="flex items-center gap-1"
                                                     onSubmit={(event) => {
@@ -308,7 +308,7 @@ export default function AdminMeet71Page() {
                                                     <p className="mt-0.5 text-xs text-gray-400">{m.members.unlimited}</p>
                                                 )}
                                             </td>
-                                            <td className="hidden py-2 pr-3 text-gray-600 md:table-cell">{member.invitesUsed}</td>
+                                            <td className="hidden py-2 pe-3 text-gray-600 md:table-cell">{member.invitesUsed}</td>
                                             <td className="py-2">
                                                 <Button
                                                     type="button"
@@ -335,15 +335,15 @@ export default function AdminMeet71Page() {
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="text-left text-xs text-gray-500">
-                                        <th className="py-1.5 pr-3 font-medium">{m.denials.columns.email}</th>
+                                    <tr className="text-start text-xs text-gray-500">
+                                        <th className="py-1.5 pe-3 font-medium">{m.denials.columns.email}</th>
                                         <th className="py-1.5 font-medium">{t.common.actions}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {denials.map((row) => (
                                         <tr key={row.email} className="border-t border-gray-100">
-                                            <td className="py-2 pr-3 font-medium text-gray-900">{row.email}</td>
+                                            <td className="py-2 pe-3 font-medium text-gray-900">{row.email}</td>
                                             <td className="py-2">
                                                 <Button type="button" size="sm" variant="secondary" onClick={() => void handleUnblock(row.email)}>
                                                     {m.denials.unblock}
