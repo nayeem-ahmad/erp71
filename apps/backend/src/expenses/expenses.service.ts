@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { cashPostErrorMessage, resolveBranchCashAccount } from '../accounting/cash-account';
-import { autoPostFromRules } from '../accounting/posting.utils';
+import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import {
     CreateExpenseCategoryDto,
     CreateExpenseEntryDto,
@@ -213,12 +214,6 @@ export class ExpensesService {
         }
 
         const paymentMethod = dto.paymentMethod ?? 'CASH';
-        const paymentMode = paymentMethod.toLowerCase().includes('bank')
-            || paymentMethod.toLowerCase().includes('bkash')
-            || paymentMethod.toLowerCase().includes('nagad')
-            || paymentMethod.toLowerCase().includes('transfer')
-            ? 'bank'
-            : 'cash';
 
         return this.db.$transaction(async (tx) => {
             const entry = await tx.expenseEntry.create({
@@ -236,38 +231,7 @@ export class ExpensesService {
                 include: this.entryInclude(),
             });
 
-            // A branch cash expense credits that branch's drawer. An entry with
-            // no branch yet keeps the posting rule's cash account.
-            let overrideCreditAccountId: string | undefined;
-            if (paymentMode === 'cash' && entry.store_id) {
-                const resolved = await resolveBranchCashAccount(tx, tenantId, entry.store_id);
-                if ('error' in resolved) {
-                    throw new BadRequestException(cashPostErrorMessage(resolved.error));
-                }
-                overrideCreditAccountId = resolved.accountId;
-            }
-
-            const posting = await autoPostFromRules({
-                tx,
-                tenantId,
-                eventType: 'expense',
-                conditionKey: 'payment_mode',
-                conditionValue: paymentMode,
-                sourceModule: 'expenses',
-                sourceType: 'expense_entry',
-                sourceId: entry.id,
-                amount: Number(entry.amount),
-                description: `Auto-posted expense${entry.description ? `: ${entry.description}` : ''}`,
-                date: entry.expense_date,
-                storeId: entry.store_id ?? undefined,
-                // The rule debits General Operating Expense. A head with its own
-                // account charges that. Otherwise the category's account is
-                // used. Cash at a branch credits that branch's drawer.
-                ...((head.account_id ?? head.category.account_id)
-                    ? { overrideDebitAccountId: head.account_id ?? head.category.account_id }
-                    : {}),
-                ...(overrideCreditAccountId ? { overrideCreditAccountId } : {}),
-            });
+            const posting = await this.postExpenseEntry(tx, tenantId, entry, head);
 
             return {
                 ...entry,
@@ -280,9 +244,11 @@ export class ExpensesService {
     }
 
     async updateEntry(tenantId: string, id: string, dto: UpdateExpenseEntryDto) {
-        await this.assertEntryExists(tenantId, id);
+        const existing = await this.assertEntryExists(tenantId, id);
 
-        let head: { id: string; category_id: string } | undefined;
+        let head = existing.head_id
+            ? await this.assertHeadExists(tenantId, existing.head_id)
+            : null;
         if (dto.headId) {
             head = await this.assertHeadExists(tenantId, dto.headId);
         }
@@ -290,23 +256,41 @@ export class ExpensesService {
             await this.assertStoreExists(tenantId, dto.storeId);
         }
 
-        return this.db.expenseEntry.update({
-            where: { id },
-            data: {
-                ...(head ? { head_id: head.id, category_id: head.category_id } : {}),
-                ...(dto.amount !== undefined ? { amount: dto.amount } : {}),
-                ...(dto.expenseDate !== undefined ? { expense_date: new Date(dto.expenseDate) } : {}),
-                ...(dto.storeId !== undefined ? { store_id: dto.storeId } : {}),
-                ...(dto.description !== undefined ? { description: dto.description } : {}),
-                ...(dto.paymentMethod !== undefined ? { payment_method: dto.paymentMethod } : {}),
-            },
-            include: this.entryInclude(),
+        return this.db.$transaction(async (tx) => {
+            const entry = await tx.expenseEntry.update({
+                where: { id },
+                data: {
+                    ...(head && dto.headId ? { head_id: head.id, category_id: head.category_id } : {}),
+                    ...(dto.amount !== undefined ? { amount: dto.amount } : {}),
+                    ...(dto.expenseDate !== undefined ? { expense_date: new Date(dto.expenseDate) } : {}),
+                    ...(dto.storeId !== undefined ? { store_id: dto.storeId } : {}),
+                    ...(dto.description !== undefined ? { description: dto.description } : {}),
+                    ...(dto.paymentMethod !== undefined ? { payment_method: dto.paymentMethod } : {}),
+                },
+                include: this.entryInclude(),
+            });
+
+            // Amount, head, date or method may have changed, so the old
+            // voucher is wrong. Void it and post from the updated row.
+            await voidAutoPostedVoucher(tx, tenantId, 'expense', id);
+            const posting = await this.postExpenseEntry(tx, tenantId, entry, head);
+
+            return {
+                ...entry,
+                posting_status: posting.postingStatus,
+                voucher_id: posting.voucherId ?? null,
+                voucher_number: posting.voucherNumber ?? null,
+                voucher_type: posting.voucherType ?? null,
+            };
         });
     }
 
     async deleteEntry(tenantId: string, id: string) {
         await this.assertEntryExists(tenantId, id);
-        return this.db.expenseEntry.delete({ where: { id } });
+        return this.db.$transaction(async (tx) => {
+            await voidAutoPostedVoucher(tx, tenantId, 'expense', id);
+            return tx.expenseEntry.delete({ where: { id } });
+        });
     }
 
     async getSummary(tenantId: string, query: ExpenseReportQueryDto) {
@@ -412,6 +396,62 @@ export class ExpensesService {
             head: true,
             store: { select: { id: true, name: true } },
         };
+    }
+
+    private expensePaymentMode(paymentMethod: string): 'bank' | 'cash' {
+        return paymentMethod.toLowerCase().includes('bank')
+            || paymentMethod.toLowerCase().includes('bkash')
+            || paymentMethod.toLowerCase().includes('nagad')
+            || paymentMethod.toLowerCase().includes('transfer')
+            ? 'bank'
+            : 'cash';
+    }
+
+    /**
+     * Posts (or re-posts) the entry. The rule debits General Operating Expense.
+     * A head with its own account charges that; otherwise the category's
+     * account is used. Cash at a branch credits that branch's drawer.
+     */
+    private async postExpenseEntry(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        entry: {
+            id: string;
+            amount: Prisma.Decimal | number | string;
+            expense_date: Date;
+            description: string | null;
+            store_id: string | null;
+            payment_method?: string | null;
+        },
+        head: { account_id: string | null; category: { account_id: string | null } } | null,
+    ) {
+        const paymentMode = this.expensePaymentMode(entry.payment_method ?? 'CASH');
+        let overrideCreditAccountId: string | undefined;
+        if (paymentMode === 'cash' && entry.store_id) {
+            const resolved = await resolveBranchCashAccount(tx, tenantId, entry.store_id);
+            if ('error' in resolved) {
+                throw new BadRequestException(cashPostErrorMessage(resolved.error));
+            }
+            overrideCreditAccountId = resolved.accountId;
+        }
+
+        const debitAccountId = head?.account_id ?? head?.category.account_id ?? undefined;
+        return autoPostFromRules({
+            tx,
+            tenantId,
+            eventType: 'expense',
+            conditionKey: 'payment_mode',
+            conditionValue: paymentMode,
+            sourceModule: 'expenses',
+            sourceType: 'expense_entry',
+            sourceId: entry.id,
+            amount: Number(entry.amount),
+            description: `Auto-posted expense${entry.description ? `: ${entry.description}` : ''}`,
+            date: entry.expense_date,
+            storeId: entry.store_id ?? undefined,
+            ...(debitAccountId ? { overrideDebitAccountId: debitAccountId } : {}),
+            ...(overrideCreditAccountId ? { overrideCreditAccountId } : {}),
+        });
     }
 
     private buildEntryWhere(tenantId: string, query: ListExpenseEntriesQueryDto & { timezone: string }) {

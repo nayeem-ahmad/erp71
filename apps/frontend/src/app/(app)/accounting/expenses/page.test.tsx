@@ -25,6 +25,7 @@ let lastTableProps: {
     viewOptions?: boolean;
     enableColumnFilters?: boolean;
     data?: unknown[];
+    columns?: Array<{ id?: string; cell?: (ctx: { row: { original: unknown } }) => React.ReactNode }>;
     filters?: Array<{ id: string; type: string; more?: boolean; operators?: boolean; withTime?: boolean }>;
 } | null = null;
 
@@ -35,6 +36,7 @@ jest.mock('@/components/data-table', () => ({
         viewOptions?: boolean;
         enableColumnFilters?: boolean;
         data?: unknown[];
+        columns?: Array<{ id?: string; cell?: (ctx: { row: { original: unknown } }) => React.ReactNode }>;
         searchValue?: string;
         onSearchChange?: (next: string) => void;
         stats?: { items?: { id: string; value: string }[] };
@@ -51,8 +53,14 @@ jest.mock('@/components/data-table', () => ({
         }>;
     }) => {
         lastTableProps = props;
+        const actionsColumn = props.columns?.find((column) => column.id === 'actions');
         return (
             <div data-testid="data-table" data-filter-layout={props.filterLayout}>
+                {(props.data ?? []).map((row, index) => (
+                    <div key={index} data-testid={`row-actions-${index}`}>
+                        {actionsColumn?.cell?.({ row: { original: row } })}
+                    </div>
+                ))}
                 <input
                     aria-label="search"
                     value={props.searchValue ?? ''}
@@ -124,6 +132,7 @@ jest.mock('@/lib/api', () => ({
         getExpenseEntries: jest.fn(),
         getExpenseCategories: jest.fn(),
         createExpenseEntry: jest.fn(),
+        updateExpenseEntry: jest.fn(),
         deleteExpenseEntry: jest.fn(),
     },
 }));
@@ -252,5 +261,45 @@ describe('ExpensesPage', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Amount over 60' }));
         expect(screen.getByTestId('row-count')).toHaveTextContent('1');
         expect(screen.getByTestId('stat-total')).toHaveTextContent('100.00');
+    });
+
+    it('opens an existing expense for edit and saves through update, not create', async () => {
+        (api.getExpenseEntries as jest.Mock).mockResolvedValue([
+            {
+                id: 'entry-1',
+                amount: '500',
+                payment_method: 'BKASH',
+                expense_date: '2026-10-02',
+                created_at: '2026-10-02T00:00:00.000Z',
+                description: 'October rent',
+                category: { id: 'cat-rent', name: 'Rent' },
+                head: { id: 'head-rent', name: 'Shop rent' },
+            },
+        ]);
+        (api.getExpenseCategories as jest.Mock).mockResolvedValue([
+            { id: 'cat-rent', name: 'Rent', heads: [{ id: 'head-rent', name: 'Shop rent' }] },
+        ]);
+        (api.updateExpenseEntry as jest.Mock).mockResolvedValue({ id: 'entry-1' });
+
+        render(<ExpensesPage />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+
+        const dialog = screen.getByRole('dialog');
+        expect(within(dialog).getByText('Edit expense')).toBeInTheDocument();
+        expect(within(dialog).getByRole('combobox', { name: /expense head/i })).toHaveValue('head-rent');
+        expect(within(dialog).getByRole('spinbutton')).toHaveValue(500);
+        expect(within(dialog).getByDisplayValue('October rent')).toBeInTheDocument();
+
+        fireEvent.change(within(dialog).getByRole('spinbutton'), { target: { value: '550' } });
+        fireEvent.click(within(dialog).getByRole('button', { name: /^save$/i }));
+
+        await waitFor(() =>
+            expect(api.updateExpenseEntry).toHaveBeenCalledWith(
+                'entry-1',
+                expect.objectContaining({ headId: 'head-rent', amount: 550 }),
+            ),
+        );
+        expect(api.createExpenseEntry).not.toHaveBeenCalled();
     });
 });
