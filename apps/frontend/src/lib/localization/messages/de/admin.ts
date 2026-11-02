@@ -1757,6 +1757,7 @@ export const adminMessages = {
             title: "Raum-Eigentümer",
             codeLabel: "Raumcode",
             emailLabel: "E-Mail des neuen Eigentümers",
+            coHostsLabel: "Co-Hosts (optional, kommagetrennt)",
             save: "Eigentümer übertragen",
             saved: "Raum-Eigentümer aktualisiert",
         },

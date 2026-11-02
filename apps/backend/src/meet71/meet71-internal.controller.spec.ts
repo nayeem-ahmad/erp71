@@ -40,6 +40,7 @@ describe('Meet71InternalController', () => {
         deleteMember: jest.fn(),
         removeDenial: jest.fn(),
         patchRoom: jest.fn(),
+        getRoom: jest.fn(),
     };
     const sso = { mint: jest.fn(), exchange: jest.fn() };
     const invites = { invite: jest.fn() };

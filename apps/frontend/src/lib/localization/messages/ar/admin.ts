@@ -1757,6 +1757,7 @@ export const adminMessages = {
             title: 'مالك الغرفة',
             codeLabel: 'رمز الغرفة',
             emailLabel: 'بريد المالك الجديد',
+            coHostsLabel: 'مضيفون مشاركون (اختياري، مفصولون بفواصل)',
             save: 'نقل المالك',
             saved: 'تم تحديث مالك الغرفة',
         },

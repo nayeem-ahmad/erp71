@@ -28,6 +28,10 @@ function fakeDb() {
             findMany: jest.fn(),
             update: jest.fn(),
         },
+        meet71RoomHost: {
+            deleteMany: jest.fn(),
+            createMany: jest.fn(),
+        },
         $transaction: jest.fn(),
     };
 }
@@ -206,17 +210,135 @@ describe('Meet71MembershipService', () => {
         db.meet71Member.findMany.mockResolvedValue([]);
         db.meet71DenyEntry.findMany.mockResolvedValue([]);
         db.meet71Room.findMany.mockResolvedValue([
-            { code: 'kxp-4n2m-q8r', created_by_email: 'sara@erp71.com', created_at: createdAt },
-            { code: 'otb', created_by_email: 'nayeem.ahmad@gmail.com', created_at: new Date('2026-01-01') },
+            {
+                code: 'kxp-4n2m-q8r',
+                created_by_email: 'sara@erp71.com',
+                created_at: createdAt,
+                hosts: [{ email: 'Sam@ERP71.com' }],
+            },
+            {
+                code: 'otb',
+                created_by_email: 'nayeem.ahmad@gmail.com',
+                created_at: new Date('2026-01-01'),
+                hosts: [],
+            },
         ]);
 
         const out = await service.listAdmin();
 
         expect(out.rooms).toEqual([
-            { code: 'kxp-4n2m-q8r', createdByEmail: 'sara@erp71.com', createdAt },
-            { code: 'otb', createdByEmail: 'nayeem.ahmad@gmail.com', createdAt: new Date('2026-01-01') },
+            {
+                code: 'kxp-4n2m-q8r',
+                createdByEmail: 'sara@erp71.com',
+                createdAt,
+                coHostEmails: ['sam@erp71.com'],
+            },
+            {
+                code: 'otb',
+                createdByEmail: 'nayeem.ahmad@gmail.com',
+                createdAt: new Date('2026-01-01'),
+                coHostEmails: [],
+            },
         ]);
-        expect(db.meet71Room.findMany).toHaveBeenCalledWith({ orderBy: { created_at: 'desc' }, take: 100 });
+        expect(db.meet71Room.findMany).toHaveBeenCalledWith({
+            orderBy: { created_at: 'desc' },
+            take: 100,
+            include: { hosts: true },
+        });
+    });
+
+    it('getRoom returns co-hosts lowercased', async () => {
+        db.meet71Room.findUnique.mockResolvedValue({
+            code: 'otb',
+            created_by_email: 'nayeem.ahmad@gmail.com',
+            created_at: new Date('2026-01-01'),
+            hosts: [{ email: 'Sara@erp71.com' }],
+        });
+
+        await expect(service.getRoom('otb')).resolves.toEqual({
+            code: 'otb',
+            createdByEmail: 'nayeem.ahmad@gmail.com',
+            createdAt: new Date('2026-01-01'),
+            coHostEmails: ['sara@erp71.com'],
+        });
+    });
+
+    it('patchRoom replaces co-hosts, lowercases, unique, and drops the owner', async () => {
+        db.meet71Room.findUnique.mockResolvedValue({
+            code: 'otb',
+            created_by_email: 'nayeem.ahmad@gmail.com',
+            created_at: new Date('2026-01-01'),
+            hosts: [],
+        });
+        db.meet71Room.update.mockResolvedValue({
+            code: 'otb',
+            created_by_email: 'nayeem.ahmad@gmail.com',
+            created_at: new Date('2026-01-01'),
+        });
+        db.meet71RoomHost.deleteMany.mockResolvedValue({ count: 0 });
+        db.meet71RoomHost.createMany.mockResolvedValue({ count: 1 });
+
+        const out = await service.patchRoom(
+            'otb',
+            {
+                coHostEmails: ['Sara@erp71.com', 'sara@erp71.com', 'nayeem.ahmad@gmail.com'],
+            },
+            { email: 'nayeem.ahmad@gmail.com' },
+        );
+
+        expect(out).toEqual({
+            code: 'otb',
+            createdByEmail: 'nayeem.ahmad@gmail.com',
+            createdAt: new Date('2026-01-01'),
+            coHostEmails: ['sara@erp71.com'],
+        });
+        expect(db.meet71RoomHost.deleteMany).toHaveBeenCalledWith({ where: { room_code: 'otb' } });
+        expect(db.meet71RoomHost.createMany).toHaveBeenCalledWith({
+            data: [{ room_code: 'otb', email: 'sara@erp71.com' }],
+        });
+    });
+
+    it('patchRoom transferring owner to a co-host removes them from co-hosts', async () => {
+        db.meet71Room.findUnique.mockResolvedValue({
+            code: 'otb',
+            created_by_email: 'nayeem.ahmad@gmail.com',
+            created_at: new Date('2026-01-01'),
+            hosts: [{ email: 'sara@erp71.com' }, { email: 'lee@erp71.com' }],
+        });
+        db.meet71Room.update.mockResolvedValue({
+            code: 'otb',
+            created_by_email: 'sara@erp71.com',
+            created_at: new Date('2026-01-01'),
+        });
+        db.meet71RoomHost.deleteMany.mockResolvedValue({ count: 2 });
+        db.meet71RoomHost.createMany.mockResolvedValue({ count: 1 });
+
+        const out = await service.patchRoom(
+            'otb',
+            { createdByEmail: 'Sara@erp71.com' },
+            { email: 'nayeem.ahmad@gmail.com' },
+        );
+
+        expect(out.coHostEmails).toEqual(['lee@erp71.com']);
+        expect(out.createdByEmail).toBe('sara@erp71.com');
+        expect(db.meet71RoomHost.createMany).toHaveBeenCalledWith({
+            data: [{ room_code: 'otb', email: 'lee@erp71.com' }],
+        });
+    });
+
+    it('patchRoom rejects more than 10 co-hosts', async () => {
+        db.meet71Room.findUnique.mockResolvedValue({
+            code: 'otb',
+            created_by_email: 'nayeem.ahmad@gmail.com',
+            created_at: new Date('2026-01-01'),
+            hosts: [],
+        });
+
+        const emails = Array.from({ length: 11 }, (_, i) => `h${i}@erp71.com`);
+        await expect(
+            service.patchRoom('otb', { coHostEmails: emails }, { email: 'nayeem.ahmad@gmail.com' }),
+        ).rejects.toMatchObject({ response: { code: 'MEET71_TOO_MANY_COHOSTS' } });
+        expect(db.meet71Room.update).not.toHaveBeenCalled();
     });
 
     it('addAllowlist of a denied exact email throws MEET71_DENIED', async () => {

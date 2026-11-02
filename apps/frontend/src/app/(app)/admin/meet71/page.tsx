@@ -50,6 +50,7 @@ export default function AdminMeet71Page() {
     const [quotas, setQuotas] = useState<Record<string, string>>({});
     const [roomCode, setRoomCode] = useState('');
     const [roomOwner, setRoomOwner] = useState('');
+    const [roomCoHosts, setRoomCoHosts] = useState('');
     const [deleting, setDeleting] = useState<Member | null>(null);
 
     const load = useCallback(async () => {
@@ -147,10 +148,15 @@ export default function AdminMeet71Page() {
         const email = roomOwner.trim();
         if (!code || !email) return;
         try {
-            await api.patchMeet71Room(code, email);
+            const coHostEmails = roomCoHosts
+                .split(',')
+                .map((value) => value.trim().toLowerCase())
+                .filter(Boolean);
+            await api.patchMeet71Room(code, { createdByEmail: email, coHostEmails });
             toast.success(m.rooms.saved);
             setRoomCode('');
             setRoomOwner('');
+            setRoomCoHosts('');
         } catch (error) {
             toast.error((error as Error).message);
         }
@@ -372,6 +378,13 @@ export default function AdminMeet71Page() {
                                 type="email"
                                 value={roomOwner}
                                 onChange={(event) => setRoomOwner(event.target.value)}
+                            />
+                        </Field>
+                        <Field label={m.rooms.coHostsLabel} htmlFor="meet71-room-cohosts" className="min-w-[16rem] flex-1">
+                            <Input
+                                id="meet71-room-cohosts"
+                                value={roomCoHosts}
+                                onChange={(event) => setRoomCoHosts(event.target.value)}
                             />
                         </Field>
                         <Button type="submit" size="sm" disabled={!roomCode.trim() || !roomOwner.trim()}>

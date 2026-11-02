@@ -1757,6 +1757,7 @@ export const adminMessages = {
             title: 'Room owner',
             codeLabel: 'Room code',
             emailLabel: 'New owner email',
+            coHostsLabel: 'Co-hosts (optional, comma-separated)',
             save: 'Transfer owner',
             saved: 'Room owner updated',
         },

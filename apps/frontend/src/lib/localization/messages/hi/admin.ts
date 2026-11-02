@@ -1757,6 +1757,7 @@ export const adminMessages = {
             title: "रूम मालिक",
             codeLabel: "रूम कोड",
             emailLabel: "नए मालिक का ईमेल",
+            coHostsLabel: "सह-होस्ट (वैकल्पिक, अल्पविराम से अलग)",
             save: "मालिक बदलें",
             saved: "रूम मालिक अपडेट हुआ",
         },
