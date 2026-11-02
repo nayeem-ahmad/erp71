@@ -1750,6 +1750,7 @@ export const adminMessages = {
                 title: "Pemilik bilik",
                 codeLabel: "Kod bilik",
                 emailLabel: "E-mel pemilik baharu",
+                coHostsLabel: "Hos bersama (pilihan, dipisahkan koma)",
                 save: "Pindah pemilik",
                 saved: "Pemilik bilik dikemas kini",
             },

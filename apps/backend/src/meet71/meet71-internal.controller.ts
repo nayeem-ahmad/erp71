@@ -7,7 +7,6 @@ import {
     Headers,
     HttpCode,
     HttpStatus,
-    NotFoundException,
     Param,
     Patch,
     Post,
@@ -75,14 +74,12 @@ export class Meet71InternalController {
                 created_by_email: dto.createdByEmail.trim().toLowerCase(),
             },
         });
-        return { code: row.code, createdByEmail: row.created_by_email, createdAt: row.created_at };
+        return { code: row.code, createdByEmail: row.created_by_email, createdAt: row.created_at, coHostEmails: [] };
     }
 
     @Get('rooms/:code')
-    async getRoom(@Param('code') code: string) {
-        const row = await this.db.meet71Room.findUnique({ where: { code } });
-        if (!row) throw new NotFoundException();
-        return { code: row.code, createdByEmail: row.created_by_email };
+    getRoom(@Param('code') code: string) {
+        return this.membership.getRoom(code);
     }
 
     @Patch('rooms/:code')
@@ -91,7 +88,7 @@ export class Meet71InternalController {
         @Body() dto: PatchMeet71RoomDto,
         @Headers('x-meet71-actor-email') actorEmail?: string,
     ) {
-        return this.membership.patchRoom(code, dto.createdByEmail, actorFromHeader(actorEmail));
+        return this.membership.patchRoom(code, dto, actorFromHeader(actorEmail));
     }
 
     @Get('members')

@@ -54,6 +54,10 @@ function fakeDb() {
             findMany: jest.fn(),
             update: jest.fn(),
         },
+        meet71RoomHost: {
+            deleteMany: jest.fn(),
+            createMany: jest.fn(),
+        },
         $transaction: jest.fn(),
     };
 }

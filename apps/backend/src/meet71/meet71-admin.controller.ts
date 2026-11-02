@@ -68,7 +68,7 @@ export class Meet71AdminController {
         @Body() dto: PatchMeet71RoomDto,
         @Request() req: { user?: Meet71Actor },
     ) {
-        return this.membership.patchRoom(code, dto.createdByEmail, actorFromUser(req.user));
+        return this.membership.patchRoom(code, dto, actorFromUser(req.user));
     }
 
     @Post('invites')
