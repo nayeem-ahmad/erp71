@@ -1,5 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { autoPostFromRules } from '../accounting/posting.utils';
+import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { ExpensesService } from './expenses.service';
 
 jest.mock('../accounting/posting.utils', () => ({
@@ -9,6 +9,7 @@ jest.mock('../accounting/posting.utils', () => ({
         voucherNumber: null,
         voucherType: null,
     }),
+    voidAutoPostedVoucher: jest.fn().mockResolvedValue(undefined),
 }));
 
 describe('ExpensesService', () => {
@@ -300,6 +301,131 @@ describe('ExpensesService', () => {
         const local = new ExpensesService(categories as any);
 
         await expect(local.deleteCategory('tenant-1', 'cat-1')).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('updateEntry() voids the old voucher and reposts at the new amount', async () => {
+        const tx = {
+            expenseEntry: {
+                update: jest.fn().mockResolvedValue({
+                    id: 'entry-1',
+                    amount: 900,
+                    expense_date: new Date('2026-10-02'),
+                    description: 'October',
+                    store_id: null,
+                    payment_method: 'CASH',
+                    head_id: 'head-1',
+                }),
+            },
+        };
+        const db = {
+            expenseEntry: {
+                findFirst: jest.fn().mockResolvedValue({
+                    id: 'entry-1',
+                    tenant_id: 'tenant-1',
+                    head_id: 'head-1',
+                    category_id: 'cat-salary',
+                }),
+            },
+            expenseHead: {
+                findFirst: jest.fn().mockResolvedValue({
+                    id: 'head-1',
+                    category_id: 'cat-salary',
+                    tenant_id: 'tenant-1',
+                    account_id: null,
+                    category: { account_id: null },
+                }),
+            },
+            $transaction: jest.fn(async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx)),
+        };
+        const local = new ExpensesService(db as any);
+
+        const result = await local.updateEntry('tenant-1', 'entry-1', { amount: 900 });
+
+        expect(tx.expenseEntry.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { id: 'entry-1' },
+                data: expect.objectContaining({ amount: 900 }),
+            }),
+        );
+        expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'expense', 'entry-1');
+        expect(autoPostFromRules).toHaveBeenCalledWith(
+            expect.objectContaining({
+                amount: 900,
+                sourceId: 'entry-1',
+                eventType: 'expense',
+                conditionValue: 'cash',
+            }),
+        );
+        expect(result).toEqual(expect.objectContaining({ posting_status: 'posted' }));
+    });
+
+    it('updateEntry() moves the entry onto a new head and posts to that head\'s account', async () => {
+        const tx = {
+            expenseEntry: {
+                update: jest.fn().mockResolvedValue({
+                    id: 'entry-1',
+                    amount: 500,
+                    expense_date: new Date('2026-10-01'),
+                    description: null,
+                    store_id: null,
+                    payment_method: 'CASH',
+                    head_id: 'head-rahim',
+                }),
+            },
+        };
+        const db = {
+            expenseEntry: {
+                findFirst: jest.fn().mockResolvedValue({
+                    id: 'entry-1',
+                    tenant_id: 'tenant-1',
+                    head_id: 'head-karim',
+                    category_id: 'cat-salary',
+                }),
+            },
+            expenseHead: {
+                findFirst: jest.fn().mockResolvedValue({
+                    id: 'head-rahim',
+                    category_id: 'cat-salary',
+                    tenant_id: 'tenant-1',
+                    account_id: 'acct-rahim',
+                    category: { account_id: 'acct-salary' },
+                }),
+            },
+            $transaction: jest.fn(async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx)),
+        };
+        const local = new ExpensesService(db as any);
+
+        await local.updateEntry('tenant-1', 'entry-1', { headId: 'head-rahim' });
+
+        expect(tx.expenseEntry.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({
+                    head_id: 'head-rahim',
+                    category_id: 'cat-salary',
+                }),
+            }),
+        );
+        expect(autoPostFromRules).toHaveBeenCalledWith(
+            expect.objectContaining({ overrideDebitAccountId: 'acct-rahim' }),
+        );
+    });
+
+    it('deleteEntry() voids the voucher before deleting the entry', async () => {
+        const tx = {
+            expenseEntry: { delete: jest.fn().mockResolvedValue({ id: 'entry-1' }) },
+        };
+        const db = {
+            expenseEntry: {
+                findFirst: jest.fn().mockResolvedValue({ id: 'entry-1', tenant_id: 'tenant-1' }),
+            },
+            $transaction: jest.fn(async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx)),
+        };
+        const local = new ExpensesService(db as any);
+
+        await local.deleteEntry('tenant-1', 'entry-1');
+
+        expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'expense', 'entry-1');
+        expect(tx.expenseEntry.delete).toHaveBeenCalledWith({ where: { id: 'entry-1' } });
     });
 
     it('getSummary() totals by category and splits each category by head', async () => {

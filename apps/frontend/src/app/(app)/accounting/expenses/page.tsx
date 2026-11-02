@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Banknote, BarChart3, Calculator, CreditCard, Plus, Receipt, Settings2, Tags, Trash2, Wallet } from 'lucide-react';
+import { Banknote, BarChart3, Calculator, CreditCard, Pencil, Plus, Receipt, Settings2, Tags, Trash2, Wallet } from 'lucide-react';
 import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
 import { applyCreatedRangeQuery, createdRangeFromPreset, type CreatedRange } from '@/lib/created-range';
 import type { NumberCondition } from '@/lib/number-condition';
@@ -15,6 +15,7 @@ import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { formatBDT, formatDate } from '@/lib/format';
 import { compactDensity } from '@/lib/ui/compact-density';
+import { RowActions, RowActionButton } from '@/components/table';
 import { BranchFilter, Button } from '@/components/ui';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
@@ -81,6 +82,7 @@ function ExpensesPageContent() {
     const [amountFilter, setAmountFilter] = useState<NumberCondition | null>(null);
     const [search, setSearch] = useState('');
     const [showForm, setShowForm] = useState(false);
+    const [editing, setEditing] = useState<ExpenseEntry | null>(null);
     const [saving, setSaving] = useState(false);
     const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -167,7 +169,33 @@ function ExpensesPageContent() {
         setFormPaymentMethod('CASH');
     };
 
-    const handleCreate = async (e: React.FormEvent) => {
+    const fillForm = (entry: ExpenseEntry) => {
+        setFormHeadId(entry.head?.id ?? '');
+        setFormAmount(String(Number(entry.amount || 0)));
+        setFormDate(String(entry.expense_date).slice(0, 10));
+        setFormDescription(entry.description ?? '');
+        setFormPaymentMethod(isKnownMethod(entry.payment_method) ? entry.payment_method : 'CASH');
+    };
+
+    const openCreate = () => {
+        setEditing(null);
+        resetForm();
+        setShowForm(true);
+    };
+
+    const openEdit = (entry: ExpenseEntry) => {
+        setEditing(entry);
+        fillForm(entry);
+        setShowForm(true);
+    };
+
+    const closeForm = () => {
+        setShowForm(false);
+        setEditing(null);
+        resetForm();
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formHeadId || !formAmount) {
             setToast({ type: 'error', message: t.expenses.entryRequired });
@@ -175,17 +203,24 @@ function ExpensesPageContent() {
         }
         setSaving(true);
         try {
-            await api.createExpenseEntry({
+            const payload = {
                 headId: formHeadId,
                 amount: Number(formAmount),
                 expenseDate: formDate,
-                description: formDescription.trim() || undefined,
+                description: editing ? formDescription.trim() : (formDescription.trim() || undefined),
                 paymentMethod: formPaymentMethod,
-                storeId: getWorkspaceItem('store_id') || undefined,
-            });
-            setToast({ type: 'success', message: t.expenses.entrySaved });
-            setShowForm(false);
-            resetForm();
+            };
+            if (editing) {
+                await api.updateExpenseEntry(editing.id, payload);
+                setToast({ type: 'success', message: t.expenses.entryUpdated });
+            } else {
+                await api.createExpenseEntry({
+                    ...payload,
+                    storeId: getWorkspaceItem('store_id') || undefined,
+                });
+                setToast({ type: 'success', message: t.expenses.entrySaved });
+            }
+            closeForm();
             await loadData();
         } catch (error: any) {
             setToast({ type: 'error', message: error?.message || t.common.error });
@@ -249,16 +284,12 @@ function ExpensesPageContent() {
                 id: 'actions',
                 header: t.common.actions,
                 cell: ({ row }) => (
-                    <button
-                        type="button"
-                        onClick={() => handleDelete(row.original)}
-                        className="p-2 rounded-lg text-gray-400 hover:text-danger hover:bg-red-50"
-                        title={t.common.delete}
-                    >
-                        <Trash2 className="w-4 h-4" />
-                    </button>
+                    <RowActions>
+                        <RowActionButton icon={<Pencil />} label={t.common.edit} onClick={() => openEdit(row.original)} />
+                        <RowActionButton icon={<Trash2 />} label={t.common.delete} intent="danger" onClick={() => handleDelete(row.original)} />
+                    </RowActions>
                 ),
-                size: 70,
+                size: 90,
             }),
         ],
         [t],
@@ -396,7 +427,7 @@ function ExpensesPageContent() {
                         </Link>
                         <button
                             type="button"
-                            onClick={() => { resetForm(); setShowForm(true); }}
+                            onClick={openCreate}
                             className={`${compactDensity.btnPrimary} bg-primary text-white hover:bg-primary-hover`}
                         >
                             <Plus className="w-3.5 h-3.5" />
@@ -430,9 +461,9 @@ function ExpensesPageContent() {
             />
 
             {showForm && (
-                <ModalShell size="sm" onBackdropClick={() => setShowForm(false)}>
-                    <form onSubmit={handleCreate} className="flex max-h-[90vh] flex-col overflow-hidden">
-                        <ModalHeader title={t.expenses.addEntry} onClose={() => setShowForm(false)} />
+                <ModalShell size="sm" onBackdropClick={closeForm}>
+                    <form onSubmit={handleSubmit} className="flex max-h-[90vh] flex-col overflow-hidden">
+                        <ModalHeader title={editing ? t.expenses.editEntry : t.expenses.addEntry} onClose={closeForm} />
                         <div className={`${compactDensity.modalPadding} ${compactDensity.formStack} overflow-y-auto`}>
                             {heads.length === 0 ? (
                                 <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
@@ -477,7 +508,7 @@ function ExpensesPageContent() {
                             )}
                         </div>
                         <ModalFooter>
-                            <Button variant="secondary" type="button" onClick={() => setShowForm(false)}>
+                            <Button variant="secondary" type="button" onClick={closeForm}>
                                 {t.common.cancel}
                             </Button>
                             <Button variant="primary" type="submit" loading={saving} disabled={heads.length === 0}>
