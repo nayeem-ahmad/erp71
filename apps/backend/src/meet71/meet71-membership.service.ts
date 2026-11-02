@@ -45,7 +45,15 @@ export type Meet71RoomView = {
     code: string;
     createdByEmail: string;
     createdAt: Date;
+    coHostEmails: string[];
 };
+
+export type Meet71RoomPatch = {
+    createdByEmail?: string;
+    coHostEmails?: string[];
+};
+
+const MAX_CO_HOSTS = 10;
 
 type MemberRow = {
     display_name: string | null;
@@ -139,7 +147,11 @@ export class Meet71MembershipService {
             this.db.meet71AllowEntry.findMany({ orderBy: { created_at: 'asc' } }),
             this.db.meet71Member.findMany({ orderBy: { email: 'asc' } }),
             this.db.meet71DenyEntry.findMany({ orderBy: { created_at: 'asc' } }),
-            this.db.meet71Room.findMany({ orderBy: { created_at: 'desc' }, take: 100 }),
+            this.db.meet71Room.findMany({
+                orderBy: { created_at: 'desc' },
+                take: 100,
+                include: { hosts: true },
+            }),
         ]);
         return {
             entries: entries.map((row) => this.toAllowEntry(row)),
@@ -149,11 +161,7 @@ export class Meet71MembershipService {
                 createdBy: row.created_by,
                 createdAt: row.created_at,
             })),
-            rooms: rooms.map((row) => ({
-                code: row.code,
-                createdByEmail: row.created_by_email,
-                createdAt: row.created_at,
-            })),
+            rooms: rooms.map((row) => this.toRoomView(row)),
         };
     }
 
@@ -270,20 +278,67 @@ export class Meet71MembershipService {
         });
     }
 
-    async patchRoom(code: string, createdByEmail: string, actor: Meet71Actor) {
-        const existing = await this.db.meet71Room.findUnique({ where: { code } });
-        if (!existing) throw new NotFoundException();
-        const owner = createdByEmail.trim().toLowerCase();
-        const row = await this.db.meet71Room.update({
+    async getRoom(code: string): Promise<Meet71RoomView> {
+        const row = await this.db.meet71Room.findUnique({
             where: { code },
-            data: { created_by_email: owner },
+            include: { hosts: true },
         });
+        if (!row) throw new NotFoundException();
+        return this.toRoomView(row);
+    }
+
+    async patchRoom(code: string, patch: Meet71RoomPatch, actor: Meet71Actor): Promise<Meet71RoomView> {
+        if (patch.createdByEmail === undefined && patch.coHostEmails === undefined) {
+            throw new BadRequestException({
+                code: 'MEET71_ROOM_PATCH_EMPTY',
+                message: 'createdByEmail or coHostEmails is required',
+            });
+        }
+
+        const existing = await this.db.meet71Room.findUnique({
+            where: { code },
+            include: { hosts: true },
+        });
+        if (!existing) throw new NotFoundException();
+
+        const owner =
+            patch.createdByEmail !== undefined
+                ? patch.createdByEmail.trim().toLowerCase()
+                : existing.created_by_email.trim().toLowerCase();
+
+        const coHostEmails =
+            patch.coHostEmails !== undefined
+                ? normalizeCoHostEmails(patch.coHostEmails, owner)
+                : uniqueEmails(existing.hosts.map((host) => host.email)).filter((email) => email !== owner);
+
+        if (coHostEmails.length > MAX_CO_HOSTS) {
+            throw new BadRequestException({
+                code: 'MEET71_TOO_MANY_COHOSTS',
+                message: `A room can have at most ${MAX_CO_HOSTS} co-hosts.`,
+            });
+        }
+
+        const row = await this.db.$transaction(async (tx) => {
+            const updated = await tx.meet71Room.update({
+                where: { code },
+                data: { created_by_email: owner },
+            });
+            await tx.meet71RoomHost.deleteMany({ where: { room_code: code } });
+            if (coHostEmails.length) {
+                await tx.meet71RoomHost.createMany({
+                    data: coHostEmails.map((email) => ({ room_code: code, email })),
+                });
+            }
+            return updated;
+        });
+
         await this.audit.log('MEET71_ROOM_PATCH', 'Meet71Room', this.auditCtx(actor), row.id, {
             code: row.code,
             createdByEmail: owner,
+            coHostEmails,
             actorEmail: actor.email ?? null,
         });
-        return { code: row.code, createdByEmail: row.created_by_email, createdAt: row.created_at };
+        return { code: row.code, createdByEmail: owner, createdAt: row.created_at, coHostEmails };
     }
 
     private async isAllowed(email: string): Promise<boolean> {
@@ -309,6 +364,23 @@ export class Meet71MembershipService {
         };
     }
 
+    private toRoomView(row: {
+        code: string;
+        created_by_email: string;
+        created_at: Date;
+        hosts?: { email: string }[];
+    }): Meet71RoomView {
+        const createdByEmail = row.created_by_email.trim().toLowerCase();
+        return {
+            code: row.code,
+            createdByEmail,
+            createdAt: row.created_at,
+            coHostEmails: uniqueEmails((row.hosts ?? []).map((host) => host.email)).filter(
+                (email) => email !== createdByEmail,
+            ),
+        };
+    }
+
     private toAllowEntry(row: AllowRow): Meet71AllowlistView {
         return {
             id: row.id,
@@ -330,6 +402,22 @@ function normalizeEmail(value: string): string {
     } catch {
         return value.trim().toLowerCase();
     }
+}
+
+function uniqueEmails(values: string[]): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const raw of values) {
+        const email = raw.trim().toLowerCase();
+        if (!email || seen.has(email)) continue;
+        seen.add(email);
+        out.push(email);
+    }
+    return out;
+}
+
+function normalizeCoHostEmails(values: string[], owner: string): string[] {
+    return uniqueEmails(values).filter((email) => email !== owner);
 }
 
 function parseAllowPattern(raw: string): { pattern: string; kind: 'EMAIL' | 'DOMAIN' } {

@@ -9767,10 +9767,23 @@ model Meet71SsoCode {
 }
 
 model Meet71Room {
-  id               String   @id @default(uuid())
-  code             String   @unique
+  id               String           @id @default(uuid())
+  code             String           @unique
   created_by_email String
-  created_at       DateTime @default(now())
+  created_at       DateTime         @default(now())
+  hosts            Meet71RoomHost[]
 
   @@index([created_by_email])
+}
+
+/// Extra emails that can admit guests. The owner stays on Meet71Room.created_by_email.
+model Meet71RoomHost {
+  id         String     @id @default(uuid())
+  room_code  String
+  email      String
+  created_at DateTime   @default(now())
+  room       Meet71Room @relation(fields: [room_code], references: [code], onDelete: Cascade)
+
+  @@unique([room_code, email])
+  @@index([email])
 }

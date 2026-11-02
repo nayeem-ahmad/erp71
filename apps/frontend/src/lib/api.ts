@@ -4630,11 +4630,11 @@ export const api = {
         fetchWithAuth(`/admin/meet71/members/${encodeURIComponent(email)}`, { method: 'DELETE' }),
     deleteMeet71Denial: (email: string) =>
         fetchWithAuth(`/admin/meet71/denials/${encodeURIComponent(email)}`, { method: 'DELETE' }),
-    patchMeet71Room: (code: string, createdByEmail: string) =>
+    patchMeet71Room: (code: string, data: { createdByEmail?: string; coHostEmails?: string[] }) =>
         fetchWithAuth(`/admin/meet71/rooms/${encodeURIComponent(code)}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ createdByEmail }),
+            body: JSON.stringify(data),
         }),
     /** Archived referees are excluded unless `include_archived` is set. */
     getAdminReferees: (params?: { include_archived?: boolean }) => {

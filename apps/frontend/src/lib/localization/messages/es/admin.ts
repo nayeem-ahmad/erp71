@@ -1757,6 +1757,7 @@ export const adminMessages = {
             title: "Dueño de la sala",
             codeLabel: "Código de sala",
             emailLabel: "Correo del nuevo dueño",
+            coHostsLabel: "Coanfitriones (opcional, separados por comas)",
             save: "Transferir dueño",
             saved: "Dueño de la sala actualizado",
         },

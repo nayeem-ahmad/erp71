@@ -1750,6 +1750,7 @@ export const adminMessages = {
                 title: "রুম মালিক",
                 codeLabel: "রুম কোড",
                 emailLabel: "নতুন মালিকের ইমেইল",
+                coHostsLabel: "সহ-হোস্ট (ঐচ্ছিক, কমা দিয়ে আলাদা)",
                 save: "মালিক পরিবর্তন",
                 saved: "রুম মালিক আপডেট হয়েছে",
             },

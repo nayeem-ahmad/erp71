@@ -1757,6 +1757,7 @@ export const adminMessages = {
             title: 'روم کا مالک',
             codeLabel: 'روم کوڈ',
             emailLabel: 'نئے مالک کا ای میل',
+            coHostsLabel: 'کو-ہوسٹ (اختیاری، کوما سے الگ)',
             save: 'مالک تبدیل کریں',
             saved: 'روم کا مالک اپ ڈیٹ ہو گیا',
         },
