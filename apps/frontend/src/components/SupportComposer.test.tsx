@@ -11,6 +11,25 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+/**
+ * Types into a `RichTextEditor` (contenteditable). `fireEvent.change` has no
+ * value setter there — paste through ProseMirror is what produces a document
+ * the editor serializes back to markdown.
+ */
+const typeInEditor = (editor: HTMLElement, text: string) => {
+    fireEvent.focus(editor);
+    fireEvent.keyDown(editor, { key: 'a', ctrlKey: true });
+    fireEvent.paste(editor, {
+        clipboardData: {
+            files: [],
+            getData: (type: string) => (type === 'text/plain' ? text : ''),
+            types: ['text/plain'],
+        },
+    });
+};
+
+const messageEditor = () => screen.getByRole('textbox', { name: 'Message' });
+
 describe('availableKnockCategories', () => {
     it('includes help only when support is on', () => {
         expect(availableKnockCategories(true, false)).toEqual(['support']);
@@ -76,9 +95,7 @@ describe('SupportComposer', () => {
                 onCancel={jest.fn()}
             />,
         );
-        fireEvent.change(screen.getByPlaceholderText('Describe what you need help with…'), {
-            target: { value: 'The printer does nothing' },
-        });
+        typeInEditor(messageEditor(), 'The printer does nothing');
         fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
         await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ id: 'thr-1', ticketNumber: 12 }));
@@ -90,7 +107,7 @@ describe('SupportComposer', () => {
     });
 
     it('lets the user pick a type when both flags are on', () => {
-        render(
+        const { container } = render(
             <SupportComposer
                 supportEnabled
                 feedbackEnabled
@@ -100,7 +117,27 @@ describe('SupportComposer', () => {
         );
         expect(screen.getByRole('button', { name: 'I need help' })).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Feature' }));
-        expect(screen.getByPlaceholderText('Describe the bug, idea, or other feedback…')).toBeInTheDocument();
+        // TipTap puts the empty-state copy on the empty paragraph, not the
+        // textbox itself — see `.prose-editor p.is-editor-empty` in globals.css.
+        expect(container.querySelector('[data-placeholder]')).toHaveAttribute(
+            'data-placeholder',
+            'Describe the bug, idea, or other feedback…',
+        );
+    });
+
+    it('offers a bigger, resizable rich-text description', () => {
+        const { container } = render(
+            <SupportComposer
+                supportEnabled
+                feedbackEnabled={false}
+                onCreated={jest.fn()}
+                onCancel={jest.fn()}
+            />,
+        );
+        expect(screen.getByRole('toolbar', { name: 'Formatting' })).toBeInTheDocument();
+        const box = container.querySelector('[data-rich-text-editor] .resize-y') as HTMLElement | null;
+        expect(box).toBeTruthy();
+        expect(box!.style.minHeight).toBe('12rem');
     });
 });
 
@@ -134,9 +171,7 @@ describe('SupportComposer attachments', () => {
         pick(shot);
         expect(screen.getByText('screen.png')).toBeInTheDocument();
 
-        fireEvent.change(screen.getByPlaceholderText('Describe what you need help with…'), {
-            target: { value: 'Totals look wrong' },
-        });
+        typeInEditor(messageEditor(), 'Totals look wrong');
         fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
         await waitFor(() => expect(onCreated).toHaveBeenCalled());

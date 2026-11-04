@@ -427,6 +427,21 @@ describe('RichTextEditor spelling suggestions', () => {
     });
 });
 
+describe('RichTextEditor resize handle', () => {
+    it('puts min-height on the bordered box when resizable', async () => {
+        const { container } = render(
+            <RichTextEditor value="" onChange={() => undefined} rows={8} resizable ariaLabel="Message" />,
+        );
+        await screen.findByRole('textbox', { name: 'Message' });
+        const box = container.querySelector('.resize-y') as HTMLElement;
+        expect(box).toBeTruthy();
+        expect(box.style.minHeight).toBe('12rem');
+        expect(screen.getByRole('textbox', { name: 'Message' }).getAttribute('style') ?? '').not.toMatch(
+            /min-height/,
+        );
+    });
+});
+
 describe('RichTextEditor markdown contract', () => {
     it('renders the markdown it is given', async () => {
         render(<Host initial="A **bold** word." />);

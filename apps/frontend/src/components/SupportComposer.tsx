@@ -5,7 +5,8 @@ import { Mic, Paperclip, Square } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
-import { Button, Field, Input, Textarea } from '@/components/ui';
+import { Button, Field, Input } from '@/components/ui';
+import { RichTextEditor } from '@/components/ui/LazyRichTextEditor';
 import {
     MAX_SUPPORT_ATTACHMENTS,
     PendingAttachmentList,
@@ -158,13 +159,15 @@ export default function SupportComposer({
             </Field>
 
             <Field label={t.admin.support.messageLabel}>
-                <Textarea
+                <RichTextEditor
                     value={body}
-                    onChange={(e) => setBody(e.target.value)}
+                    onChange={setBody}
                     placeholder={placeholder}
-                    rows={4}
-                    className="resize-none"
+                    ariaLabel={t.admin.support.messageLabel}
+                    rows={8}
+                    resizable
                     autoFocus
+                    disabled={status === 'submitting'}
                 />
             </Field>
 
