@@ -6,6 +6,7 @@ import { BillingSuspensionGuard } from '../auth/billing-suspension.guard';
 import { ALLOW_WHEN_SUSPENDED_KEY } from '../auth/billing-suspension.decorator';
 import { TransformInterceptor } from '../common/transform.interceptor';
 import { HttpExceptionFilter } from '../common/http-exception.filter';
+import { Meet71ClientService } from './meet71-client.service';
 import { Meet71Controller } from './meet71.controller';
 import { Meet71MembershipService } from './meet71-membership.service';
 import { Meet71SsoService } from './meet71-sso.service';
@@ -34,9 +35,10 @@ const MEMBERSHIP = {
 
 describe('Meet71Controller', () => {
     let app: INestApplication;
-    const membership = { evaluate: jest.fn(), upsertOnSignIn: jest.fn() };
+    const membership = { evaluate: jest.fn(), upsertOnSignIn: jest.fn(), listAdmin: jest.fn() };
     const sso = { mint: jest.fn(), exchange: jest.fn() };
     const db = { user: { findUnique: jest.fn() } };
+    const meet71 = { getPresence: jest.fn(), startCall: jest.fn(), isConfigured: jest.fn() };
 
     const previousOrigins = process.env.MEET71_RETURN_ORIGINS;
 
@@ -44,8 +46,31 @@ describe('Meet71Controller', () => {
         jest.resetAllMocks();
         process.env.MEET71_RETURN_ORIGINS = ORIGINS;
         membership.evaluate.mockResolvedValue(MEMBERSHIP);
+        membership.listAdmin.mockResolvedValue({
+            entries: [],
+            members: [
+                { ...MEMBERSHIP, email: 'member@erp71.com' },
+                {
+                    email: 'peer@erp71.com',
+                    displayName: 'Peer',
+                    isAdmin: false,
+                    canCreateRoom: false,
+                    inviteQuota: 0,
+                    invitesUsed: 0,
+                    invitesRemaining: 0,
+                },
+            ],
+            denials: [],
+            rooms: [],
+        });
         sso.mint.mockResolvedValue({ code: 'minted-code' });
         db.user.findUnique.mockResolvedValue({ name: 'Member', email: 'member@erp71.com' });
+        meet71.getPresence.mockResolvedValue({ online: ['peer@erp71.com'] });
+        meet71.startCall.mockResolvedValue({
+            call: { id: 'c1' },
+            callerUrl: 'https://meet.erp71.com/call/c1',
+            roomUrl: 'https://meet.erp71.com/room/c1',
+        });
 
         const module = await Test.createTestingModule({
             controllers: [Meet71Controller],
@@ -53,6 +78,7 @@ describe('Meet71Controller', () => {
                 { provide: Meet71MembershipService, useValue: membership },
                 { provide: Meet71SsoService, useValue: sso },
                 { provide: DatabaseService, useValue: db },
+                { provide: Meet71ClientService, useValue: meet71 },
             ],
         })
             .overrideGuard(JwtAuthGuard)
@@ -181,5 +207,56 @@ describe('Meet71Controller', () => {
                 switchToHttp: () => ({ getRequest: () => ({ originalUrl: '/api/v1/sales' }) }),
             }),
         ).toThrow(ForbiddenException);
+    });
+
+    it('GET /meet71/directory lists other members when allowed', async () => {
+        const res = await request(app.getHttpServer()).get('/meet71/directory').expect(200);
+        expect(res.body.data).toEqual([{ email: 'peer@erp71.com', displayName: 'Peer' }]);
+    });
+
+    it('GET /meet71/directory is 403 MEET71_NOT_ALLOWED when not allowlisted', async () => {
+        membership.evaluate.mockResolvedValue({ allowed: false });
+        const res = await request(app.getHttpServer()).get('/meet71/directory').expect(403);
+        expect(res.body.error).toMatchObject({ code: 'MEET71_NOT_ALLOWED' });
+        expect(membership.listAdmin).not.toHaveBeenCalled();
+    });
+
+    it('GET /meet71/presence proxies online emails', async () => {
+        const res = await request(app.getHttpServer()).get('/meet71/presence').expect(200);
+        expect(res.body.data).toEqual({ online: ['peer@erp71.com'] });
+        expect(meet71.getPresence).toHaveBeenCalledWith('member@erp71.com');
+    });
+
+    it('POST /meet71/calls starts a call when both parties are allowed', async () => {
+        membership.evaluate
+            .mockResolvedValueOnce(MEMBERSHIP)
+            .mockResolvedValueOnce({ ...MEMBERSHIP, email: 'peer@erp71.com', displayName: 'Peer' });
+
+        const res = await request(app.getHttpServer())
+            .post('/meet71/calls')
+            .send({ to: 'Peer@ERP71.com', mode: 'video' })
+            .expect(200);
+
+        expect(res.body.data.callerUrl).toBe('https://meet.erp71.com/call/c1');
+        expect(meet71.startCall).toHaveBeenCalledWith({
+            to: 'peer@erp71.com',
+            mode: 'video',
+            fromName: 'Member',
+            fromEmail: 'member@erp71.com',
+        });
+    });
+
+    it('POST /meet71/calls is 403 when callee is not allowlisted', async () => {
+        membership.evaluate
+            .mockResolvedValueOnce(MEMBERSHIP)
+            .mockResolvedValueOnce({ allowed: false });
+
+        const res = await request(app.getHttpServer())
+            .post('/meet71/calls')
+            .send({ to: 'outsider@example.com' })
+            .expect(403);
+
+        expect(res.body.error).toMatchObject({ code: 'MEET71_NOT_ALLOWED' });
+        expect(meet71.startCall).not.toHaveBeenCalled();
     });
 });

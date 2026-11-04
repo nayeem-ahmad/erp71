@@ -524,6 +524,7 @@ export const coreMessages = {
             users: "Usuarios de la plataforma",
             platformStaff: "Personal",
             meet71: "Meet71",
+            call: "Llamar",
             platformAccountingOverview: "Resumen de libros",
             platformAccountingExpenses: "Gastos de plataforma",
             platformAccountingLedger: "Libro mayor",

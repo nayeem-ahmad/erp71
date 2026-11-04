@@ -73,6 +73,7 @@ const APP_ONLY_PREFIXES = [
     '/admin',
     '/ai-credits',
     '/billing',
+    '/call',
     '/chat',
     '/crm',
     '/dashboard',
