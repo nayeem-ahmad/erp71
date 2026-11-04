@@ -4626,6 +4626,14 @@ export const api = {
         }),
     sendPlatformAdminUserResetEmail: (userId: string) =>
         fetchWithAuth(`/admin/users/${userId}/send-reset-email`, { method: 'POST' }),
+    getMeet71Directory: () => fetchWithAuth('/meet71/directory'),
+    getMeet71Presence: () => fetchWithAuth('/meet71/presence'),
+    startMeet71Call: (data: { to: string; mode?: 'voice' | 'video' }) =>
+        fetchWithAuth('/meet71/calls', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
     getMeet71Admin: () => fetchWithAuth('/admin/meet71'),
     addMeet71Allowlist: (pattern: string) =>
         fetchWithAuth('/admin/meet71/allowlist', {

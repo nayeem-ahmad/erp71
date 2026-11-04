@@ -82,6 +82,9 @@ export const OPEN_ROUTES: Record<string, string> = {
     'InvitationsController.cancel': "permission is enforced in the service layer, not by a decorator", // DELETE /invitations/:id
     'InvitationsController.accept': "permission is enforced in the service layer, not by a decorator", // POST /invitations/accept
     'Meet71Controller.mint': "Meet71 silent SSO: any signed-in app user may request a code; allowlist membership is enforced in the handler", // POST /meet71/sso/code
+    'Meet71Controller.directory': "Meet71 dialer: any signed-in app user may list members; allowlist membership is enforced in the handler", // GET /meet71/directory
+    'Meet71Controller.presence': "Meet71 dialer: any signed-in app user may read presence; allowlist membership is enforced in the handler", // GET /meet71/presence
+    'Meet71Controller.startCall': "Meet71 dialer: any signed-in app user may start a call; allowlist membership is enforced in the handler", // POST /meet71/calls
     'NavigationController.getLayout': "shell read: the sidebar layout every member needs to render the app", // GET /navigation/layout
     'NotificationsController.list': "self-scoped: acts only on the signed-in member’s own data", // GET /notifications
     'NotificationsController.unreadCount': "self-scoped: acts only on the signed-in member’s own data", // GET /notifications/unread-count

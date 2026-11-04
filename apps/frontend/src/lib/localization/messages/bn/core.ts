@@ -523,6 +523,7 @@ export const coreMessages = {
                 users: "প্ল্যাটফর্ম ব্যবহারকারী",
                 platformStaff: "স্টাফ",
                 meet71: "Meet71",
+                call: "কল",
                 platformAccountingOverview: "হিসাব সারসংক্ষেপ",
                 platformAccountingExpenses: "প্ল্যাটফর্ম খরচ",
                 platformAccountingLedger: "প্ল্যাটফর্ম খতিয়ান",

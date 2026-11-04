@@ -524,6 +524,7 @@ export const coreMessages = {
             users: 'مستخدمو المنصة',
             platformStaff: 'الموظفون',
             meet71: 'Meet71',
+            call: 'اتصال',
             platformAccountingOverview: 'ملخص الدفاتر',
             platformAccountingExpenses: 'مصروفات المنصة',
             platformAccountingLedger: 'دفتر أستاذ المنصة',

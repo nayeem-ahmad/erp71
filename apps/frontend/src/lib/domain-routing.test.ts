@@ -58,6 +58,10 @@ describe('isAppOnlyPath', () => {
         expect(isAppOnlyPath('/meet71')).toBe(true);
     });
 
+    it('claims the Meet71 dialer', () => {
+        expect(isAppOnlyPath('/call')).toBe(true);
+    });
+
     it('leaves the marketing and public pages alone', () => {
         for (const path of ['/', '/pricing', '/blog', '/blog/some-post', '/contact', '/terms']) {
             expect(isAppOnlyPath(path)).toBe(false);
