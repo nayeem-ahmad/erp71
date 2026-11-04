@@ -45,7 +45,7 @@ describe('LeadGenerationPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         api.searchLeadGeneration.mockResolvedValue({
-            query: 'software companies',
+            query: 'B2B companies',
             web_search: true,
             credits_used: 3,
             candidates: [ACME],
@@ -57,10 +57,10 @@ describe('LeadGenerationPage', () => {
         });
     });
 
-    it('starts with a software-company niche so a blank search still targets software firms', () => {
+    it('starts with a B2B niche the tenant can edit, defaulting to SMEs in Bangladesh', () => {
         render(<LeadGenerationPage />);
-        expect(screen.getByLabelText(/what they build/i)).toHaveValue(
-            'custom software, SaaS, or IT services',
+        expect(screen.getByLabelText(/who you sell to/i)).toHaveValue(
+            'small and medium businesses',
         );
         expect(screen.getByLabelText(/location/i)).toHaveValue('Bangladesh');
     });
@@ -72,7 +72,7 @@ describe('LeadGenerationPage', () => {
         await screen.findByText('Acme Soft');
         expect(api.searchLeadGeneration).toHaveBeenCalledWith(
             expect.objectContaining({
-                niche: 'custom software, SaaS, or IT services',
+                niche: 'small and medium businesses',
                 location: 'Bangladesh',
             }),
         );
@@ -95,7 +95,7 @@ describe('LeadGenerationPage', () => {
 
     it('does not offer a company that is already a lead', async () => {
         api.searchLeadGeneration.mockResolvedValue({
-            query: 'software companies',
+            query: 'B2B companies',
             web_search: true,
             credits_used: 1,
             candidates: [{ ...ACME, existing_lead_id: 'lead-old', existing_lead_name: 'Acme Soft Ltd' }],

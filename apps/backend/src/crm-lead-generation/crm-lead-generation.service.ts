@@ -16,18 +16,19 @@ import {
 const EXTRACT_MAX_TOKENS = 1800;
 
 const EXTRACT_PROMPT = [
-    'You extract software-company prospects for a CRM from the research below.',
-    'Only include companies that build, sell, or implement software (SaaS, custom development, product studios, IT services, system integrators).',
-    'Exclude retailers, restaurants, and any business that is not a software company.',
+    'You extract B2B company prospects for a CRM from the research below.',
+    'The brief is who the tenant wants to sell to. Return companies that match that brief as stated.',
+    'If they asked for restaurants, return restaurants. If they asked for software firms, return software firms.',
+    'Only include organisations (companies, shops, clinics, agencies, factories). Exclude private individuals.',
     'Never invent an email, phone number, or LinkedIn URL. Leave those null unless they appear in the sources.',
     'Return JSON only, no prose:',
     '{ "candidates": [ { "company_name": "", "website_url": null, "linkedin_url": null, "email": null, "location": null, "description": "", "fit_score": 0, "fit_reason": "", "source_url": null, "unverified": false } ] }',
-    'fit_score is 0-100 for how well the company matches the brief.',
+    'fit_score is 0-100 for how well the company matches the brief as a sales prospect.',
 ].join('\n');
 
 const KNOWLEDGE_PROMPT = [
     EXTRACT_PROMPT,
-    'Web search is unavailable. Only list well-known software companies you are confident exist.',
+    'Web search is unavailable. Only list well-known companies you are confident exist that match the brief.',
     'Set unverified to true on every candidate. Leave email, linkedin_url and phone null.',
 ].join('\n');
 

@@ -1,6 +1,6 @@
 import { organizationNameNorm } from '@erp71/shared-types';
 
-export const DEFAULT_NICHE = 'custom software, SaaS, or IT services';
+export const DEFAULT_NICHE = 'small and medium businesses';
 export const DEFAULT_LOCATION = 'Bangladesh';
 export const DEFAULT_CANDIDATE_LIMIT = 8;
 export const MAX_CANDIDATE_LIMIT = 15;
@@ -60,14 +60,14 @@ export function normalizeBrief(input: {
 }
 
 /**
- * Always a software-company search. A niche like "restaurants" becomes
- * software companies that serve restaurants, not restaurants themselves.
+ * Search for B2B companies matching the tenant's brief as stated.
+ * A niche like "restaurants" stays restaurants, not software firms that serve them.
  */
 export function buildSearchQuery(brief: LeadGenerationBrief): string {
-    const niche = brief.niche.trim();
+    const niche = brief.niche.trim() || DEFAULT_NICHE;
     const parts = [
-        'software companies',
-        niche ? `specialising in ${niche}` : '',
+        'B2B companies',
+        niche,
         brief.location.trim() ? `in ${brief.location.trim()}` : '',
         brief.companySize.trim() ? `with about ${brief.companySize.trim()}` : '',
         brief.keywords.trim() ? brief.keywords.trim() : '',
@@ -167,7 +167,7 @@ export function leadRemarksFor(candidate: ParsedCandidate): string {
         candidate.fit_reason ? `Why it fits: ${candidate.fit_reason}` : null,
         candidate.location ? `Location: ${candidate.location}` : null,
         candidate.source_url ? `Source: ${candidate.source_url}` : null,
-        'Found via AI lead generation (software companies).',
+        'Found via AI lead generation.',
         candidate.unverified ? 'Unverified — review before contacting.' : null,
     ];
     return lines.filter(Boolean).join('\n');

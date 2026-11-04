@@ -34,31 +34,33 @@ describe('buildSearchQuery', () => {
         ...over,
     });
 
-    it('always names software companies, even when the niche is blank', () => {
+    it('still names B2B companies when the niche is blank', () => {
         const query = buildSearchQuery(brief({ niche: '' }));
-        expect(query.toLowerCase()).toContain('software compan');
+        expect(query.toLowerCase()).toContain('b2b');
+        expect(query.toLowerCase()).toContain('compan');
+        expect(query.toLowerCase()).toContain('small and medium');
     });
 
-    it('keeps a restaurant-shaped niche as software for that niche, not restaurants themselves', () => {
+    it('keeps a restaurant-shaped niche as restaurants, not software companies that serve them', () => {
         const query = buildSearchQuery(brief({ niche: 'restaurants in Gulshan' }));
-        expect(query.toLowerCase()).toContain('software');
         expect(query.toLowerCase()).toContain('restaurants in gulshan');
+        expect(query.toLowerCase()).not.toContain('software');
     });
 
     it('includes location, size, keywords and the requested count', () => {
         const query = buildSearchQuery(
             brief({
-                niche: 'B2B SaaS',
+                niche: 'retailers and wholesalers',
                 location: 'Dhaka',
                 companySize: '20-50 people',
-                keywords: 'fintech export',
+                keywords: 'grocery export',
                 limit: 6,
             }),
         );
-        expect(query).toContain('B2B SaaS');
+        expect(query).toContain('retailers and wholesalers');
         expect(query).toContain('Dhaka');
         expect(query).toContain('20-50 people');
-        expect(query).toContain('fintech export');
+        expect(query).toContain('grocery export');
         expect(query).toContain('6');
     });
 });
@@ -77,7 +79,7 @@ describe('normalizeWebsite', () => {
 });
 
 describe('parseCandidates', () => {
-    it('keeps named software companies and drops rows with no company name', () => {
+    it('keeps named companies and drops rows with no company name', () => {
         const parsed = parseCandidates(
             {
                 candidates: [

@@ -36,7 +36,7 @@ type Candidate = {
     existing_lead_name: string | null;
 };
 
-const DEFAULT_NICHE = 'custom software, SaaS, or IT services';
+const DEFAULT_NICHE = 'small and medium businesses';
 const DEFAULT_LOCATION = 'Bangladesh';
 
 function fitTone(score: number): StatusBadgeTone {

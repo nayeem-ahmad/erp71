@@ -35,7 +35,7 @@ function makeService(over: {
         isEnabled: jest.fn().mockResolvedValue(over.webEnabled ?? true),
         search: jest.fn().mockResolvedValue({
             result: {
-                query: 'software companies',
+                query: 'B2B companies',
                 answer: over.searchAnswer ?? 'Acme Soft (acmesoft.com) builds ERP for SMEs in Dhaka.',
                 sources: [{ url: 'https://acmesoft.com', title: 'Acme Soft' }],
                 excerpts: [{ url: 'https://acmesoft.com', content: 'Custom ERP for Bangladeshi retailers.' }],
@@ -80,22 +80,36 @@ describe('CrmLeadGenerationService.search', () => {
         expect(ai.completeUnbilled).not.toHaveBeenCalled();
     });
 
-    it('searches the web for software companies and returns scored candidates', async () => {
+    it('searches the web for B2B companies matching the brief and returns scored candidates', async () => {
         const { service, webSearch, ai } = makeService();
 
-        const result = await service.search('t1', { niche: 'B2B SaaS', location: 'Dhaka', limit: 6 });
+        const result = await service.search('t1', { niche: 'retailers', location: 'Dhaka', limit: 6 });
 
         expect(webSearch.search).toHaveBeenCalled();
         const query = webSearch.search.mock.calls[0][1] as string;
-        expect(query.toLowerCase()).toContain('software compan');
-        expect(query).toContain('B2B SaaS');
+        expect(query.toLowerCase()).toContain('b2b');
+        expect(query).toContain('retailers');
         expect(query).toContain('Dhaka');
+        expect(query.toLowerCase()).not.toContain('software compan');
+        const system = ai.completeUnbilled.mock.calls[0][1] as string;
+        expect(system.toLowerCase()).toContain('b2b');
+        expect(system.toLowerCase()).not.toContain('exclude retailers');
         expect(ai.completeUnbilled).toHaveBeenCalled();
         expect(result.candidates).toHaveLength(1);
         expect(result.candidates[0].company_name).toBe('Acme Soft');
         expect(result.candidates[0].existing_lead_id).toBeNull();
         expect(result.web_search).toBe(true);
         expect(result.credits_used).toBeGreaterThan(0);
+    });
+
+    it('keeps a non-software niche as that niche, so restaurants stay restaurants', async () => {
+        const { service, webSearch } = makeService();
+
+        await service.search('t1', { niche: 'restaurants', location: 'Gulshan' });
+
+        const query = webSearch.search.mock.calls[0][1] as string;
+        expect(query.toLowerCase()).toContain('restaurant');
+        expect(query.toLowerCase()).not.toContain('software compan');
     });
 
     it('still finds well-known companies when web search is off, marked unverified', async () => {
