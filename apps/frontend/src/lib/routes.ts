@@ -390,6 +390,7 @@ export const routes = {
     status: '/status',
     support: '/support',
     chat: '/chat',
+    call: '/call',
     smsCredits: '/sms-credits',
     aiCredits: '/ai-credits',
     /**

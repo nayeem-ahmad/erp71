@@ -523,6 +523,7 @@ export const coreMessages = {
                 users: "Pengguna Platform",
                 platformStaff: "Staf",
                 meet71: "Meet71",
+                call: "Panggil",
                 platformAccountingOverview: "Ringkasan Buku",
                 platformAccountingExpenses: "Perbelanjaan Platform",
                 platformAccountingLedger: "Lejar Platform",

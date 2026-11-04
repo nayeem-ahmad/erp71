@@ -524,6 +524,7 @@ export const coreMessages = {
             users: 'پلیٹ فارم کے صارفین',
             platformStaff: 'عملہ',
             meet71: 'Meet71',
+            call: 'کال',
             platformAccountingOverview: 'کھاتوں کا خلاصہ',
             platformAccountingExpenses: 'پلیٹ فارم اخراجات',
             platformAccountingLedger: 'پلیٹ فارم کھاتہ',

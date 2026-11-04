@@ -524,6 +524,7 @@ export const coreMessages = {
             users: "प्लेटफ़ॉर्म उपयोगकर्ता",
             platformStaff: "स्टाफ़",
             meet71: "Meet71",
+            call: "कॉल",
             platformAccountingOverview: "बहीखाता सार",
             platformAccountingExpenses: "प्लेटफ़ॉर्म व्यय",
             platformAccountingLedger: "प्लेटफ़ॉर्म खाता बही",
