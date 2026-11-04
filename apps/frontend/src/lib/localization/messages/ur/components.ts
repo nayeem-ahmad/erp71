@@ -116,6 +116,18 @@ export const componentsMessages = {
         clearFilters: "فلٹرز صاف کریں",
         count: "{count, plural, one {# گفتگو} other {# گفتگوئیں}}",
         replyPlaceholderMobile: "پیغام لکھیں…",
+        call: {
+            call: 'Call',
+            availableHint: 'Someone on the platform is available — call rings on their Meet71 screen.',
+            unavailable: 'Call unavailable',
+            unavailableHint: 'No platform user is available in Meet71 right now.',
+            pickerTitle: 'Call support',
+            pickerSubtitle: 'These people have Meet71 open. Pick voice or video to ring them.',
+            voice: 'Voice',
+            video: 'Video',
+            calling: 'Calling…',
+            callFailed: 'Could not start the call',
+        },
     },
     voiceNavWidget: {
         startAria: "صوتی نیویگیشن — صفحے کا نام بولیں",
