@@ -48,6 +48,12 @@ export type RichTextEditorProps = {
     placeholder?: string;
     /** Names the editing surface — the toolbar buttons carry their own labels. */
     ariaLabel?: string;
+    /**
+     * Lets the bordered editing box be dragged taller or shorter. The
+     * `rows` value remains the starting height; without this the box only
+     * grows with its content.
+     */
+    resizable?: boolean;
     disabled?: boolean;
     autoFocus?: boolean;
     /** Ctrl/⌘+Enter, and the tick when `showActions` draws one. */
@@ -218,6 +224,7 @@ export function RichTextEditor({
     maxLength,
     placeholder,
     ariaLabel,
+    resizable = false,
     disabled,
     autoFocus,
     onSubmit,
@@ -228,6 +235,7 @@ export function RichTextEditor({
     onImageDiscarded,
     onUploadingChange,
 }: RichTextEditorProps) {
+    const minHeight = `${Math.max(rows, 2) * 1.5}rem`;
     const { t } = useI18n();
     const m = t.components.richText;
     const [uploading, setUploading] = useState(0);
@@ -236,6 +244,12 @@ export function RichTextEditor({
        rebuild — to find when a key is pressed. */
     const latest = useRef({ onSubmit, onCancel, uploading: false });
     latest.current = { onSubmit, onCancel, uploading: uploading > 0 };
+
+    /* TipTap keeps the first Placeholder options object. A function reads this
+       ref so a caller that swaps the empty-state copy (support ↔ feedback) is
+       not stuck with the wording from the first render. */
+    const placeholderRef = useRef(placeholder ?? '');
+    placeholderRef.current = placeholder ?? '';
 
     /** Ctrl/⌘+Enter and the tick. */
     const submit = () => {
@@ -313,7 +327,7 @@ export function RichTextEditor({
             // upload spinner need one, and a plain function cannot hold them.
             ...contentExtensions.filter((extension) => extension.name !== 'image'),
             Image.extend({ addNodeView: () => ReactNodeViewRenderer(ResizableImage) }),
-            Placeholder.configure({ placeholder: placeholder ?? '' }),
+            Placeholder.configure({ placeholder: () => placeholderRef.current }),
             Shortcuts.configure({ submit, cancel }),
         ],
         content: markdownToDoc(value).toJSON(),
@@ -330,7 +344,10 @@ export function RichTextEditor({
                 // applied in `applySpellReplacement` — ProseMirror does not.
                 spellcheck: 'true',
                 // The old textarea's `rows`, which has no meaning here.
-                style: `min-height: ${Math.max(rows, 2) * 1.5}rem`,
+                // When the bordered box is resizable, height lives on that
+                // wrapper instead — a min-height on the contenteditable would
+                // stop the drag handle from shrinking the field.
+                style: resizable ? undefined : `min-height: ${minHeight}`,
                 class: 'prose-editor px-3 py-2 text-sm focus:outline-none',
             },
             handlePaste: (_view, event) => handlePaste(event as ClipboardEvent),
@@ -393,6 +410,14 @@ export function RichTextEditor({
     useEffect(() => {
         editor?.setEditable(!disabled);
     }, [disabled, editor]);
+
+    /* Placeholder decorations are computed from the plugin state; a no-op
+       transaction makes TipTap re-read the function above after the copy
+       changes without touching the document. */
+    useEffect(() => {
+        if (!editor || editor.isDestroyed) return;
+        editor.view.dispatch(editor.state.tr);
+    }, [placeholder, editor]);
 
     /**
      * Finds a pasted image's node by the id it was inserted with.
@@ -635,7 +660,10 @@ export function RichTextEditor({
             <div
                 className={`rounded-md border bg-white ${
                     overLimit ? 'border-danger' : 'border-gray-300'
-                } focus-within:border-blue-600 focus-within:ring-1 focus-within:ring-blue-600`}
+                } focus-within:border-blue-600 focus-within:ring-1 focus-within:ring-blue-600${
+                    resizable ? ' resize-y overflow-auto' : ''
+                }`}
+                style={resizable ? { minHeight } : undefined}
             >
                 <EditorContent editor={editor} />
             </div>

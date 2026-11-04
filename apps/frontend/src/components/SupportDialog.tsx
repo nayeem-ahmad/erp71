@@ -21,7 +21,7 @@ export default function SupportDialog({ onClose }: { onClose: () => void }) {
     if (!support && !feedback) return null;
 
     return (
-        <ModalShell size="sm" onBackdropClick={onClose}>
+        <ModalShell size="md" onBackdropClick={onClose} dismissOnBackdrop={false}>
             <ModalHeader title={m.title} onClose={onClose} />
             <div className="p-4">
                 <SupportComposer
