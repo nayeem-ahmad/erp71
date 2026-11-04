@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -52,7 +52,6 @@ function candidateKey(row: Candidate, index: number): string {
 export default function LeadGenerationPage() {
     const { t, fmt } = useI18n();
     const m = t.crm.leadGeneration;
-    const hub = t.crm.hub;
 
     const [niche, setNiche] = useState(DEFAULT_NICHE);
     const [location, setLocation] = useState(DEFAULT_LOCATION);
@@ -64,11 +63,6 @@ export default function LeadGenerationPage() {
     const [candidates, setCandidates] = useState<Candidate[] | null>(null);
     const [selected, setSelected] = useState<Record<string, boolean>>({});
     const [created, setCreated] = useState<Array<{ id: string; name: string }>>([]);
-
-    const breadcrumbs = useMemo(
-        () => modulePageBreadcrumbs(t.common.home, hub.moduleLabel, m.title, 'crm'),
-        [t.common.home, hub.moduleLabel, m.title],
-    );
 
     const selectable = (candidates ?? []).filter((row) => !row.existing_lead_id);
     const selectedRows = (candidates ?? []).filter(
@@ -128,7 +122,12 @@ export default function LeadGenerationPage() {
             <PageHeader
                 title={m.title}
                 subtitle={m.subtitle}
-                breadcrumbs={breadcrumbs}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.crm,
+                    m.title,
+                    'crm',
+                )}
                 actions={
                     <Button
                         onClick={findCompanies}
