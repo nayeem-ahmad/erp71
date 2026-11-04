@@ -11,6 +11,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { usePlatformFeatures } from '@/contexts/PlatformFeaturesContext';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
 import SupportComposer from '@/components/SupportComposer';
+import SupportMessageBody from '@/components/SupportMessageBody';
 import { useSupportStream, type SupportStreamEvent } from '@/hooks/useSupportStream';
 import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { toast } from '@/lib/toast';
@@ -521,7 +522,7 @@ export default function SupportPage() {
                                                     <p className={`text-[10px] font-bold mb-1 ${isOwner ? 'text-blue-100' : 'text-gray-500'}`}>
                                                         {isOwner ? page.you : page.admin}
                                                     </p>
-                                                    <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
+                                                    <SupportMessageBody body={msg.body} onPrimary={isOwner} />
                                                     <SupportAttachmentList attachments={msg.attachments} onPrimary={isOwner} />
                                                     <p className={`text-[10px] mt-1 ${isOwner ? 'text-blue-200' : 'text-gray-400'}`}>
                                                         {new Date(msg.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
@@ -572,7 +573,7 @@ export default function SupportPage() {
             </div>
 
             {showNewForm && (
-                <ModalShell size="sm" onBackdropClick={() => setShowNewForm(false)}>
+                <ModalShell size="md" onBackdropClick={() => setShowNewForm(false)} dismissOnBackdrop={false}>
                     <ModalHeader title={page.createTitle} onClose={() => setShowNewForm(false)} />
                     <div className="p-4">
                         <SupportComposer

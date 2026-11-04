@@ -12,6 +12,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import FeedbackAutomationPanel from '@/components/admin/FeedbackAutomationPanel';
 import { formatDate } from '@/lib/format';
 import { SupportAttachmentList, type SupportAttachment } from '@/components/SupportAttachments';
+import SupportMessageBody from '@/components/SupportMessageBody';
 
 type ThreadUser = { id: string; name: string; email: string };
 
@@ -535,7 +536,7 @@ export default function AdminSupportPage() {
                                                     <p className={`text-[10px] font-bold mb-1 ${isAdmin ? 'text-blue-100' : 'text-gray-500'}`}>
                                                         {isAdmin ? m.you : m.owner}
                                                     </p>
-                                                    <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
+                                                    <SupportMessageBody body={msg.body} onPrimary={isAdmin} />
                                                     <SupportAttachmentList attachments={msg.attachments} onPrimary={isAdmin} />
                                                     <p className={`text-[10px] mt-1 ${isAdmin ? 'text-blue-200' : 'text-gray-400'}`}>
                                                         {new Date(msg.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
