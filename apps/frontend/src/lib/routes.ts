@@ -190,6 +190,7 @@ export const routes = {
         leads: '/crm/leads',
         leadNew: '/crm/leads/new' as const,
         leadDetail: (id: string) => `/crm/leads/${id}` as const,
+        leadGeneration: '/crm/lead-generation',
         contacts: '/crm/contacts',
         contactNew: '/crm/contacts/new' as const,
         contactDetail: (id: string) => `/crm/contacts/${id}` as const,

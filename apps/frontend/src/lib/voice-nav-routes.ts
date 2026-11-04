@@ -24,6 +24,7 @@ export type VoiceNavTargetId =
     | 'inventory'
     | 'crm'
     | 'leads'
+    | 'lead-generation'
     | 'lead-entry'
     | 'contacts'
     | 'crm-activities'
@@ -216,6 +217,18 @@ export const VOICE_NAV_ROUTES: VoiceNavRoute[] = [
         id: 'leads',
         path: '/crm/leads',
         aliases: ['leads', 'lead', 'lead list', 'all leads', 'লিড', 'লিড তালিকা', 'prospek'],
+    },
+    {
+        id: 'lead-generation',
+        path: '/crm/lead-generation',
+        aliases: [
+            'lead generation',
+            'ai leads',
+            'find leads',
+            'b2b leads',
+            'software leads',
+            'লিড জেনারেশন',
+        ],
     },
     {
         id: 'lead-entry',
