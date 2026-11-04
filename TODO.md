@@ -391,6 +391,13 @@ Second external-ERP provider alongside Express Retail Pro, built on a new multi-
 - [x] Add load tests for POS endpoint (peak: multiple cashiers × multiple tenants) — `load-tests/pos-sale.js` (k6); run manually with env vars — done 2026-06-12
 - [x] Verify GitHub Actions CI actually runs tests on every push — CI now triggers on push/PR to main and dev
 
+### CRM AI lead generation — follow-ups (2026-11-04)
+
+- [ ] **Run `sync:nav-layout --nodes=crm.lead-generation` against production** after this ships. Saved custom sidebars keep the old tree verbatim, so tenants who rearranged CRM before this release will not see Lead generation until that script adds the node (same trap as `crm.setup`). Dry-run first.
+- [ ] **Searches are not stored.** Closing the page drops the candidate list, and a second Find companies spends credits again. A `LeadGenerationRun` table (brief, candidates, imported lead ids) would let the last few searches be reopened.
+- [ ] **Companies, not people.** The first cut files the company name as the lead. Decision-maker names, mobiles and direct emails are left null unless they appeared in the search sources — by design, so the model does not invent them. A second pass that fetches the company site / LinkedIn and extracts a named contact would make the lead callable.
+- [ ] **Web search off still invents a shortlist from model memory**, marked unverified. Fine as a fallback; a hard refuse when `ai.web_search_enabled` is false would be the safer default if anyone starts importing those rows without reading the badge.
+
 ### CRM lead form — follow-ups (2026-08-25)
 
 - [ ] **CSV-imported leads are still unowned.** `create()` now files a lead against its creator, but `importRows` writes through `this.db.lead.create` directly and sets no `assigned_to` (`crm-leads.service.ts:736`), so a bulk import still lands thousands of ownerless leads. Defaulting them to the importing user is one line; whether that is *wanted* is a product call — an import is usually a backlog to be distributed, not one person's book. Decide, then either set it or add an owner column to the import mapping.
@@ -2122,6 +2129,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 
 ## COMPLETED
+
+- [x] **AI-driven lead generation for software companies** — done 2026-11-04. CRM → Lead generation (`/crm/lead-generation`). The brief always searches as software companies (SaaS, custom software, IT services); a niche like "restaurants" becomes software companies that serve restaurants. Web search when the platform switch is on, then a JSON extract; otherwise a knowledge-only list marked unverified. Duplicates against existing leads by website and company name. Selected companies become leads (`source` WEBSITE, `category` CORPORATE) with the fit reason in remarks. Gated by `premiumCrm` + `MANAGE_LEADS` (CRM_WRITE) and AI credits. Nav node `crm.lead-generation`. After deploy: `npx tsx packages/database/prisma/sync-nav-layout.ts --nodes=crm.lead-generation`. **Verified:** backend util+service 22/22; frontend page 4/4; catalog, voice-nav, sidebar, route-authorization, nav-layout-merge. **Not done: no live browser session** — local app was not running.
 
 - [x] **Expense entries can be edited from the list** — done 2026-11-02. The Expenses list only offered Delete, even though `PATCH /expenses/entries/:id` already existed. Each row now has Edit beside Delete; the same modal as Add expense opens with the head, amount, date, method and notes filled, and Save calls `updateExpenseEntry`. The API now voids the auto-posted voucher and re-posts from the updated row (same path as salary payments), and Delete voids before removing the row so the ledger stays in step. Strings `editEntry` / `entryUpdated` in all nine locales. **Verified:** backend `expenses.service.spec.ts` 15/15 (void-and-repost on amount and head change; void-then-delete); frontend expenses page + catalog 23/23 (edit prefills and saves through update, not create). **Not done: no live browser session** — local app was not running.
 

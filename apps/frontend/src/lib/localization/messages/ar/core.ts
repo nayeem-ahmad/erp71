@@ -440,6 +440,7 @@ export const coreMessages = {
             manufacturingProductPL: 'أرباح المنتج',
             crmCampaigns: 'الحملات',
             crmLeads: 'العملاء المحتملون',
+            crmLeadGeneration: 'توليد العملاء المحتملين',
             crmContacts: 'جهات الاتصال',
             crmConversations: 'المحادثات',
             crmSetup: 'الإعداد',

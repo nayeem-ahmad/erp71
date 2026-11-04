@@ -440,6 +440,7 @@ export const coreMessages = {
             manufacturingProductPL: "Résultat par produit",
             crmCampaigns: "Campagnes",
             crmLeads: "Pistes",
+            crmLeadGeneration: "Génération de pistes",
             crmContacts: "Contacts",
             crmConversations: "Échanges",
             crmSetup: "Configuration",

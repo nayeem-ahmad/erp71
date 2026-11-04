@@ -440,6 +440,7 @@ export const coreMessages = {
             manufacturingProductPL: 'پروڈکٹ نفع و نقصان',
             crmCampaigns: 'مہمات',
             crmLeads: 'لیڈز',
+            crmLeadGeneration: 'لیڈ جنریشن',
             crmContacts: 'رابطے',
             crmConversations: 'گفتگو',
             crmSetup: 'سیٹ اپ',

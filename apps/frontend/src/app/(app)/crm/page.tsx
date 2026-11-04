@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { UserPlus, Users, Megaphone, ListChecks, MessageSquare, SlidersHorizontal, Contact } from 'lucide-react';
+import { UserPlus, Users, Megaphone, ListChecks, MessageSquare, SlidersHorizontal, Contact, Sparkles } from 'lucide-react';
 import ModuleHub, { type HubSectionConfig } from '@/components/ModuleHub';
 import CrmDashboard from '@/components/dashboard/CrmDashboard';
 import { useI18n } from '@/lib/i18n';
@@ -25,6 +25,7 @@ export default function CrmHubPage() {
         const pipelineLinks = canAccessPremiumCrm
             ? [
                 { href: routes.crm.leads, key: 'leads', icon: UserPlus, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+                { href: routes.crm.leadGeneration, key: 'leadGeneration', icon: Sparkles, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
                 { href: routes.crm.contacts, key: 'contacts', icon: Contact, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
                 { href: routes.crm.conversations, key: 'crmConversations', icon: MessageSquare, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
                 { href: routes.crm.followUps, key: 'crmFollowUps', icon: ListChecks, accent: 'bg-amber-50 text-amber-700 border-amber-100' },

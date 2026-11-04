@@ -218,6 +218,17 @@ export const VOICE_NAV_ROUTES: VoiceNavRoute[] = [
         aliases: ['leads', 'lead', 'lead list', 'all leads', 'লিড', 'লিড তালিকা', 'prospek'],
     },
     {
+        id: 'lead-generation',
+        path: '/crm/lead-generation',
+        aliases: [
+            'lead generation',
+            'ai leads',
+            'find leads',
+            'software leads',
+            'লিড জেনারেশন',
+        ],
+    },
+    {
         id: 'lead-entry',
         path: '/crm/leads/new',
         aliases: [

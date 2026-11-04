@@ -642,6 +642,7 @@ function AppShell({ children }: DashboardLayoutProps) {
         // so guarding only the two legacy paths just moved the failure one hop along.
         const premiumCrmPaths = [
             routes.crm.leads,
+            routes.crm.leadGeneration,
             routes.crm.contacts,
             routes.crm.conversations,
             routes.crm.activities,
