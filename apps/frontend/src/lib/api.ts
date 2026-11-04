@@ -2420,6 +2420,24 @@ export const api = {
             body: JSON.stringify({ rows, mode }),
             headers: { 'Content-Type': 'application/json' },
         }),
+    searchLeadGeneration: (data: {
+        niche?: string;
+        location?: string;
+        companySize?: string;
+        keywords?: string;
+        limit?: number;
+    }) =>
+        fetchWithAuth('/crm/lead-generation/search', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    importLeadGeneration: (candidates: Array<Record<string, unknown>>) =>
+        fetchWithAuth('/crm/lead-generation/import', {
+            method: 'POST',
+            body: JSON.stringify({ candidates }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     // CRM Contacts
     /** `mine` narrows to the caller's own contacts; the server resolves the id. */
     getContacts: (params?: { search?: string; company?: string; assignedTo?: string; mine?: boolean; captureSource?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string; filters?: Record<string, string> }) => {

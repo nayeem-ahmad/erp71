@@ -440,6 +440,7 @@ export const coreMessages = {
             manufacturingProductPL: "Untung Rugi Produk",
             crmCampaigns: "Kempen",
             crmLeads: "Prospek",
+            crmLeadGeneration: "Penjanaan prospek",
             crmContacts: "Kenalan",
             crmConversations: "Perbualan",
             crmSetup: "Persediaan",

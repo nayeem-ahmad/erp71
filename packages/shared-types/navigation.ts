@@ -244,6 +244,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   crm: { id: 'crm', kind: 'module', icon: 'Users', labelKey: 'sidebar.modules.crm', moduleKey: 'crm' },
   'crm.overview': { id: 'crm.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/crm', exact: true },
   'crm.leads': { id: 'crm.leads', kind: 'link', icon: 'UserPlus', labelKey: 'sidebar.items.crmLeads', href: '/crm/leads', premiumOnly: true },
+  'crm.lead-generation': { id: 'crm.lead-generation', kind: 'link', icon: 'Sparkles', labelKey: 'sidebar.items.crmLeadGeneration', href: '/crm/lead-generation', premiumOnly: true },
   'crm.contacts': { id: 'crm.contacts', kind: 'link', icon: 'Contact', labelKey: 'sidebar.items.crmContacts', href: '/crm/contacts', premiumOnly: true },
   // Both of these pointed at the two lists R2 merged into /crm/activities. They
   // are repointed rather than replaced by a new id: resolveTenantSidebarLayout
@@ -704,6 +705,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm', null, 8),
   layoutNode('crm.overview', 'crm', 0),
   layoutNode('crm.leads', 'crm', 1),
+  layoutNode('crm.lead-generation', 'crm', 3),
   layoutNode('crm.contacts', 'crm', 2),
   layoutNode('crm.follow-ups', 'crm', 4),
   layoutNode('crm.campaigns', 'crm', 5),
