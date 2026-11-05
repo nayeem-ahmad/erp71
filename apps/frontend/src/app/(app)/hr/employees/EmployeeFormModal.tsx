@@ -9,6 +9,10 @@ import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { hasPermission, isOwner } from '@/lib/permissions';
 import { Button, Field, Input, Select, FormGrid, Alert } from '@/components/ui';
 import { useBranchScope } from '@/lib/branch-scope';
+import {
+    codeLabel, groupByDepartment, pickable, reportsToLabel,
+    type Department, type Designation,
+} from '@/lib/org-structure';
 
 /** The fields of a list row the edit form fills from. */
 export interface EditableEmployee {
@@ -68,8 +72,8 @@ export default function EmployeeFormModal({ isOpen, employee, onClose, onSubmit 
     const [formData, setFormData] = useState({ ...emptyForm });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [departments, setDepartments] = useState<any[]>([]);
-    const [designations, setDesignations] = useState<any[]>([]);
+    const [departments, setDepartments] = useState<Department[]>([]);
+    const [designations, setDesignations] = useState<Designation[]>([]);
 
     useEffect(() => {
         if (isOpen) {
@@ -122,6 +126,32 @@ export default function EmployeeFormModal({ isOpen, employee, onClose, onSubmit 
 
     const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
         setFormData({ ...formData, [field]: e.target.value });
+
+    // Picking a designation fills in its department, which is almost always
+    // where the person works. It stays editable: a trainee's designation sits
+    // under "General" but they work in one real department.
+    const chooseDesignation = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const designationId = e.target.value;
+        const chosen = designations.find((d) => d.id === designationId);
+        const deptId = chosen?.department_id;
+        const deptPickable = deptId && departments.some((d) => d.id === deptId && d.is_active !== false);
+        setFormData({
+            ...formData,
+            designation_id: designationId,
+            ...(deptPickable ? { department_id: deptId } : {}),
+        });
+    };
+
+    // New choices come from active records; an inactive one already on the
+    // employee stays visible so editing does not silently drop it.
+    const departmentOptions = pickable(departments, employee?.department_id);
+    const designationGroups = groupByDepartment(
+        pickable(designations, employee?.designation_id),
+        t.orgStructure.noDepartment,
+    );
+    const selectedDesignation = designations.find((d) => d.id === formData.designation_id);
+    const reportsTo = reportsToLabel(selectedDesignation);
+    const inactive = (item: { is_active?: boolean }) => (item.is_active === false ? ` ${t.orgStructure.inactiveSuffix}` : '');
 
     const submitLabel = editing
         ? (loading ? t.employees.detail.saving : t.common.saveChanges)
@@ -195,21 +225,33 @@ export default function EmployeeFormModal({ isOpen, employee, onClose, onSubmit 
                             </Select>
                         </Field>
 
+
+                        <FormGrid.Full>
+                            <Field
+                                label={t.employees.modal.designation}
+                                hint={reportsTo ? `${t.orgStructure.reportsTo}: ${reportsTo}` : `(${t.common.optional})`}
+                            >
+                                <Select value={formData.designation_id} onChange={chooseDesignation} aria-label={t.employees.modal.designation}>
+                                    <option value="">{t.common.none}</option>
+                                    {designationGroups.map((group) => (
+                                        <optgroup key={group.label} label={group.label}>
+                                            {group.items.map((d) => (
+                                                <option key={d.id} value={d.id}>{codeLabel(d)}{inactive(d)}</option>
+                                            ))}
+                                        </optgroup>
+                                    ))}
+                                </Select>
+                            </Field>
+                        </FormGrid.Full>
+
                         <Field label={t.employees.modal.department} hint={`(${t.common.optional})`}>
                             <div className="relative">
                                 <Briefcase className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <Select value={formData.department_id} onChange={set('department_id')} className="ps-10">
                                     <option value="">{t.common.none}</option>
-                                    {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                    {departmentOptions.map(d => <option key={d.id} value={d.id}>{codeLabel(d)}{inactive(d)}</option>)}
                                 </Select>
                             </div>
-                        </Field>
-
-                        <Field label={t.employees.modal.designation} hint={`(${t.common.optional})`}>
-                            <Select value={formData.designation_id} onChange={set('designation_id')}>
-                                <option value="">{t.common.none}</option>
-                                {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                            </Select>
                         </Field>
 
                         {canSeeSalary && (

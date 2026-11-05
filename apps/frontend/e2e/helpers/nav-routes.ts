@@ -106,6 +106,7 @@ export const NAV_ROUTES: { path: string; label: string }[] = [
     { path: '/hr/employees', label: 'Employees' },
     { path: '/hr/employees/departments', label: 'Departments' },
     { path: '/hr/employees/designations', label: 'Designations' },
+    { path: '/hr/employees/designation-levels', label: 'Designation Levels' },
     { path: '/hr/attendance', label: 'Attendance' },
     { path: '/hr/leaves', label: 'Leaves' },
     { path: '/hr/salary-payments', label: 'Salary Payments' },

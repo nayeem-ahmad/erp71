@@ -15,8 +15,10 @@ import { PageShell, Alert, Button, Input, StatusBadge, statusToneFor } from '@/c
 import { getWorkspaceItem } from '@/lib/session-store';
 import LoginCredentialsModal, { type LoginCredentials } from './LoginCredentialsModal';
 
-interface Department { id: string; name: string; }
-interface Designation { id: string; name: string; }
+import {
+    codeLabel, groupByDepartment, levelLabel, pickable, reportsToLabel,
+    type Department, type Designation,
+} from '@/lib/org-structure';
 
 interface Employee {
     id: string;
@@ -272,6 +274,14 @@ export default function EmployeeDetailPage() {
     const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
         setForm({ ...form, [field]: e.target.value });
 
+    /** Choosing a designation also fills in its department, as on the add form. */
+    const chooseDesignation = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const chosen = designations.find((d) => d.id === e.target.value);
+        const deptId = chosen?.department_id;
+        const deptPickable = deptId && departments.some((d) => d.id === deptId && d.is_active !== false);
+        setForm({ ...form, designation_id: e.target.value, ...(deptPickable ? { department_id: deptId } : {}) });
+    };
+
     if (loading) {
         return (
             <PageShell className="flex items-center justify-center">
@@ -314,12 +324,36 @@ export default function EmployeeDetailPage() {
                                 <StatusBadge tone={statusToneFor(employee.status)}>{employee.status}</StatusBadge>
                                 <span className="text-xs text-gray-500">{employee.employee_code}</span>
                             </div>
-                            <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-xs text-gray-500">
-                                <span>{t.employees.detail.department}: {employee.department?.name ?? '—'}</span>
-                                <span>{t.employees.detail.designation}: {employee.designation?.name ?? '—'}</span>
-                                <span>{t.employees.detail.joined}: {employee.date_of_joining ? formatDate(employee.date_of_joining) : '—'}</span>
-                                <span>{t.employees.detail.added}: {formatDate(employee.created_at)}</span>
-                            </div>
+                            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 mt-3 text-xs">
+                                <div className="flex gap-1.5">
+                                    <dt className="text-gray-500">{t.employees.detail.designation}:</dt>
+                                    <dd className="font-medium text-gray-900">
+                                        {codeLabel(employee.designation) || '—'}
+                                        {employee.designation?.is_active === false && ` ${t.orgStructure.inactiveSuffix}`}
+                                    </dd>
+                                </div>
+                                <div className="flex gap-1.5">
+                                    <dt className="text-gray-500">{t.employees.detail.department}:</dt>
+                                    {/* The employee's own department; the designation's when none is set. */}
+                                    <dd className="font-medium text-gray-900">{codeLabel(employee.department ?? employee.designation?.department) || '—'}</dd>
+                                </div>
+                                <div className="flex gap-1.5">
+                                    <dt className="text-gray-500">{t.orgStructure.reportsTo}:</dt>
+                                    <dd className="font-medium text-gray-900">{reportsToLabel(employee.designation) || '—'}</dd>
+                                </div>
+                                <div className="flex gap-1.5">
+                                    <dt className="text-gray-500">{t.orgStructure.level}:</dt>
+                                    <dd className="font-medium text-gray-900">{levelLabel(employee.designation?.level, t.orgStructure.levelWord) || '—'}</dd>
+                                </div>
+                                <div className="flex gap-1.5">
+                                    <dt className="text-gray-500">{t.employees.detail.joined}:</dt>
+                                    <dd className="text-gray-700">{employee.date_of_joining ? formatDate(employee.date_of_joining) : '—'}</dd>
+                                </div>
+                                <div className="flex gap-1.5">
+                                    <dt className="text-gray-500">{t.employees.detail.added}:</dt>
+                                    <dd className="text-gray-700">{formatDate(employee.created_at)}</dd>
+                                </div>
+                            </dl>
                         </div>
                     </div>
                 </div>
@@ -383,17 +417,25 @@ export default function EmployeeDetailPage() {
                                 <select value={form.department_id} onChange={set('department_id')}
                                     className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 ps-10 pe-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all appearance-none">
                                     <option value="">{t.common.none}</option>
-                                    {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                    {pickable(departments, employee.department_id).map(d => (
+                                        <option key={d.id} value={d.id}>{codeLabel(d)}{d.is_active === false ? ` ${t.orgStructure.inactiveSuffix}` : ''}</option>
+                                    ))}
                                 </select>
                             </div>
                         </div>
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.employees.detail.designation}</label>
-                            <select value={form.designation_id} onChange={set('designation_id')}
+                            <select value={form.designation_id} onChange={chooseDesignation}
                                 className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all">
                                 <option value="">{t.common.none}</option>
-                                {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                {groupByDepartment(pickable(designations, employee.designation_id), t.orgStructure.noDepartment).map((group) => (
+                                    <optgroup key={group.label} label={group.label}>
+                                        {group.items.map((d) => (
+                                            <option key={d.id} value={d.id}>{codeLabel(d)}{d.is_active === false ? ` ${t.orgStructure.inactiveSuffix}` : ''}</option>
+                                        ))}
+                                    </optgroup>
+                                ))}
                             </select>
                         </div>
 

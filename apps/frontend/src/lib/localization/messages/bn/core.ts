@@ -575,6 +575,7 @@ export const coreMessages = {
                 employees: "কর্মচারী",
                 departments: "বিভাগ",
                 designations: "পদবী",
+                designationLevels: "পদবীর স্তর",
                 attendance: "উপস্থিতি",
                 attendanceRecords: "উপস্থিতির রেকর্ড",
                 attendancePunches: "ইন/আউট রেকর্ড",
