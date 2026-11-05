@@ -2610,6 +2610,8 @@ export const api = {
     /** Takes `mine` so the tiles cannot disagree with the list beneath them. */
     getCrmActivitySummary: (params?: { mine?: boolean }) =>
         fetchWithAuth(`/crm/activities/summary${params?.mine ? '?mine=true' : ''}`),
+    /** Overdue LinkedIn follow-up drafts, with grade (cf_4) and History. */
+    getApprovalsInbox: () => fetchWithAuth('/crm/activities/approvals-inbox'),
     createCrmActivity: (data: any) => fetchWithAuth('/crm/activities', {
         method: 'POST',
         body: JSON.stringify(data),
