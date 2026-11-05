@@ -1190,6 +1190,108 @@ describe('CrmActivitiesService', () => {
         });
     });
 
+    describe('approvalsInbox()', () => {
+        const draft = {
+            id: 'a1',
+            subject: 'LinkedIn follow-up DRAFT — review before send',
+            notes: 'Hi there',
+            due_at: new Date('2026-01-01T00:00:00.000Z'),
+            is_approved: false,
+            lead_id: 'l1',
+            lead: { id: 'l1', name: 'Karim', custom_fields: { cf_4: 'A', cf_1: 'ignore' } },
+        };
+
+        it('reads overdue LinkedIn drafts for this tenant and attaches grade plus history', async () => {
+            db.crmActivity.findMany
+                .mockResolvedValueOnce([draft])
+                .mockResolvedValueOnce([{
+                    id: 'h1',
+                    lead_id: 'l1',
+                    subject: null,
+                    summary: 'Sent a LinkedIn DM',
+                    outcome: null,
+                    notes: null,
+                    channel_code: 'LINKEDIN',
+                    direction: 'OUTBOUND',
+                    status: 'DONE',
+                    completed_at: new Date('2026-02-01T00:00:00.000Z'),
+                    created_at: new Date('2026-02-01T00:00:00.000Z'),
+                }]);
+
+            const result = await service.approvalsInbox('t1', 'Asia/Dhaka');
+
+            expect(db.crmActivity.findMany.mock.calls[0][0].where).toEqual(expect.objectContaining({
+                tenant_id: 't1',
+                status: 'PLANNED',
+                lead_id: { not: null },
+                due_at: { lt: expect.any(Date) },
+            }));
+            expect(db.crmActivity.findMany.mock.calls[1][0].where).toEqual({
+                tenant_id: 't1',
+                lead_id: { in: ['l1'] },
+                status: { not: 'PLANNED' },
+            });
+            expect(result.items).toEqual([
+                expect.objectContaining({
+                    id: 'a1',
+                    lead: { id: 'l1', name: 'Karim', grade: 'A' },
+                    history: [expect.objectContaining({ id: 'h1', summary: 'Sent a LinkedIn DM' })],
+                }),
+            ]);
+        });
+
+        it('does not query history when this tenant has no matching drafts', async () => {
+            db.crmActivity.findMany.mockResolvedValueOnce([]);
+
+            const result = await service.approvalsInbox('t1', 'Asia/Dhaka');
+
+            expect(result.items).toEqual([]);
+            expect(db.crmActivity.findMany).toHaveBeenCalledTimes(1);
+        });
+
+        it('keeps the newest history lines and drops a blank grade', async () => {
+            db.crmActivity.findMany
+                .mockResolvedValueOnce([{
+                    ...draft,
+                    lead: { id: 'l1', name: 'Karim', custom_fields: { cf_4: '  ' } },
+                }])
+                .mockResolvedValueOnce([
+                    {
+                        id: 'older',
+                        lead_id: 'l1',
+                        subject: null,
+                        summary: 'Older',
+                        outcome: null,
+                        notes: null,
+                        channel_code: null,
+                        direction: 'OUTBOUND',
+                        status: 'DONE',
+                        completed_at: new Date('2026-01-01T00:00:00.000Z'),
+                        created_at: new Date('2026-01-01T00:00:00.000Z'),
+                    },
+                    {
+                        id: 'newer',
+                        lead_id: 'l1',
+                        subject: null,
+                        summary: 'Newer',
+                        outcome: null,
+                        notes: null,
+                        channel_code: null,
+                        direction: 'OUTBOUND',
+                        status: 'DONE',
+                        completed_at: new Date('2026-03-01T00:00:00.000Z'),
+                        created_at: new Date('2026-03-01T00:00:00.000Z'),
+                    },
+                ]);
+
+            const result = await service.approvalsInbox('t1', 'Asia/Dhaka');
+
+            expect(result.items[0].lead.grade).toBeNull();
+            expect(result.items[0].history.map((row) => row.id)).toEqual(['newer', 'older']);
+        });
+    });
+
+
     describe('notifyAssignee()', () => {
         it('notifies an assignee who is not the acting user', async () => {
             db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });

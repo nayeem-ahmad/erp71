@@ -20,6 +20,7 @@ describe('CrmActivitiesController — list query wiring', () => {
         findAll: jest.fn().mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 0 }),
         setApproval: jest.fn().mockResolvedValue({ id: 'a1', is_approved: true }),
         summary: jest.fn().mockResolvedValue({ dueToday: 0, overdue: 0, total: 0 }),
+        approvalsInbox: jest.fn().mockResolvedValue({ items: [] }),
     } as any;
 
     class AllowAll {
@@ -39,6 +40,7 @@ describe('CrmActivitiesController — list query wiring', () => {
         service.findAll.mockClear();
         service.setApproval.mockClear();
         service.summary.mockClear();
+        service.approvalsInbox.mockClear();
         const module = await Test.createTestingModule({
             controllers: [CrmActivitiesController],
             providers: [{ provide: CrmActivitiesService, useValue: service }],
@@ -142,6 +144,12 @@ describe('CrmActivitiesController — list query wiring', () => {
         await request(app.getHttpServer()).get('/crm/activities/summary?mine=true').expect(200);
 
         expect(service.summary).toHaveBeenCalledWith('tenant-1', expect.any(String), 'user-1');
+    });
+
+    it('loads the approvals inbox for the caller tenant', async () => {
+        await request(app.getHttpServer()).get('/crm/activities/approvals-inbox').expect(200);
+
+        expect(service.approvalsInbox).toHaveBeenCalledWith('tenant-1', expect.any(String));
     });
 
     it('leaves the summary tiles counting everybody when the scope is off', async () => {

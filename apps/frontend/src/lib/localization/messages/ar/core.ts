@@ -425,6 +425,7 @@ export const coreMessages = {
             badDebts: 'الديون المعدومة',
             crmFollowUps: 'المتابعات',
             crmActivities: 'الأنشطة',
+            crmApprovalsInbox: 'Approvals Inbox',
             projectsList: 'كل المشاريع',
             projectsBoards: 'اللوحات',
             projectsTasks: 'المهام',

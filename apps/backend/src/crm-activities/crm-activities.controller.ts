@@ -36,8 +36,19 @@ export class CrmActivitiesController {
 
     /**
      * Declared before `@Get(':id')` — Nest matches routes in declaration order, so
-     * the parameterised route would otherwise swallow /summary as an id.
+     * the parameterised route would otherwise swallow these paths as an id.
      *
+     * Overdue LinkedIn follow-up drafts, with the lead's grade and History.
+     * Same permission as the planned list. Approve and complete stay on their
+     * own routes; this one only reads.
+     */
+    @Get('approvals-inbox')
+    @RequireStorePermission(StorePermission.VIEW_CRM_INTERACTIONS)
+    approvalsInbox(@Tenant() tenant: TenantContext) {
+        return this.service.approvalsInbox(tenant.tenantId, tenant.timezone);
+    }
+
+    /**
      * `mine=true` resolves against the caller's own id, which never crosses the
      * wire — the same shape `GET /crm/lead-conversations?mine` uses. The tiles and
      * the list below must agree, so both read it.
