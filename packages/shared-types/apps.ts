@@ -83,8 +83,6 @@ export const APP_REGISTRY: Record<string, AppDefinition> = {
   },
   hr: { id: 'hr', kind: 'business' },
   chat: { id: 'chat', kind: 'utility', entitlement: 'teamChat' },
-  // Meet71 dialer — allowlist-gated on the API, not a plan entitlement.
-  meet71: { id: 'meet71', kind: 'utility' },
   help: { id: 'help', kind: 'utility', platformFeature: 'help', inAccountingOnly: true, railGroup: 'help' },
   support: {
     id: 'support',

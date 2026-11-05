@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { usePlatformFeatures } from '@/contexts/PlatformFeaturesContext';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
+import SupportCallControl from '@/components/SupportCallControl';
 import SupportComposer from '@/components/SupportComposer';
 import SupportMessageBody from '@/components/SupportMessageBody';
 import { useSupportStream, type SupportStreamEvent } from '@/hooks/useSupportStream';
@@ -326,13 +327,16 @@ export default function SupportPage() {
                     'support',
                 )}
                 actions={(
-                    <button
-                        type="button"
-                        onClick={() => setShowNewForm(true)}
-                        className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-hover min-h-touch"
-                    >
-                        <Plus className="w-3 h-3" /> {page.new}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <SupportCallControl />
+                        <button
+                            type="button"
+                            onClick={() => setShowNewForm(true)}
+                            className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-hover min-h-touch"
+                        >
+                            <Plus className="w-3 h-3" /> {page.new}
+                        </button>
+                    </div>
                 )}
                 /* An open conversation owns the phone screen — the thread header
                    below carries the title and the way back, so the page header

@@ -23,6 +23,12 @@ jest.mock('@/components/SupportComposer', () => {
     return MockComposer;
 });
 
+jest.mock('@/components/SupportCallControl', () => {
+    const MockCall = () => null;
+    MockCall.displayName = 'SupportCallControl';
+    return MockCall;
+});
+
 const thread = {
     id: 'thr-1',
     ticketNumber: 12,

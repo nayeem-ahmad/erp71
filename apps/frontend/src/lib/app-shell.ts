@@ -14,7 +14,7 @@ export interface RailEntry {
 }
 
 /** Utilities in rail order; Settings last, the way a rail ends with its gear. */
-const UTILITY_ORDER = ['chat', 'meet71', 'help', 'account-settings', 'admin'];
+const UTILITY_ORDER = ['chat', 'help', 'account-settings', 'admin'];
 
 function stripQuery(href: string): string {
     const at = href.indexOf('?');
