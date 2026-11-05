@@ -338,7 +338,7 @@ export default function ApprovalsInboxPage() {
                     }`}
                 >
                     {m.buckets.all}
-                    <span className="ml-1 text-gray-400">{gradeScoped.length}</span>
+                    <span className="ms-1 text-gray-400">{gradeScoped.length}</span>
                 </button>
                 {APPROVAL_BUCKETS.map((key) => (
                     <button
@@ -351,10 +351,10 @@ export default function ApprovalsInboxPage() {
                         }`}
                     >
                         {bucketLabel[key]}
-                        <span className="ml-1 text-gray-400">{counts[key]}</span>
+                        <span className="ms-1 text-gray-400">{counts[key]}</span>
                     </button>
                 ))}
-                <label className="ml-auto flex min-h-touch items-center gap-2 text-sm text-gray-700">
+                <label className="ms-auto flex min-h-touch items-center gap-2 text-sm text-gray-700">
                     <Checkbox
                         checked={gradeAOnly}
                         onChange={(event) => setGradeAOnly(event.target.checked)}
@@ -372,7 +372,7 @@ export default function ApprovalsInboxPage() {
                 <p className="py-8 text-center text-sm text-gray-400">{m.empty}</p>
             ) : (
                 <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-                    <table className="w-full text-left text-sm">
+                    <table className="w-full text-start text-sm">
                         <thead className="border-b border-gray-100 text-xs text-gray-500">
                             <tr>
                                 <th className="w-10 px-3 py-2" />
@@ -410,7 +410,7 @@ export default function ApprovalsInboxPage() {
                                         <td className="px-3 py-2 font-medium text-gray-900">
                                             {item.lead.name}
                                             {item.is_approved && (
-                                                <span className="ml-2 text-xs font-medium text-emerald-700">{m.approved}</span>
+                                                <span className="ms-2 text-xs font-medium text-emerald-700">{m.approved}</span>
                                             )}
                                         </td>
                                         <td className="px-3 py-2 text-gray-700">{item.lead.grade || m.noGrade}</td>
@@ -434,7 +434,7 @@ export default function ApprovalsInboxPage() {
 
             {selectedItems.length > 0 && (
                 <div className="sticky bottom-0 flex flex-wrap items-end gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-                    <p className="mr-2 self-center text-sm text-gray-700">
+                    <p className="me-2 self-center text-sm text-gray-700">
                         {m.selected.replace('{count}', String(selectedItems.length))}
                     </p>
                     {overCap && <p className="self-center text-xs text-red-600">{m.batchCap}</p>}
