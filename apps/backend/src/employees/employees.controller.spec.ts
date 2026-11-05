@@ -5,6 +5,7 @@ import { Reflector } from '@nestjs/core';
 import { StorePermission } from '@erp71/shared-types';
 import { EmployeesController } from './employees.controller';
 import { EmployeesService } from './employees.service';
+import { OrgStructureImportService } from './org-structure-import.service';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
@@ -94,6 +95,7 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
             controllers: [EmployeesController],
             providers: [
                 { provide: EmployeesService, useValue: employeesService },
+                { provide: OrgStructureImportService, useValue: { import: jest.fn() } },
                 { provide: DatabaseService, useValue: db },
                 {
                     provide: BranchScopeService,
@@ -139,6 +141,7 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
             grant([]);
             await request(app.getHttpServer()).get('/employees/departments').expect(403);
             await request(app.getHttpServer()).get('/employees/designations').expect(403);
+            await request(app.getHttpServer()).get('/employees/designation-levels').expect(403);
         });
     });
 
@@ -166,6 +169,11 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
             ['delete', '/employees/emp-1'],
             ['post', '/employees/departments'],
             ['post', '/employees/designations'],
+            ['patch', '/employees/designations/des-1'],
+            ['post', '/employees/designation-levels'],
+            ['patch', '/employees/designation-levels/lvl-1'],
+            ['delete', '/employees/designation-levels/lvl-1'],
+            ['post', '/employees/org-structure/import'],
             ['post', '/employees/import'],
             ['post', '/employees/emp-1/link-user'],
             ['delete', '/employees/emp-1/link-user'],

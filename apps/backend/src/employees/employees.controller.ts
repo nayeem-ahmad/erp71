@@ -7,8 +7,11 @@ import {
     CreateEmployeeDto, UpdateEmployeeDto,
     CreateDepartmentDto, UpdateDepartmentDto,
     CreateDesignationDto, UpdateDesignationDto,
+    CreateDesignationLevelDto, UpdateDesignationLevelDto,
+    OrgStructureImportDto,
     LinkUserDto,
 } from './employee.dto';
+import { OrgStructureImportService } from './org-structure-import.service';
 import { StorePermission } from '@erp71/shared-types';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
@@ -37,13 +40,14 @@ export class EmployeesController {
     constructor(
         private readonly employeesService: EmployeesService,
         private readonly branchScope: BranchScopeService,
+        private readonly orgImport: OrgStructureImportService,
     ) {}
 
     // ── Departments ───────────────────────────────────────────────────────────
 
     @Get('departments')
-    listDepartments(@Tenant() tenant: TenantContext) {
-        return this.employeesService.listDepartments(tenant.tenantId);
+    listDepartments(@Tenant() tenant: TenantContext, @Query('status') status?: string) {
+        return this.employeesService.listDepartments(tenant.tenantId, { status });
     }
 
     @Post('departments')
@@ -68,8 +72,13 @@ export class EmployeesController {
     // ── Designations ──────────────────────────────────────────────────────────
 
     @Get('designations')
-    listDesignations(@Tenant() tenant: TenantContext) {
-        return this.employeesService.listDesignations(tenant.tenantId);
+    listDesignations(
+        @Tenant() tenant: TenantContext,
+        @Query('departmentId') departmentId?: string,
+        @Query('levelId') levelId?: string,
+        @Query('status') status?: string,
+    ) {
+        return this.employeesService.listDesignations(tenant.tenantId, { departmentId, levelId, status });
     }
 
     @Post('designations')
@@ -89,6 +98,42 @@ export class EmployeesController {
     @HttpCode(HttpStatus.NO_CONTENT)
     deleteDesignation(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.employeesService.deleteDesignation(tenant.tenantId, id);
+    }
+
+    // ── Designation levels ────────────────────────────────────────────────────
+
+    @Get('designation-levels')
+    listDesignationLevels(@Tenant() tenant: TenantContext, @Query('status') status?: string) {
+        return this.employeesService.listDesignationLevels(tenant.tenantId, { status });
+    }
+
+    @Post('designation-levels')
+    @RequireStorePermission(StorePermission.MANAGE_HR)
+    createDesignationLevel(@Tenant() tenant: TenantContext, @Body() dto: CreateDesignationLevelDto) {
+        return this.employeesService.createDesignationLevel(tenant.tenantId, dto);
+    }
+
+    @Patch('designation-levels/:id')
+    @RequireStorePermission(StorePermission.MANAGE_HR)
+    updateDesignationLevel(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateDesignationLevelDto) {
+        return this.employeesService.updateDesignationLevel(tenant.tenantId, id, dto);
+    }
+
+    @Delete('designation-levels/:id')
+    @RequireStorePermission(StorePermission.MANAGE_HR)
+    @HttpCode(HttpStatus.NO_CONTENT)
+    deleteDesignationLevel(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.employeesService.deleteDesignationLevel(tenant.tenantId, id);
+    }
+
+    // ── Designation master workbook ───────────────────────────────────────────
+
+    /** Levels, departments and designations from one workbook. `dry_run` previews it. */
+    @Post('org-structure/import')
+    @RequireStorePermission(StorePermission.MANAGE_HR)
+    @HttpCode(HttpStatus.OK)
+    importOrgStructure(@Tenant() tenant: TenantContext, @Body() dto: OrgStructureImportDto) {
+        return this.orgImport.import(tenant.tenantId, dto);
     }
 
     // ── Employees ─────────────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ import { EmployeeLoginService } from './employee-login.service';
 import { EmployeeGuard } from './employee.guard';
 import { EmployeesController } from '../employees/employees.controller';
 import { EmployeesService } from '../employees/employees.service';
+import { OrgStructureImportService } from '../employees/org-structure-import.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
@@ -124,6 +125,7 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
                 { provide: EmployeePortalService, useValue: portalService },
                 { provide: EmployeeLoginService, useValue: loginService },
                 { provide: EmployeesService, useValue: employeesService },
+                { provide: OrgStructureImportService, useValue: { import: jest.fn() } },
                 { provide: DatabaseService, useValue: db },
                 {
                     provide: BranchScopeService,
@@ -303,6 +305,7 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
             ['get', '/employees/emp-2'],
             ['get', '/employees/departments'],
             ['get', '/employees/designations'],
+            ['get', '/employees/designation-levels'],
         ])('refuses %s %s', async (method, path) => {
             await (request(app.getHttpServer()) as any)[method](path).expect(403);
         });

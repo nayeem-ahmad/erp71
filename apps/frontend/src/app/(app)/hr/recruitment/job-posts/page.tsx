@@ -20,7 +20,7 @@ import {
     type EmploymentType, type JobPost, type JobPostStatus, type RecruitmentSummary,
 } from '../types';
 
-interface NamedRecord { id: string; name: string }
+interface NamedRecord { id: string; name: string; code?: string | null; is_active?: boolean }
 
 const blankForm = () => ({
     title: '',
@@ -336,7 +336,7 @@ export default function JobPostsPage() {
                                     onChange={(event) => setForm((prev) => ({ ...prev, department_id: event.target.value }))}
                                 >
                                     <option value="">{copy.form.none}</option>
-                                    {departments.map((dept) => (
+                                    {departments.filter((d) => d.is_active !== false || d.id === form.department_id).map((dept) => (
                                         <option key={dept.id} value={dept.id}>{dept.name}</option>
                                     ))}
                                 </Select>
@@ -349,8 +349,8 @@ export default function JobPostsPage() {
                                     onChange={(event) => setForm((prev) => ({ ...prev, designation_id: event.target.value }))}
                                 >
                                     <option value="">{copy.form.none}</option>
-                                    {designations.map((desig) => (
-                                        <option key={desig.id} value={desig.id}>{desig.name}</option>
+                                    {designations.filter((d) => d.is_active !== false || d.id === form.designation_id).map((desig) => (
+                                        <option key={desig.id} value={desig.id}>{desig.code ? `${desig.code} · ${desig.name}` : desig.name}</option>
                                     ))}
                                 </Select>
                             </Field>

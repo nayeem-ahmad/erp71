@@ -1,7 +1,10 @@
 import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
-import { CreateEmployeeDto, UpdateEmployeeDto, CreateDepartmentDto, UpdateDepartmentDto, CreateDesignationDto, UpdateDesignationDto } from './employee.dto';
+import {
+    CreateEmployeeDto, UpdateEmployeeDto, CreateDepartmentDto, UpdateDepartmentDto,
+    CreateDesignationDto, UpdateDesignationDto, CreateDesignationLevelDto, UpdateDesignationLevelDto,
+} from './employee.dto';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { runImport, ImportResult } from '../common/import.util';
 import { TenantContext } from '../database/tenant.decorator';
@@ -25,6 +28,56 @@ const EMPLOYEE_USER_SELECT = {
     mobile: true,
     must_change_password: true,
 } as const;
+
+/** What a designation carries when shown: where it sits and who it reports to. */
+export const DESIGNATION_RELATIONS = {
+    department: { select: { id: true, name: true, code: true, is_active: true } },
+    level: { select: { id: true, level: true, name: true, is_active: true } },
+    reportsTo: { select: { id: true, name: true, code: true, is_active: true } },
+} as const;
+
+/** The employee's own relations, with the designation's place in the hierarchy. */
+const EMPLOYEE_INCLUDE = {
+    department: true,
+    designation: { include: DESIGNATION_RELATIONS },
+    user: { select: EMPLOYEE_USER_SELECT },
+} as const;
+
+/** `?status=active|inactive` on a master list; anything else lists both. */
+function activeFilter(status?: string): { is_active?: boolean } {
+    if (status === 'active') return { is_active: true };
+    if (status === 'inactive') return { is_active: false };
+    return {};
+}
+
+/** Codes compare case-insensitively, so they are stored upper-case. Blank clears. */
+export function normaliseCode(value: unknown): string | null {
+    if (value == null) return null;
+    const code = String(value).trim().toUpperCase();
+    return code === '' ? null : code;
+}
+
+export function cleanText(value: unknown): string | null {
+    if (value == null) return null;
+    const text = String(value).trim();
+    return text === '' ? null : text;
+}
+
+/**
+ * Whether following `parentOf` up from `start` comes back to `start`. Stops at
+ * the first repeat, so a loop elsewhere in the chart cannot spin it forever.
+ */
+export function findReportingCycle(parentOf: Map<string, string | null>, start: string): boolean {
+    const seen = new Set<string>();
+    let cursor = parentOf.get(start) ?? null;
+    while (cursor) {
+        if (cursor === start) return true;
+        if (seen.has(cursor)) return false;
+        seen.add(cursor);
+        cursor = parentOf.get(cursor) ?? null;
+    }
+    return false;
+}
 
 @Injectable()
 export class EmployeesService {
@@ -90,22 +143,49 @@ export class EmployeesService {
 
     // ── Departments ───────────────────────────────────────────────────────────
 
-    async listDepartments(tenantId: string) {
+    /**
+     * Every department that has not been deleted, active or not: reports and
+     * filters need the retired ones to read history. Pickers that offer a
+     * department for a *new* assignment filter to `is_active` themselves.
+     */
+    async listDepartments(tenantId: string, opts: { status?: string } = {}) {
         return this.db.department.findMany({
-            where: { tenant_id: tenantId, deleted_at: null },
+            where: { tenant_id: tenantId, deleted_at: null, ...activeFilter(opts.status) },
             orderBy: { name: 'asc' },
+            include: {
+                _count: {
+                    select: {
+                        employees: { where: { deleted_at: null } },
+                        designations: { where: { deleted_at: null } },
+                    },
+                },
+            },
         });
     }
 
     async createDepartment(tenantId: string, dto: CreateDepartmentDto) {
-        const existing = await this.db.department.findFirst({
-            where: { tenant_id: tenantId, name: dto.name, deleted_at: null },
-        });
-        if (existing) throw new ConflictException('A department with this name already exists.');
+        const name = dto.name.trim();
+        const code = normaliseCode(dto.code);
+        await this.assertDepartmentUnique(tenantId, name, code);
 
-        return this.db.department.create({
-            data: { tenant_id: tenantId, name: dto.name },
+        const data = {
+            name,
+            code,
+            description: cleanText(dto.description),
+            reports_to: cleanText(dto.reports_to),
+            is_active: dto.is_active ?? true,
+        };
+
+        // A department deleted earlier still holds its name in the unique index;
+        // bring it back rather than fail on a name nobody can see.
+        const deleted = await this.db.department.findFirst({
+            where: { tenant_id: tenantId, name, NOT: { deleted_at: null } },
+            select: { id: true },
         });
+        if (deleted) {
+            return this.db.department.update({ where: { id: deleted.id }, data: { ...data, deleted_at: null } });
+        }
+        return this.db.department.create({ data: { tenant_id: tenantId, ...data } });
     }
 
     async updateDepartment(tenantId: string, id: string, dto: UpdateDepartmentDto) {
@@ -114,12 +194,20 @@ export class EmployeesService {
         });
         if (!dept) throw new NotFoundException('Department not found.');
 
-        const duplicate = await this.db.department.findFirst({
-            where: { tenant_id: tenantId, name: dto.name, deleted_at: null, NOT: { id } },
-        });
-        if (duplicate) throw new ConflictException('A department with this name already exists.');
+        const name = dto.name !== undefined ? dto.name.trim() : undefined;
+        const code = dto.code !== undefined ? normaliseCode(dto.code) : undefined;
+        await this.assertDepartmentUnique(tenantId, name, code, id);
 
-        return this.db.department.update({ where: { id }, data: { name: dto.name } });
+        return this.db.department.update({
+            where: { id },
+            data: {
+                ...(name !== undefined ? { name } : {}),
+                ...(code !== undefined ? { code } : {}),
+                ...(dto.description !== undefined ? { description: cleanText(dto.description) } : {}),
+                ...(dto.reports_to !== undefined ? { reports_to: cleanText(dto.reports_to) } : {}),
+                ...(dto.is_active !== undefined ? { is_active: dto.is_active } : {}),
+            },
+        });
     }
 
     async deleteDepartment(tenantId: string, id: string) {
@@ -128,31 +216,155 @@ export class EmployeesService {
         });
         if (!dept) throw new NotFoundException('Department not found.');
 
-        const assigned = await this.db.employee.count({
-            where: { department_id: id, deleted_at: null },
-        });
-        if (assigned > 0) throw new BadRequestException('This department is still in use.');
+        const [assigned, designations] = await Promise.all([
+            this.db.employee.count({ where: { department_id: id, deleted_at: null } }),
+            this.db.designation.count({ where: { department_id: id, deleted_at: null } }),
+        ]);
+        if (assigned > 0 || designations > 0) throw new BadRequestException('This department is still in use.');
 
-        return this.db.department.update({ where: { id }, data: { deleted_at: new Date() } });
+        // The code is released so it can be given to a new department; the
+        // name stays, which is what lets `createDepartment` revive the row.
+        return this.db.department.update({ where: { id }, data: { deleted_at: new Date(), code: null } });
+    }
+
+    private async assertDepartmentUnique(tenantId: string, name?: string, code?: string | null, exceptId?: string) {
+        const not = exceptId ? { NOT: { id: exceptId } } : {};
+        if (name !== undefined) {
+            const duplicate = await this.db.department.findFirst({
+                where: { tenant_id: tenantId, name: { equals: name, mode: 'insensitive' }, deleted_at: null, ...not },
+            });
+            if (duplicate) throw new ConflictException('A department with this name already exists.');
+        }
+        if (code) {
+            const duplicate = await this.db.department.findFirst({
+                where: { tenant_id: tenantId, code, ...not },
+            });
+            if (duplicate) throw new ConflictException('A department with this code already exists.');
+        }
+    }
+
+    // ── Designation levels ────────────────────────────────────────────────────
+
+    async listDesignationLevels(tenantId: string, opts: { status?: string } = {}) {
+        return this.db.designationLevel.findMany({
+            where: { tenant_id: tenantId, deleted_at: null, ...activeFilter(opts.status) },
+            orderBy: { level: 'asc' },
+            include: { _count: { select: { designations: { where: { deleted_at: null } } } } },
+        });
+    }
+
+    async createDesignationLevel(tenantId: string, dto: CreateDesignationLevelDto) {
+        const name = dto.name.trim();
+        await this.assertLevelUnique(tenantId, dto.level);
+        const data = { name, is_active: dto.is_active ?? true };
+
+        const deleted = await this.db.designationLevel.findFirst({
+            where: { tenant_id: tenantId, level: dto.level, NOT: { deleted_at: null } },
+            select: { id: true },
+        });
+        if (deleted) {
+            return this.db.designationLevel.update({ where: { id: deleted.id }, data: { ...data, deleted_at: null } });
+        }
+        return this.db.designationLevel.create({ data: { tenant_id: tenantId, level: dto.level, ...data } });
+    }
+
+    async updateDesignationLevel(tenantId: string, id: string, dto: UpdateDesignationLevelDto) {
+        const level = await this.db.designationLevel.findFirst({
+            where: { id, tenant_id: tenantId, deleted_at: null },
+        });
+        if (!level) throw new NotFoundException('Level not found.');
+        if (dto.level !== undefined && dto.level !== level.level) {
+            await this.assertLevelUnique(tenantId, dto.level, id);
+        }
+
+        return this.db.designationLevel.update({
+            where: { id },
+            data: {
+                ...(dto.level !== undefined ? { level: dto.level } : {}),
+                ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+                ...(dto.is_active !== undefined ? { is_active: dto.is_active } : {}),
+            },
+        });
+    }
+
+    async deleteDesignationLevel(tenantId: string, id: string) {
+        const level = await this.db.designationLevel.findFirst({
+            where: { id, tenant_id: tenantId, deleted_at: null },
+        });
+        if (!level) throw new NotFoundException('Level not found.');
+
+        const used = await this.db.designation.count({ where: { level_id: id, deleted_at: null } });
+        if (used > 0) throw new BadRequestException('This level is still in use.');
+
+        return this.db.designationLevel.update({ where: { id }, data: { deleted_at: new Date() } });
+    }
+
+    private async assertLevelUnique(tenantId: string, level: number, exceptId?: string) {
+        // Deleted rows hold their number in the unique index too. Creating
+        // revives such a row; renumbering onto one would collide, so refuse it.
+        const duplicate = await this.db.designationLevel.findFirst({
+            where: {
+                tenant_id: tenantId,
+                level,
+                ...(exceptId ? { NOT: { id: exceptId } } : { deleted_at: null }),
+            },
+        });
+        if (duplicate) throw new ConflictException('This level number already exists.');
     }
 
     // ── Designations ──────────────────────────────────────────────────────────
 
-    async listDesignations(tenantId: string) {
+    async listDesignations(
+        tenantId: string,
+        opts: { departmentId?: string; levelId?: string; status?: string } = {},
+    ) {
         return this.db.designation.findMany({
-            where: { tenant_id: tenantId, deleted_at: null },
-            orderBy: { name: 'asc' },
+            where: {
+                tenant_id: tenantId,
+                deleted_at: null,
+                ...activeFilter(opts.status),
+                ...(opts.departmentId ? { department_id: opts.departmentId } : {}),
+                ...(opts.levelId ? { level_id: opts.levelId } : {}),
+            },
+            orderBy: [{ code: { sort: 'asc', nulls: 'last' } }, { name: 'asc' }],
+            include: {
+                ...DESIGNATION_RELATIONS,
+                _count: { select: { employees: { where: { deleted_at: null } } } },
+            },
         });
     }
 
     async createDesignation(tenantId: string, dto: CreateDesignationDto) {
-        const existing = await this.db.designation.findFirst({
-            where: { tenant_id: tenantId, name: dto.name, deleted_at: null },
-        });
-        if (existing) throw new ConflictException('A designation with this name already exists.');
+        const name = dto.name.trim();
+        const code = normaliseCode(dto.code);
+        await this.assertDesignationUnique(tenantId, name, code);
+        await this.assertDesignationLinks(tenantId, dto, null);
 
+        const data = {
+            name,
+            code,
+            department_id: dto.department_id ?? null,
+            level_id: dto.level_id ?? null,
+            reports_to_id: dto.reports_to_id ?? null,
+            reports_to_note: cleanText(dto.reports_to_note),
+            remarks: cleanText(dto.remarks),
+            is_active: dto.is_active ?? true,
+        };
+
+        const deleted = await this.db.designation.findFirst({
+            where: { tenant_id: tenantId, name, NOT: { deleted_at: null } },
+            select: { id: true },
+        });
+        if (deleted) {
+            return this.db.designation.update({
+                where: { id: deleted.id },
+                data: { ...data, deleted_at: null },
+                include: DESIGNATION_RELATIONS,
+            });
+        }
         return this.db.designation.create({
-            data: { tenant_id: tenantId, name: dto.name },
+            data: { tenant_id: tenantId, ...data },
+            include: DESIGNATION_RELATIONS,
         });
     }
 
@@ -162,12 +374,25 @@ export class EmployeesService {
         });
         if (!desig) throw new NotFoundException('Designation not found.');
 
-        const duplicate = await this.db.designation.findFirst({
-            where: { tenant_id: tenantId, name: dto.name, deleted_at: null, NOT: { id } },
-        });
-        if (duplicate) throw new ConflictException('A designation with this name already exists.');
+        const name = dto.name !== undefined ? dto.name.trim() : undefined;
+        const code = dto.code !== undefined ? normaliseCode(dto.code) : undefined;
+        await this.assertDesignationUnique(tenantId, name, code, id);
+        await this.assertDesignationLinks(tenantId, dto, desig);
 
-        return this.db.designation.update({ where: { id }, data: { name: dto.name } });
+        return this.db.designation.update({
+            where: { id },
+            data: {
+                ...(name !== undefined ? { name } : {}),
+                ...(code !== undefined ? { code } : {}),
+                ...(dto.department_id !== undefined ? { department_id: dto.department_id } : {}),
+                ...(dto.level_id !== undefined ? { level_id: dto.level_id } : {}),
+                ...(dto.reports_to_id !== undefined ? { reports_to_id: dto.reports_to_id } : {}),
+                ...(dto.reports_to_note !== undefined ? { reports_to_note: cleanText(dto.reports_to_note) } : {}),
+                ...(dto.remarks !== undefined ? { remarks: cleanText(dto.remarks) } : {}),
+                ...(dto.is_active !== undefined ? { is_active: dto.is_active } : {}),
+            },
+            include: DESIGNATION_RELATIONS,
+        });
     }
 
     async deleteDesignation(tenantId: string, id: string) {
@@ -176,12 +401,75 @@ export class EmployeesService {
         });
         if (!desig) throw new NotFoundException('Designation not found.');
 
-        const assigned = await this.db.employee.count({
-            where: { designation_id: id, deleted_at: null },
-        });
-        if (assigned > 0) throw new BadRequestException('This designation is still in use.');
+        const [assigned, reportees] = await Promise.all([
+            this.db.employee.count({ where: { designation_id: id, deleted_at: null } }),
+            this.db.designation.count({ where: { reports_to_id: id, deleted_at: null } }),
+        ]);
+        if (assigned > 0 || reportees > 0) throw new BadRequestException('This designation is still in use.');
 
-        return this.db.designation.update({ where: { id }, data: { deleted_at: new Date() } });
+        return this.db.designation.update({ where: { id }, data: { deleted_at: new Date(), code: null } });
+    }
+
+    private async assertDesignationUnique(tenantId: string, name?: string, code?: string | null, exceptId?: string) {
+        const not = exceptId ? { NOT: { id: exceptId } } : {};
+        if (name !== undefined) {
+            const duplicate = await this.db.designation.findFirst({
+                where: { tenant_id: tenantId, name: { equals: name, mode: 'insensitive' }, deleted_at: null, ...not },
+            });
+            if (duplicate) throw new ConflictException('A designation with this name already exists.');
+        }
+        if (code) {
+            const duplicate = await this.db.designation.findFirst({
+                where: { tenant_id: tenantId, code, ...not },
+            });
+            if (duplicate) throw new ConflictException('A designation with this code already exists.');
+        }
+    }
+
+    /**
+     * The department, level and reporting designation must belong to the
+     * tenant and still exist. A *newly chosen* one must also be active — an
+     * inactive one already on the record may stay, so editing a remark on an
+     * old designation does not force anyone to re-home it first.
+     */
+    private async assertDesignationLinks(
+        tenantId: string,
+        dto: { department_id?: string | null; level_id?: string | null; reports_to_id?: string | null },
+        current: { id: string; department_id: string | null; level_id: string | null; reports_to_id: string | null } | null,
+    ) {
+        if (dto.department_id && dto.department_id !== current?.department_id) {
+            const dept = await this.db.department.findFirst({
+                where: { id: dto.department_id, tenant_id: tenantId, deleted_at: null },
+            });
+            if (!dept) throw new BadRequestException('Department not found.');
+            if (!dept.is_active) throw new BadRequestException('This department is inactive.');
+        }
+        if (dto.level_id && dto.level_id !== current?.level_id) {
+            const level = await this.db.designationLevel.findFirst({
+                where: { id: dto.level_id, tenant_id: tenantId, deleted_at: null },
+            });
+            if (!level) throw new BadRequestException('Level not found.');
+            if (!level.is_active) throw new BadRequestException('This level is inactive.');
+        }
+        if (dto.reports_to_id && dto.reports_to_id !== current?.reports_to_id) {
+            if (current && dto.reports_to_id === current.id) {
+                throw new BadRequestException('A designation cannot report to itself.');
+            }
+            const all = await this.db.designation.findMany({
+                where: { tenant_id: tenantId, deleted_at: null },
+                select: { id: true, reports_to_id: true, is_active: true },
+            });
+            const target = all.find((d) => d.id === dto.reports_to_id);
+            if (!target) throw new BadRequestException('Reporting designation not found.');
+            if (!target.is_active) throw new BadRequestException('The reporting designation is inactive.');
+            if (current) {
+                const parentOf = new Map(all.map((d) => [d.id, d.reports_to_id]));
+                parentOf.set(current.id, dto.reports_to_id);
+                if (findReportingCycle(parentOf, current.id)) {
+                    throw new BadRequestException('This reporting line would loop back to the same designation.');
+                }
+            }
+        }
     }
 
     // ── Employees ─────────────────────────────────────────────────────────────
@@ -199,14 +487,7 @@ export class EmployeesService {
         });
         if (existing) throw new BadRequestException('An employee with this phone number already exists.');
 
-        if (dto.department_id) {
-            const dept = await this.db.department.findFirst({ where: { id: dto.department_id, tenant_id: tenantId, deleted_at: null } });
-            if (!dept) throw new BadRequestException('Department not found.');
-        }
-        if (dto.designation_id) {
-            const desig = await this.db.designation.findFirst({ where: { id: dto.designation_id, tenant_id: tenantId, deleted_at: null } });
-            if (!desig) throw new BadRequestException('Designation not found.');
-        }
+        await this.assertEmployeeAssignment(tenantId, dto, null);
 
         const employee_code = await this.generateEmployeeCode(tenantId);
         const seesSalary = await this.canSeeSalary(viewer);
@@ -229,9 +510,31 @@ export class EmployeesService {
                 ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
                 ...(date_of_joining ? { date_of_joining: this.toJoiningDate(date_of_joining) } : {}),
             },
-            include: { department: true, designation: true, user: { select: EMPLOYEE_USER_SELECT } },
+            include: EMPLOYEE_INCLUDE,
         });
         return stripPayrollFields(this.decryptEmployee(record), seesSalary);
+    }
+
+    /**
+     * The department and designation must exist in the tenant, and a newly
+     * chosen one must be active. One the employee already holds may stay after
+     * it is deactivated — retiring a designation never rewrites anyone's record.
+     */
+    private async assertEmployeeAssignment(
+        tenantId: string,
+        dto: { department_id?: string | null; designation_id?: string | null },
+        current: { department_id: string | null; designation_id: string | null } | null,
+    ) {
+        if (dto.department_id && dto.department_id !== current?.department_id) {
+            const dept = await this.db.department.findFirst({ where: { id: dto.department_id, tenant_id: tenantId, deleted_at: null } });
+            if (!dept) throw new BadRequestException('Department not found.');
+            if (dept.is_active === false) throw new BadRequestException('This department is inactive.');
+        }
+        if (dto.designation_id && dto.designation_id !== current?.designation_id) {
+            const desig = await this.db.designation.findFirst({ where: { id: dto.designation_id, tenant_id: tenantId, deleted_at: null } });
+            if (!desig) throw new BadRequestException('Designation not found.');
+            if (desig.is_active === false) throw new BadRequestException('This designation is inactive.');
+        }
     }
 
     async findAll(
@@ -258,7 +561,7 @@ export class EmployeesService {
         const [items, total, seesSalary] = await Promise.all([
             this.db.employee.findMany({
                 where,
-                include: { department: true, designation: true, user: { select: EMPLOYEE_USER_SELECT } },
+                include: EMPLOYEE_INCLUDE,
                 orderBy: { created_at: 'desc' },
                 skip,
                 take: limit,
@@ -278,7 +581,7 @@ export class EmployeesService {
     async findOne(tenantId: string, id: string, viewer?: TenantContext, storeId?: string) {
         const employee = await this.db.employee.findFirst({
             where: { id, tenant_id: tenantId, deleted_at: null, ...(storeId ? { store_id: storeId } : {}) },
-            include: { department: true, designation: true, user: { select: EMPLOYEE_USER_SELECT } },
+            include: EMPLOYEE_INCLUDE,
         });
         if (!employee) throw new NotFoundException('Employee not found');
         return stripPayrollFields(this.decryptEmployee(employee), await this.canSeeSalary(viewer));
@@ -297,14 +600,7 @@ export class EmployeesService {
             if (duplicate) throw new BadRequestException('An employee with this phone number already exists.');
         }
 
-        if (dto.department_id) {
-            const dept = await this.db.department.findFirst({ where: { id: dto.department_id, tenant_id: tenantId, deleted_at: null } });
-            if (!dept) throw new BadRequestException('Department not found.');
-        }
-        if (dto.designation_id) {
-            const desig = await this.db.designation.findFirst({ where: { id: dto.designation_id, tenant_id: tenantId, deleted_at: null } });
-            if (!desig) throw new BadRequestException('Designation not found.');
-        }
+        await this.assertEmployeeAssignment(tenantId, dto, employee);
 
         const seesSalary = await this.canSeeSalary(viewer);
         const { nid, basic_salary, storeId: nextStoreId, date_of_joining, ...rest } = dto as UpdateEmployeeDto & { basic_salary?: unknown };
@@ -336,7 +632,7 @@ export class EmployeesService {
                 ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
                 ...(date_of_joining ? { date_of_joining: this.toJoiningDate(date_of_joining) } : {}),
             },
-            include: { department: true, designation: true, user: { select: EMPLOYEE_USER_SELECT } },
+            include: EMPLOYEE_INCLUDE,
         });
         return stripPayrollFields(this.decryptEmployee(record), seesSalary);
     }
@@ -430,7 +726,7 @@ export class EmployeesService {
         const record = await this.db.employee.update({
             where: { id },
             data: { user_id: userId },
-            include: { department: true, designation: true, user: { select: EMPLOYEE_USER_SELECT } },
+            include: EMPLOYEE_INCLUDE,
         });
         return this.decryptEmployee(record);
     }
@@ -444,7 +740,7 @@ export class EmployeesService {
         const record = await this.db.employee.update({
             where: { id },
             data: { user_id: null },
-            include: { department: true, designation: true, user: { select: EMPLOYEE_USER_SELECT } },
+            include: EMPLOYEE_INCLUDE,
         });
         return this.decryptEmployee(record);
     }

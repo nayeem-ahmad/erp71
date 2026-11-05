@@ -251,6 +251,7 @@ export const routes = {
         employeeDetail: (id: string) => `/hr/employees/${id}` as const,
         departments: '/hr/employees/departments',
         designations: '/hr/employees/designations',
+        designationLevels: '/hr/employees/designation-levels',
         attendance: '/hr/attendance',
         attendancePunches: '/hr/attendance/punches',
         schedules: '/hr/schedules',

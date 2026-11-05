@@ -8,7 +8,7 @@ import { Alert, Button, Field, FormFooter, FormGrid, Input, Select } from '@/com
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
 import type { JobApplication } from './types';
 
-interface NamedRecord { id: string; name: string }
+interface NamedRecord { id: string; name: string; code?: string | null; is_active?: boolean }
 
 /**
  * Accepting an offer. This is the one action in recruitment that writes outside
@@ -44,8 +44,10 @@ export default function HireModal({
         Promise.all([api.getDepartments(), api.getDesignations()])
             .then(([depts, desigs]) => {
                 if (cancelled) return;
-                setDepartments(depts ?? []);
-                setDesignations(desigs ?? []);
+                // A hire gets an active department and designation; retired
+                // ones stay on old records but are not offered for new ones.
+                setDepartments((depts ?? []).filter((d) => d.is_active !== false));
+                setDesignations((desigs ?? []).filter((d) => d.is_active !== false));
             })
             .catch(() => undefined);
         return () => { cancelled = true; };
