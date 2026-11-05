@@ -206,16 +206,18 @@ All under `/projects/boards`, guarded by `JwtAuthGuard, StorePermissionGuard`:
 | GET | `/projects/boards/:id` | `VIEW_PROJECTS` |
 | PATCH | `/projects/boards/:id` | `MANAGE_PROJECTS` |
 | DELETE | `/projects/boards/:id` | `MANAGE_PROJECTS` |
-| POST | `/projects/boards/:id/tasks` | `MANAGE_PROJECTS` |
-| DELETE | `/projects/boards/:id/tasks/:taskId` | `MANAGE_PROJECTS` |
-| PATCH | `/projects/boards/:id/tasks/:taskId/move` | `MANAGE_PROJECTS` |
+| POST | `/projects/boards/:id/tasks` | `MANAGE_PROJECT_TASKS` |
+| DELETE | `/projects/boards/:id/tasks/:taskId` | `MANAGE_PROJECT_TASKS` |
+| PATCH | `/projects/boards/:id/tasks/:taskId/move` | `MANAGE_PROJECT_TASKS` |
 | POST | `/projects/boards/:id/columns` | `MANAGE_PROJECT_SETTINGS` |
 | PATCH | `/projects/boards/:id/columns/:columnId` | `MANAGE_PROJECT_SETTINGS` |
 | DELETE | `/projects/boards/:id/columns/:columnId` | `MANAGE_PROJECT_SETTINGS` |
 | PUT | `/projects/boards/:id/columns/:columnId/statuses` | `MANAGE_PROJECT_SETTINGS` |
 
-No new permission keys. Reads take `VIEW_PROJECTS`, board and card mutations take
-`MANAGE_PROJECTS`, column and binding configuration takes
+No new permission keys. Reads take `VIEW_PROJECTS`, board mutations take
+`MANAGE_PROJECTS`, card mutations (compose, add, move, sort, remove — and their
+bulk forms) take `MANAGE_PROJECT_TASKS` so a Project User can work a board
+without being a project manager (changed 2026-11-05), column and binding configuration takes
 `MANAGE_PROJECT_SETTINGS` — the same three the projects controller already uses,
 which is what tenant-wide access means here.
 
