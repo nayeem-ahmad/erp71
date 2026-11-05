@@ -35,6 +35,21 @@ import {
     UpdateBoardDto,
 } from './board.dto';
 
+/**
+ * Two kinds of write live here, and they take different permissions.
+ *
+ * The board itself — creating, renaming, deleting it, its background — is
+ * MANAGE_PROJECTS: it is shared furniture everyone who opens it sees.
+ *
+ * The cards on it are task work, so they take MANAGE_PROJECT_TASKS, the same
+ * permission the task panel and task list take for the same changes: composing
+ * a card creates a task, dropping one changes its status, sorting or pulling
+ * one off a board only moves a task around. A Project User holds that and not
+ * MANAGE_PROJECTS, and must be able to work a board without being made a
+ * project manager. Every card route still narrows to the tasks and projects
+ * the caller can see (see BoardsService), so this widens who may act, not what
+ * they may act on.
+ */
 @Controller('projects/boards')
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
@@ -115,7 +130,7 @@ export class BoardsController {
     }
 
     @Post(':id/tasks')
-    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     addTasks(
         @Tenant() tenant: TenantContext,
         @Param('id') id: string,
@@ -128,17 +143,13 @@ export class BoardsController {
      * Composing into a column, not adding an existing task — hence the column in
      * the path and a title in the body rather than a list of task ids.
      *
-     * Both permissions, because the call does both things: it creates a task
-     * (MANAGE_PROJECT_TASKS, as `POST /projects/tasks` requires) and it puts a
-     * card on a board (MANAGE_PROJECTS, as `addTasks` requires). Requiring only
-     * the board half would make this route a way to create tasks without the
-     * permission that governs creating tasks.
+     * MANAGE_PROJECT_TASKS, as `POST /projects/tasks` requires: the call
+     * creates a task, and putting it on the board is card work, which takes the
+     * same permission. It must never take less — that would make this route a
+     * way to create tasks without the permission that governs creating them.
      */
     @Post(':id/columns/:columnId/cards')
-    @RequireStorePermission(
-        StorePermission.MANAGE_PROJECTS,
-        StorePermission.MANAGE_PROJECT_TASKS,
-    )
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     createCard(
         @Tenant() tenant: TenantContext,
         @Param('id') id: string,
@@ -149,7 +160,7 @@ export class BoardsController {
     }
 
     @Delete(':id/tasks/:taskId')
-    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     removeTask(
         @Tenant() tenant: TenantContext,
         @Param('id') id: string,
@@ -159,7 +170,7 @@ export class BoardsController {
     }
 
     @Patch(':id/tasks/:taskId/move')
-    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     moveCard(
         @Tenant() tenant: TenantContext,
         @Param('id') id: string,
@@ -171,11 +182,11 @@ export class BoardsController {
 
     /**
      * Several cards into one column — the column menu's "move all cards to" and
-     * the selection bar. MANAGE_PROJECTS, the same as the single-card drop it
-     * repeats: doing a thing in bulk is not a different permission.
+     * the selection bar. MANAGE_PROJECT_TASKS, the same as the single-card drop
+     * it repeats: doing a thing in bulk is not a different permission.
      */
     @Post(':id/cards/move')
-    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     moveCards(
         @Tenant() tenant: TenantContext,
         @Param('id') id: string,
@@ -185,7 +196,7 @@ export class BoardsController {
     }
 
     @Post(':id/cards/remove')
-    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     removeCards(
         @Tenant() tenant: TenantContext,
         @Param('id') id: string,
@@ -196,11 +207,11 @@ export class BoardsController {
 
     /**
      * One column's card order, as "sort cards" leaves it. Ordering cards is
-     * moving cards, so it takes MANAGE_PROJECTS rather than the settings
+     * moving cards, so it takes MANAGE_PROJECT_TASKS rather than the settings
      * permission the column's own shape takes.
      */
     @Put(':id/columns/:columnId/cards/order')
-    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     orderColumnCards(
         @Tenant() tenant: TenantContext,
         @Param('id') id: string,

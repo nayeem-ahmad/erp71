@@ -2131,6 +2131,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Project Users can work boards without MANAGE_PROJECTS** — done 2026-11-05. Composing a card on a board demanded `MANAGE_PROJECTS` (Project Manager only). Every card route on `BoardsController` — create card, add existing tasks, move/bulk move, sort a column, remove from board — now takes `MANAGE_PROJECT_TASKS`, the same permission the task panel uses for the same changes; the board itself (create/rename/delete/background) stays on `MANAGE_PROJECTS` and columns on `MANAGE_PROJECT_SETTINGS`. Card routes already narrow to tasks/projects the caller can see. `boards.controller.spec.ts` now checks the routes against the real `project_user` role template.
+
 - [x] **Meet71 Call under Support (not a separate menu)** — done 2026-11-05. Removed sidebar/rail `meet71` node. Support header has a Call control that is active when any Meet71-allowlisted platform user is online (presence); opens a picker to ring them voice/video. `/call` stays as the full directory page for Admin → Meet71 Open dialer.
 
 - [x] **Meet71 phone dialer in ERP71** — done 2026-11-04. `/call` directory + presence dots + Voice/Video Call; Admin → Meet71 Open dialer + per-member call buttons. Backend JWT allowlist-gated `GET /meet71/directory`, `GET /meet71/presence`, `POST /meet71/calls` via `Meet71ClientService` (`MEET71_INTERNAL_URL` + `X-Meet71-Service-Key`); 409/503 falls back to `meet.erp71.com/call?to=`. Ops: set `MEET71_INTERNAL_URL=http://meet71-app-1:3000` on the VPS.
