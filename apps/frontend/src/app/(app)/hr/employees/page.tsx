@@ -39,7 +39,7 @@ interface Employee {
     status: string;
     created_at: string;
     department?: { id: string; name: string } | null;
-    designation?: { id: string; name: string } | null;
+    designation?: { id: string; name: string; code?: string | null } | null;
     user?: { id: string; email: string; name?: string | null; mobile?: string | null } | null;
     store_id?: string | null;
 }
@@ -165,7 +165,9 @@ export default function EmployeesPage() {
                 size: 150,
                 meta: { hideOnMobile: true },
             }),
-            columnHelper.accessor((row) => row.designation?.name ?? '', {
+            columnHelper.accessor((row) => (row.designation
+                ? (row.designation.code ? `${row.designation.code} · ${row.designation.name}` : row.designation.name)
+                : ''), {
                 id: 'designation',
                 header: t.employees.columns.designation,
                 cell: (info) => info.getValue() || '—',

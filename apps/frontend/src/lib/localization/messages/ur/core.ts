@@ -575,6 +575,7 @@ export const coreMessages = {
             employees: 'ملازمین',
             departments: 'شعبے',
             designations: 'عہدے',
+            designationLevels: "عہدوں کی سطحیں",
             attendance: 'حاضری',
             attendanceRecords: 'حاضری کے ریکارڈ',
             attendancePunches: 'آمد/روانگی ریکارڈ',

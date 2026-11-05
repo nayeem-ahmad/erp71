@@ -14,6 +14,7 @@ import {
     Clock,
     Landmark,
     Layers,
+    LayoutList,
     ScrollText,
     UserSearch,
     Users,
@@ -74,6 +75,7 @@ const HR_HUB_SECTIONS: HubSectionConfig[] = [
         links: [
             { href: routes.hr.departments, key: 'departments', icon: Layers, accent: 'bg-primary-light text-blue-700 border-primary-border' },
             { href: routes.hr.designations, key: 'designations', icon: BadgeCheck, accent: 'bg-primary-light text-blue-700 border-primary-border' },
+            { href: routes.hr.designationLevels, key: 'designationLevels', icon: LayoutList, accent: 'bg-primary-light text-blue-700 border-primary-border' },
             { href: routes.hr.schedules, key: 'schedules', icon: CalendarDays, accent: 'bg-primary-light text-blue-700 border-primary-border' },
         ],
     },

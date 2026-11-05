@@ -575,6 +575,7 @@ export const coreMessages = {
             employees: 'Employees',
             departments: 'Departments',
             designations: 'Designations',
+            designationLevels: 'Designation Levels',
             attendance: 'Attendance',
             attendanceRecords: 'Attendance Records',
             attendancePunches: 'In/Out Records',

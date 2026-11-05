@@ -1057,6 +1057,7 @@ model Tenant {
   posCounters                PosCounter[]
   departments                Department[]
   designations               Designation[]
+  designationLevels          DesignationLevel[]
   employees                  Employee[]
   leaveTypes                 LeaveType[]
   attendanceRecords          AttendanceRecord[]
@@ -5819,33 +5820,92 @@ model AlertScanCursor {
 }
 
 model Department {
-  id         String    @id @default(uuid())
-  tenant_id  String
-  name       String
-  created_at DateTime  @default(now())
-  deleted_at DateTime?
+  id          String    @id @default(uuid())
+  tenant_id   String
+  name        String
+  /// The tenant's short code, e.g. `IMP`. Optional because departments
+  /// predate codes; unique within the tenant when set. Stored upper-case.
+  code        String?
+  description String?
+  /// Who the department answers to, in the tenant's words ("CEO", "Board",
+  /// "Shareholders"). Free text: the top of an org chart is rarely a
+  /// department of its own.
+  reports_to  String?
+  /// Inactive departments stay on the employees and designations already
+  /// using them, but are no longer offered for new ones. Deactivating is the
+  /// way to retire a department that has history; `deleted_at` is only for
+  /// one created by mistake and never used.
+  is_active   Boolean   @default(true)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime? @updatedAt
+  deleted_at  DateTime?
 
-  tenant    Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  employees Employee[]
-  jobPosts  JobPost[]
+  tenant       Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employees    Employee[]
+  jobPosts     JobPost[]
+  designations Designation[]
 
   @@unique([tenant_id, name])
+  @@unique([tenant_id, code])
   @@index([tenant_id, deleted_at])
 }
 
-model Designation {
+/// A seniority band designations sit in — 1 is the most senior. Each tenant
+/// keeps its own scale and names ("Department Head", "Executive / Officer").
+model DesignationLevel {
   id         String    @id @default(uuid())
   tenant_id  String
+  level      Int
   name       String
+  is_active  Boolean   @default(true)
   created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
   deleted_at DateTime?
 
-  tenant    Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  employees Employee[]
-  jobPosts  JobPost[]
+  tenant       Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  designations Designation[]
+
+  @@unique([tenant_id, level])
+  @@index([tenant_id, deleted_at])
+  @@map("designation_levels")
+}
+
+model Designation {
+  id            String    @id @default(uuid())
+  tenant_id     String
+  name          String
+  /// The tenant's code, e.g. `IMP-04`. Optional because designations predate
+  /// codes; unique within the tenant when set. Stored upper-case.
+  code          String?
+  department_id String?
+  level_id      String?
+  /// The designation this one reports to — the default line manager for
+  /// anyone holding it.
+  reports_to_id String?
+  /// Who it reports to when that is not a designation: "Shareholders" for a
+  /// chairman, "Relevant Department Head" for a trainee.
+  reports_to_note String?
+  remarks       String?
+  /// Inactive designations stay on the employees already holding them, but are
+  /// no longer offered for new ones. Old records are never touched.
+  is_active     Boolean   @default(true)
+  created_at    DateTime  @default(now())
+  updated_at    DateTime? @updatedAt
+  deleted_at    DateTime?
+
+  tenant     Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  department Department?       @relation(fields: [department_id], references: [id], onDelete: SetNull)
+  level      DesignationLevel? @relation(fields: [level_id], references: [id], onDelete: SetNull)
+  reportsTo  Designation?      @relation("DesignationReportsTo", fields: [reports_to_id], references: [id], onDelete: SetNull)
+  reportees  Designation[]     @relation("DesignationReportsTo")
+  employees  Employee[]
+  jobPosts   JobPost[]
 
   @@unique([tenant_id, name])
+  @@unique([tenant_id, code])
   @@index([tenant_id, deleted_at])
+  @@index([tenant_id, department_id])
+  @@index([tenant_id, level_id])
 }
 
 model Employee {

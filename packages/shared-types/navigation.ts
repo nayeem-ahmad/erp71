@@ -295,6 +295,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'hr.setup': { id: 'hr.setup', kind: 'subgroup', icon: 'Layers', labelKey: 'hr.hub.setup' },
   'hr.setup.departments': { id: 'hr.setup.departments', kind: 'link', icon: 'Layers', labelKey: 'sidebar.items.departments', href: '/hr/employees/departments' },
   'hr.setup.designations': { id: 'hr.setup.designations', kind: 'link', icon: 'BadgeCheck', labelKey: 'sidebar.items.designations', href: '/hr/employees/designations' },
+  'hr.setup.designationLevels': { id: 'hr.setup.designationLevels', kind: 'link', icon: 'LayoutList', labelKey: 'sidebar.items.designationLevels', href: '/hr/employees/designation-levels' },
   'hr.setup.schedules': { id: 'hr.setup.schedules', kind: 'link', icon: 'CalendarDays', labelKey: 'sidebar.items.schedules', href: '/hr/schedules' },
 
   'account-settings': { id: 'account-settings', kind: 'module', icon: 'Cog', labelKey: 'sidebar.modules.accountSettings', moduleKey: 'account-settings' },
@@ -756,7 +757,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('hr.setup', 'hr', 6),
   layoutNode('hr.setup.departments', 'hr.setup', 0),
   layoutNode('hr.setup.designations', 'hr.setup', 1),
-  layoutNode('hr.setup.schedules', 'hr.setup', 2),
+  layoutNode('hr.setup.designationLevels', 'hr.setup', 2),
+  layoutNode('hr.setup.schedules', 'hr.setup', 3),
 
   layoutNode('account-settings', null, 12),
   layoutNode('account-settings.overview', 'account-settings', 0),

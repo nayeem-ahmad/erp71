@@ -36,6 +36,7 @@ import type {
     MessagingCreditSummary,
 } from './messaging-credits';
 import type { DailyReport } from '@/lib/daily-report';
+import type { Department, Designation, DesignationLevel, OrgImportResult } from '@/lib/org-structure';
 import { numberConditionParam, type NumberCondition } from '@/lib/number-condition';
 import { browserApiBase } from './api-base';
 import { getQueryClient, ME_QUERY_KEY, readMe } from './query-client';
@@ -49,6 +50,25 @@ import {
     isAccessTokenNearExpiry,
     updateCredentials,
 } from './session-store';
+
+export interface DepartmentInput {
+    name: string;
+    code?: string | null;
+    description?: string | null;
+    reports_to?: string | null;
+    is_active?: boolean;
+}
+
+export interface DesignationInput {
+    name: string;
+    code?: string | null;
+    department_id?: string | null;
+    level_id?: string | null;
+    reports_to_id?: string | null;
+    reports_to_note?: string | null;
+    remarks?: string | null;
+    is_active?: boolean;
+}
 
 /** Per-tenant feature state: platform defaults, this tenant's overrides, and the result. */
 export type AdminTenantFeatures = {
@@ -5325,30 +5345,64 @@ export const api = {
             body: JSON.stringify({ rows, mode }),
             headers: { 'Content-Type': 'application/json' },
         }),
-    getDepartments: () => fetchWithAuth('/employees/departments'),
-    createDepartment: (data: { name: string }) => fetchWithAuth('/employees/departments', {
+    getDepartments: (params?: { status?: 'active' | 'inactive' }): Promise<Department[]> =>
+        fetchWithAuth(params?.status ? `/employees/departments?status=${params.status}` : '/employees/departments'),
+    createDepartment: (data: DepartmentInput) => fetchWithAuth('/employees/departments', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    updateDepartment: (id: string, data: { name: string }) => fetchWithAuth(`/employees/departments/${id}`, {
+    updateDepartment: (id: string, data: Partial<DepartmentInput>) => fetchWithAuth(`/employees/departments/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteDepartment: (id: string) => fetchWithAuth(`/employees/departments/${id}`, { method: 'DELETE' }),
-    getDesignations: () => fetchWithAuth('/employees/designations'),
-    createDesignation: (data: { name: string }) => fetchWithAuth('/employees/designations', {
+    getDesignations: (params?: { departmentId?: string; levelId?: string; status?: 'active' | 'inactive' }): Promise<Designation[]> => {
+        const query = new URLSearchParams();
+        if (params?.departmentId) query.set('departmentId', params.departmentId);
+        if (params?.levelId) query.set('levelId', params.levelId);
+        if (params?.status) query.set('status', params.status);
+        const qs = query.toString();
+        return fetchWithAuth(qs ? `/employees/designations?${qs}` : '/employees/designations');
+    },
+    createDesignation: (data: DesignationInput) => fetchWithAuth('/employees/designations', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    updateDesignation: (id: string, data: { name: string }) => fetchWithAuth(`/employees/designations/${id}`, {
+    updateDesignation: (id: string, data: Partial<DesignationInput>) => fetchWithAuth(`/employees/designations/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteDesignation: (id: string) => fetchWithAuth(`/employees/designations/${id}`, { method: 'DELETE' }),
+    getDesignationLevels: (params?: { status?: 'active' | 'inactive' }): Promise<DesignationLevel[]> =>
+        fetchWithAuth(params?.status ? `/employees/designation-levels?status=${params.status}` : '/employees/designation-levels'),
+    createDesignationLevel: (data: { level: number; name: string; is_active?: boolean }) => fetchWithAuth('/employees/designation-levels', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateDesignationLevel: (id: string, data: { level?: number; name?: string; is_active?: boolean }) =>
+        fetchWithAuth(`/employees/designation-levels/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteDesignationLevel: (id: string) => fetchWithAuth(`/employees/designation-levels/${id}`, { method: 'DELETE' }),
+    /** Levels, departments and designations from one workbook. `dry_run` previews without writing. */
+    importOrgStructure: (data: {
+        levels?: Record<string, string>[];
+        departments?: Record<string, string>[];
+        designations?: Record<string, string>[];
+        mode: 'skip' | 'upsert';
+        dry_run?: boolean;
+    }): Promise<OrgImportResult> => fetchWithAuth('/employees/org-structure/import', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     linkEmployeeUser: (id: string, user_id: string) => fetchWithAuth(`/employees/${id}/link-user`, {
         method: 'POST',
         body: JSON.stringify({ user_id }),
