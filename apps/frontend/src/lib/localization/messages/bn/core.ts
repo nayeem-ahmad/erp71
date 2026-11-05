@@ -425,6 +425,7 @@ export const coreMessages = {
                 badDebts: "মওকুফকৃত বকেয়া",
                 crmFollowUps: "ফলো-আপ",
                 crmActivities: "কার্যক্রম",
+                crmApprovalsInbox: 'Approvals Inbox',
                 projectsList: "সব প্রকল্প",
                 projectsBoards: "বোর্ড",
                 projectsTasks: "কাজ",

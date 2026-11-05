@@ -61,6 +61,66 @@ const ACTIVITY_SORTABLE: SortableMap = {
 
 const ACTIVITY_DEFAULT_ORDER = [{ due_at: 'asc' as const }, { created_at: 'desc' as const }];
 
+/**
+ * Grade lives in the lead's custom fields, not a column. `cf_4` is the field
+ * this inbox was built against; a tenant that never defined it simply has no
+ * Grade A rows.
+ */
+const APPROVAL_INBOX_GRADE_FIELD = 'cf_4';
+
+/** Newest history lines kept per lead. Older than this, the tag cannot see them. */
+const APPROVAL_INBOX_HISTORY_LIMIT = 40;
+
+function approvalInboxGrade(customFields: unknown): string | null {
+    if (!customFields || typeof customFields !== 'object' || Array.isArray(customFields)) return null;
+    const value = (customFields as Record<string, unknown>)[APPROVAL_INBOX_GRADE_FIELD];
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
+}
+
+type InboxHistoryRow = {
+    id: string;
+    lead_id: string | null;
+    subject: string | null;
+    summary: string | null;
+    outcome: string | null;
+    notes: string | null;
+    channel_code: string | null;
+    direction: string | null;
+    status: string;
+    completed_at: Date | null;
+    created_at: Date;
+};
+
+function groupInboxHistory(rows: InboxHistoryRow[]) {
+    const sorted = [...rows].sort((a, b) => {
+        const at = a.completed_at ? new Date(a.completed_at).getTime() : 0;
+        const bt = b.completed_at ? new Date(b.completed_at).getTime() : 0;
+        if (bt !== at) return bt - at;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+    const byLead = new Map<string, Omit<InboxHistoryRow, 'lead_id' | 'created_at'>[]>();
+    for (const row of sorted) {
+        if (!row.lead_id) continue;
+        const list = byLead.get(row.lead_id) ?? [];
+        if (list.length >= APPROVAL_INBOX_HISTORY_LIMIT) continue;
+        list.push({
+            id: row.id,
+            subject: row.subject,
+            summary: row.summary,
+            outcome: row.outcome,
+            notes: row.notes,
+            channel_code: row.channel_code,
+            direction: row.direction,
+            status: row.status,
+            completed_at: row.completed_at,
+        });
+        byLead.set(row.lead_id, list);
+    }
+    return byLead;
+}
+
 /** How long a customer must go untouched before the reorder cron flags them. */
 const REORDER_DORMANT_DAYS = 60;
 
@@ -349,6 +409,79 @@ export class CrmActivitiesService {
         ]);
 
         return paginate(items, total, page, limit);
+    }
+
+    /**
+     * Overdue LinkedIn follow-up drafts for the Approvals Inbox.
+     *
+     * Same tenant scope as `findAll`. Grade is lead custom field `cf_4` — a
+     * tenant-defined value, read here and not filtered, so the page can default
+     * to Grade A and still offer the rest. History is the lead's non-planned
+     * activities (the History list), newest first, capped per lead. Nothing in
+     * this read sends or fetches from LinkedIn.
+     */
+    async approvalsInbox(tenantId: string, timezone: string) {
+        const planned = await this.db.crmActivity.findMany({
+            where: {
+                tenant_id: tenantId,
+                status: 'PLANNED',
+                lead_id: { not: null },
+                due_at: { lt: startOfZonedToday(timezone) },
+                AND: [
+                    { subject: { contains: 'linkedin', mode: 'insensitive' } },
+                    { subject: { contains: 'draft', mode: 'insensitive' } },
+                ],
+            },
+            include: {
+                lead: { select: { id: true, name: true, custom_fields: true } },
+            },
+            orderBy: [{ due_at: 'asc' }, { created_at: 'asc' }],
+        });
+
+        const leadIds = [...new Set(planned.map((row) => row.lead_id).filter((id): id is string => Boolean(id)))];
+        const historyRows = leadIds.length
+            ? await this.db.crmActivity.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    lead_id: { in: leadIds },
+                    status: { not: 'PLANNED' },
+                },
+                select: {
+                    id: true,
+                    lead_id: true,
+                    subject: true,
+                    summary: true,
+                    outcome: true,
+                    notes: true,
+                    channel_code: true,
+                    direction: true,
+                    status: true,
+                    completed_at: true,
+                    created_at: true,
+                },
+            })
+            : [];
+
+        const byLead = groupInboxHistory(historyRows);
+
+        return {
+            items: planned.flatMap((row) => {
+                if (!row.lead) return [];
+                return [{
+                    id: row.id,
+                    subject: row.subject,
+                    notes: row.notes,
+                    due_at: row.due_at,
+                    is_approved: row.is_approved,
+                    lead: {
+                        id: row.lead.id,
+                        name: row.lead.name,
+                        grade: approvalInboxGrade(row.lead.custom_fields),
+                    },
+                    history: byLead.get(row.lead.id) ?? [],
+                }];
+            }),
+        };
     }
 
     async findOne(tenantId: string, id: string) {

@@ -103,6 +103,9 @@ export const DEFAULT_CONVERSATION_CHANNELS: {
     { code: 'VISIT', name: 'Visit', icon: '🏪', sort_order: 5 },
     { code: 'ONLINE_MEETING', name: 'Online Meeting', icon: '💻', sort_order: 6 },
     { code: 'NOTE', name: 'Note', icon: '📝', sort_order: 7 },
+    // Not a legacy enum member. The approvals inbox completes a draft with
+    // this code, and sync-lead-taxonomy adds it to tenants that predate it.
+    { code: 'LINKEDIN', name: 'LinkedIn', icon: '💼', sort_order: 8 },
 ];
 
 /**

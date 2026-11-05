@@ -425,6 +425,7 @@ export const coreMessages = {
             badDebts: 'Bad Debts',
             crmFollowUps: 'Follow-ups',
             crmActivities: 'Activities',
+            crmApprovalsInbox: 'Approvals Inbox',
             projectsList: 'All Projects',
             projectsBoards: 'Boards',
             projectsTasks: 'Tasks',

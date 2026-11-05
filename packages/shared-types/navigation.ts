@@ -254,6 +254,9 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   // below, so a fresh tenant sees one Activities item instead of two.
   'crm.conversations': { id: 'crm.conversations', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.crmActivities', href: '/crm/activities', premiumOnly: true },
   'crm.follow-ups': { id: 'crm.follow-ups', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.crmActivities', href: '/crm/activities', premiumOnly: true },
+  // Overdue LinkedIn follow-up drafts. Its own item so a reviewer does not
+  // have to rebuild this queue from the activities filters.
+  'crm.approvals-inbox': { id: 'crm.approvals-inbox', kind: 'link', icon: 'Inbox', labelKey: 'sidebar.items.crmApprovalsInbox', href: '/crm/approvals-inbox', premiumOnly: true },
   'crm.campaigns': { id: 'crm.campaigns', kind: 'link', icon: 'Megaphone', labelKey: 'sidebar.items.crmCampaigns', href: '/crm/campaigns', premiumOnly: true },
   'crm.customers': { id: 'crm.customers', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.crmCustomers', href: '/crm/customers' },
   // Replaces the separate 'crm.lead-taxonomy' and 'crm.custom-fields' nodes — both
@@ -711,6 +714,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.lead-generation', 'crm', 3),
   layoutNode('crm.contacts', 'crm', 2),
   layoutNode('crm.follow-ups', 'crm', 4),
+  layoutNode('crm.approvals-inbox', 'crm', 4),
   layoutNode('crm.campaigns', 'crm', 5),
   layoutNode('crm.customers', 'crm', 6),
   layoutNode('crm.setup', 'crm', 7),
