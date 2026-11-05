@@ -324,10 +324,8 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   // Entitlement-gated rather than plan-gated: `teamChat` is off on every plan
   // and granted by the Team Chat add-on, which is how a workspace turns it on.
   chat: { id: 'chat', kind: 'module', icon: 'MessagesSquare', labelKey: 'sidebar.modules.chat', href: '/chat', moduleKey: 'chat', entitlement: 'teamChat' },
-  // Meet71 phone dialer (directory + presence + voice/video). Allowlist-gated on
-  // the API (`MEET71_NOT_ALLOWED`); no plan entitlement. Sync saved layouts with
-  // `npx tsx packages/database/prisma/sync-nav-layout.ts --nodes=meet71`.
-  meet71: { id: 'meet71', kind: 'module', icon: 'Phone', labelKey: 'sidebar.items.call', href: '/call', moduleKey: 'meet71' },
+  // Meet71 calling lives on Support (`SupportCallControl`), not as its own menu.
+  // `/call` remains as a full-directory page (admin Open dialer) without a nav node.
   support: { id: 'support', kind: 'module', icon: 'MessageSquare', labelKey: 'sidebar.items.support', href: '/support', moduleKey: 'support', platformFeature: 'support' },
   admin: { id: 'admin', kind: 'module', icon: 'ShieldCheck', labelKey: 'sidebar.modules.admin', moduleKey: 'admin' },
   'admin.overview': { id: 'admin.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/admin' },
@@ -768,9 +766,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('account-settings.url-shortener', 'account-settings', 4),
 
   layoutNode('chat', null, 13),
-  layoutNode('meet71', null, 14),
-  layoutNode('support', null, 15),
-  layoutNode('admin', null, 16),
+  layoutNode('support', null, 14),
+  layoutNode('admin', null, 15),
   layoutNode('admin.overview', 'admin', 0),
   layoutNode('admin.tenant-management', 'admin', 1),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
@@ -784,8 +781,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.url-shortener', 'admin', 5),
   layoutNode('admin.blog', 'admin', 6),
   layoutNode('admin.social-media', 'admin', 7),
-  layoutNode('whats-new', null, 17),
-  layoutNode('help', null, 18),
+  layoutNode('whats-new', null, 16),
+  layoutNode('help', null, 17),
 ];
 
 /**
@@ -816,8 +813,6 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
  *
  * Meet71 console: `npx tsx packages/database/prisma/sync-nav-layout.ts --nodes=admin.meet71`
  * (dry-run first). Not on boot.
- *
- * Meet71 dialer: `npx tsx packages/database/prisma/sync-nav-layout.ts --nodes=meet71`
  */
 export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin', null, 0),
@@ -887,9 +882,8 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('projects.hour-log-report', 'projects', 7),
   layoutNode('projects.setup', 'projects', 8),
 
-  layoutNode('meet71', null, 2),
-  layoutNode('whats-new', null, 3),
-  layoutNode('help', null, 4),
+  layoutNode('whats-new', null, 2),
+  layoutNode('help', null, 3),
 ];
 
 export function getDefaultNavLayout(scope: NavScope): NavLayoutNode[] {

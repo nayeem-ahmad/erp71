@@ -116,6 +116,18 @@ export const componentsMessages = {
             clearFilters: 'Kosongkan penapis',
             count: '{count, plural, one {# perbualan} other {# perbualan}}',
             replyPlaceholderMobile: 'Taip mesej…',
+            call: {
+                call: 'Call',
+                availableHint: 'Someone on the platform is available — call rings on their Meet71 screen.',
+                unavailable: 'Call unavailable',
+                unavailableHint: 'No platform user is available in Meet71 right now.',
+                pickerTitle: 'Call support',
+                pickerSubtitle: 'These people have Meet71 open. Pick voice or video to ring them.',
+                voice: 'Voice',
+                video: 'Video',
+                calling: 'Calling…',
+                callFailed: 'Could not start the call',
+            },
         },
         voiceNavWidget: {
             startAria: 'Navigasi suara — sebut nama halaman',

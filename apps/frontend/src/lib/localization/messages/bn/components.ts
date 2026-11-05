@@ -116,6 +116,18 @@ export const componentsMessages = {
             clearFilters: "ফিল্টার মুছুন",
             count: "{count, plural, one {# টি কথোপকথন} other {# টি কথোপকথন}}",
             replyPlaceholderMobile: "বার্তা লিখুন…",
+            call: {
+                call: 'কল',
+                availableHint: 'প্ল্যাটফর্মের কেউ উপলব্ধ — কল তাদের Meet71 স্ক্রিনে বাজবে।',
+                unavailable: 'কল উপলব্ধ নয়',
+                unavailableHint: 'এখন Meet71-এ কোনো প্ল্যাটফর্ম ব্যবহারকারী উপলব্ধ নেই।',
+                pickerTitle: 'সাপোর্টে কল করুন',
+                pickerSubtitle: 'এদের Meet71 খোলা আছে। ভয়েস বা ভিডিও বেছে বাজান।',
+                voice: 'ভয়েস',
+                video: 'ভিডিও',
+                calling: 'কল করা হচ্ছে…',
+                callFailed: 'কল শুরু করা যায়নি',
+            },
         },
         voiceNavWidget: {
             startAria: "ভয়েস নেভিগেশন — পেজের নাম বলুন",

@@ -2,7 +2,7 @@ import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { GUARDS_METADATA, INTERCEPTORS_METADATA } from '@nestjs/common/constants';
 import request from 'supertest';
-import { StorePermission } from '@erp71/shared-types';
+import { StorePermission, TENANT_ROLE_TEMPLATE_BY_KEY } from '@erp71/shared-types';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { STORE_PERMISSIONS_KEY } from '../auth/store-permission.decorator';
@@ -130,19 +130,26 @@ describe('BoardsController permission-to-route mapping (access control surface)'
         resolveBoard: [StorePermission.VIEW_PROJECTS],
         listColumns: [StorePermission.VIEW_PROJECTS],
 
+        // The board itself: shared furniture, so the project-management
+        // permission.
         create: [StorePermission.MANAGE_PROJECTS],
         update: [StorePermission.MANAGE_PROJECTS],
         remove: [StorePermission.MANAGE_PROJECTS],
-        addTasks: [StorePermission.MANAGE_PROJECTS],
-        removeTask: [StorePermission.MANAGE_PROJECTS],
-        moveCard: [StorePermission.MANAGE_PROJECTS],
+
+        // The cards on it are task work: a Project User (MANAGE_PROJECT_TASKS,
+        // no MANAGE_PROJECTS) must be able to work a board without being made
+        // a project manager. Putting MANAGE_PROJECTS back on any of these locks
+        // them out of their own board again.
+        addTasks: [StorePermission.MANAGE_PROJECT_TASKS],
+        removeTask: [StorePermission.MANAGE_PROJECT_TASKS],
+        moveCard: [StorePermission.MANAGE_PROJECT_TASKS],
 
         // Doing a thing to many cards is the same permission as doing it to
         // one; ordering a column's cards is moving cards, not changing the
         // column's shape, so none of these three take the settings permission.
-        moveCards: [StorePermission.MANAGE_PROJECTS],
-        removeCards: [StorePermission.MANAGE_PROJECTS],
-        orderColumnCards: [StorePermission.MANAGE_PROJECTS],
+        moveCards: [StorePermission.MANAGE_PROJECT_TASKS],
+        removeCards: [StorePermission.MANAGE_PROJECT_TASKS],
+        orderColumnCards: [StorePermission.MANAGE_PROJECT_TASKS],
 
         // The board's background, not the reader's: everyone who opens the
         // board sees it, so setting it takes the same permission as renaming
@@ -150,10 +157,9 @@ describe('BoardsController permission-to-route mapping (access control surface)'
         setBackgroundImage: [StorePermission.MANAGE_PROJECTS],
         clearBackground: [StorePermission.MANAGE_PROJECTS],
 
-        // Both halves of what it does: creates a task and puts it on a board.
-        // Dropping MANAGE_PROJECT_TASKS here would turn this route into a way
-        // to create tasks without the permission that governs creating them.
-        createCard: [StorePermission.MANAGE_PROJECTS, StorePermission.MANAGE_PROJECT_TASKS],
+        // Creates a task, so the task-creation permission — never less, or this
+        // route becomes a way to create tasks without it.
+        createCard: [StorePermission.MANAGE_PROJECT_TASKS],
 
         createColumn: [StorePermission.MANAGE_PROJECT_SETTINGS],
         updateColumn: [StorePermission.MANAGE_PROJECT_SETTINGS],
@@ -184,5 +190,34 @@ describe('BoardsController permission-to-route mapping (access control surface)'
         expect(interceptorsOn(BoardsController)).toEqual(
             expect.arrayContaining([TenantInterceptor]),
         );
+    });
+});
+
+describe('BoardsController and the built-in Projects roles', () => {
+    const CARD_ROUTES = [
+        'createCard',
+        'addTasks',
+        'moveCard',
+        'moveCards',
+        'orderColumnCards',
+        'removeTask',
+        'removeCards',
+    ];
+    const BOARD_ROUTES = ['create', 'update', 'remove', 'setBackgroundImage', 'clearBackground'];
+
+    const projectUser = new Set<string>(TENANT_ROLE_TEMPLATE_BY_KEY['project_user'].permissions);
+    const holds = (method: string) =>
+        permissionsOn(BoardsController, method).every((p) => projectUser.has(p));
+
+    // The reported bug: a Project User composing a card was refused for want of
+    // MANAGE_PROJECTS. Checked against the role itself, not a copy of its
+    // permissions, so narrowing the role breaks this as surely as widening a
+    // route does.
+    it.each(CARD_ROUTES)('a Project User may %s', (method) => {
+        expect(holds(method)).toBe(true);
+    });
+
+    it.each(BOARD_ROUTES)('a Project User may not %s the board itself', (method) => {
+        expect(holds(method)).toBe(false);
     });
 });
