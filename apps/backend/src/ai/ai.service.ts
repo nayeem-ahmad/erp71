@@ -126,6 +126,18 @@ type OpenRouterChatResponse = {
 };
 
 /**
+ * Extra flags for a single completion. Structured extractors (lead generation,
+ * blog drafts) pass `json: true` and `reasoning: false` so a thinking model
+ * cannot spend the whole `max_tokens` budget on hidden reasoning and return
+ * empty `content` — OpenRouter reports that as finish_reason=length, and the
+ * caller then surfaces "AI returned an invalid response".
+ */
+export type CompleteOptions = {
+    json?: boolean;
+    reasoning?: boolean;
+};
+
+/**
  * The fields a business card can yield. Every one is optional — cards routinely
  * omit a mobile, a company, or an address, and a missing field has to come back
  * as absent rather than as an invented value the user then has to notice.
@@ -784,6 +796,7 @@ Rules:
         systemPrompt: string,
         userMessage: string,
         maxTokens = 512,
+        options?: CompleteOptions,
     ): Promise<{ text: string; usage: OpenRouterUsage; model: string }> {
         const apiKey = await this.getApiKey();
         if (!apiKey) {
@@ -791,7 +804,14 @@ Rules:
         }
 
         const normalizedModel = this.normalizeModel(model);
-        const { text, usage } = await this.callOpenRouter(apiKey, normalizedModel, systemPrompt, userMessage, maxTokens);
+        const { text, usage } = await this.callOpenRouter(
+            apiKey,
+            normalizedModel,
+            systemPrompt,
+            userMessage,
+            maxTokens,
+            options,
+        );
         return { text, usage, model: normalizedModel };
     }
 
@@ -1015,9 +1035,22 @@ Rules:
         systemPrompt: string,
         userMessage: string,
         maxTokens: number,
+        options?: CompleteOptions,
     ): Promise<{ text: string; usage: OpenRouterUsage }> {
         const referer = process.env.FRONTEND_URL ?? 'https://erp71.com';
         const title = process.env.OPENROUTER_APP_NAME ?? 'ERP71';
+
+        const payload: Record<string, unknown> = {
+            model,
+            max_tokens: maxTokens,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userMessage },
+            ],
+        };
+        if (options?.json) payload.response_format = { type: 'json_object' };
+        if (options?.reasoning === false) payload.reasoning = { enabled: false };
+        if (options?.reasoning === true) payload.reasoning = { enabled: true };
 
         let response: Response;
         try {
@@ -1029,14 +1062,7 @@ Rules:
                     'HTTP-Referer': referer,
                     'X-OpenRouter-Title': title,
                 },
-                body: JSON.stringify({
-                    model,
-                    max_tokens: maxTokens,
-                    messages: [
-                        { role: 'system', content: systemPrompt },
-                        { role: 'user', content: userMessage },
-                    ],
-                }),
+                body: JSON.stringify(payload),
             });
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);

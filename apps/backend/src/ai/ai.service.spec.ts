@@ -44,3 +44,70 @@ describe('AiService.completeUnbilled', () => {
         );
     });
 });
+
+/**
+ * Structured callers (lead generation, blog drafts) need a JSON object and
+ * cannot spend the token budget on hidden reasoning. An empty `content` with
+ * finish_reason=length is how OpenRouter reports that a reasoning model ate
+ * max_tokens thinking — the user then sees "invalid response".
+ */
+describe('AiService.completeUnbilled JSON extract options', () => {
+    const originalFetch = global.fetch;
+
+    afterEach(() => {
+        global.fetch = originalFetch;
+        delete process.env.OPENROUTER_API_KEY;
+    });
+
+    it('sends response_format=json_object and reasoning.enabled=false when asked', async () => {
+        process.env.OPENROUTER_API_KEY = 'test-key';
+        const fetchMock = jest.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({
+                choices: [{ message: { content: '{"ok":true}' } }],
+                usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+            }),
+        });
+        global.fetch = fetchMock as unknown as typeof fetch;
+
+        const service = new AiService(
+            { aiUsageLog: { create: jest.fn() } } as any,
+            { getRawValue: jest.fn().mockResolvedValue(null) } as any,
+            {} as any,
+        );
+
+        await service.completeUnbilled('anthropic/claude-haiku-4.5', 'system', 'user', 4096, {
+            json: true,
+            reasoning: false,
+        });
+
+        const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
+        expect(payload.response_format).toEqual({ type: 'json_object' });
+        expect(payload.reasoning).toEqual({ enabled: false });
+        expect(payload.max_tokens).toBe(4096);
+    });
+
+    it('omits those flags on an ordinary completion', async () => {
+        process.env.OPENROUTER_API_KEY = 'test-key';
+        const fetchMock = jest.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({
+                choices: [{ message: { content: 'ok' } }],
+                usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+            }),
+        });
+        global.fetch = fetchMock as unknown as typeof fetch;
+
+        const service = new AiService(
+            { aiUsageLog: { create: jest.fn() } } as any,
+            { getRawValue: jest.fn().mockResolvedValue(null) } as any,
+            {} as any,
+        );
+
+        await service.completeUnbilled('anthropic/claude-haiku-4.5', 'system', 'user', 100);
+
+        const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
+        expect(payload.response_format).toBeUndefined();
+        expect(payload.reasoning).toBeUndefined();
+    });
+});
