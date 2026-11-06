@@ -1,18 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { PageShell, PageHeader, Select } from '@/components/ui';
-import DataTable from '@/components/data-table/DataTable';
+import { CalendarCheck, CalendarX, Lock, Percent, Plane, Timer } from 'lucide-react';
+import { PageShell, PageHeader } from '@/components/ui';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import ReportTile from '@/components/hr/ReportTile';
-import MonthRangeFilter, {
-    monthRangePreset,
-    type MonthRange,
-    type MonthRangePreset,
-} from '@/components/hr/MonthRangeFilter';
+import GroupByChip from '@/components/hr/GroupByChip';
+import { MONTH_RANGE_PRESETS, monthRangeFromDates } from '@/components/hr/month-range';
+import { createdRangeFromPreset, type CreatedRange } from '@/lib/created-range';
 
 type GroupBy = 'employee' | 'department' | 'designation' | 'month';
 
@@ -45,16 +43,19 @@ interface Summary {
 }
 
 const GROUPS: GroupBy[] = ['employee', 'department', 'designation', 'month'];
+const defaultPeriod = () => createdRangeFromPreset('last3Months');
 
 export default function HrAttendanceReportPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const r = t.hr.reports;
     const c = r.common;
 
-    const [preset, setPreset] = useState<MonthRangePreset>('3');
-    const [range, setRange] = useState<MonthRange>(() => monthRangePreset('3'));
+    // A month-grained report always covers some months: cleared, the period
+    // goes back to the last three.
+    const [period, setPeriod] = useState<CreatedRange>(defaultPeriod);
+    const range = useMemo(() => monthRangeFromDates(period), [period]);
     const [groupBy, setGroupBy] = useState<GroupBy>('employee');
-    const [departmentId, setDepartmentId] = useState('');
+    const [departmentId, setDepartmentId] = useState<string | null>(null);
     const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
     const [rows, setRows] = useState<Row[]>([]);
     const [summary, setSummary] = useState<Summary | null>(null);
@@ -97,9 +98,9 @@ export default function HrAttendanceReportPage() {
                 accessorKey: 'label',
                 cell: ({ row }: { row: { original: Row } }) => (
                     <div className="min-w-0">
-                        <span className="font-medium">{row.original.label}</span>
+                        <span>{row.original.label}</span>
                         {row.original.sublabel ? (
-                            <span className="block truncate text-xs text-gray-500">
+                            <span className="block truncate text-gray-500">
                                 {row.original.sublabel}
                             </span>
                         ) : null}
@@ -110,7 +111,7 @@ export default function HrAttendanceReportPage() {
                 id: 'scheduledDays',
                 header: r.attendance.columns.scheduled,
                 accessorKey: 'scheduledDays',
-                meta: { hideOnMobile: true },
+                meta: { hideOnMobile: true, align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
                     <span className="tabular-nums">{row.original.scheduledDays}</span>
                 ),
@@ -119,16 +120,16 @@ export default function HrAttendanceReportPage() {
                 id: 'presentDays',
                 header: r.attendance.columns.present,
                 accessorKey: 'presentDays',
+                meta: { align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
-                    <span className="font-semibold tabular-nums text-blue-600">
-                        {row.original.presentDays}
-                    </span>
+                    <span className="tabular-nums">{row.original.presentDays}</span>
                 ),
             },
             {
                 id: 'absentDays',
                 header: r.attendance.columns.absent,
                 accessorKey: 'absentDays',
+                meta: { align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
                     <span
                         className={`tabular-nums ${row.original.absentDays > 0 ? 'text-red-600' : ''}`}
@@ -141,7 +142,7 @@ export default function HrAttendanceReportPage() {
                 id: 'leaveDays',
                 header: r.attendance.columns.leave,
                 accessorKey: 'leaveDays',
-                meta: { hideOnMobile: true },
+                meta: { hideOnMobile: true, align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
                     <span className="tabular-nums">{row.original.leaveDays}</span>
                 ),
@@ -150,7 +151,7 @@ export default function HrAttendanceReportPage() {
                 id: 'lateDays',
                 header: r.attendance.columns.late,
                 accessorKey: 'lateDays',
-                meta: { hideOnMobile: true },
+                meta: { hideOnMobile: true, align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
                     <span
                         className={`tabular-nums ${row.original.lateDays > 0 ? 'text-amber-600' : ''}`}
@@ -163,7 +164,7 @@ export default function HrAttendanceReportPage() {
                 id: 'workedHours',
                 header: r.attendance.columns.worked,
                 accessorKey: 'workedHours',
-                meta: { hideOnMobile: true },
+                meta: { hideOnMobile: true, align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
                     <span className="tabular-nums">{row.original.workedHours.toFixed(1)}</span>
                 ),
@@ -172,7 +173,7 @@ export default function HrAttendanceReportPage() {
                 id: 'overtimeHours',
                 header: r.attendance.columns.overtime,
                 accessorKey: 'overtimeHours',
-                meta: { hideOnMobile: true },
+                meta: { hideOnMobile: true, align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
                     <span className="tabular-nums">{row.original.overtimeHours.toFixed(1)}</span>
                 ),
@@ -189,7 +190,7 @@ export default function HrAttendanceReportPage() {
                                 style={{ width: `${Math.min(row.original.attendanceRate ?? 0, 100)}%` }}
                             />
                         </div>
-                        <span className="w-12 text-end text-xs tabular-nums text-gray-600">
+                        <span className="w-12 text-end tabular-nums text-gray-600">
                             {row.original.attendanceRate == null
                                 ? '—'
                                 : `${row.original.attendanceRate.toFixed(1)}%`}
@@ -200,6 +201,54 @@ export default function HrAttendanceReportPage() {
         ],
         [c, r, groupBy],
     );
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'period',
+            type: 'date-range',
+            label: t.hr.listUi.period,
+            value: period,
+            onChange: (next) => setPeriod(next ?? defaultPeriod()),
+            presets: MONTH_RANGE_PRESETS,
+        },
+        {
+            id: 'department',
+            type: 'select',
+            label: c.department,
+            value: departmentId,
+            onChange: setDepartmentId,
+            options: departments.map((department) => ({ value: department.id, label: department.name })),
+        },
+    ], [t, c, period, departmentId, departments]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const items: ListStat[] = [
+            {
+                id: 'rate',
+                icon: <Percent aria-hidden />,
+                label: r.attendance.kpi.rate,
+                value: summary?.attendanceRate == null ? '—' : `${summary.attendanceRate.toFixed(1)}%`,
+            },
+            { id: 'present', icon: <CalendarCheck aria-hidden />, label: r.attendance.kpi.present, value: n(summary?.presentDays ?? 0) },
+            {
+                id: 'absent',
+                icon: <CalendarX aria-hidden />,
+                label: r.attendance.kpi.absent,
+                value: n(summary?.absentDays ?? 0),
+                tone: (summary?.absentDays ?? 0) > 0 ? 'warning' : 'default',
+            },
+            { id: 'leave', icon: <Plane aria-hidden />, label: r.attendance.kpi.leave, value: n(summary?.leaveDays ?? 0) },
+            { id: 'overtime', icon: <Timer aria-hidden />, label: r.attendance.kpi.overtime, value: (summary?.overtimeHours ?? 0).toFixed(1) },
+            {
+                id: 'frozen',
+                icon: <Lock aria-hidden />,
+                label: r.attendance.kpi.frozen,
+                value: `${summary?.frozenMonths ?? 0}/${summary?.employeeMonths ?? 0}`,
+            },
+        ];
+        return { items, loading: loading && !summary, label: t.hr.listUi.reportStats };
+    }, [summary, loading, locale, r, t]);
 
     return (
         <PageShell>
@@ -214,62 +263,7 @@ export default function HrAttendanceReportPage() {
                 )}
             />
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
-                <ReportTile
-                    label={r.attendance.kpi.rate}
-                    value={summary?.attendanceRate == null ? '—' : `${summary.attendanceRate.toFixed(1)}%`}
-                    accent
-                />
-                <ReportTile label={r.attendance.kpi.present} value={String(summary?.presentDays ?? 0)} />
-                <ReportTile label={r.attendance.kpi.absent} value={String(summary?.absentDays ?? 0)} />
-                <ReportTile label={r.attendance.kpi.leave} value={String(summary?.leaveDays ?? 0)} />
-                <ReportTile
-                    label={r.attendance.kpi.overtime}
-                    value={(summary?.overtimeHours ?? 0).toFixed(1)}
-                />
-                <ReportTile
-                    label={r.attendance.kpi.frozen}
-                    value={`${summary?.frozenMonths ?? 0}/${summary?.employeeMonths ?? 0}`}
-                    hint={r.attendance.frozenHint}
-                />
-            </div>
-
-            <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
-                <MonthRangeFilter
-                    preset={preset}
-                    range={range}
-                    onPresetChange={setPreset}
-                    onRangeChange={setRange}
-                    labels={c}
-                />
-                <Select
-                    value={groupBy}
-                    onChange={(event) => setGroupBy(event.target.value as GroupBy)}
-                    className="md:w-48"
-                    aria-label={c.groupBy}
-                >
-                    {GROUPS.map((group) => (
-                        <option key={group} value={group}>
-                            {`${c.groupBy}: ${c.group[group]}`}
-                        </option>
-                    ))}
-                </Select>
-                <Select
-                    value={departmentId}
-                    onChange={(event) => setDepartmentId(event.target.value)}
-                    className="md:w-48"
-                    aria-label={c.department}
-                >
-                    <option value="">{c.allDepartments}</option>
-                    {departments.map((department) => (
-                        <option key={department.id} value={department.id}>
-                            {department.name}
-                        </option>
-                    ))}
-                </Select>
-            </div>
-
-            <p className="text-xs text-gray-500">{r.attendance.hint}</p>
+            <p className="text-xs text-gray-500">{r.attendance.hint} {r.attendance.frozenHint}</p>
 
             <DataTable
                 title={r.attendance.title}
@@ -278,6 +272,19 @@ export default function HrAttendanceReportPage() {
                 data={rows}
                 isLoading={loading}
                 emptyMessage={c.empty}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+                toolbarActions={(
+                    <GroupByChip<GroupBy>
+                        label={c.groupBy}
+                        value={groupBy}
+                        onChange={setGroupBy}
+                        options={GROUPS.map((group) => ({ value: group, label: c.group[group] }))}
+                    />
+                )}
             />
         </PageShell>
     );

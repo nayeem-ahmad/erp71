@@ -47,6 +47,15 @@ jest.mock('@/hooks/useMediaQuery', () => ({
     useIsMdUp: () => mockMdUp,
 }));
 
+/** A toolbar chip: a button that opens its own panel. */
+function chip(name: string | RegExp): HTMLElement {
+    const found = screen
+        .getAllByRole('button', { name })
+        .find((button) => button.getAttribute('aria-haspopup') === 'dialog');
+    if (!found) throw new Error(`No filter chip named ${String(name)}`);
+    return found;
+}
+
 const mockEmployees = [
     {
         id: 'emp-1',
@@ -176,21 +185,50 @@ describe('EmployeesPage', () => {
         render(<EmployeesPage />);
         await screen.findByText('Alice Rahman');
 
-        fireEvent.change(screen.getByRole('combobox', { name: 'Status' }), { target: { value: 'ACTIVE' } });
+        fireEvent.click(chip('Status'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Active' }));
 
         await waitFor(() => expect(screen.queryByText('Bob Hossain')).not.toBeInTheDocument());
         expect(screen.getByText('Alice Rahman')).toBeInTheDocument();
+        expect(chip(/Status: Active/)).toBeInTheDocument();
     });
 
-    it('filters by department from the toolbar', async () => {
+    it('leaves statuses out with "is none of"', async () => {
         mockMdUp = true;
         render(<EmployeesPage />);
         await screen.findByText('Alice Rahman');
 
-        fireEvent.change(screen.getByRole('combobox', { name: 'Department' }), { target: { value: 'Sales' } });
+        fireEvent.click(chip('Status'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Active' }));
+        fireEvent.click(screen.getByRole('button', { name: 'is none of' }));
 
-        await waitFor(() => expect(screen.queryByText('Bob Hossain')).not.toBeInTheDocument());
-        expect(screen.getByText('Alice Rahman')).toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByText('Alice Rahman')).not.toBeInTheDocument());
+        expect(screen.getByText('Bob Hossain')).toBeInTheDocument();
+    });
+
+    it('filters by department from the toolbar, including people with none', async () => {
+        mockMdUp = true;
+        render(<EmployeesPage />);
+        await screen.findByText('Alice Rahman');
+
+        fireEvent.click(chip('Department'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Unassigned' }));
+
+        await waitFor(() => expect(screen.queryByText('Alice Rahman')).not.toBeInTheDocument());
+        expect(screen.getByText('Bob Hossain')).toBeInTheDocument();
+    });
+
+    it('shows a summary strip that follows the filters', async () => {
+        mockMdUp = true;
+        render(<EmployeesPage />);
+        const strip = await screen.findByRole('region', { name: 'Employee summary' });
+        await screen.findByText('Alice Rahman');
+        expect(within(strip).getByText('Employees').parentElement).toHaveTextContent('2');
+
+        fireEvent.click(chip('Status'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Active' }));
+
+        await waitFor(() => expect(within(strip).getByText('Employees').parentElement).toHaveTextContent('1'));
     });
 
     it('shows statuses by name', async () => {

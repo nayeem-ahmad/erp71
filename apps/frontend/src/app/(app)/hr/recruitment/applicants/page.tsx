@@ -1,17 +1,27 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { FileText, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Calculator, FileText, Inbox, Pencil, Plus, Trash2, UserCheck, UserRound, Users } from 'lucide-react';
+import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
+import type { NumberCondition } from '@/lib/number-condition';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { useToastStore } from '@/lib/toast';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import {
-    Alert, Button, Field, FormFooter, FormGrid, Input, PageHeader, PageShell, StatusBadge, Textarea,
+    Alert, Button, ConfirmDialog, Field, FormFooter, FormGrid, Input, PageHeader, PageShell, StatusBadge, Textarea,
 } from '@/components/ui';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
-import { stageTone, type Applicant } from '../types';
+import { APPLICATION_STAGES, OPEN_STAGES, stageTone, type Applicant } from '../types';
+
+const columnHelper = createColumnHelper<Applicant>();
+/** The source chip's value for an applicant with none recorded. */
+const NONE = '__none__';
+const OPEN = new Set<string>(OPEN_STAGES);
 
 const blankForm = () => ({
     name: '',
@@ -35,12 +45,18 @@ const blankForm = () => ({
  * second application from the same person reuses this row instead of adding one.
  */
 export default function ApplicantsPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const copy = t.recruitment.applicants;
     const toast = useToastStore((state) => state.show);
 
     const [applicants, setApplicants] = useState<Applicant[]>([]);
     const [search, setSearch] = useState('');
+    const [sources, setSources] = useState<string[]>([]);
+    const [stages, setStages] = useState<string[]>([]);
+    const [experienceFilter, setExperienceFilter] = useState<NumberCondition | null>(null);
+    const [salaryFilter, setSalaryFilter] = useState<NumberCondition | null>(null);
+    const [applicationsFilter, setApplicationsFilter] = useState<NumberCondition | null>(null);
+    const [pendingDelete, setPendingDelete] = useState<Applicant | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
@@ -53,13 +69,15 @@ export default function ApplicantsPage() {
         setLoading(true);
         setError('');
         try {
-            setApplicants(await api.getApplicants(search || undefined) ?? []);
+            // Every applicant loads once; the toolbar narrows them here, so the
+            // strip counts the same people.
+            setApplicants(await api.getApplicants() ?? []);
         } catch (err: any) {
             setError(err?.message || copy.loadFailed);
         } finally {
             setLoading(false);
         }
-    }, [search, copy.loadFailed]);
+    }, [copy.loadFailed]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -119,16 +137,229 @@ export default function ApplicantsPage() {
         }
     };
 
-    const remove = async (applicant: Applicant) => {
-        if (!window.confirm(copy.deleteConfirm)) return;
+    const remove = async () => {
+        const applicant = pendingDelete;
+        if (!applicant) return;
         try {
             await api.deleteApplicant(applicant.id);
             toast('success', copy.deleted);
+            setPendingDelete(null);
             await load();
         } catch (err: any) {
             toast('error', err?.message || copy.deleteFailed);
         }
     };
+
+    const sourceOptions = useMemo(
+        () => [...new Set(applicants.map((a) => a.source?.trim()).filter((v): v is string => Boolean(v)))]
+            .sort((a, b) => a.localeCompare(b))
+            .map((value) => ({ value, label: value })),
+        [applicants],
+    );
+
+    const filtered = useMemo(
+        () => applicants.filter((a) => {
+            if (!matchesAnyOf(sources, a.source?.trim() || NONE)) return false;
+            if (stages.length && !(a.applications ?? []).some((app) => stages.includes(app.stage))) return false;
+            if (experienceFilter && (a.experience_years == null || !matchesNumberCondition(Number(a.experience_years), experienceFilter))) return false;
+            if (salaryFilter && (a.expected_salary == null || !matchesNumberCondition(Number(a.expected_salary), salaryFilter))) return false;
+            if (!matchesNumberCondition(a.application_count ?? a.applications?.length ?? 0, applicationsFilter)) return false;
+            return matchesSearch(
+                search,
+                a.name, a.phone, a.email, a.skills, a.source, a.current_company, a.current_designation,
+            );
+        }),
+        [applicants, sources, stages, experienceFilter, salaryFilter, applicationsFilter, search],
+    );
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'stage',
+            type: 'multi-select',
+            label: t.hr.listUi.stage,
+            value: stages,
+            onChange: setStages,
+            options: APPLICATION_STAGES.map((value) => ({ value, label: t.recruitment.stages[value] })),
+        },
+        {
+            id: 'source',
+            type: 'multi-select',
+            label: copy.columns.source,
+            value: sources,
+            onChange: setSources,
+            options: [{ value: NONE, label: t.hr.reports.common.unassigned }, ...sourceOptions],
+        },
+        {
+            id: 'experience',
+            type: 'number',
+            label: copy.columns.experience,
+            value: experienceFilter,
+            onChange: setExperienceFilter,
+        },
+        {
+            id: 'expectedSalary',
+            type: 'number',
+            label: copy.columns.expectedSalary,
+            value: salaryFilter,
+            onChange: setSalaryFilter,
+            money: true,
+        },
+        {
+            id: 'applications',
+            type: 'number',
+            label: copy.columns.applications,
+            value: applicationsFilter,
+            onChange: setApplicationsFilter,
+            more: true,
+        },
+    ], [t, copy, stages, sources, sourceOptions, experienceFilter, salaryFilter, applicationsFilter]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const salaries = filtered.map((a) => a.expected_salary).filter((v) => v != null).map(Number);
+        const items: ListStat[] = [
+            { id: 'count', icon: <Users aria-hidden />, label: copy.title, value: n(filtered.length) },
+            {
+                id: 'pipeline',
+                icon: <UserRound aria-hidden />,
+                label: t.recruitment.summary.inPipeline,
+                value: n(filtered.filter((a) => (a.applications ?? []).some((app) => OPEN.has(app.stage))).length),
+            },
+            {
+                id: 'hired',
+                icon: <UserCheck aria-hidden />,
+                label: t.recruitment.stages.HIRED,
+                value: n(filtered.filter((a) => (a.applications ?? []).some((app) => app.stage === 'HIRED')).length),
+            },
+            {
+                id: 'none',
+                icon: <Inbox aria-hidden />,
+                label: copy.noApplications,
+                value: n(filtered.filter((a) => (a.application_count ?? a.applications?.length ?? 0) === 0).length),
+            },
+            {
+                id: 'salary',
+                icon: <Calculator aria-hidden />,
+                label: t.hr.listUi.averageExpected,
+                value: salaries.length
+                    ? formatBDT(salaries.reduce((sum, v) => sum + v, 0) / salaries.length, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 })
+                    : '—',
+            },
+        ];
+        return { items, loading, label: t.hr.listUi.applicantsStats };
+    }, [filtered, loading, locale, copy, t]);
+
+    const columns: ColumnDef<Applicant, any>[] = useMemo(() => [
+        columnHelper.accessor('name', {
+            header: copy.columns.name,
+            cell: (info) => {
+                const applicant = info.row.original;
+                return (
+                    <div>
+                        <span className="block">{applicant.name}</span>
+                        {applicant.source && <span className="block text-gray-500">{applicant.source}</span>}
+                        {applicant.resume_url && (
+                            <a
+                                href={applicant.resume_url}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                            >
+                                <FileText className="h-3.5 w-3.5" />
+                                {copy.openResume}
+                            </a>
+                        )}
+                    </div>
+                );
+            },
+            size: 200,
+        }),
+        columnHelper.accessor('phone', {
+            header: copy.columns.contact,
+            cell: (info) => (
+                <div>
+                    <span className="block">{info.getValue()}</span>
+                    {info.row.original.email && <span className="block text-gray-500">{info.row.original.email}</span>}
+                </div>
+            ),
+            size: 180,
+        }),
+        columnHelper.accessor(
+            (row) => [row.current_designation, row.current_company].filter(Boolean).join(' · '),
+            {
+                id: 'current',
+                header: copy.columns.current,
+                cell: (info) => info.getValue() || '—',
+                size: 180,
+                meta: { hideOnMobile: true },
+            },
+        ),
+        columnHelper.accessor((row) => (row.experience_years == null ? -1 : Number(row.experience_years)), {
+            id: 'experience',
+            header: copy.columns.experience,
+            cell: (info) => (info.row.original.experience_years == null ? '—' : String(info.row.original.experience_years)),
+            size: 100,
+            meta: { hideOnMobile: true, align: 'end' },
+        }),
+        columnHelper.accessor((row) => (row.expected_salary == null ? -1 : Number(row.expected_salary)), {
+            id: 'expected_salary',
+            header: copy.columns.expectedSalary,
+            cell: (info) => {
+                const value = info.row.original.expected_salary;
+                return value == null ? '—' : formatBDT(Number(value), { locale });
+            },
+            size: 120,
+            meta: { hideOnMobile: true, align: 'end' },
+        }),
+        columnHelper.accessor((row) => row.application_count ?? row.applications?.length ?? 0, {
+            id: 'applications',
+            header: copy.columns.applications,
+            cell: (info) => {
+                const applicant = info.row.original;
+                return (
+                    <div>
+                        {applicant.applications?.length ? (
+                            <div className="flex flex-wrap gap-1">
+                                {applicant.applications.map((application) => (
+                                    <StatusBadge key={application.id} tone={stageTone(application.stage)}>
+                                        {application.jobPost?.title}: {t.recruitment.stages[application.stage]}
+                                    </StatusBadge>
+                                ))}
+                            </div>
+                        ) : (
+                            <span className="text-gray-400">{copy.noApplications}</span>
+                        )}
+                        {(applicant.application_count ?? 0) > (applicant.applications?.length ?? 0) && (
+                            <span className="mt-1 block text-gray-400">
+                                {formatMessage(copy.applicationCount, { count: applicant.application_count ?? 0 })}
+                            </span>
+                        )}
+                    </div>
+                );
+            },
+            size: 240,
+        }),
+        columnHelper.display({
+            id: 'actions',
+            header: t.common.actions,
+            cell: (info) => (
+                <RowActions>
+                    <RowActionButton icon={<Pencil />} label={copy.editTitle} onClick={() => openModal(info.row.original)} />
+                    <RowActionButton
+                        icon={<Trash2 />}
+                        label={t.common.delete}
+                        intent="danger"
+                        onClick={() => setPendingDelete(info.row.original)}
+                    />
+                </RowActions>
+            ),
+            enableSorting: false,
+            enableColumnFilter: false,
+            enableResizing: false,
+            size: 90,
+        }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    ], [t, copy, locale]);
 
     return (
         <PageShell>
@@ -151,103 +382,34 @@ export default function ApplicantsPage() {
 
             {error && <Alert tone="danger">{error}</Alert>}
 
-            <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={copy.searchPlaceholder}
-                className="w-full sm:w-80"
-                aria-label={copy.searchPlaceholder}
+            <DataTable<Applicant>
+                tableId="applicants"
+                columns={columns}
+                data={filtered}
+                title={copy.title}
+                isLoading={loading}
+                emptyMessage={applicants.length === 0 ? copy.empty : copy.emptyFiltered}
+                emptyIcon={<Users className="w-16 h-16 text-gray-200" />}
+                searchPlaceholder={copy.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
             />
 
-            {loading ? (
-                <p className="py-8 text-center text-sm text-gray-500">…</p>
-            ) : applicants.length === 0 ? (
-                <p className="rounded-lg border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
-                    {search ? copy.emptyFiltered : copy.empty}
-                </p>
-            ) : (
-                <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-                    <table className="w-full text-sm">
-                        <thead className="border-b border-gray-200 bg-gray-50 text-xs text-gray-500">
-                            <tr>
-                                <th className="p-2 text-start font-medium">{copy.columns.name}</th>
-                                <th className="p-2 text-start font-medium">{copy.columns.contact}</th>
-                                <th className="hidden p-2 text-start font-medium md:table-cell">{copy.columns.current}</th>
-                                <th className="hidden p-2 text-end font-medium lg:table-cell">{copy.columns.experience}</th>
-                                <th className="hidden p-2 text-end font-medium lg:table-cell">{copy.columns.expectedSalary}</th>
-                                <th className="p-2 text-start font-medium">{copy.columns.applications}</th>
-                                <th className="p-2" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {applicants.map((applicant) => (
-                                <tr key={applicant.id} className="border-b border-gray-100 last:border-0">
-                                    <td className="p-2">
-                                        <p className="font-medium text-gray-900">{applicant.name}</p>
-                                        {applicant.source && (
-                                            <p className="text-xs text-gray-500">{applicant.source}</p>
-                                        )}
-                                        {applicant.resume_url && (
-                                            <a
-                                                href={applicant.resume_url}
-                                                target="_blank"
-                                                rel="noreferrer noopener"
-                                                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
-                                            >
-                                                <FileText className="h-3.5 w-3.5" />
-                                                {copy.openResume}
-                                            </a>
-                                        )}
-                                    </td>
-                                    <td className="p-2 text-gray-600">
-                                        <p>{applicant.phone}</p>
-                                        {applicant.email && <p className="text-xs text-gray-500">{applicant.email}</p>}
-                                    </td>
-                                    <td className="hidden p-2 text-gray-600 md:table-cell">
-                                        {applicant.current_designation || applicant.current_company
-                                            ? [applicant.current_designation, applicant.current_company].filter(Boolean).join(' · ')
-                                            : '—'}
-                                    </td>
-                                    <td className="hidden p-2 text-end text-gray-600 lg:table-cell">
-                                        {applicant.experience_years == null ? '—' : String(applicant.experience_years)}
-                                    </td>
-                                    <td className="hidden p-2 text-end text-gray-600 lg:table-cell">
-                                        {applicant.expected_salary == null ? '—' : formatBDT(Number(applicant.expected_salary))}
-                                    </td>
-                                    <td className="p-2">
-                                        {applicant.applications?.length ? (
-                                            <div className="flex flex-wrap gap-1">
-                                                {applicant.applications.map((application) => (
-                                                    <StatusBadge key={application.id} tone={stageTone(application.stage)}>
-                                                        {application.jobPost?.title}: {t.recruitment.stages[application.stage]}
-                                                    </StatusBadge>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <span className="text-xs text-gray-400">{copy.noApplications}</span>
-                                        )}
-                                        {(applicant.application_count ?? 0) > (applicant.applications?.length ?? 0) && (
-                                            <p className="mt-1 text-xs text-gray-400">
-                                                {formatMessage(copy.applicationCount, { count: applicant.application_count ?? 0 })}
-                                            </p>
-                                        )}
-                                    </td>
-                                    <td className="p-2 text-end">
-                                        <div className="flex justify-end gap-1">
-                                            <Button variant="ghost" onClick={() => openModal(applicant)} aria-label={copy.editTitle}>
-                                                <Pencil className="h-4 w-4" />
-                                            </Button>
-                                            <Button variant="ghost" onClick={() => remove(applicant)} aria-label={copy.deleteConfirm}>
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+            <ConfirmDialog
+                open={pendingDelete !== null}
+                title={t.common.delete}
+                prompt={copy.deleteConfirm}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                danger
+                onConfirm={() => void remove()}
+                onCancel={() => setPendingDelete(null)}
+            />
 
             {modal.open && (
                 <ModalShell size="lg" onBackdropClick={() => setModal({ open: false, editing: null })}>

@@ -1,6 +1,6 @@
 'use client';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import AttendancePage from './page';
 
 jest.mock('@/lib/api', () => ({
@@ -164,12 +164,19 @@ describe('AttendancePage', () => {
         });
     });
 
-    it('renders date filter inputs', async () => {
+    it('opens on this month, asking the server for its first and last day', async () => {
+        const { api } = require('@/lib/api');
         render(<AttendancePage />);
-        // Named by `aria-label` rather than a visible caption, so the filter row
-        // fits on one line on a phone without losing its accessible names.
-        expect(await screen.findByLabelText('From')).toBeInTheDocument();
-        expect(screen.getByLabelText('To')).toBeInTheDocument();
+        await waitFor(() => expect(api.getAttendance).toHaveBeenCalledTimes(1));
+        const params = api.getAttendance.mock.calls[0][0];
+        expect(params.startDate).toMatch(/^\d{4}-\d{2}-01$/);
+        expect(params.endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('shows a summary strip of the records on screen', async () => {
+        render(<AttendancePage />);
+        const strip = await screen.findByRole('region', { name: 'Attendance summary' });
+        await waitFor(() => expect(within(strip).getByText('Records').parentElement).toHaveTextContent(String(mockRecords.length)));
     });
 
     it('shows empty state when no records exist', async () => {

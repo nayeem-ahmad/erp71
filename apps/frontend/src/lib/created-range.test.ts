@@ -36,6 +36,15 @@ describe('createdRangeFromPreset', () => {
     });
 });
 
+describe('createdRangeFromPreset — month presets', () => {
+    it('walks back whole months to the first, this month included', () => {
+        expect(createdRangeFromPreset('last3Months', NOW)).toEqual({ from: '2026-06-01', to: '2026-08-19' });
+        expect(createdRangeFromPreset('last6Months', NOW)).toEqual({ from: '2026-03-01', to: '2026-08-19' });
+        expect(createdRangeFromPreset('last12Months', NOW)).toEqual({ from: '2025-09-01', to: '2026-08-19' });
+        expect(createdRangeFromPreset('thisYear', NOW)).toEqual({ from: '2026-01-01', to: '2026-08-19' });
+    });
+});
+
 describe('formatCreatedRangeLabel', () => {
     it('returns the empty-state label when nothing is picked', () => {
         expect(formatCreatedRangeLabel(null, 'Any time')).toBe('Any time');

@@ -2,8 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { BadgeCheck, Plus, Pencil, Trash2, Upload, Power } from 'lucide-react';
-import { DataTable, type ListFilter } from '@/components/data-table';
+import { BadgeCheck, Plus, Pencil, Trash2, Upload, Power, CheckCircle2, CircleOff, Users, UserMinus } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
+import type { NumberCondition } from '@/lib/number-condition';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
 import { api, type DesignationInput } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
@@ -29,6 +32,11 @@ interface FormState {
     remarks: string;
 }
 
+/** The department and level chips' value for a designation without one. */
+const NONE = '__none__';
+
+const statusOf = (row: { is_active?: boolean }) => (row.is_active === false ? 'inactive' : 'active');
+
 const EMPTY_FORM: FormState = {
     code: '', name: '', department_id: '', level_id: '', reports_to_id: '', reports_to_note: '', remarks: '',
 };
@@ -52,7 +60,7 @@ function formFor(d: Designation): FormState {
  * already names it changes.
  */
 export default function DesignationsPage() {
-    const { t, fmt } = useI18n();
+    const { t, fmt, locale } = useI18n();
     const o = t.orgStructure;
     const [designations, setDesignations] = useState<Designation[]>([]);
     const [departments, setDepartments] = useState<Department[]>([]);
@@ -68,6 +76,11 @@ export default function DesignationsPage() {
     const [deleteTarget, setDeleteTarget] = useState<Designation | null>(null);
     const [statusTarget, setStatusTarget] = useState<Designation | null>(null);
     const [busy, setBusy] = useState(false);
+    const [search, setSearch] = useState('');
+    const [departmentIds, setDepartmentIds] = useState<string[]>([]);
+    const [levelIds, setLevelIds] = useState<string[]>([]);
+    const [statusFilter, setStatusFilter] = useState<string[]>([]);
+    const [employeeCount, setEmployeeCount] = useState<NumberCondition | null>(null);
 
     useEffect(() => {
         void load();
@@ -187,39 +200,88 @@ export default function DesignationsPage() {
         }
     };
 
+    const filtered = useMemo(
+        () => designations.filter((d) => {
+            if (!matchesAnyOf(departmentIds, d.department_id || NONE)) return false;
+            if (!matchesAnyOf(levelIds, d.level_id || NONE)) return false;
+            if (!matchesAnyOf(statusFilter, statusOf(d))) return false;
+            if (!matchesNumberCondition(d._count?.employees ?? 0, employeeCount)) return false;
+            return matchesSearch(
+                search,
+                d.code, d.name, d.remarks, codeLabel(d.department), d.level?.name, reportsToLabel(d),
+            );
+        }),
+        [designations, departmentIds, levelIds, statusFilter, employeeCount, search],
+    );
+
     const filters = useMemo<ListFilter[]>(() => [
         {
             id: 'department',
-            type: 'select',
+            type: 'multi-select',
             label: o.department,
-            columnId: 'department',
-            options: departments.map((d) => ({ value: d.id, label: codeLabel(d) })),
+            value: departmentIds,
+            onChange: setDepartmentIds,
+            options: [
+                { value: NONE, label: t.hr.reports.common.unassigned },
+                ...departments.map((d) => ({ value: d.id, label: codeLabel(d) })),
+            ],
         },
         {
             id: 'level',
-            type: 'select',
+            type: 'multi-select',
             label: o.level,
-            columnId: 'level',
-            options: levels.map((l) => ({ value: l.id, label: levelLabel(l, o.levelWord) })),
+            value: levelIds,
+            onChange: setLevelIds,
+            options: [
+                { value: NONE, label: t.hr.reports.common.unassigned },
+                ...levels.map((l) => ({ value: l.id, label: levelLabel(l, o.levelWord) })),
+            ],
         },
         {
             id: 'status',
-            type: 'select',
+            type: 'multi-select',
             label: o.status,
-            columnId: 'status',
+            value: statusFilter,
+            onChange: setStatusFilter,
             options: [
                 { value: 'active', label: o.active },
                 { value: 'inactive', label: o.inactive },
             ],
         },
-    ], [o, departments, levels]);
+        {
+            id: 'employees',
+            type: 'number',
+            label: o.employees,
+            value: employeeCount,
+            onChange: setEmployeeCount,
+        },
+    ], [o, t, departments, levels, departmentIds, levelIds, statusFilter, employeeCount]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const inactive = filtered.filter((d) => statusOf(d) === 'inactive').length;
+        const vacant = filtered.filter((d) => statusOf(d) === 'active' && (d._count?.employees ?? 0) === 0).length;
+        const items: ListStat[] = [
+            { id: 'count', icon: <BadgeCheck aria-hidden />, label: t.designations.title, value: n(filtered.length) },
+            { id: 'active', icon: <CheckCircle2 aria-hidden />, label: o.active, value: n(filtered.length - inactive) },
+            { id: 'inactive', icon: <CircleOff aria-hidden />, label: o.inactive, value: n(inactive) },
+            {
+                id: 'employees',
+                icon: <Users aria-hidden />,
+                label: o.employees,
+                value: n(filtered.reduce((sum, d) => sum + (d._count?.employees ?? 0), 0)),
+            },
+            { id: 'vacant', icon: <UserMinus aria-hidden />, label: t.hr.listUi.unfilled, value: n(vacant) },
+        ];
+        return { items, loading, label: t.hr.listUi.designationsStats };
+    }, [filtered, loading, locale, o, t]);
 
     const columns: ColumnDef<Designation, any>[] = useMemo(
         () => [
             columnHelper.accessor((row) => row.code ?? '', {
                 id: 'code',
                 header: o.code,
-                cell: (info) => <span className="text-sm font-medium text-gray-900 whitespace-nowrap">{info.getValue() || '—'}</span>,
+                cell: (info) => <span className="whitespace-nowrap">{info.getValue() || '—'}</span>,
                 size: 100,
             }),
             columnHelper.accessor('name', {
@@ -228,8 +290,8 @@ export default function DesignationsPage() {
                     const d = info.row.original;
                     return (
                         <div className="min-w-0">
-                            <span className="block text-sm font-medium text-gray-900">{d.name}</span>
-                            {d.remarks && <span className="block text-xs text-gray-500 truncate">{d.remarks}</span>}
+                            <span className="block">{d.name}</span>
+                            {d.remarks && <span className="block text-gray-500 truncate">{d.remarks}</span>}
                         </div>
                     );
                 },
@@ -240,8 +302,7 @@ export default function DesignationsPage() {
             columnHelper.accessor((row) => row.department_id ?? '', {
                 id: 'department',
                 header: o.department,
-                cell: (info) => <span className="text-sm text-gray-700">{codeLabel(info.row.original.department) || '—'}</span>,
-                filterFn: 'equalsString',
+                cell: (info) => codeLabel(info.row.original.department) || '—',
                 sortingFn: (a, b) => codeLabel(a.original.department).localeCompare(codeLabel(b.original.department)),
                 size: 200,
                 meta: { hideOnMobile: true },
@@ -252,10 +313,9 @@ export default function DesignationsPage() {
                 cell: (info) => {
                     const level = info.row.original.level;
                     return level
-                        ? <span className="text-sm text-gray-700"><span className="tabular-nums">{level.level}</span> · {level.name}</span>
-                        : <span className="text-sm text-gray-400">—</span>;
+                        ? <span><span className="tabular-nums">{level.level}</span> · {level.name}</span>
+                        : <span className="text-gray-400">—</span>;
                 },
-                filterFn: 'equalsString',
                 sortingFn: (a, b) => (a.original.level?.level ?? 99) - (b.original.level?.level ?? 99),
                 size: 200,
                 meta: { hideOnMobile: true },
@@ -263,25 +323,23 @@ export default function DesignationsPage() {
             columnHelper.accessor((row) => reportsToLabel(row), {
                 id: 'reports_to',
                 header: o.reportsTo,
-                cell: (info) => <span className="text-sm text-gray-700">{info.getValue() || '—'}</span>,
+                cell: (info) => info.getValue() || '—',
                 size: 220,
                 meta: { hideOnMobile: true },
             }),
             columnHelper.accessor((row) => row._count?.employees ?? 0, {
                 id: 'employees',
                 header: o.employees,
-                cell: (info) => <span className="text-sm text-gray-700 tabular-nums">{info.getValue()}</span>,
-                enableColumnFilter: false,
+                cell: (info) => info.getValue(),
                 size: 100,
-                meta: { hideOnMobile: true },
+                meta: { hideOnMobile: true, align: 'end' },
             }),
-            columnHelper.accessor((row) => (row.is_active === false ? 'inactive' : 'active'), {
+            columnHelper.accessor(statusOf, {
                 id: 'status',
                 header: o.status,
                 cell: (info) => info.getValue() === 'active'
                     ? <StatusBadge tone="success">{o.active}</StatusBadge>
                     : <StatusBadge tone="neutral">{o.inactive}</StatusBadge>,
-                filterFn: 'equalsString',
                 size: 110,
             }),
             columnHelper.display({
@@ -293,38 +351,26 @@ export default function DesignationsPage() {
                         || designations.some((other) => other.reports_to_id === d.id);
                     const active = d.is_active !== false;
                     return (
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={() => openEdit(d)}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                title={t.common.edit}
-                                aria-label={`${t.common.edit} ${d.name}`}
-                            >
-                                <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
+                        <RowActions>
+                            <RowActionButton icon={<Pencil />} label={t.common.edit} onClick={() => openEdit(d)} />
+                            <RowActionButton
+                                icon={<Power />}
+                                label={active ? o.deactivate : o.activate}
+                                intent={active ? 'warning' : 'success'}
                                 onClick={() => setStatusTarget(d)}
-                                className={`p-1.5 rounded-lg transition-colors ${active
-                                    ? 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'
-                                    : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
-                                title={active ? o.deactivate : o.activate}
-                                aria-label={`${active ? o.deactivate : o.activate} ${d.name}`}
-                            >
-                                <Power className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={() => setDeleteTarget(d)}
+                            />
+                            <RowActionButton
+                                icon={<Trash2 />}
+                                label={inUse ? o.inUse : t.common.delete}
+                                intent="danger"
                                 disabled={inUse}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:cursor-not-allowed"
-                                title={inUse ? o.inUse : t.common.delete}
-                                aria-label={`${t.common.delete} ${d.name}`}
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        </div>
+                                onClick={() => setDeleteTarget(d)}
+                            />
+                        </RowActions>
                     );
                 },
                 enableSorting: false,
+                enableColumnFilter: false,
                 enableResizing: false,
                 size: 120,
             }),
@@ -365,13 +411,19 @@ export default function DesignationsPage() {
             <DataTable<Designation>
                 tableId="designations"
                 columns={columns}
-                data={designations}
+                data={filtered}
                 title={t.designations.title}
                 isLoading={loading}
                 emptyMessage={t.designations.emptyMessage}
                 emptyIcon={<BadgeCheck className="w-16 h-16 text-gray-200" />}
                 searchPlaceholder={t.designations.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={setSearch}
                 filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
             />
 
             {modalOpen && (

@@ -6,7 +6,17 @@ import { getActiveTimeZone } from '@/lib/format';
  * `YYYY-MM-DDTHH:mm` — both on the workspace's own wall clock.
  */
 export type CreatedRange = { from?: string; to?: string };
-export type CreatedRangePreset = 'today' | 'yesterday' | 'last7' | 'last30' | 'thisMonth';
+export type CreatedRangePreset =
+    | 'today'
+    | 'yesterday'
+    | 'last7'
+    | 'last30'
+    | 'thisMonth'
+    /** Whole months back to the first of the month, this month included — for month-grained reports. */
+    | 'last3Months'
+    | 'last6Months'
+    | 'last12Months'
+    | 'thisYear';
 
 /**
  * Today, as the workspace's own calendar reads it.
@@ -42,6 +52,12 @@ export function createdRangeFromPreset(
     }
     if (preset === 'last7') return { from: addCalendarDays(today, -6), to: today };
     if (preset === 'last30') return { from: addCalendarDays(today, -29), to: today };
+    if (preset === 'thisYear') return { from: `${today.slice(0, 4)}-01-01`, to: today };
+    const monthsBack = { last3Months: 2, last6Months: 5, last12Months: 11 }[preset as string];
+    if (monthsBack !== undefined) {
+        const [year, month] = today.split('-').map(Number);
+        return { from: new Date(Date.UTC(year, month - 1 - monthsBack, 1)).toISOString().slice(0, 10), to: today };
+    }
     return { from: `${today.slice(0, 8)}01`, to: today };
 }
 

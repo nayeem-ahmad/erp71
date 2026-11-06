@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { LayoutList, Plus, Pencil, Trash2, Power, Upload } from 'lucide-react';
-import { DataTable, type ListFilter } from '@/components/data-table';
+import { LayoutList, Plus, Pencil, Trash2, Power, Upload, CheckCircle2, CircleOff, BadgeCheck } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
+import { matchesAnyOf, matchesSearch } from '@/lib/list-filter';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
@@ -16,12 +18,14 @@ import OrgImportDialog from '../OrgImportDialog';
 
 const columnHelper = createColumnHelper<DesignationLevel>();
 
+const statusOf = (row: { is_active?: boolean }) => (row.is_active === false ? 'inactive' : 'active');
+
 /**
  * The tenant's seniority scale — 1 is the most senior. Designations pick a
  * level from here, so the designation list can be filtered by it.
  */
 export default function DesignationLevelsPage() {
-    const { t, fmt } = useI18n();
+    const { t, fmt, locale } = useI18n();
     const o = t.orgStructure;
     const l = t.designationLevels;
     const [levels, setLevels] = useState<DesignationLevel[]>([]);
@@ -37,6 +41,8 @@ export default function DesignationLevelsPage() {
     const [deleteTarget, setDeleteTarget] = useState<DesignationLevel | null>(null);
     const [statusTarget, setStatusTarget] = useState<DesignationLevel | null>(null);
     const [busy, setBusy] = useState(false);
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState<string[]>([]);
 
     useEffect(() => {
         void load();
@@ -135,45 +141,68 @@ export default function DesignationLevelsPage() {
         }
     };
 
+    const filtered = useMemo(
+        () => levels.filter((lvl) => matchesAnyOf(statusFilter, statusOf(lvl)) && matchesSearch(search, lvl.level, lvl.name)),
+        [levels, statusFilter, search],
+    );
+
     const filters = useMemo<ListFilter[]>(() => [
         {
             id: 'status',
-            type: 'select',
+            type: 'multi-select',
             label: o.status,
-            columnId: 'status',
+            value: statusFilter,
+            onChange: setStatusFilter,
             options: [
                 { value: 'active', label: o.active },
                 { value: 'inactive', label: o.inactive },
             ],
         },
-    ], [o]);
+    ], [o, statusFilter]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const inactive = filtered.filter((lvl) => statusOf(lvl) === 'inactive').length;
+        const items: ListStat[] = [
+            { id: 'count', icon: <LayoutList aria-hidden />, label: l.title, value: n(filtered.length) },
+            { id: 'active', icon: <CheckCircle2 aria-hidden />, label: o.active, value: n(filtered.length - inactive) },
+            { id: 'inactive', icon: <CircleOff aria-hidden />, label: o.inactive, value: n(inactive) },
+            {
+                id: 'designations',
+                icon: <BadgeCheck aria-hidden />,
+                label: o.designations,
+                value: n(filtered.reduce((sum, lvl) => sum + (lvl._count?.designations ?? 0), 0)),
+            },
+        ];
+        return { items, loading, label: t.hr.listUi.levelsStats };
+    }, [filtered, loading, locale, o, l, t]);
 
     const columns: ColumnDef<DesignationLevel, any>[] = useMemo(
         () => [
             columnHelper.accessor('level', {
                 header: o.level,
-                cell: (info) => <span className="text-sm font-medium text-gray-900 tabular-nums">{info.getValue()}</span>,
+                cell: (info) => info.getValue(),
                 size: 90,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('name', {
                 header: l.name,
-                cell: (info) => <span className="text-sm font-medium text-gray-900">{info.getValue()}</span>,
+                cell: (info) => info.getValue(),
                 size: 300,
             }),
             columnHelper.accessor((row) => row._count?.designations ?? 0, {
                 id: 'designations',
                 header: o.designations,
-                cell: (info) => <span className="text-sm text-gray-700 tabular-nums">{info.getValue()}</span>,
-                enableColumnFilter: false,
+                cell: (info) => info.getValue(),
                 size: 120,
+                meta: { align: 'end' },
             }),
-            columnHelper.accessor((row) => (row.is_active === false ? 'inactive' : 'active'), {
+            columnHelper.accessor(statusOf, {
                 id: 'status',
                 header: o.status,
                 cell: (info) => info.getValue() === 'active'
                     ? <StatusBadge tone="success">{o.active}</StatusBadge>
                     : <StatusBadge tone="neutral">{o.inactive}</StatusBadge>,
-                filterFn: 'equalsString',
                 size: 110,
             }),
             columnHelper.display({
@@ -184,38 +213,26 @@ export default function DesignationLevelsPage() {
                     const inUse = (lvl._count?.designations ?? 0) > 0;
                     const active = lvl.is_active !== false;
                     return (
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={() => openEdit(lvl)}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                title={t.common.edit}
-                                aria-label={`${t.common.edit} ${lvl.name}`}
-                            >
-                                <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
+                        <RowActions>
+                            <RowActionButton icon={<Pencil />} label={t.common.edit} onClick={() => openEdit(lvl)} />
+                            <RowActionButton
+                                icon={<Power />}
+                                label={active ? o.deactivate : o.activate}
+                                intent={active ? 'warning' : 'success'}
                                 onClick={() => setStatusTarget(lvl)}
-                                className={`p-1.5 rounded-lg transition-colors ${active
-                                    ? 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'
-                                    : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
-                                title={active ? o.deactivate : o.activate}
-                                aria-label={`${active ? o.deactivate : o.activate} ${lvl.name}`}
-                            >
-                                <Power className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={() => setDeleteTarget(lvl)}
+                            />
+                            <RowActionButton
+                                icon={<Trash2 />}
+                                label={inUse ? o.inUse : t.common.delete}
+                                intent="danger"
                                 disabled={inUse}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:cursor-not-allowed"
-                                title={inUse ? o.inUse : t.common.delete}
-                                aria-label={`${t.common.delete} ${lvl.name}`}
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        </div>
+                                onClick={() => setDeleteTarget(lvl)}
+                            />
+                        </RowActions>
                     );
                 },
                 enableSorting: false,
+                enableColumnFilter: false,
                 enableResizing: false,
                 size: 120,
             }),
@@ -252,13 +269,19 @@ export default function DesignationLevelsPage() {
             <DataTable<DesignationLevel>
                 tableId="designation-levels"
                 columns={columns}
-                data={levels}
+                data={filtered}
                 title={l.title}
                 isLoading={loading}
                 emptyMessage={l.emptyMessage}
                 emptyIcon={<LayoutList className="w-16 h-16 text-gray-200" />}
                 searchPlaceholder={l.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={setSearch}
                 filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
             />
 
             {modalOpen && (

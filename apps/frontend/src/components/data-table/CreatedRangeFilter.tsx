@@ -106,6 +106,10 @@ export function CreatedRangePanel({
         last7: copy.last7Days,
         last30: copy.last30Days,
         thisMonth: copy.thisMonth,
+        last3Months: copy.last3Months,
+        last6Months: copy.last6Months,
+        last12Months: copy.last12Months,
+        thisYear: copy.thisYear,
     };
 
     const finish = (next: CreatedRange | null, preset?: CreatedRangePreset) => {
