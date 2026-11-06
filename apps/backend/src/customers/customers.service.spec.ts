@@ -400,6 +400,53 @@ describe('CustomersService', () => {
     expect(res.total).toBe(1);
   });
 
+  // The list's "Last sale" column: one query for the page, newest sale first.
+  describe('findAll() last sale', () => {
+    const sqlOf = (call: any[]) => (call[0] as TemplateStringsArray).join('?');
+
+    it('attaches each customer\'s latest sale, null when they have none', async () => {
+      db.customer.findMany.mockResolvedValue([{ id: 'c1' }, { id: 'c2' }]);
+      db.customer.count.mockResolvedValue(2);
+      const saleDate = new Date('2026-11-01T10:00:00.000Z');
+      db.$queryRaw.mockResolvedValueOnce([
+        { id: 's9', customer_id: 'c1', serial_number: 'INV-9', reference_number: null, sale_date: saleDate, total_amount: '1250.50' },
+      ]);
+
+      const res = await service.findAll('t1', { timezone: 'Asia/Dhaka' });
+
+      expect(res.items[0].last_sale).toEqual({
+        id: 's9', serial_number: 'INV-9', reference_number: null, sale_date: saleDate, total_amount: 1250.5,
+      });
+      expect(res.items[1].last_sale).toBeNull();
+      const sql = sqlOf(db.$queryRaw.mock.calls[0]);
+      expect(sql).toContain('DISTINCT ON (customer_id)');
+      expect(sql).toContain("NOT IN ('CANCELLED', 'DRAFT')");
+      expect(sql).toContain('ORDER BY customer_id, sale_date DESC');
+    });
+
+    it('skips the lookup on an empty page', async () => {
+      db.customer.findMany.mockResolvedValue([]);
+      db.customer.count.mockResolvedValue(0);
+
+      await service.findAll('t1', { timezone: 'Asia/Dhaka' });
+
+      expect(db.$queryRaw).not.toHaveBeenCalled();
+    });
+
+    it('counts only the sales at a limited member\'s branches', async () => {
+      db.customer.findMany.mockResolvedValue([{ id: 'c1' }]);
+      db.customer.count.mockResolvedValue(1);
+      db.$queryRaw.mockResolvedValueOnce([]);
+
+      await service.findAll('t1', { timezone: 'Asia/Dhaka', scope: ['branch-a'] });
+
+      const [, ...values] = db.$queryRaw.mock.calls[0];
+      const flat = JSON.stringify(values);
+      expect(flat).toContain('branch-a');
+      expect(flat).toContain('store_id IN');
+    });
+  });
+
   it('findAll() should filter created_at to the inclusive Dhaka day range', async () => {
     db.customer.findMany.mockResolvedValue([]);
     db.customer.count.mockResolvedValue(0);

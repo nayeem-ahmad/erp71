@@ -26,6 +26,8 @@ export const customersMessages = {
                 pointsSuffix: "পয়েন্ট",
                 segment: "সেগমেন্ট",
                 registered: "নিবন্ধিত",
+                lastSale: "সর্বশেষ বিক্রয়",
+                noSales: "এখনও কোনো বিক্রয় নেই",
             },
             filters: {
                 vip: "VIP",
