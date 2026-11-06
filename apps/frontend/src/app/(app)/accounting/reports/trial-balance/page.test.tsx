@@ -52,8 +52,8 @@ const RESPONSE = {
     totals: { debit: 38_000, credit: 38_000 },
 };
 
-// The statement's own Print in the header — the table's toolbar keeps its plain table print too.
-const statementPrint = () => screen.getAllByRole('button', { name: /print/i })[0];
+// The statement's own Print in the header — the only Print on the page.
+const statementPrint = () => screen.getByRole('button', { name: /print/i });
 
 const tile = (label: string) => within(screen.getByRole('region', { name: 'Trial balance summary' }))
     .getByText(label).closest('div') as HTMLElement;

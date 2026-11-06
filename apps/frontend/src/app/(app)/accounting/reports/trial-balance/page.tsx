@@ -493,6 +493,10 @@ export default function TrialBalancePage() {
                         stats={stats}
                         enableColumnFilters={false}
                         viewOptions
+                        // The header's Print prints the statement with its
+                        // totals; a plain-table print beside it would be a
+                        // second, lesser copy of the same thing.
+                        showPrint={false}
                     />
                     {isRolledUp && data ? (
                         <p className="text-xs text-gray-500">{t.accounting.reports.reportLevel.nettingHint}</p>

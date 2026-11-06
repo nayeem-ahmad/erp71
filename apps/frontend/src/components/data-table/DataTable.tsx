@@ -131,6 +131,12 @@ export interface DataTableProps<T> {
     /** Show the built-in global search input in the toolbar (default: true). Set false when the caller renders its own search box. */
     showSearch?: boolean;
     /**
+     * Show the built-in Print button (default: true), which prints the rows as
+     * a plain table. Set false when the page has its own formatted print — a
+     * statement with its totals — so the toolbar does not offer a second one.
+     */
+    showPrint?: boolean;
+    /**
      * The toolbar search box reports each change here and does not filter the
      * rows on screen. A server-paginated list debounces this and sends it with
      * the query. Leave unset and the box filters the loaded rows.
@@ -452,6 +458,7 @@ export default function DataTable<T>({
     toolbarActions,
     searchPlaceholder,
     showSearch = true,
+    showPrint = true,
     onSearchChange,
     searchValue: searchValueProp,
     filterPresets,
@@ -1208,6 +1215,7 @@ export default function DataTable<T>({
                         </button>
 
                         {/* Print */}
+                        {showPrint && (
                         <button
                             onClick={async () => {
                                 // The branch the page is filtered to; company
@@ -1235,6 +1243,7 @@ export default function DataTable<T>({
                             <Printer className="w-3.5 h-3.5" />
                             <span className={iconOnlyToolbar ? 'sr-only' : undefined}>{t.common.dataTable.print}</span>
                         </button>
+                        )}
 
                         {/* Custom toolbar actions */}
                         {toolbarActions}
