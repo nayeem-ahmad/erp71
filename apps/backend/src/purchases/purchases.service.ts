@@ -602,6 +602,20 @@ export class PurchasesService {
                         items: {
                             include: { product: true, returnItems: true },
                         },
+                        // Enough for the list to mark a row that has returns and
+                        // open their details without a second round trip.
+                        returns: {
+                            select: {
+                                id: true,
+                                return_number: true,
+                                total_amount: true,
+                                notes: true,
+                                status: true,
+                                created_at: true,
+                                _count: { select: { items: true } },
+                            },
+                            orderBy: { created_at: 'desc' },
+                        },
                     },
                 }),
             count: (args) => this.db.purchase.count(args as any),

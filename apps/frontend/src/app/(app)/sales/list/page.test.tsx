@@ -110,6 +110,17 @@ const mockSales = [
         status: 'REFUNDED',
         payments: [{ payment_method: 'BKASH', amount: '20.00' }],
         customer: undefined,
+        returns: [
+            {
+                id: 'ret-1',
+                return_number: 'SR-00009',
+                total_refund: '20.00',
+                reason: 'Damaged',
+                status: 'COMPLETED',
+                created_at: '2026-03-22T09:00:00.000Z',
+                _count: { items: 1 },
+            },
+        ],
     },
 ];
 
@@ -453,6 +464,25 @@ describe('SalesListPage — Sales Transaction List', () => {
         await waitFor(() => {
             expect(screen.getByText('Refunded')).toBeInTheDocument();
         });
+    });
+
+    it('marks a row that has sales returns and opens their details from the icon', async () => {
+        renderWithQueryClient(<SalesListPage />);
+        await screen.findByText('SL-00002');
+
+        // Only the refunded sale carries returns — the completed one stays plain.
+        expect(screen.queryByRole('button', { name: 'View sales returns (0)' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /View sales returns \(1\)/ })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'View sales returns (1)' }));
+
+        expect(await screen.findByRole('heading', { name: 'Sales returns for SL-00002' })).toBeInTheDocument();
+        expect(screen.getByText('SR-00009')).toBeInTheDocument();
+        expect(screen.getByText('Damaged')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /Open return/i })).toHaveAttribute(
+            'href',
+            '/sales/returns/ret-1',
+        );
     });
 
     it('shows payment method tags', async () => {

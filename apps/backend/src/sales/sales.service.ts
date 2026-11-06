@@ -1759,6 +1759,20 @@ export class SalesService {
                     items: { include: { product: true } },
                     payments: true,
                     customer: true,
+                    // Enough for the list to mark a row that has returns and
+                    // open their details without a second round trip.
+                    returns: {
+                        select: {
+                            id: true,
+                            return_number: true,
+                            total_refund: true,
+                            reason: true,
+                            status: true,
+                            created_at: true,
+                            _count: { select: { items: true } },
+                        },
+                        orderBy: { created_at: 'desc' },
+                    },
                 },
                 orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, SALE_SORTABLE, { created_at: 'desc' }),
                 skip: (page - 1) * limit,

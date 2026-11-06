@@ -281,6 +281,13 @@ export const salesMessages = {
                 salesRep: 'Sales rep',
                 noSalesRep: 'No sales rep',
             },
+            returnsModal: {
+                viewReturns: 'View sales returns ({count})',
+                title: 'Sales returns for {serial}',
+                empty: 'No sales returns on this sale',
+                reason: 'Reason',
+                openReturn: 'Open return',
+            },
         },
         hub: {
             moduleLabel: 'Sales Module',

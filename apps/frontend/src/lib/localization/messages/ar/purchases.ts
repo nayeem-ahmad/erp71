@@ -153,6 +153,13 @@ export const purchasesMessages = {
             RECORDED: 'مسجَّل',
             CANCELLED: 'ملغى',
         },
+        returnsModal: {
+            viewReturns: 'عرض مرتجعات الشراء ({count})',
+            title: 'مرتجعات الشراء لـ {number}',
+            empty: 'لا توجد مرتجعات على هذه الفاتورة',
+            notes: 'ملاحظات',
+            openReturn: 'فتح المرتجع',
+        },
         printInvoice: "طباعة الفاتورة",
         printLoadFailed: "تعذر تحميل المشترى للطباعة.",
         modal: {

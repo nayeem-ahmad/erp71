@@ -153,6 +153,13 @@ export const purchasesMessages = {
             RECORDED: 'Recorded',
             CANCELLED: 'Cancelled',
         },
+        returnsModal: {
+            viewReturns: 'View purchase returns ({count})',
+            title: 'Purchase returns for {number}',
+            empty: 'No purchase returns on this bill',
+            notes: 'Notes',
+            openReturn: 'Open return',
+        },
         printInvoice: 'Print Invoice',
         printLoadFailed: 'Could not load the purchase to print.',
         modal: {

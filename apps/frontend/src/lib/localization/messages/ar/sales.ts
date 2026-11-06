@@ -281,6 +281,13 @@ export const salesMessages = {
                 salesRep: 'مندوب المبيعات',
                 noSalesRep: 'بلا مندوب',
             },
+            returnsModal: {
+                viewReturns: 'عرض مرتجعات المبيعات ({count})',
+                title: 'مرتجعات المبيعات لـ {serial}',
+                empty: 'لا توجد مرتجعات لهذه البيعة',
+                reason: 'السبب',
+                openReturn: 'فتح المرتجع',
+            },
         },
         hub: {
             moduleLabel: 'وحدة المبيعات',

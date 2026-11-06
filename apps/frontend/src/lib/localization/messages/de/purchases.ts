@@ -153,6 +153,13 @@ export const purchasesMessages = {
             RECORDED: 'Erfasst',
             CANCELLED: 'Storniert',
         },
+        returnsModal: {
+            viewReturns: 'Einkaufsretouren anzeigen ({count})',
+            title: 'Einkaufsretouren für {number}',
+            empty: 'Keine Retouren zu diesem Beleg',
+            notes: 'Notizen',
+            openReturn: 'Retoure öffnen',
+        },
         printInvoice: "Rechnung drucken",
         printLoadFailed: "Der Einkauf konnte nicht zum Drucken geladen werden.",
         modal: {
