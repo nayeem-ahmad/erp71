@@ -146,6 +146,8 @@ export default function CostCentersPage() {
                 label: m.period,
                 value: period,
                 // The P&L always covers a period: clearing the chip goes back to this month.
+                required: true,
+                defaultValue: defaultPeriod(),
                 onChange: (next) => setPeriod(next?.from || next?.to ? next : defaultPeriod()),
                 operators: true,
                 presets: ['thisMonth', 'last30', 'last3Months', 'last6Months', 'thisYear'],
@@ -227,8 +229,8 @@ export default function CostCentersPage() {
                 search={{ value: search, onChange: setSearch, placeholder: m.searchPlaceholder }}
             />
 
-            <div className="grid gap-3 lg:grid-cols-[240px_1fr]">
-                <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[240px_1fr]">
+                <div className="min-w-0 space-y-2">
                     {railMessage ? (
                         <CompactSection className="py-6 text-center text-sm text-gray-400">{railMessage}</CompactSection>
                     ) : (
@@ -264,7 +266,7 @@ export default function CostCentersPage() {
                     )}
                 </div>
 
-                <div>
+                <div className="min-w-0">
                     {!selected ? (
                         <CompactSection className="py-8 text-center text-sm text-gray-400">{m.selectPrompt}</CompactSection>
                     ) : plLoading ? (

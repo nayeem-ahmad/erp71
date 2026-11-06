@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CircleOff, Filter, ListChecks, Pencil, Workflow } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
+import { POSTING_RULE_EVENT_TYPES, PostingRuleConditionKey } from '@erp71/shared-types';
 import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { RowActions, RowActionButton } from '@/components/table';
 import {
@@ -15,6 +16,7 @@ import { ContextualHelpPanel } from '@/components/ContextualHelpPanel';
 import { HelpTooltip } from '@/components/HelpTooltip';
 import { POSTING_RULES_FIELD_HELP, POSTING_RULES_HELP } from '@/lib/help/contextual-help';
 import { api } from '@/lib/api';
+import { humanizeKey } from '@/lib/audit-description';
 import { useI18n } from '@/lib/i18n';
 import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
 import type { NumberCondition } from '@/lib/number-condition';
@@ -24,18 +26,21 @@ import { Button, StatusBadge } from '@/components/ui';
 import AccountSelect from '@/components/accounting/AccountSelect';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 
-const EVENT_TYPES = [
-    'sale',
-    'sale_return',
-    'purchase',
-    'purchase_return',
-    'inventory_adjustment',
-    'fund_movement',
-    'loan_disbursement',
-    'loan_repayment',
-] as const;
+/** The conditions a rule can carry, the default first. */
+const CONDITION_KEYS: readonly string[] = [
+    PostingRuleConditionKey.NONE,
+    ...Object.values(PostingRuleConditionKey).filter((key) => key !== PostingRuleConditionKey.NONE),
+];
 
-const CONDITION_KEYS = ['none', 'payment_mode', 'reason_type', 'transfer_scope', 'loan_direction'] as const;
+/**
+ * The known values first, in their own order, then any the rules carry that
+ * the list does not know yet — so the chip can still filter by them.
+ */
+function withUnknown(known: readonly string[], seen: Iterable<string>): string[] {
+    const out = [...known];
+    for (const value of seen) if (value && !out.includes(value)) out.push(value);
+    return out;
+}
 
 interface Account {
     id: string;
@@ -115,8 +120,12 @@ export default function PostingRulesPage() {
         }
     };
 
-    const eventLabel = (type: string) => m.eventTypes[type as keyof typeof m.eventTypes] ?? type;
-    const conditionLabel = (key: string) => m.conditionKeys[key as keyof typeof m.conditionKeys] ?? key;
+    // A type the copy does not name yet reads as words ("Bad debt write off"), never raw snake_case.
+    const eventLabel = (type: string) => m.eventTypes[type as keyof typeof m.eventTypes] ?? humanizeKey(type);
+    const conditionLabel = (key: string) => m.conditionKeys[key as keyof typeof m.conditionKeys] ?? humanizeKey(key);
+    // Every event a rule can map (from the schema's enum), plus any the rules carry beyond it.
+    const eventTypes = useMemo(() => withUnknown(POSTING_RULE_EVENT_TYPES, rules.map((r) => r.eventType)), [rules]);
+    const conditionKeys = useMemo(() => withUnknown(CONDITION_KEYS, rules.map((r) => r.conditionKey)), [rules]);
     const statusOf = (rule: PostingRule) => (rule.isActive ? 'active' : 'inactive');
 
     const openEdit = (rule: PostingRule) => {
@@ -200,7 +209,7 @@ export default function PostingRulesPage() {
                 value: eventFilter,
                 onChange: setEventFilter,
                 exclude: { value: eventExclude, onChange: setEventExclude },
-                options: EVENT_TYPES.map((type) => ({ value: type, label: m.eventTypes[type] })),
+                options: eventTypes.map((type) => ({ value: type, label: eventLabel(type) })),
             },
             {
                 id: 'status',
@@ -219,7 +228,7 @@ export default function PostingRulesPage() {
                 label: p.columns.condition,
                 value: conditionFilter,
                 onChange: setConditionFilter,
-                options: CONDITION_KEYS.map((key) => ({ value: key, label: m.conditionKeys[key] })),
+                options: conditionKeys.map((key) => ({ value: key, label: conditionLabel(key) })),
             },
             {
                 id: 'debitAccount',
@@ -248,7 +257,9 @@ export default function PostingRulesPage() {
                 more: true,
             },
         ];
-    }, [p, m, rules, eventFilter, eventExclude, statusFilter, conditionFilter, debitFilter, creditFilter, priorityFilter]);
+        // eventLabel/conditionLabel read only `m`.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [p, m, rules, eventTypes, conditionKeys, eventFilter, eventExclude, statusFilter, conditionFilter, debitFilter, creditFilter, priorityFilter]);
 
     const stats = useMemo(() => {
         const n = (value: number) => value.toLocaleString(locale);
@@ -268,11 +279,11 @@ export default function PostingRulesPage() {
                 icon: <Workflow aria-hidden />,
                 label: m.eventsCovered,
                 value: n(new Set(active.map((r) => r.eventType)).size),
-                hint: `/ ${n(EVENT_TYPES.length)}`,
+                hint: `/ ${n(eventTypes.length)}`,
             },
         ];
         return { items, loading, label: m.statsLabel };
-    }, [filteredRules, loading, locale, m, p]);
+    }, [filteredRules, eventTypes, loading, locale, m, p]);
 
     const columns = useMemo<ColumnDef<PostingRule, any>[]>(
         () => [

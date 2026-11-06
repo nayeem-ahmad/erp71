@@ -185,6 +185,8 @@ export default function BankbookPage() {
                 type: 'date-range',
                 label: t.accountingShared.period,
                 value: period,
+                required: true,
+                defaultValue: defaultPeriod(),
                 onChange: (next) => setPeriod(next ?? defaultPeriod()),
                 presets: PERIOD_PRESETS,
                 operators: true,

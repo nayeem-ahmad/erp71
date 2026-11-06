@@ -335,8 +335,8 @@ export default function AccountGroupsPage() {
                 search={{ value: search, onChange: setSearch, placeholder: m.searchPlaceholder }}
             />
 
-            <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
-                <CompactSection className="lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[320px_1fr]">
+                <CompactSection className="min-w-0 lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto">
                     {railMessage ? (
                         <p className="py-6 text-center text-sm text-gray-400">{railMessage}</p>
                     ) : (
@@ -379,7 +379,7 @@ export default function AccountGroupsPage() {
                     )}
                 </CompactSection>
 
-                <div>
+                <div className="min-w-0">
                     {selectedGroup ? (
                         <CompactSection
                             title={formatMessage(t.accountGroups.subgroupsIn, {

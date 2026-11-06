@@ -23,7 +23,9 @@ import type { useI18n } from '@/lib/i18n';
  * The accounting reports' toolbar chips. A report's parameters (its period,
  * its as-of date, the statements' branch and detail options) sit in the same
  * chip row as a list's filters — but a report is always run for something, so
- * a cleared period or date falls back to its default instead of "any time".
+ * those chips are `required`: no "All" or Clear, no ✕, and Clear all puts them
+ * back on their default. Each page's onChange still falls back to its default
+ * on a null, belt and braces.
  */
 
 type Copy = ReturnType<typeof useI18n>['t'];
@@ -60,6 +62,8 @@ export function asOfFilter(input: {
         value: input.value,
         onChange: (next) => input.onChange(next ?? fallback()),
         presets: AS_OF_PRESETS,
+        required: true,
+        defaultValue: fallback(),
     };
 }
 
@@ -121,7 +125,9 @@ export function statementScopeFilters(t: Copy, input: {
             type: 'select',
             label: levels.detail,
             value: input.level,
-            // A statement is always at some level: All goes back to account.
+            // A statement is always at some level; Clear all goes back to account.
+            required: true,
+            defaultValue: 'account',
             onChange: (next) => {
                 const mode = REPORT_LEVEL_MODES.includes(next as ReportLevelMode) ? (next as ReportLevelMode) : 'account';
                 persistReportLevel(mode);
@@ -151,6 +157,8 @@ export function statementScopeFilters(t: Copy, input: {
                     label: t.accountingReportsUi.common.branches,
                     value: input.selectedStoreIds,
                     // A comparison needs a branch: none picked compares them all.
+                    required: true,
+                    defaultValue: allIds,
                     onChange: (next) => input.onSelectedStoreIdsChange(next.length ? next : allIds),
                     options: input.stores.map((store) => ({ value: store.id, label: store.name })),
                 },

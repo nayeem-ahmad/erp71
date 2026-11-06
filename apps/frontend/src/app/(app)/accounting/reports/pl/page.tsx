@@ -222,6 +222,8 @@ export default function ProfitLossPage() {
                 label: t.accountingShared.period,
                 value: periodRange,
                 // A statement is always for some period: cleared, it goes back to this month.
+                required: true,
+                defaultValue: defaultPeriod(),
                 onChange: (next) => setPeriodRange(requiredPeriod(next)),
                 presets: PERIOD_PRESETS,
                 operators: true,

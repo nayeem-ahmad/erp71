@@ -298,6 +298,8 @@ export default function ExpenseReportsPage() {
         type: 'date-range',
         label: t.expenses.period,
         value: period,
+        required: true,
+        defaultValue: defaultPeriod(),
         onChange: (next) => setPeriod(next ?? defaultPeriod()),
         presets: MONTH_RANGE_PRESETS,
         operators: true,

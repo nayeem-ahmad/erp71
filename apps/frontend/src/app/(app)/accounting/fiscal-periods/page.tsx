@@ -49,7 +49,7 @@ export default function FiscalPeriodsPage() {
     const { t, fmt, locale } = useI18n();
     const f = t.fiscalPeriods;
     const m = t.accountingMastersUi.fiscalPeriods;
-    const currentYear = new Date().getFullYear();
+    const currentYear = Number(tenantDateOnly().slice(0, 4));
     const [year, setYear] = useState(currentYear);
     const [periods, setPeriods] = useState<FiscalPeriod[]>([]);
     const [loading, setLoading] = useState(true);
@@ -128,7 +128,9 @@ export default function FiscalPeriodsPage() {
             type: 'select',
             label: f.fiscalYear,
             value: String(year),
-            // The year is the report's own parameter: clearing it goes back to this year.
+            // The year is the report's own parameter; Clear all goes back to this year.
+            required: true,
+            defaultValue: String(currentYear),
             onChange: (next) => setYear(next ? Number(next) : currentYear),
             options: yearOptions,
         },

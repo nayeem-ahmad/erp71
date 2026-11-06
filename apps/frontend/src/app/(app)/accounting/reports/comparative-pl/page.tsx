@@ -120,6 +120,8 @@ export default function ComparativePLPage() {
                 label: t.accountingShared.period,
                 value: period,
                 // The comparison is always of some period: cleared, it goes back to this month.
+                required: true,
+                defaultValue: defaultPeriod(),
                 onChange: (next) => setPeriod(requiredPeriod(next)),
                 presets: PERIOD_PRESETS,
                 operators: true,

@@ -24,8 +24,16 @@ jest.mock('@/components/data-table', () => ({
                 Active only
             </button>
             {(stats?.items ?? []).map((stat: any) => (
-                <span key={stat.id} data-testid={`stat-${stat.id}`}>{stat.value}</span>
+                <span key={stat.id}>
+                    <span data-testid={`stat-${stat.id}`}>{stat.value}</span>
+                    {stat.hint ? <span data-testid={`stat-hint-${stat.id}`}>{stat.hint}</span> : null}
+                </span>
             ))}
+            <ul data-testid="event-options">
+                {(filters?.find((f: any) => f.id === 'event')?.options ?? []).map((option: any) => (
+                    <li key={option.value} data-value={option.value}>{option.label}</li>
+                ))}
+            </ul>
             {data && data.map((item: any, i: number) => (
                 <div key={i} data-testid={`rule-row-${i}`}>
                     <span>{item.eventType}</span>
@@ -164,6 +172,45 @@ describe('PostingRulesPage', () => {
 
         await waitFor(() => expect(screen.queryByTestId('rule-row-1')).not.toBeInTheDocument());
         expect(screen.getByTestId('stat-inactive')).toHaveTextContent('0');
+    });
+
+    it('offers every event a rule can map, labelled, and counts coverage against them all', async () => {
+        const { api } = require('@/lib/api');
+        api.getPostingRules.mockResolvedValue({ data: mockRules });
+        api.getAccounts.mockResolvedValue(mockAccounts);
+
+        render(<PostingRulesPage />);
+        await waitFor(() => expect(screen.getByTestId('rule-row-1')).toBeInTheDocument());
+        const options = Array.from(screen.getByTestId('event-options').querySelectorAll('li'));
+        const values = options.map((li) => li.getAttribute('data-value'));
+        // The rule-mapped events from the schema's enum, not the old eight.
+        expect(values).toEqual(expect.arrayContaining([
+            'sale', 'expense', 'customer_payment', 'supplier_payment', 'depreciation', 'cash_transaction',
+            'salary_accrual', 'salary_payment', 'asset_acquisition', 'fund_transfer', 'investor_contribution',
+            'investor_withdrawal', 'investor_profit_accrual', 'investor_profit_payout', 'bad_debt_write_off',
+        ]));
+        // Events posted by fixed routes, never by a rule, are not offered.
+        expect(values).not.toContain('import_cost');
+        expect(values).not.toContain('platform_billing');
+        expect(values).toHaveLength(22);
+        // Every option reads as words.
+        options.forEach((li) => expect(li.textContent).not.toMatch(/_/));
+        expect(screen.getByText('Bad Debt Write-off')).toBeInTheDocument();
+        expect(screen.getByTestId('stat-hint-events')).toHaveTextContent('/ 22');
+    });
+
+    it('offers and names an event type the list does not know yet, humanised', async () => {
+        const { api } = require('@/lib/api');
+        api.getPostingRules.mockResolvedValue({
+            data: [...mockRules, { ...mockRules[0], id: 'rule3', eventType: 'warranty_claim_settlement' }],
+        });
+        api.getAccounts.mockResolvedValue(mockAccounts);
+
+        render(<PostingRulesPage />);
+        await waitFor(() => expect(screen.getByTestId('rule-row-2')).toBeInTheDocument());
+        const unknown = screen.getByTestId('event-options').querySelector('li[data-value="warranty_claim_settlement"]');
+        expect(unknown).toHaveTextContent('Warranty claim settlement');
+        expect(screen.getByTestId('stat-hint-events')).toHaveTextContent('/ 23');
     });
 
     it('renders the breadcrumb back to Accounting', async () => {

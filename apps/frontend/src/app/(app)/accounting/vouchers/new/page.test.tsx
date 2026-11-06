@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AccountingVouchersPage from './page';
 import { api } from '@/lib/api';
+import { tenantDateOnly } from '@/lib/created-range';
 import { selectAccount, selectedAccountLabel } from '@/test-utils/account-select';
 
 const replace = jest.fn();
@@ -335,7 +336,7 @@ describe('AccountingVouchersPage — Story 30.5', () => {
             // A duplicate never reuses the source's number, date or attachments.
             expect(screen.getByText('CP-00042')).toBeInTheDocument();
             expect(screen.queryByText('CP-00009')).not.toBeInTheDocument();
-            expect(screen.getByLabelText('Voucher date')).toHaveValue(new Date().toISOString().slice(0, 10));
+            expect(screen.getByLabelText('Voucher date')).toHaveValue(tenantDateOnly());
             expect(screen.queryByText('rent.pdf')).not.toBeInTheDocument();
             expect(screen.getByText(/Copied from CP-00009/)).toBeInTheDocument();
         });
@@ -361,7 +362,7 @@ describe('AccountingVouchersPage — Story 30.5', () => {
 
             await waitFor(() => {
                 expect(screen.getByLabelText('Voucher date'))
-                    .toHaveValue(new Date().toISOString().slice(0, 10));
+                    .toHaveValue(tenantDateOnly());
                 expect(screen.queryByText('rent.pdf')).not.toBeInTheDocument();
                 expect(screen.getByRole('button', { name: 'Save Voucher' })).toBeInTheDocument();
             });

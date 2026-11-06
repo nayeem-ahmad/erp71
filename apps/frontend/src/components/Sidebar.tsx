@@ -40,6 +40,7 @@ import {
     normalizeNavSearchQuery,
 } from '@/lib/sidebar-nav-filter';
 import { routes } from '@/lib/routes';
+import { collectNavLinkTargets, isNavLinkActive } from '@/lib/app-shell';
 import { usePendingVoucherCount } from '@/hooks/usePendingVoucherCount';
 
 /* ------------------------------------------------------------------ */
@@ -310,11 +311,9 @@ export default function Sidebar({
     );
     const hasExpandableGroups = expandableGroupKeys.length > 0;
 
-    const isActive = (href: string, exact = false) => {
-        if (href === routes.home) return pathname === routes.home;
-        if (exact) return pathname === href;
-        return pathname === href || pathname.startsWith(`${href}/`);
-    };
+    // The longest link holding the page is the one lit — see `isNavLinkActive`.
+    const navTargets = collectNavLinkTargets(modules);
+    const isActive = (href: string, exact = false) => isNavLinkActive(href, pathname, navTargets, exact);
 
     useEffect(() => {
         const saved = localStorage.getItem('sidebar-collapsed');

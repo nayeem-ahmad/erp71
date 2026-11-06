@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { BadgePercent, CalendarClock, CircleCheck, Coins, Eye, Hourglass, Pencil, PiggyBank, Plus, Trash2, Users } from 'lucide-react';
 import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
-import type { CreatedRange } from '@/lib/created-range';
+import { tenantDateOnly, type CreatedRange } from '@/lib/created-range';
 import type { NumberCondition } from '@/lib/number-condition';
 import { inDateRange, matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
 import { AccountingPageShell, CompactStat } from '@/components/accounting/compact';
@@ -85,7 +85,8 @@ const STATUSES = ['ACTIVE', 'EXITED'] as const;
 
 const columnHelper = createColumnHelper<Investor>();
 
-const today = () => new Date().toISOString().slice(0, 10);
+/** Today on the workspace's calendar, not the UTC day. */
+const today = () => tenantDateOnly();
 const monthLabel = (year: number, month: number) => `${year}-${String(month).padStart(2, '0')}`;
 
 /** Default the run form to last month — the month you can actually close. */

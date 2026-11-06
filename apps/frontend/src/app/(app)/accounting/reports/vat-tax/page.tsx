@@ -112,6 +112,8 @@ export default function VatTaxPage() {
             label: t.accountingShared.period,
             value: period,
             // A VAT return is always for some period: cleared, it goes back to this month.
+            required: true,
+            defaultValue: defaultPeriod(),
             onChange: (next) => setPeriod(requiredPeriod(next)),
             presets: PERIOD_PRESETS,
             operators: true,

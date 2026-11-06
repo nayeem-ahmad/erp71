@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Boxes, Banknote, Building2, Play, Plus, Tag, TrendingDown, Wallet } from 'lucide-react';
 import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
-import type { CreatedRange } from '@/lib/created-range';
+import { tenantDateOnly, type CreatedRange } from '@/lib/created-range';
 import type { NumberCondition } from '@/lib/number-condition';
 import { inDateRange, matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
 import {
@@ -13,13 +13,12 @@ import {
 } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
-import { Alert, Button, Field, Input, StatusBadge } from '@/components/ui';
+import { Alert, Button, Field, FormGrid, Input, Select, StatusBadge } from '@/components/ui';
 import { RowActions, RowActionButton } from '@/components/table';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
-import { compactDensity } from '@/lib/ui/compact-density';
 import { toast } from '@/lib/toast';
 
 interface FixedAsset {
@@ -55,6 +54,8 @@ const statusOf = (asset: FixedAsset) => (asset.is_active === false ? 'inactive' 
 const bookValueOf = (asset: FixedAsset) => Number(asset.cost || 0) - Number(asset.accumulated_depreciation || 0);
 
 const EMPTY_FORM = { assetCode: '', name: '', category: '', purchaseDate: '', cost: '', residualValue: '0', usefulLifeMonths: '60', depreciationMethod: 'STRAIGHT_LINE' };
+type AssetFormKey = keyof typeof EMPTY_FORM;
+type AssetFormErrors = Partial<Record<AssetFormKey, string>>;
 
 export default function FixedAssetsPage() {
     const { t, locale } = useI18n();
@@ -65,10 +66,12 @@ export default function FixedAssetsPage() {
     const [error, setError] = useState<string | null>(null);
     const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState(EMPTY_FORM);
+    const [formErrors, setFormErrors] = useState<AssetFormErrors>({});
     const [creating, setCreating] = useState(false);
     const [showRunDep, setShowRunDep] = useState(false);
-    const [depYear, setDepYear] = useState(new Date().getFullYear());
-    const [depMonth, setDepMonth] = useState(new Date().getMonth() + 1);
+    // The month to depreciate defaults to this one on the workspace's calendar.
+    const [depYear, setDepYear] = useState(() => Number(tenantDateOnly().slice(0, 4)));
+    const [depMonth, setDepMonth] = useState(() => Number(tenantDateOnly().slice(5, 7)));
     const [runningDep, setRunningDep] = useState(false);
     const [depResult, setDepResult] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -99,7 +102,36 @@ export default function FixedAssetsPage() {
         }
     };
 
+    /** What is missing or not a number, per field — shown under each field before anything is sent. */
+    const validateForm = (): AssetFormErrors => {
+        const errors: AssetFormErrors = {};
+        const required = t.common.required;
+        const enterAmount = t.common.dataTable.enterAmount;
+        if (!form.assetCode.trim()) errors.assetCode = required;
+        if (!form.name.trim()) errors.name = required;
+        if (!form.purchaseDate) errors.purchaseDate = required;
+        if (!form.cost.trim()) errors.cost = required;
+        else if (!(parseFloat(form.cost) > 0)) errors.cost = enterAmount;
+        if (form.residualValue.trim() && !(parseFloat(form.residualValue) >= 0)) errors.residualValue = enterAmount;
+        if (!form.usefulLifeMonths.trim()) errors.usefulLifeMonths = required;
+        else if (!(parseInt(form.usefulLifeMonths) >= 1)) errors.usefulLifeMonths = enterAmount;
+        return errors;
+    };
+
+    const setFormField = (key: AssetFormKey, value: string) => {
+        setForm((f) => ({ ...f, [key]: value }));
+        setFormErrors((errors) => (errors[key] ? { ...errors, [key]: undefined } : errors));
+    };
+
+    const closeCreate = () => {
+        setShowCreate(false);
+        setFormErrors({});
+    };
+
     const handleCreate = async () => {
+        const errors = validateForm();
+        setFormErrors(errors);
+        if (Object.values(errors).some(Boolean)) return;
         setCreating(true);
         setError(null);
         try {
@@ -113,7 +145,7 @@ export default function FixedAssetsPage() {
                 usefulLifeMonths: parseInt(form.usefulLifeMonths),
                 depreciationMethod: form.depreciationMethod,
             });
-            setShowCreate(false);
+            closeCreate();
             setForm(EMPTY_FORM);
             await load();
         } catch (e: any) {
@@ -396,18 +428,16 @@ export default function FixedAssetsPage() {
             {showRunDep && (
                 <CompactSection title={fa.runDepreciation}>
                     <div className="flex gap-3 items-end flex-wrap">
-                        <label className="block">
-                            <span className={`${compactDensity.formLabel} block mb-1`}>{fa.year}</span>
-                            <select value={depYear} onChange={(e) => setDepYear(Number(e.target.value))} className={compactDensity.formField}>
+                        <Field label={fa.year} htmlFor="fixed-asset-dep-year">
+                            <Select id="fixed-asset-dep-year" value={depYear} onChange={(e) => setDepYear(Number(e.target.value))}>
                                 {[depYear - 1, depYear, depYear + 1].map((y) => <option key={y} value={y}>{y}</option>)}
-                            </select>
-                        </label>
-                        <label className="block">
-                            <span className={`${compactDensity.formLabel} block mb-1`}>{fa.month}</span>
-                            <select value={depMonth} onChange={(e) => setDepMonth(Number(e.target.value))} className={compactDensity.formField}>
+                            </Select>
+                        </Field>
+                        <Field label={fa.month} htmlFor="fixed-asset-dep-month">
+                            <Select id="fixed-asset-dep-month" value={depMonth} onChange={(e) => setDepMonth(Number(e.target.value))}>
                                 {monthNames.map((name, i) => <option key={i + 1} value={i + 1}>{name}</option>)}
-                            </select>
-                        </label>
+                            </Select>
+                        </Field>
                         <Button variant="primary" onClick={handleRunDepreciation} loading={runningDep}>
                             {runningDep ? fa.running : fa.runNow}
                         </Button>
@@ -425,32 +455,42 @@ export default function FixedAssetsPage() {
 
             {showCreate && (
                 <CompactSection title={fa.addAsset}>
-                    <div className={`grid grid-cols-2 gap-3 ${compactDensity.formStack}`}>
+                    <FormGrid>
                         {([
-                            { label: fa.assetCode, key: 'assetCode', placeholder: fa.placeholders.assetCode },
-                            { label: fa.name, key: 'name', placeholder: fa.placeholders.name },
+                            { label: fa.assetCode, key: 'assetCode', placeholder: fa.placeholders.assetCode, required: true },
+                            { label: fa.name, key: 'name', placeholder: fa.placeholders.name, required: true },
                             { label: t.accountingShared.category, key: 'category', placeholder: ui.categoryPlaceholder, list: CATEGORY_LIST_ID, maxLength: CATEGORY_MAX_LENGTH },
-                            { label: fa.purchaseDate, key: 'purchaseDate', type: 'date', placeholder: '' },
-                            { label: fa.cost, key: 'cost', type: 'number', placeholder: '0.00' },
+                            { label: fa.purchaseDate, key: 'purchaseDate', type: 'date', placeholder: '', required: true },
+                            { label: fa.cost, key: 'cost', type: 'number', placeholder: '0.00', required: true },
                             { label: fa.residualValue, key: 'residualValue', type: 'number', placeholder: '0.00' },
-                            { label: fa.usefulLifeMonths, key: 'usefulLifeMonths', type: 'number', placeholder: fa.placeholders.usefulLife },
-                        ] as Array<{ label: string; key: keyof typeof EMPTY_FORM; type?: string; placeholder: string; list?: string; maxLength?: number }>).map(({ label, key, type, placeholder, list, maxLength }) => (
-                            <label key={key} className="block">
-                                <span className={`${compactDensity.formLabel} block mb-1`}>{label}</span>
-                                <input type={type ?? 'text'} value={form[key]} placeholder={placeholder} list={list} maxLength={maxLength}
-                                    onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                                    className={compactDensity.formField} />
-                            </label>
+                            { label: fa.usefulLifeMonths, key: 'usefulLifeMonths', type: 'number', placeholder: fa.placeholders.usefulLife, required: true },
+                        ] as Array<{ label: string; key: AssetFormKey; type?: string; placeholder: string; list?: string; maxLength?: number; required?: boolean }>).map(({ label, key, type, placeholder, list, maxLength, required }) => (
+                            <Field key={key} label={label} htmlFor={`fixed-asset-${key}`} required={required} error={formErrors[key]}>
+                                <Input
+                                    id={`fixed-asset-${key}`}
+                                    type={type ?? 'text'}
+                                    inputMode={type === 'number' ? 'decimal' : undefined}
+                                    value={form[key]}
+                                    placeholder={placeholder}
+                                    list={list}
+                                    maxLength={maxLength}
+                                    error={Boolean(formErrors[key])}
+                                    onChange={(e) => setFormField(key, e.target.value)}
+                                />
+                            </Field>
                         ))}
-                    </div>
-                    <label className="block mt-3">
-                        <span className={`${compactDensity.formLabel} block mb-1`}>{fa.method}</span>
-                        <select value={form.depreciationMethod} onChange={(e) => setForm((f) => ({ ...f, depreciationMethod: e.target.value }))} className={compactDensity.formField}>
-                            {METHODS.map((method) => <option key={method} value={method}>{methodLabel(method)}</option>)}
-                        </select>
-                    </label>
+                        <Field label={fa.method} htmlFor="fixed-asset-method">
+                            <Select
+                                id="fixed-asset-method"
+                                value={form.depreciationMethod}
+                                onChange={(e) => setFormField('depreciationMethod', e.target.value)}
+                            >
+                                {METHODS.map((method) => <option key={method} value={method}>{methodLabel(method)}</option>)}
+                            </Select>
+                        </Field>
+                    </FormGrid>
                     <div className="flex gap-2 mt-3">
-                        <Button variant="secondary" onClick={() => setShowCreate(false)}>{t.common.cancel}</Button>
+                        <Button variant="secondary" onClick={closeCreate}>{t.common.cancel}</Button>
                         <Button variant="primary" onClick={handleCreate} loading={creating}>
                             {creating ? fa.saving : fa.saveAsset}
                         </Button>

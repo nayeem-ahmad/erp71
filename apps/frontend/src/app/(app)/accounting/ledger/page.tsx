@@ -341,6 +341,8 @@ function AccountingLedgerPageContent() {
                 type: 'date-range',
                 label: t.accountingShared.period,
                 value: period,
+                required: true,
+                defaultValue: defaultPeriod(),
                 onChange: (next) => setPeriod(next ?? defaultPeriod()),
                 presets: MONTH_RANGE_PRESETS,
                 operators: true,

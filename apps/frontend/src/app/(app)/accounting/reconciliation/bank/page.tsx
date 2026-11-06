@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Check, CircleCheck, CircleDashed, Landmark, Scale, Sparkles, Wallet } from 'lucide-react';
 import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
-import type { CreatedRange } from '@/lib/created-range';
+import { tenantDateOnly, type CreatedRange } from '@/lib/created-range';
 import type { NumberCondition } from '@/lib/number-condition';
 import { inDateRange, matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
 import {
@@ -55,7 +55,7 @@ export default function BankReconciliationPage() {
     const [step, setStep] = useState<'setup' | 'import' | 'match' | 'done'>('setup');
     const [reconId, setReconId] = useState<string | null>(null);
     const [report, setReport] = useState<ReconciliationReport | null>(null);
-    const [form, setForm] = useState({ accountId: '', statementDate: new Date().toISOString().slice(0, 10), statementClosingBalance: '' });
+    const [form, setForm] = useState({ accountId: '', statementDate: tenantDateOnly(), statementClosingBalance: '' });
     const [csvText, setCsvText] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [working, setWorking] = useState(false);

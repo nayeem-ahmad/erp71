@@ -302,6 +302,32 @@ describe('FixedAssetsPage', () => {
         expect(screen.getByText('FA-003')).toBeInTheDocument();
     });
 
+    /** The fields an asset cannot be saved without. */
+    const fillRequired = (code = 'FA-009') => {
+        fireEvent.change(screen.getByLabelText(/Asset Code/), { target: { value: code } });
+        fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'Delivery van' } });
+        fireEvent.change(screen.getByLabelText(/Purchase Date/), { target: { value: '2026-10-01' } });
+        fireEvent.change(screen.getByLabelText(/^Cost/), { target: { value: '1200000' } });
+    };
+
+    it('says under each field what is missing, and sends nothing until it is there', async () => {
+        const { api } = require('@/lib/api');
+        render(<FixedAssetsPage />);
+        await waitFor(() => expect(screen.getByText('FA-002')).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: /add asset/i }));
+        fireEvent.change(screen.getByLabelText(/^Cost/), { target: { value: '-5' } });
+        fireEvent.click(screen.getByRole('button', { name: /save asset/i }));
+
+        expect(api.createFixedAsset).not.toHaveBeenCalled();
+        expect(screen.getAllByText('Required')).toHaveLength(3);
+        expect(screen.getByText('Enter an amount')).toBeInTheDocument();
+        expect(screen.getByLabelText(/Asset Code/)).toHaveClass('border-danger');
+
+        // Typing into a field clears its own message.
+        fireEvent.change(screen.getByLabelText(/Asset Code/), { target: { value: 'FA-010' } });
+        expect(screen.getAllByText('Required')).toHaveLength(2);
+    });
+
     it('sends the typed category when adding an asset, suggesting the ones in use', async () => {
         const { api } = require('@/lib/api');
         render(<FixedAssetsPage />);
@@ -313,7 +339,7 @@ describe('FixedAssetsPage', () => {
         const suggestions = document.getElementById('fixed-asset-categories')!;
         expect([...suggestions.querySelectorAll('option')].map((o) => o.getAttribute('value'))).toEqual(['Furniture']);
 
-        fireEvent.change(screen.getByPlaceholderText('e.g. FA-001'), { target: { value: 'FA-009' } });
+        fillRequired('FA-009');
         fireEvent.change(category, { target: { value: '  Vehicles ' } });
         fireEvent.click(screen.getByRole('button', { name: /save asset/i }));
 
@@ -327,6 +353,7 @@ describe('FixedAssetsPage', () => {
         render(<FixedAssetsPage />);
         await waitFor(() => expect(screen.getByText('FA-002')).toBeInTheDocument());
         fireEvent.click(screen.getByRole('button', { name: /add asset/i }));
+        fillRequired();
         fireEvent.click(screen.getByRole('button', { name: /save asset/i }));
         await waitFor(() => expect(api.createFixedAsset).toHaveBeenCalled());
         expect(api.createFixedAsset.mock.calls[0][0].category).toBeUndefined();

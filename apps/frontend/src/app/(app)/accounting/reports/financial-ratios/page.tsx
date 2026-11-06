@@ -115,6 +115,8 @@ export default function FinancialRatiosPage() {
                 label: ui.plPeriod,
                 value: period,
                 // The P&L ratios are always over some period: cleared, this month.
+                required: true,
+                defaultValue: defaultPeriod(),
                 onChange: (next) => setPeriod(requiredPeriod(next)),
                 presets: PERIOD_PRESETS,
                 operators: true,

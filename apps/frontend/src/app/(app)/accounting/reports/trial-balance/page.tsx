@@ -37,12 +37,8 @@ import {
 } from '@/lib/accounting-report-scope';
 import { matchesAnyOf, matchesSearch } from '@/lib/list-filter';
 import { BranchFilter } from '@/components/ui';
-import { asOfFilter } from '../_shared/report-chips';
+import { asOfFilter, todayDate } from '../_shared/report-chips';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
-
-function defaultToday() {
-    return new Date().toISOString().slice(0, 10);
-}
 
 interface TBRow {
     account: { id: string; name: string; code?: string | null; type: string; group: { name: string; code?: string | null }; subgroup?: { name: string } | null; is_unassigned?: boolean };
@@ -85,7 +81,7 @@ export default function TrialBalancePage() {
     const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
     const [includeCompanyBucket, setIncludeCompanyBucket] = useState(false);
     const [hideZero, setHideZero] = useState(false);
-    const [asOfDate, setAsOfDate] = useState(defaultToday());
+    const [asOfDate, setAsOfDate] = useState(todayDate);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [initialized, setInitialized] = useState(false);
@@ -332,18 +328,20 @@ export default function TrialBalancePage() {
 
     const filters = useMemo<ResolvedListFilter[]>(() => {
         const list: ResolvedListFilter[] = [
-            // A trial balance is always as of some day: cleared, it is today.
+            // A trial balance is always as of some day (today, on the workspace's calendar).
             asOfFilter({
                 label: t.accounting.reports.balanceSheet.asOf,
                 value: asOfDate,
                 onChange: setAsOfDate,
-                fallback: defaultToday,
             }) as ResolvedListFilter,
             {
                 id: 'level',
                 type: 'select',
                 label: t.accounting.reports.reportLevel.detail,
                 value: level,
+                // Always at some level; Clear all goes back to account.
+                required: true,
+                defaultValue: 'account',
                 onChange: (next) => {
                     const nextLevel = (next as ReportLevelMode | null) ?? 'account';
                     persistReportLevel(nextLevel);
@@ -392,7 +390,9 @@ export default function TrialBalancePage() {
                         type: 'multi-select',
                         label: ui.trialBalance.branches,
                         value: selectedStoreIds,
-                        // A comparison needs at least one branch.
+                        // A comparison needs at least one branch; Clear all compares them all.
+                        required: true,
+                        defaultValue: stores.map((store) => store.id),
                         onChange: (next) => {
                             if (next.length > 0) setSelectedStoreIds(next);
                         },

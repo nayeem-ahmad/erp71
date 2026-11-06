@@ -220,6 +220,7 @@ function PickHarness({ compact = false, required = false, more = false }: { comp
             // A report that must have a day goes back to its default.
             onChange: (next) => setAsOf(next ?? (required ? '2026-03-31' : null)),
             more,
+            ...(required ? { required: true, defaultValue: '2026-03-31' } : {}),
         },
     ];
     return <FilterBar filters={filters} compact={compact} layout="row" />;
@@ -312,13 +313,34 @@ describe('FilterBar — one-day date', () => {
         expect(chip('As of')).toBeInTheDocument();
     });
 
-    it('falls back to the page\'s day when a required one is cleared', () => {
+    it('names a required day at its default, with no ✕, no Clear and no Clear all', () => {
         render(<PickHarness required />);
         expect(chip(/^As of: 31 Mar/)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Remove filter As of' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
+        fireEvent.click(chip(/^As of/));
+        expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Apply' })).toBeInTheDocument();
+    });
+
+    it('counts a required day moved off its default, and Clear all puts it back', () => {
+        render(<PickHarness required />);
         fireEvent.click(chip(/^As of/));
         fireEvent.click(screen.getByRole('button', { name: 'End of last year' }));
         expect(chip(/^As of: 31 Dec/)).toBeInTheDocument();
+        // Still no ✕ — a required day is not removed, only moved.
+        expect(screen.queryByRole('button', { name: 'Remove filter As of' })).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Clear All' }));
+        expect(chip(/^As of: 31 Mar/)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
+    });
+
+    it('leaves a required day alone when Clear all clears the others', () => {
+        render(<PickHarness required />);
+        fireEvent.click(chip('Account'));
+        fireEvent.click(screen.getByRole('option', { name: '1020 — City Bank' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Clear All' }));
+        expect(chip('Account')).toBeInTheDocument();
         expect(chip(/^As of: 31 Mar/)).toBeInTheDocument();
     });
 
@@ -352,7 +374,148 @@ describe('FilterBar — phone sheet, picks and days', () => {
     });
 });
 
+describe('FilterBar — required selects', () => {
+    const YEARS = [
+        { value: '2025', label: '2025' },
+        { value: '2026', label: '2026' },
+    ];
+
+    function YearHarness({ compact = false, withDefault = true }: { compact?: boolean; withDefault?: boolean }) {
+        const [year, setYear] = useState('2026');
+        const [account, setAccount] = useState<string | null>('cash');
+        const filters: ResolvedListFilter[] = [
+            {
+                id: 'year',
+                type: 'select',
+                label: 'Fiscal year',
+                options: YEARS,
+                value: year,
+                onChange: (next) => setYear(next ?? '2026'),
+                required: true,
+                ...(withDefault ? { defaultValue: '2026' } : {}),
+            },
+            {
+                id: 'account',
+                type: 'select',
+                label: 'Account',
+                options: ACCOUNT_OPTIONS,
+                value: account,
+                onChange: (next) => setAccount(next ?? 'cash'),
+                searchable: true,
+                required: true,
+                defaultValue: 'cash',
+            },
+        ];
+        return <FilterBar filters={filters} compact={compact} layout="row" />;
+    }
+
+    it('offers no "All" in a required native select', () => {
+        render(<YearHarness />);
+        const select = screen.getByRole('combobox', { name: 'Fiscal year' });
+        expect(within(select).queryByRole('option', { name: 'All' })).not.toBeInTheDocument();
+        expect(within(select).getAllByRole('option').map((option) => option.textContent)).toEqual(['2025', '2026']);
+    });
+
+    it('still offers "All" in a select that is not required', () => {
+        render(<FilterBar compact={false} layout="row" filters={[{ id: 'k', type: 'select', label: 'Kind', options: YEARS, value: null, onChange: jest.fn() }]} />);
+        expect(within(screen.getByRole('combobox', { name: 'Kind' })).getByRole('option', { name: 'All' })).toBeInTheDocument();
+    });
+
+    it('is not on at its default; moved, Clear all resets it', () => {
+        render(<YearHarness />);
+        expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
+        fireEvent.change(screen.getByRole('combobox', { name: 'Fiscal year' }), { target: { value: '2025' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Clear All' }));
+        expect(screen.getByRole('combobox', { name: 'Fiscal year' })).toHaveValue('2026');
+        expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
+    });
+
+    it('is never on without a default to go back to', () => {
+        render(<YearHarness withDefault={false} />);
+        fireEvent.change(screen.getByRole('combobox', { name: 'Fiscal year' }), { target: { value: '2025' } });
+        expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
+    });
+
+    it('names a required searchable pick without ✕, and its panel has no Clear', () => {
+        render(<YearHarness />);
+        expect(chip(/^Account: 1010 — Cash in Hand/)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Remove filter Account' })).not.toBeInTheDocument();
+        fireEvent.click(chip(/^Account/));
+        expect(screen.getByRole('listbox')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument();
+    });
+
+    it('lists required filters under the phone toolbar without ✕, and counts only those moved', () => {
+        render(<YearHarness compact />);
+        expect(screen.getByText('Fiscal year: 2026')).toBeInTheDocument();
+        expect(screen.getByText('Account: 1010 — Cash in Hand')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^Remove filter/ })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+        fireEvent.change(screen.getByRole('combobox', { name: 'Fiscal year' }), { target: { value: '2025' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+        expect(screen.getByRole('button', { name: 'Filters 1' })).toBeInTheDocument();
+        expect(screen.getByText('Fiscal year: 2025')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^Remove filter/ })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Clear All' }));
+        expect(screen.getByText('Fiscal year: 2026')).toBeInTheDocument();
+    });
+});
+
+describe('FilterBar — required period', () => {
+    it('offers no Clear in a required period, and Clear all goes back to its default', () => {
+        const fallback = { from: '2026-11-01', to: '2026-11-06' };
+        function PeriodHarness() {
+            const [period, setPeriod] = useState<{ from?: string; to?: string }>(fallback);
+            return (
+                <FilterBar
+                    compact={false}
+                    layout="row"
+                    filters={[{
+                        id: 'period',
+                        type: 'date-range',
+                        label: 'Period',
+                        value: period,
+                        onChange: (next) => setPeriod(next ?? fallback),
+                        required: true,
+                        defaultValue: fallback,
+                    }]}
+                />
+            );
+        }
+        render(<PeriodHarness />);
+        expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Remove filter Period' })).not.toBeInTheDocument();
+        fireEvent.click(chip(/^Period/));
+        expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument();
+        fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-01' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Clear All' }));
+        expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
+        fireEvent.click(chip(/^Period/));
+        expect(screen.getByLabelText('From')).toHaveValue('2026-11-01');
+    });
+});
+
 describe('isFilterActive', () => {
+    it('reads a required filter as on only once it leaves its default', () => {
+        const base = { id: 'y', type: 'select' as const, label: 'Y', options: [], onChange: jest.fn(), required: true };
+        expect(isFilterActive({ ...base, value: '2026' })).toBe(false);
+        expect(isFilterActive({ ...base, value: '2026', defaultValue: '2026' })).toBe(false);
+        expect(isFilterActive({ ...base, value: '2025', defaultValue: '2026' })).toBe(true);
+        const day = { id: 'd', type: 'date' as const, label: 'D', onChange: jest.fn(), required: true, defaultValue: '2026-11-06' };
+        expect(isFilterActive({ ...day, value: '2026-11-06' })).toBe(false);
+        expect(isFilterActive({ ...day, value: '2026-10-31' })).toBe(true);
+        const range = { id: 'r', type: 'date-range' as const, onChange: jest.fn(), required: true, defaultValue: { from: '2026-11-01', to: '2026-11-06' } };
+        expect(isFilterActive({ ...range, value: { from: '2026-11-01', to: '2026-11-06' } })).toBe(false);
+        expect(isFilterActive({ ...range, value: { from: '2026-01-01', to: '2026-11-06' } })).toBe(true);
+        const branches = { id: 'b', type: 'multi-select' as const, label: 'B', options: [], onChange: jest.fn(), required: true, defaultValue: ['a', 'b'] };
+        expect(isFilterActive({ ...branches, value: ['b', 'a'] })).toBe(false);
+        expect(isFilterActive({ ...branches, value: ['a'] })).toBe(true);
+    });
+
     it('reads each new type', () => {
         expect(isFilterActive({ id: 'a', type: 'multi-select', label: 'A', options: [], value: [], onChange: jest.fn() })).toBe(false);
         expect(isFilterActive({ id: 'a', type: 'multi-select', label: 'A', options: [], value: ['x'], onChange: jest.fn() })).toBe(true);

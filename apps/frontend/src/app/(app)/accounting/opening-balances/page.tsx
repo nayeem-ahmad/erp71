@@ -15,6 +15,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { Alert, Button } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
+import { tenantDateOnly } from '@/lib/created-range';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { matchesAnyOf, matchesSearch } from '@/lib/list-filter';
@@ -29,7 +30,8 @@ const NONE = '__none__';
 
 const emptyRow = (): EntryRow => ({ accountId: '', debitAmount: '', creditAmount: '' });
 
-function today() { return new Date().toISOString().slice(0, 10); }
+/** Today on the workspace's calendar, not the UTC day. */
+function today() { return tenantDateOnly(); }
 
 const amountOf = (value: string) => parseFloat(value) || 0;
 const hasAmount = (row: EntryRow) => amountOf(row.debitAmount) > 0 || amountOf(row.creditAmount) > 0;

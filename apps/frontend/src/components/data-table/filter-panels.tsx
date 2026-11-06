@@ -47,6 +47,8 @@ export interface MultiSelectPanelProps {
     exclude?: { value: boolean; onChange: (next: boolean) => void };
     loadOptions?: (query: string) => Promise<readonly ListFilterOption[]>;
     searchable?: boolean;
+    /** The filter always holds a value: no Clear. */
+    required?: boolean;
 }
 
 /**
@@ -138,6 +140,7 @@ export function MultiSelectPanel({
     exclude,
     loadOptions,
     searchable,
+    required = false,
 }: MultiSelectPanelProps) {
     const { t } = useI18n();
     const copy = t.common.dataTable;
@@ -217,14 +220,16 @@ export function MultiSelectPanel({
                         {copy.selectAll}
                     </button>
                 )}
-                <button
-                    type="button"
-                    onClick={() => onChange([])}
-                    disabled={value.length === 0}
-                    className="text-gray-500 hover:underline disabled:opacity-40 max-md:min-h-touch"
-                >
-                    {copy.clear}
-                </button>
+                {required ? null : (
+                    <button
+                        type="button"
+                        onClick={() => onChange([])}
+                        disabled={value.length === 0}
+                        className="text-gray-500 hover:underline disabled:opacity-40 max-md:min-h-touch"
+                    >
+                        {copy.clear}
+                    </button>
+                )}
             </div>
         </div>
     );
@@ -237,15 +242,27 @@ export interface SingleSelectPanelProps {
     value: string | null;
     onChange: (next: string | null) => void;
     loadOptions?: (query: string) => Promise<readonly ListFilterOption[]>;
+    /** The filter always holds a value: no Clear. */
+    required?: boolean;
     /** Called once a choice is made — the popover around the panel closes on it. */
     onDone?: () => void;
 }
 
 /**
  * Picks one value from a list long enough to want a search box (an account
- * out of a chart of accounts). A pick applies at once; Clear empties it.
+ * out of a chart of accounts). A pick applies at once; Clear empties it,
+ * unless the filter is required.
  */
-export function SingleSelectPanel({ filterId, label, options, value, onChange, loadOptions, onDone }: SingleSelectPanelProps) {
+export function SingleSelectPanel({
+    filterId,
+    label,
+    options,
+    value,
+    onChange,
+    loadOptions,
+    required = false,
+    onDone,
+}: SingleSelectPanelProps) {
     const { t } = useI18n();
     const copy = t.common.dataTable;
     const { query, setQuery, trimmed, fetched, loading } = useOptionSearch(filterId, loadOptions);
@@ -293,16 +310,18 @@ export function SingleSelectPanel({ filterId, label, options, value, onChange, l
                     })
                 )}
             </div>
-            <div className="flex items-center justify-end border-t border-gray-100 px-3 py-2 text-xs">
-                <button
-                    type="button"
-                    onClick={() => pick(null)}
-                    disabled={!value}
-                    className="text-gray-500 hover:underline disabled:opacity-40 max-md:min-h-touch"
-                >
-                    {copy.clear}
-                </button>
-            </div>
+            {required ? null : (
+                <div className="flex items-center justify-end border-t border-gray-100 px-3 py-2 text-xs">
+                    <button
+                        type="button"
+                        onClick={() => pick(null)}
+                        disabled={!value}
+                        className="text-gray-500 hover:underline disabled:opacity-40 max-md:min-h-touch"
+                    >
+                        {copy.clear}
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
@@ -350,6 +369,8 @@ export interface DatePanelProps {
     value: string | null;
     onChange: (next: string | null) => void;
     presets?: readonly DatePreset[];
+    /** The report must have a day: no Clear. */
+    required?: boolean;
     /** Called once a choice is made — the popover around the panel closes on it. */
     onDone?: () => void;
     /** Injected in tests so "Today" is a known day. */
@@ -358,10 +379,9 @@ export interface DatePanelProps {
 
 /**
  * One day — a report's as-of date: shortcuts, then any day picked, then
- * Clear and Apply. A page whose report must have a day falls back to its
- * default when cleared.
+ * Clear (unless the filter is required) and Apply.
  */
-export function DatePanel({ label, value, onChange, presets = DEFAULT_DATE_PRESETS, onDone, now }: DatePanelProps) {
+export function DatePanel({ label, value, onChange, presets = DEFAULT_DATE_PRESETS, required = false, onDone, now }: DatePanelProps) {
     const { t } = useI18n();
     const copy = t.common.createdRange;
     const [date, setDate] = useState(value ?? '');
@@ -432,7 +452,7 @@ export function DatePanel({ label, value, onChange, presets = DEFAULT_DATE_PRESE
                 />
             </Field>
             <div className="flex items-center justify-end gap-2">
-                {value ? (
+                {value && !required ? (
                     <Button type="button" variant="ghost" size="sm" onClick={() => finish(null)}>
                         {copy.clear}
                     </Button>

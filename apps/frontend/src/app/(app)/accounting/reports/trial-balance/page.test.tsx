@@ -3,6 +3,7 @@ import TrialBalancePage from './page';
 import { api } from '@/lib/api';
 import { printTrialBalanceReport } from '@/lib/statement-printer';
 import { setWorkspaceItem } from '@/lib/session-store';
+import { tenantDateOnly } from '@/lib/created-range';
 import { mockBrowserPaper } from '@/test-utils/print-paper';
 import { mockBranchScope } from '@/test-utils/branch-scope';
 
@@ -191,20 +192,42 @@ describe('TrialBalancePage — print', () => {
         expect(cell('credit_balance')).toHaveTextContent(/৳\s?0/);
     });
 
-    it('asks for the day picked on the as-of chip, and falls back to today when it is cleared', async () => {
+    it('asks for the day picked on the as-of chip, and Clear all goes back to today', async () => {
         render(<TrialBalancePage />);
         await screen.findByText('Cash in Hand');
-        const today = new Date().toISOString().slice(0, 10);
+        const today = tenantDateOnly();
         expect(api.getTrialBalance).toHaveBeenLastCalledWith(expect.objectContaining({ asOfDate: today }));
-
         fireEvent.click(screen.getByRole('button', { name: /^As of/ }));
         fireEvent.click(screen.getByRole('button', { name: 'End of last year' }));
         const lastYearEnd = `${Number(today.slice(0, 4)) - 1}-12-31`;
         await waitFor(() => expect(api.getTrialBalance).toHaveBeenLastCalledWith(expect.objectContaining({ asOfDate: lastYearEnd })));
         expect(screen.getByRole('button', { name: /^As of: 31 Dec \d{4}/ })).toBeInTheDocument();
+        // A report is always as of some day: nothing to remove, only to move back.
+        expect(screen.queryByRole('button', { name: 'Remove filter As of' })).not.toBeInTheDocument();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Remove filter As of' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Clear All' }));
         await waitFor(() => expect(api.getTrialBalance).toHaveBeenLastCalledWith(expect.objectContaining({ asOfDate: today })));
+        expect(screen.getByRole('button', { name: /^As of: / })).toBeInTheDocument();
+    });
+
+    it('offers no "All" detail level', async () => {
+        render(<TrialBalancePage />);
+        await screen.findByText('Cash in Hand');
+        const detail = screen.getByRole('combobox', { name: 'Detail' });
+        expect(within(detail).queryByRole('option', { name: 'All' })).not.toBeInTheDocument();
+        expect(within(detail).getAllByRole('option')).toHaveLength(3);
+    });
+
+    it('defaults the as-of day to the workspace\'s today, not the UTC day', async () => {
+        // 02:30 in Dhaka on 6 Nov is still 5 Nov in UTC.
+        jest.useFakeTimers({ now: new Date('2026-11-05T20:30:00Z'), advanceTimers: true });
+        try {
+            render(<TrialBalancePage />);
+            await screen.findByText('Cash in Hand');
+            expect(api.getTrialBalance).toHaveBeenLastCalledWith(expect.objectContaining({ asOfDate: '2026-11-06' }));
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it('warns when the trial does not balance', async () => {

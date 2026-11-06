@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { tenantDateOnly } from '@/lib/created-range';
 import { AlertTriangle, Banknote, Scale, Target } from 'lucide-react';
 import { AccountingPageShell } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -54,7 +55,9 @@ export default function BudgetVsActualPage() {
     const { t, locale } = useI18n();
     const ui = t.accountingReportsUi.budget;
     const copy = t.accounting.reports.budgetVsActual;
-    const currentYear = new Date().getFullYear();
+    // The workspace's year, not the browser's: on 31 Dec after 18:00 UTC a
+    // Dhaka shop is already in the new year.
+    const currentYear = Number(tenantDateOnly().slice(0, 4));
     const [fiscalYear, setFiscalYear] = useState(currentYear);
     const [month, setMonth] = useState<number | null>(null);
     const [data, setData] = useState<BudgetVsActualData | null>(null);
@@ -227,7 +230,9 @@ export default function BudgetVsActualPage() {
             type: 'select',
             label: ui.fiscalYear,
             value: String(fiscalYear),
-            // A budget is always for some year: All goes back to this one.
+            // A budget is always for some year: no All, and Clear all goes back to this one.
+            required: true,
+            defaultValue: String(currentYear),
             onChange: (next) => setFiscalYear(next ? Number(next) : currentYear),
             options: [currentYear - 1, currentYear, currentYear + 1].map((year) => ({ value: String(year), label: String(year) })),
         },

@@ -53,7 +53,8 @@ const STATUSES = ['ACTIVE', 'CLOSED'] as const;
 
 const columnHelper = createColumnHelper<Loan>();
 
-const today = () => new Date().toISOString().slice(0, 10);
+/** Today on the workspace's calendar, not the UTC day. */
+const today = () => tenantDateOnly();
 
 /** An open loan with money still owed whose due date has passed. */
 function isOverdue(loan: Loan, onDay: string): boolean {

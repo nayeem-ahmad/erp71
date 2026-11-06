@@ -53,6 +53,8 @@ export type CreatedRangePanelProps = {
     presets?: readonly CreatedRangePreset[];
     /** Asks for the custom range as is between / on / before / after rather than a bare From and To. */
     operators?: boolean;
+    /** A report's period that must always be set: no Clear, and an empty custom range is refused. */
+    required?: boolean;
 };
 
 const DEFAULT_PRESETS: readonly CreatedRangePreset[] = ['today', 'yesterday', 'last7', 'thisMonth'];
@@ -70,6 +72,7 @@ export function CreatedRangePanel({
     withTime = false,
     presets = DEFAULT_PRESETS,
     operators = false,
+    required = false,
 }: CreatedRangePanelProps) {
     const { t } = useI18n();
     const copy = t.common.createdRange;
@@ -123,7 +126,8 @@ export function CreatedRangePanel({
         const nextFrom = joinRangeBound(fromDate, withTime ? fromTime : '');
         const nextTo = joinRangeBound(toDate, withTime ? toTime : '');
         if (!nextFrom && !nextTo) {
-            finish(null);
+            if (required) setRangeError(copy.pickDate);
+            else finish(null);
             return;
         }
         // Compared as text: `YYYY-MM-DDTHH:mm` sorts the way time runs. A bound
@@ -241,7 +245,7 @@ export function CreatedRangePanel({
                 betweenFields
             )}
             <div className="flex items-center justify-end gap-2">
-                {!isCreatedRangeEmpty(value) ? (
+                {!required && !isCreatedRangeEmpty(value) ? (
                     <Button type="button" variant="ghost" size="sm" onClick={() => finish(null)}>
                         {copy.clear}
                     </Button>

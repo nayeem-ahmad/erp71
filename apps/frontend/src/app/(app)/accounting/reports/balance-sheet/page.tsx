@@ -372,8 +372,8 @@ export default function BalanceSheetPage() {
                             <span className="ms-2">{t.accounting.reports.balanceSheet.asOf} {data.as_of}</span>
                         </div>
 
-                        <div className="grid md:grid-cols-2 gap-3">
-                            <CompactSection className="space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <CompactSection className="min-w-0 space-y-3">
                                 <StatementSection groups={assetGroups} label={t.accounting.reports.assets} colorClass="bg-gray-100 text-gray-700" />
                                 <div className="flex justify-between items-center px-3 py-2 bg-gray-100 rounded-lg font-semibold text-sm text-gray-800 border border-gray-200">
                                     <span>{t.accounting.reports.totalAssets}</span>
@@ -381,7 +381,7 @@ export default function BalanceSheetPage() {
                                 </div>
                             </CompactSection>
 
-                            <div className="space-y-3">
+                            <div className="min-w-0 space-y-3">
                                 <CompactSection className="space-y-3">
                                     <StatementSection groups={liabilityGroups} label={t.accounting.reports.liabilities} colorClass="bg-danger-light text-danger-text" />
                                     <div className="flex justify-between items-center px-3 py-2 bg-danger-light rounded-lg font-semibold text-sm text-danger-text border border-red-100">

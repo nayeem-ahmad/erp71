@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import BudgetVsActualPage from './page';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
+import { tenantDateOnly } from '@/lib/created-range';
 
 // A wide screen, so the chips sit in the toolbar rather than the phone's Filters sheet.
 jest.mock('@/hooks/useMediaQuery', () => ({
@@ -51,6 +52,21 @@ function stat(label: string) {
 describe('Budget vs. actual', () => {
     beforeEach(() => {
         (api.getBudgetVsActual as jest.Mock).mockReset().mockResolvedValue(RESPONSE);
+    });
+
+    it('keeps the fiscal year a required chip: no "All", and Clear all goes back to this year', async () => {
+        render(<BudgetVsActualPage />);
+        await screen.findByText('Rent');
+        const thisYear = Number(tenantDateOnly().slice(0, 4));
+        const year = screen.getByRole('combobox', { name: 'Fiscal year' });
+        expect(within(year).queryByRole('option', { name: 'All' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
+
+        fireEvent.change(year, { target: { value: String(thisYear - 1) } });
+        await waitFor(() => expect(api.getBudgetVsActual).toHaveBeenLastCalledWith(expect.objectContaining({ fiscalYear: thisYear - 1 })));
+        fireEvent.click(screen.getByRole('button', { name: 'Clear All' }));
+        await waitFor(() => expect(api.getBudgetVsActual).toHaveBeenLastCalledWith(expect.objectContaining({ fiscalYear: thisYear })));
+        expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
     });
 
     it('marks the overspend in red and counts the accounts over budget', async () => {

@@ -79,6 +79,22 @@ describe('FiscalPeriodsPage', () => {
         expect(tile('Periods')).toHaveTextContent('1');
     });
 
+    it('keeps the fiscal year a required chip: no "All", and Clear all goes back to this year', async () => {
+        render(<FiscalPeriodsPage />);
+        await within(await screen.findByRole('table')).findByText('January 2020');
+        const thisYear = new Date().getFullYear();
+        const year = screen.getByRole('combobox', { name: 'Fiscal Year' });
+        expect(within(year).queryByRole('option', { name: 'All' })).not.toBeInTheDocument();
+        // At this year the chip is not a filter to clear.
+        expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
+
+        fireEvent.change(year, { target: { value: String(thisYear - 1) } });
+        await waitFor(() => expect(api.getFiscalPeriods).toHaveBeenLastCalledWith({ year: thisYear - 1 }));
+        fireEvent.click(screen.getByRole('button', { name: 'Clear All' }));
+        await waitFor(() => expect(api.getFiscalPeriods).toHaveBeenLastCalledWith({ year: thisYear }));
+        expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
+    });
+
     it('locks a period from its row action', async () => {
         render(<FiscalPeriodsPage />);
         await screen.findByText('February 2020');
