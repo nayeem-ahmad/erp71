@@ -150,6 +150,26 @@ describe('CrmLeadGenerationService.search', () => {
 
         await expect(service.search('t1', {})).rejects.toBeInstanceOf(BadRequestException);
     });
+
+    it('asks the extract call for JSON with reasoning off and enough tokens for a full shortlist', async () => {
+        const { service, ai } = makeService();
+
+        await service.search('t1', { limit: 15 });
+
+        expect(ai.completeUnbilled.mock.calls[0][3]).toBeGreaterThanOrEqual(4000);
+        expect(ai.completeUnbilled.mock.calls[0][4]).toEqual({ json: true, reasoning: false });
+    });
+
+    it('still returns candidates when the model wraps the JSON in a sentence', async () => {
+        const { service } = makeService({
+            extractText: 'Here are the companies:\n' + JSON.stringify({
+                candidates: [{ company_name: 'Acme Soft', website_url: 'https://acmesoft.com' }],
+            }),
+        });
+
+        const result = await service.search('t1', {});
+        expect(result.candidates[0].company_name).toBe('Acme Soft');
+    });
 });
 
 describe('CrmLeadGenerationService.importCandidates', () => {

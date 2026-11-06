@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { AiService } from '../ai/ai.service';
 import { WebSearchService, WebToolRefusal } from '../ai/web-search.service';
 import { DatabaseService } from '../database/database.service';
@@ -13,7 +13,12 @@ import {
     type ParsedCandidate,
 } from './lead-generation.util';
 
-const EXTRACT_MAX_TOKENS = 1800;
+/**
+ * 15 candidates with descriptions overflow 1800 tokens, and Haiku 4.5 is a
+ * reasoning model: thinking counts against max_tokens. A small budget returns
+ * empty or truncated content, which the UI shows as "invalid response".
+ */
+export const EXTRACT_MAX_TOKENS = 4096;
 
 const EXTRACT_PROMPT = [
     'You extract B2B company prospects for a CRM from the research below.',
@@ -48,6 +53,8 @@ export type ImportCandidateInput = {
 
 @Injectable()
 export class CrmLeadGenerationService {
+    private readonly logger = new Logger(CrmLeadGenerationService.name);
+
     constructor(
         private readonly ai: AiService,
         private readonly webSearch: WebSearchService,
@@ -101,10 +108,20 @@ export class CrmLeadGenerationService {
             webEnabled ? EXTRACT_PROMPT : KNOWLEDGE_PROMPT,
             extractUser,
             EXTRACT_MAX_TOKENS,
+            { json: true, reasoning: false },
         );
         const extractCredits = await this.ai.logUsage(tenantId, 'lead_generation', usedModel, usage);
 
-        const parsed = parseCandidates(extractJson<unknown>(text), brief.limit);
+        let payload: unknown;
+        try {
+            payload = extractJson<unknown>(text);
+        } catch (err) {
+            this.logger.warn(
+                `lead_generation extract failed (model=${usedModel}, chars=${text.length}): ${text.slice(0, 400)}`,
+            );
+            throw err;
+        }
+        const parsed = parseCandidates(payload, brief.limit);
         const candidates = webEnabled
             ? parsed
             : parsed.map((row) => ({ ...row, unverified: true }));
