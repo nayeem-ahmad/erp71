@@ -38,6 +38,7 @@ export const accountingReportsUiMessages = {
             withinBudget: 'ضمن الميزانية',
             accountsOver: 'حسابات تجاوزت الميزانية',
             ofAccounts: 'من {count}',
+            monthsBudgeted: 'ميزانية {count} من {total} شهرًا',
             empty: 'لا توجد بنود ميزانية لهذه الفترة. حدّد ميزانية لكل حساب لاستخدام هذا التقرير.',
         },
         comparative: {

@@ -38,6 +38,7 @@ export const accountingReportsUiMessages = {
             withinBudget: 'বাজেটের মধ্যে',
             accountsOver: 'বাজেট ছাড়ানো অ্যাকাউন্ট',
             ofAccounts: '{count}টির মধ্যে',
+            monthsBudgeted: '{total} মাসের মধ্যে {count} মাসের বাজেট',
             empty: 'এই সময়ের জন্য কোনো বাজেট এন্ট্রি পাওয়া যায়নি। এই রিপোর্ট ব্যবহারে প্রতিটি অ্যাকাউন্টের বাজেট নির্ধারণ করুন।',
         },
         comparative: {

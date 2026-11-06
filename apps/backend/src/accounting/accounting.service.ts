@@ -3413,12 +3413,30 @@ export class AccountingService {
         });
     }
 
+    /**
+     * Budget vs actual — always one row per account, so an account's actual is
+     * counted once however many budget rows it has.
+     *
+     * A budget row (AccountBudget) is either monthly (month 1–12) or annual
+     * (month null). The rule:
+     *  - Month view (`month` given): the account's budget row for that month
+     *    against its actual for that calendar month. Annual rows carry no
+     *    monthly phasing, so an account budgeted only annually is not listed.
+     *  - Full-year view: an annual row, when the account has one, is the year's
+     *    budget and its monthly rows are read as the phasing of it (not added
+     *    on top); otherwise the budget is the sum of the account's monthly rows
+     *    for the year. The actual is the account's actual for the whole
+     *    calendar year. `months` is how many monthly rows make up the budget
+     *    (null when it is the annual row), so a year budgeted for only some of
+     *    its months shows as such.
+     */
     async getBudgetVsActual(tenantId: string, query: BudgetVsActualQueryDto, storeId?: string) {
+        const isMonthView = query.month !== undefined && query.month !== null;
         const budgets = await this.db.accountBudget.findMany({
             where: {
                 tenant_id: tenantId,
                 fiscal_year: query.fiscalYear,
-                ...(query.month !== undefined ? { month: query.month } : {}),
+                ...(isMonthView ? { month: query.month } : {}),
             },
             include: { account: { include: { group: true } } },
         });
@@ -3427,18 +3445,43 @@ export class AccountingService {
             return { fiscal_year: query.fiscalYear, month: query.month ?? null, rows: [], totals: { budget: 0, actual: 0, variance: 0 } };
         }
 
-        // Determine date range for actuals
+        type AccountBudgetLine = {
+            account: (typeof budgets)[number]['account'];
+            /** The annual row's amount and when it was last set, if the account has one. */
+            annual: { amount: number; updatedAt: number } | null;
+            monthly: number;
+            months: number;
+        };
+        const byAccount = new Map<string, AccountBudgetLine>();
+        for (const budget of budgets) {
+            const line = byAccount.get(budget.account_id)
+                ?? { account: budget.account, annual: null, monthly: 0, months: 0 };
+            const amount = Number(budget.amount);
+            if (budget.month === null || budget.month === undefined) {
+                // The unique key treats a null month as distinct, so a second annual
+                // row can exist; the one set last is the budget.
+                const updatedAt = budget.updated_at ? new Date(budget.updated_at).getTime() : 0;
+                if (!line.annual || updatedAt >= line.annual.updatedAt) line.annual = { amount, updatedAt };
+            } else {
+                line.monthly += amount;
+                line.months += 1;
+            }
+            byAccount.set(budget.account_id, line);
+        }
+
+        // Determine date range for actuals: the month's window in a month view,
+        // the calendar year otherwise.
         let fromDate: Date;
         let toDate: Date;
-        if (query.month) {
-            fromDate = new Date(Date.UTC(query.fiscalYear, query.month - 1, 1));
-            toDate = new Date(Date.UTC(query.fiscalYear, query.month, 0, 23, 59, 59, 999));
+        if (isMonthView) {
+            fromDate = new Date(Date.UTC(query.fiscalYear, query.month! - 1, 1));
+            toDate = new Date(Date.UTC(query.fiscalYear, query.month!, 0, 23, 59, 59, 999));
         } else {
             fromDate = new Date(Date.UTC(query.fiscalYear, 0, 1));
             toDate = new Date(Date.UTC(query.fiscalYear, 11, 31, 23, 59, 59, 999));
         }
 
-        const accountIds = budgets.map((b) => b.account_id);
+        const accountIds = [...byAccount.keys()];
         const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
         const details = await this.db.voucherDetail.findMany({
             where: {
@@ -3459,13 +3502,18 @@ export class AccountingService {
         let totalBudget = 0;
         let totalActual = 0;
 
-        const rows = budgets.map((budget) => {
-            const t = actualMap.get(budget.account_id) ?? { debit: 0, credit: 0 };
-            const accountType = budget.account.type as AccountType;
+        const lines = [...byAccount.values()].sort((a, b) =>
+            (a.account.code ?? '').localeCompare(b.account.code ?? '') || a.account.name.localeCompare(b.account.name));
+
+        const rows = lines.map((line) => {
+            const account = line.account;
+            const t = actualMap.get(account.id) ?? { debit: 0, credit: 0 };
+            const accountType = account.type as AccountType;
             const actual = CREDIT_NORMAL_ACCOUNT_TYPES.has(accountType)
                 ? this.roundAmount(t.credit - t.debit)
                 : this.roundAmount(t.debit - t.credit);
-            const budgetAmount = this.roundAmount(Number(budget.amount));
+            const useAnnual = !isMonthView && line.annual !== null;
+            const budgetAmount = this.roundAmount(useAnnual ? line.annual!.amount : line.monthly);
             const variance = this.roundAmount(budgetAmount - actual);
             const variancePct = budgetAmount !== 0 ? this.roundAmount((variance / Math.abs(budgetAmount)) * 100) : null;
 
@@ -3474,16 +3522,18 @@ export class AccountingService {
 
             return {
                 account: {
-                    id: budget.account.id,
-                    name: budget.account.name,
-                    code: budget.account.code,
-                    type: budget.account.type,
-                    group: { id: budget.account.group.id, name: budget.account.group.name },
+                    id: account.id,
+                    name: account.name,
+                    code: account.code,
+                    type: account.type,
+                    group: { id: account.group.id, name: account.group.name },
                 },
                 budget: budgetAmount,
                 actual,
                 variance,
                 variance_pct: variancePct,
+                /** Monthly budget rows behind `budget`; null when it is the annual budget. */
+                months: useAnnual ? null : line.months,
             };
         });
 

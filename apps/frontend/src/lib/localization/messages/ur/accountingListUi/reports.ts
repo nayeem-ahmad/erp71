@@ -38,6 +38,7 @@ export const accountingReportsUiMessages = {
             withinBudget: 'بجٹ کے اندر',
             accountsOver: 'بجٹ سے زیادہ کھاتے',
             ofAccounts: '{count} میں سے',
+            monthsBudgeted: '{total} میں سے {count} مہینوں کا بجٹ',
             empty: 'اس مدت کے لیے کوئی بجٹ اندراج نہیں ملا۔ یہ رپورٹ استعمال کرنے کے لیے ہر کھاتے کا بجٹ مقرر کریں۔',
         },
         comparative: {

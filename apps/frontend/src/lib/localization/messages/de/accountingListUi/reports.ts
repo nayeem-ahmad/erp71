@@ -38,6 +38,7 @@ export const accountingReportsUiMessages = {
             withinBudget: 'Im Budget',
             accountsOver: 'Konten über Budget',
             ofAccounts: 'von {count}',
+            monthsBudgeted: 'Budget für {count} von {total} Monaten',
             empty: 'Keine Budgeteinträge für diesen Zeitraum gefunden. Legen Sie Budgets je Konto fest, um diesen Bericht zu nutzen.',
         },
         comparative: {

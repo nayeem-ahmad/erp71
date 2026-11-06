@@ -22,10 +22,17 @@ interface BudgetRow {
     /** Budget minus actual: below zero, the account has gone over its budget. */
     variance: number;
     variance_pct: number | null;
+    /**
+     * Monthly budget rows summed into `budget` — one row per account, so an
+     * account's actual is never repeated. Null when the year view uses the
+     * account's annual budget.
+     */
+    months?: number | null;
 }
 
 interface BudgetVsActualData {
-    filters?: { fiscalYear: number; month: number | null };
+    fiscal_year?: number;
+    month?: number | null;
     rows: BudgetRow[];
     totals: { budget: number; actual: number; variance: number };
 }
@@ -36,6 +43,8 @@ const STATUSES: BudgetStatus[] = ['over', 'within'];
 function statusOf(row: BudgetRow): BudgetStatus {
     return row.variance < 0 ? 'over' : 'within';
 }
+
+const MONTHS_IN_YEAR = 12;
 
 function varianceClass(variance: number) {
     return variance >= 0 ? 'text-emerald-700' : 'text-red-600';
@@ -84,6 +93,9 @@ export default function BudgetVsActualPage() {
     const statusLabels: Record<BudgetStatus, string> = useMemo(() => ({ over: ui.overBudget, within: ui.withinBudget }), [ui]);
 
     const allRows = useMemo(() => data?.rows ?? [], [data]);
+    // The year view compares a full year's actual, so a budget that covers only
+    // some months says so under its figure.
+    const yearView = (data?.month ?? null) === null;
     const rows = useMemo(
         () => allRows.filter((row) => matchesSearch(search, row.account.name, row.account.code)
             && matchesAnyOf(types, row.account.type)
@@ -127,9 +139,23 @@ export default function BudgetVsActualPage() {
             header: copy.budget,
             accessorKey: 'budget',
             meta: { align: 'end', hideOnMobile: true },
-            cell: ({ row }: { row: { original: BudgetRow } }) => (
-                <span className="tabular-nums">{formatBDT(row.original.budget, { locale })}</span>
-            ),
+            cell: ({ row }: { row: { original: BudgetRow } }) => {
+                const months = row.original.months;
+                const partial = yearView && typeof months === 'number' && months > 0 && months < MONTHS_IN_YEAR;
+                return (
+                    <>
+                        <span className="tabular-nums">{formatBDT(row.original.budget, { locale })}</span>
+                        {partial ? (
+                            <span className="block text-xs text-gray-400">
+                                {formatMessage(ui.monthsBudgeted, {
+                                    count: months.toLocaleString(locale),
+                                    total: MONTHS_IN_YEAR.toLocaleString(locale),
+                                })}
+                            </span>
+                        ) : null}
+                    </>
+                );
+            },
             footer: () => formatBDT(totals.budget, { locale }),
         },
         {
@@ -179,7 +205,7 @@ export default function BudgetVsActualPage() {
             },
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    ], [t, ui, copy, statusLabels, locale, totals]);
+    ], [t, ui, copy, statusLabels, locale, totals, yearView]);
 
     const monthOptions = useMemo(
         () => Array.from({ length: 12 }, (_, index) => ({
@@ -247,7 +273,10 @@ export default function BudgetVsActualPage() {
         const budget = rows.reduce((sum, row) => sum + row.budget, 0);
         const actual = rows.reduce((sum, row) => sum + row.actual, 0);
         const variance = budget - actual;
-        const over = rows.filter((row) => statusOf(row) === 'over').length;
+        // Counted by account: the report has one row per account, and the strip
+        // says so rather than relying on it.
+        const accounts = new Set(rows.map((row) => row.account.id)).size;
+        const over = new Set(rows.filter((row) => statusOf(row) === 'over').map((row) => row.account.id)).size;
         const items: ListStat[] = [
             { id: 'budget', icon: <Target aria-hidden />, label: copy.budget, value: wholeTaka(budget, locale) },
             { id: 'actual', icon: <Banknote aria-hidden />, label: copy.actual, value: wholeTaka(actual, locale) },
@@ -264,7 +293,7 @@ export default function BudgetVsActualPage() {
                 icon: <AlertTriangle aria-hidden />,
                 label: ui.accountsOver,
                 value: over.toLocaleString(locale),
-                hint: formatMessage(ui.ofAccounts, { count: rows.length.toLocaleString(locale) }),
+                hint: formatMessage(ui.ofAccounts, { count: accounts.toLocaleString(locale) }),
                 tone: over > 0 ? 'warning' : 'default',
             },
         ];

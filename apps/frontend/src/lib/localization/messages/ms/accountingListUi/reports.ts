@@ -38,6 +38,7 @@ export const accountingReportsUiMessages = {
             withinBudget: 'Dalam bajet',
             accountsOver: 'Akaun melebihi bajet',
             ofAccounts: 'daripada {count}',
+            monthsBudgeted: 'Bajet untuk {count} daripada {total} bulan',
             empty: 'Tiada entri bajet untuk tempoh ini. Tetapkan bajet bagi setiap akaun untuk menggunakan laporan ini.',
         },
         comparative: {
