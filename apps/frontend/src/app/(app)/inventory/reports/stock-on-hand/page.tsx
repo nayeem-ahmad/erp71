@@ -233,19 +233,25 @@ export default function StockOnHandPage() {
                 },
                 size: 120,
             }),
-            columnHelper.accessor((row) => row.lastPurchasePrice ?? '', {
+            columnHelper.accessor((row) => (row.lastPurchasePrice != null && row.lastPurchasePrice > 0 ? row.lastPurchasePrice : ''), {
                 id: 'lastPurchasePrice',
                 header: strings.columns.lastPurchasePrice,
                 cell: (info) => {
                     const value = info.row.original.lastPurchasePrice;
-                    return value == null ? <span className="text-xs text-gray-400">-</span> : formatBDT(value);
+                    return value == null || value <= 0 ? <span className="text-xs text-gray-400">-</span> : formatBDT(value);
                 },
                 size: 150,
             }),
-            columnHelper.accessor((row) => row.product.sellingPrice ?? 0, {
+            columnHelper.accessor((row) => {
+                const value = Number(row.product.sellingPrice ?? 0);
+                return value > 0 ? value : '';
+            }, {
                 id: 'salesPrice',
                 header: strings.columns.salesPrice,
-                cell: (info) => formatBDT(Number(info.getValue() || 0)),
+                cell: (info) => {
+                    const value = Number(info.getValue() || 0);
+                    return value <= 0 ? <span className="text-xs text-gray-400">-</span> : formatBDT(value);
+                },
                 size: 120,
             }),
             columnHelper.accessor('costBasis', {
