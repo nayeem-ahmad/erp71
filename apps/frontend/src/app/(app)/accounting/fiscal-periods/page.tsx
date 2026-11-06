@@ -1,49 +1,86 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Lock, Unlock, AlertTriangle } from 'lucide-react';
-import {
-    AccountingPageShell,
-    CompactSection,
-} from '@/components/accounting/compact';
+import { useEffect, useMemo, useState } from 'react';
+import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
+import { CalendarCheck, CalendarClock, CalendarDays, CalendarRange, Lock, Unlock } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
+import { AccountingPageShell } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { Alert, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { api } from '@/lib/api';
+import { tenantDateOnly, type CreatedRange } from '@/lib/created-range';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { calendarDayOf, inDateRange, matchesAnyOf, matchesSearch } from '@/lib/list-filter';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { compactDensity } from '@/lib/ui/compact-density';
+import { toast } from '@/lib/toast';
 
 interface FiscalPeriod {
     id: string;
     year: number;
     month: number;
     period_label: string;
+    start_date?: string | null;
+    end_date?: string | null;
     is_locked: boolean;
     locked_at: string | null;
 }
 
+type PeriodStatus = 'open' | 'closed' | 'locked';
+
+const STATUSES: PeriodStatus[] = ['open', 'closed', 'locked'];
+const STATUS_TONE: Record<PeriodStatus, StatusBadgeTone> = { open: 'success', closed: 'warning', locked: 'neutral' };
+
+/** Locked, or — unlocked — whether the month has ended ("closed") or is still running or ahead. */
+function statusOf(period: FiscalPeriod, today: string): PeriodStatus {
+    if (period.is_locked) return 'locked';
+    const end = calendarDayOf(period.end_date) ?? lastDayOf(period.year, period.month);
+    return end < today ? 'closed' : 'open';
+}
+
+function lastDayOf(year: number, month: number): string {
+    return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+}
+
+const columnHelper = createColumnHelper<FiscalPeriod>();
+
 export default function FiscalPeriodsPage() {
-    const { t } = useI18n();
+    const { t, fmt, locale } = useI18n();
+    const f = t.fiscalPeriods;
+    const m = t.accountingMastersUi.fiscalPeriods;
     const currentYear = new Date().getFullYear();
     const [year, setYear] = useState(currentYear);
     const [periods, setPeriods] = useState<FiscalPeriod[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     const [working, setWorking] = useState<string | null>(null);
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState<string[]>([]);
+    const [statusExclude, setStatusExclude] = useState(false);
+    const [dateRange, setDateRange] = useState<CreatedRange | null>(null);
 
-    useEffect(() => { void load(); }, [year]);
+    useEffect(() => {
+        void load();
+        // load reads the year from this render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [year]);
 
     const load = async () => {
         setLoading(true);
-        setError(null);
         try {
             const data = await api.getFiscalPeriods({ year });
-            setPeriods(data);
+            setPeriods(Array.isArray(data) ? data : []);
         } catch (e: any) {
-            setError(e?.message ?? 'Failed to load fiscal periods');
+            setPeriods([]);
+            toast.error(e?.message ?? f.loadFailed);
         } finally {
             setLoading(false);
         }
+    };
+
+    const periodLabel = (p: FiscalPeriod) => {
+        const month = f.months[p.month as keyof typeof f.months];
+        return month ? `${month} ${p.year}` : p.period_label;
     };
 
     const toggle = async (p: FiscalPeriod) => {
@@ -52,104 +89,211 @@ export default function FiscalPeriodsPage() {
         try {
             if (p.is_locked) {
                 await api.unlockFiscalPeriod({ year: p.year, month: p.month });
+                toast.success(fmt(m.unlockedToast, { period: periodLabel(p) }));
             } else {
                 await api.lockFiscalPeriod({ year: p.year, month: p.month });
+                toast.success(fmt(m.lockedToast, { period: periodLabel(p) }));
             }
             await load();
         } catch (e: any) {
-            setError(e?.message ?? 'Action failed');
+            toast.error(e?.message ?? f.actionFailed);
         } finally {
             setWorking(null);
         }
     };
 
+    const today = tenantDateOnly();
+
+    const filtered = useMemo(
+        () =>
+            periods.filter((p) => {
+                if (!matchesAnyOf(statusFilter, statusOf(p, today), statusExclude)) return false;
+                if (!inDateRange(p.start_date ?? `${p.year}-${String(p.month).padStart(2, '0')}-01`, dateRange)) return false;
+                return matchesSearch(search, periodLabel(p), p.period_label);
+            }),
+        // periodLabel reads only the copy.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [periods, statusFilter, statusExclude, dateRange, search, today, f],
+    );
+
+    const yearOptions = useMemo(() => {
+        const years = new Set<number>([year]);
+        for (let y = currentYear + 1; y >= currentYear - 6; y -= 1) years.add(y);
+        return [...years].sort((a, b) => b - a).map((y) => ({ value: String(y), label: String(y) }));
+    }, [year, currentYear]);
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'year',
+            type: 'select',
+            label: f.fiscalYear,
+            value: String(year),
+            // The year is the report's own parameter: clearing it goes back to this year.
+            onChange: (next) => setYear(next ? Number(next) : currentYear),
+            options: yearOptions,
+        },
+        {
+            id: 'status',
+            type: 'multi-select',
+            label: f.status,
+            value: statusFilter,
+            onChange: setStatusFilter,
+            exclude: { value: statusExclude, onChange: setStatusExclude },
+            options: STATUSES.map((status) => ({ value: status, label: m.statuses[status] })),
+        },
+        {
+            id: 'dates',
+            type: 'date-range',
+            label: m.dates,
+            value: dateRange,
+            onChange: setDateRange,
+            operators: true,
+            presets: ['thisMonth', 'last3Months', 'last6Months', 'thisYear'],
+        },
+    ], [f, m, year, currentYear, yearOptions, statusFilter, statusExclude, dateRange]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const count = (status: PeriodStatus) => filtered.filter((p) => statusOf(p, today) === status).length;
+        const closed = count('closed');
+        // The run of locked months from the first one shown — the books are final up to there.
+        const ordered = [...filtered].sort((a, b) => a.year - b.year || a.month - b.month);
+        const firstOpen = ordered.findIndex((p) => !p.is_locked);
+        const lastLocked = firstOpen === -1 ? ordered[ordered.length - 1] : ordered[firstOpen - 1];
+        const items: ListStat[] = [
+            { id: 'periods', icon: <CalendarDays aria-hidden />, label: m.periods, value: n(filtered.length) },
+            { id: 'open', icon: <CalendarClock aria-hidden />, label: m.statuses.open, value: n(count('open')) },
+            {
+                id: 'closed',
+                icon: <CalendarRange aria-hidden />,
+                label: m.statuses.closed,
+                value: n(closed),
+                tone: closed > 0 ? 'warning' : 'default',
+            },
+            { id: 'locked', icon: <Lock aria-hidden />, label: m.statuses.locked, value: n(count('locked')) },
+            {
+                id: 'lockedThrough',
+                icon: <CalendarCheck aria-hidden />,
+                label: m.lockedThrough,
+                value: lastLocked ? periodLabel(lastLocked) : m.none,
+            },
+        ];
+        return { items, loading, label: m.statsLabel };
+        // periodLabel reads only the copy.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filtered, loading, locale, m, today, f]);
+
+    const columns = useMemo<ColumnDef<FiscalPeriod, any>[]>(
+        () => [
+            columnHelper.accessor((row) => row.year * 100 + row.month, {
+                id: 'period',
+                header: f.period,
+                cell: (info) => <span className="text-gray-900">{periodLabel(info.row.original)}</span>,
+                size: 180,
+            }),
+            columnHelper.accessor((row) => row.start_date ?? '', {
+                id: 'dates',
+                header: m.dates,
+                cell: (info) => {
+                    const p = info.row.original;
+                    if (!p.start_date || !p.end_date) return '—';
+                    return (
+                        <span className="text-gray-500">
+                            {formatDate(calendarDayOf(p.start_date), locale)} – {formatDate(calendarDayOf(p.end_date), locale)}
+                        </span>
+                    );
+                },
+                size: 220,
+                meta: { hideOnMobile: true },
+            }),
+            columnHelper.accessor((row) => statusOf(row, today), {
+                id: 'status',
+                header: f.status,
+                cell: (info) => {
+                    const status = info.getValue() as PeriodStatus;
+                    return <StatusBadge tone={STATUS_TONE[status]}>{m.statuses[status]}</StatusBadge>;
+                },
+                size: 150,
+            }),
+            columnHelper.accessor((row) => row.locked_at ?? '', {
+                id: 'lockedAt',
+                header: f.lockedAt,
+                cell: (info) => <span className="text-gray-500">{formatDate(info.row.original.locked_at, locale)}</span>,
+                size: 140,
+                meta: { hideOnMobile: true, align: 'end' },
+            }),
+            columnHelper.display({
+                id: 'actions',
+                header: t.common.actions,
+                cell: (info) => {
+                    const p = info.row.original;
+                    const busy = working === `${p.year}-${p.month}`;
+                    return (
+                        <RowActions>
+                            {p.is_locked ? (
+                                <RowActionButton
+                                    icon={<Unlock />}
+                                    label={f.unlock}
+                                    intent="success"
+                                    disabled={busy}
+                                    onClick={() => void toggle(p)}
+                                />
+                            ) : (
+                                <RowActionButton
+                                    icon={<Lock />}
+                                    label={f.lockPeriod}
+                                    intent="warning"
+                                    disabled={busy}
+                                    onClick={() => void toggle(p)}
+                                />
+                            )}
+                        </RowActions>
+                    );
+                },
+                enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
+                size: 80,
+            }),
+        ],
+        // periodLabel/toggle read only the copy and setters.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [t, f, m, locale, today, working],
+    );
+
     return (
-        <AccountingPageShell maxWidth="narrow">
+        <AccountingPageShell>
             <PageHeader
-                title={t.fiscalPeriods.title}
-                subtitle={t.fiscalPeriods.subtitle}
+                title={f.title}
+                subtitle={f.subtitle}
                 breadcrumbs={modulePageBreadcrumbs(
                     t.dashboardHome.breadcrumbHome,
                     t.sidebar.modules.accounting,
-                    t.fiscalPeriods.title,
+                    f.title,
                     'accounting',
                 )}
             />
 
-            <CompactSection className="border-amber-100 bg-amber-50/50">
-                <div className="flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                    <p className="text-xs text-amber-800">
-                        Locking a period prevents any new vouchers from being posted with dates in that period. Only OWNER can unlock a period.
-                    </p>
-                </div>
-            </CompactSection>
+            <Alert tone="warning">{m.lockNotice}</Alert>
 
-            <CompactSection>
-                <div className="flex items-center gap-3">
-                    <span className={compactDensity.formLabel}>Fiscal Year</span>
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => setYear((y) => y - 1)} className="w-7 h-7 rounded-lg bg-gray-100 font-semibold text-gray-600 hover:bg-gray-200 transition text-sm">−</button>
-                        <span className="text-base font-bold w-14 text-center">{year}</span>
-                        <button onClick={() => setYear((y) => y + 1)} className="w-7 h-7 rounded-lg bg-gray-100 font-semibold text-gray-600 hover:bg-gray-200 transition text-sm">+</button>
-                    </div>
-                </div>
-            </CompactSection>
-
-            {error && <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-700">{error}</div>}
-
-            {loading ? (
-                <CompactSection className="text-center text-gray-400 text-sm py-8">Loading…</CompactSection>
-            ) : (
-                <CompactSection className="!p-0 overflow-hidden">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-gray-100">
-                                <th className={`text-start px-3 py-2 ${compactDensity.formLabel}`}>Period</th>
-                                <th className={`text-center px-3 py-2 ${compactDensity.formLabel}`}>Status</th>
-                                <th className={`text-end px-3 py-2 ${compactDensity.formLabel}`}>Locked At</th>
-                                <th className="px-3 py-2" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {periods.map((p) => {
-                                const key = `${p.year}-${p.month}`;
-                                const isBusy = working === key;
-                                return (
-                                    <tr key={p.id} className="border-b border-gray-50 last:border-0">
-                                        <td className="px-3 py-2 font-semibold text-gray-800">{p.period_label}</td>
-                                        <td className="px-3 py-2 text-center">
-                                            {p.is_locked ? (
-                                                <span className="inline-flex items-center gap-1 rounded-full bg-danger-light px-2 py-0.5 text-xs font-semibold text-danger-text border border-red-100">
-                                                    <Lock className="w-3 h-3" /> Locked
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-100">
-                                                    <Unlock className="w-3 h-3" /> Open
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-3 py-2 text-end text-gray-400 text-xs">
-                                            {formatDate(p.locked_at)}
-                                        </td>
-                                        <td className="px-3 py-2 text-end">
-                                            <button
-                                                onClick={() => toggle(p)}
-                                                disabled={isBusy}
-                                                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition disabled:opacity-50 ${p.is_locked
-                                                    ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                                    : 'bg-danger-light text-danger-text border border-red-100 hover:bg-danger-light'}`}
-                                            >
-                                                {isBusy ? '…' : p.is_locked ? 'Unlock' : 'Lock Period'}
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </CompactSection>
-            )}
+            <DataTable<FiscalPeriod>
+                tableId="accounting-fiscal-periods"
+                columns={columns}
+                data={filtered}
+                title={f.title}
+                isLoading={loading}
+                emptyMessage={m.empty}
+                emptyIcon={<CalendarDays className="h-10 w-10 text-gray-200" />}
+                searchPlaceholder={m.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+                getRowId={(row) => row.id}
+            />
         </AccountingPageShell>
     );
 }

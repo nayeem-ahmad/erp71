@@ -2,13 +2,21 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { BookOpen, FolderTree, Layers, Pencil, Plus, Trash2 } from 'lucide-react';
+import { BookOpen, CircleOff, FolderTree, Layers, Pencil, Plus, Trash2 } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import {
+    DataTable,
+    ListStats,
+    ListToolbar,
+    type ListFilter,
+    type ListStat,
+    type ResolvedListFilter,
+} from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
 import { AccountingPageShell, CompactSection } from '@/components/accounting/compact';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Button, buttonClassName, ConfirmDialog } from '@/components/ui';
 import {
     ACCOUNT_TYPES,
     subgroupGroupId,
@@ -18,6 +26,8 @@ import {
 } from '@/components/accounting/AccountFormModal';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
+import type { NumberCondition } from '@/lib/number-condition';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -36,58 +46,55 @@ function buildSubgroupColumns(
     return [
         subgroupColumnHelper.accessor('code', {
             header: t.coa.columns.code,
-            cell: (info) => (
-                <span className="font-mono text-xs text-gray-500">{info.getValue()}</span>
-            ),
+            cell: (info) => <span className="font-mono text-gray-500">{info.getValue()}</span>,
             size: 70,
         }),
         subgroupColumnHelper.accessor('name', {
             header: t.accountGroups.columns.subgroup,
-            cell: (info) => (
-                <span className="text-sm font-semibold text-gray-900">{info.getValue()}</span>
-            ),
+            cell: (info) => <span className="text-gray-900">{info.getValue()}</span>,
             size: 260,
         }),
         subgroupColumnHelper.accessor((row) => row._count?.accounts ?? 0, {
             id: 'accounts',
             header: t.accountGroups.columns.accounts,
-            cell: (info) => <span className="text-sm text-gray-700">{info.getValue()}</span>,
+            cell: (info) => <span className="tabular-nums text-gray-700">{info.getValue()}</span>,
             size: 100,
+            meta: { align: 'end' },
         }),
         subgroupColumnHelper.display({
             id: 'actions',
             header: t.common.actions,
             cell: (info) => (
-                <div className="flex items-center justify-end gap-1">
-                    <button
-                        type="button"
-                        onClick={() => onEdit(info.row.original)}
-                        aria-label={t.common.edit}
-                        className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"
-                    >
-                        <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                        type="button"
+                <RowActions>
+                    <RowActionButton icon={<Pencil />} label={t.common.edit} onClick={() => onEdit(info.row.original)} />
+                    <RowActionButton
+                        icon={<Trash2 />}
+                        label={t.common.delete}
+                        intent="danger"
                         onClick={() => onDelete(info.row.original)}
-                        aria-label={t.common.delete}
-                        className="rounded-lg p-1.5 text-red-500 hover:bg-red-50"
-                    >
-                        <Trash2 className="h-4 w-4" />
-                    </button>
-                </div>
+                    />
+                </RowActions>
             ),
+            enableSorting: false,
+            enableColumnFilter: false,
+            enableResizing: false,
             size: 90,
         }),
     ];
 }
 
 export default function AccountGroupsPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
+    const m = t.accountingMastersUi.accountGroups;
     const [groups, setGroups] = useState<AccountGroup[]>([]);
     const [subgroups, setSubgroups] = useState<AccountSubgroup[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedGroupId, setSelectedGroupId] = useState('');
+
+    const [search, setSearch] = useState('');
+    const [typeFilter, setTypeFilter] = useState<string[]>([]);
+    const [accountsFilter, setAccountsFilter] = useState<NumberCondition | null>(null);
+    const [subgroupsFilter, setSubgroupsFilter] = useState<NumberCondition | null>(null);
 
     const [groupFormOpen, setGroupFormOpen] = useState(false);
     const [editingGroup, setEditingGroup] = useState<AccountGroup | null>(null);
@@ -98,6 +105,8 @@ export default function AccountGroupsPage() {
 
     useEffect(() => {
         void load();
+        // Loaded once; the loader reads only the copy.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const load = async () => {
@@ -124,21 +133,101 @@ export default function AccountGroupsPage() {
         }
     };
 
-    const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? null;
+    const subgroupMatches = (subgroup: AccountSubgroup) => matchesSearch(search, subgroup.code, subgroup.name);
+    const groupMatchesText = (group: AccountGroup | null) => !!group && matchesSearch(search, group.code, group.name);
+
+    /** The groups the chips keep — a group stays when it, or one of its subgroups, matches the search. */
+    const visibleGroups = useMemo(
+        () =>
+            groups.filter((group) => {
+                if (!matchesAnyOf(typeFilter, group.type)) return false;
+                if (!matchesNumberCondition(group._count?.accounts ?? 0, accountsFilter)) return false;
+                if (!matchesNumberCondition(group._count?.subgroups ?? 0, subgroupsFilter)) return false;
+                return (
+                    groupMatchesText(group)
+                    || subgroups.some((s) => subgroupGroupId(s) === group.id && subgroupMatches(s))
+                );
+            }),
+        // The matchers read only `search`.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [groups, subgroups, typeFilter, accountsFilter, subgroupsFilter, search],
+    );
+
+    // A selection the filters hide gives way to the first group they keep.
+    const activeGroupId = visibleGroups.some((group) => group.id === selectedGroupId)
+        ? selectedGroupId
+        : visibleGroups[0]?.id ?? '';
+    const selectedGroup = groups.find((group) => group.id === activeGroupId) ?? null;
 
     const groupsByType = useMemo(
         () =>
             ACCOUNT_TYPES.map((type) => ({
                 type,
-                items: groups.filter((group) => group.type === type),
+                items: visibleGroups.filter((group) => group.type === type),
             })).filter((section) => section.items.length > 0),
-        [groups],
+        [visibleGroups],
     );
 
-    const visibleSubgroups = useMemo(
-        () => subgroups.filter((subgroup) => subgroupGroupId(subgroup) === selectedGroupId),
-        [subgroups, selectedGroupId],
-    );
+    const visibleSubgroups = useMemo(() => {
+        const inGroup = subgroups.filter((subgroup) => subgroupGroupId(subgroup) === activeGroupId);
+        // A group found by its own name shows all its subgroups; one found through
+        // a subgroup shows only the ones that matched.
+        return groupMatchesText(selectedGroup) ? inGroup : inGroup.filter(subgroupMatches);
+        // The matchers read only `search`.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [subgroups, activeGroupId, selectedGroup, search]);
+
+    const filters = useMemo<ResolvedListFilter[]>(() => {
+        const list: ListFilter[] = [
+            {
+                id: 'type',
+                type: 'multi-select',
+                label: t.accountGroups.groupType,
+                value: typeFilter,
+                onChange: setTypeFilter,
+                options: ACCOUNT_TYPES.map((type) => ({ value: type, label: t.accountGroups.typeSections[type] })),
+            },
+            {
+                id: 'accounts',
+                type: 'number',
+                label: m.accounts,
+                value: accountsFilter,
+                onChange: setAccountsFilter,
+            },
+            {
+                id: 'subgroups',
+                type: 'number',
+                label: m.subgroups,
+                value: subgroupsFilter,
+                onChange: setSubgroupsFilter,
+                more: true,
+            },
+        ];
+        return list as ResolvedListFilter[];
+    }, [t, m, typeFilter, accountsFilter, subgroupsFilter]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const groupIds = new Set(visibleGroups.map((group) => group.id));
+        const keptSubgroups = subgroups.filter((s) => groupIds.has(subgroupGroupId(s)));
+        const items: ListStat[] = [
+            { id: 'groups', icon: <FolderTree aria-hidden />, label: m.groups, value: n(visibleGroups.length) },
+            { id: 'subgroups', icon: <Layers aria-hidden />, label: m.subgroups, value: n(keptSubgroups.length) },
+            {
+                id: 'accounts',
+                icon: <BookOpen aria-hidden />,
+                label: m.accounts,
+                value: n(visibleGroups.reduce((sum, group) => sum + (group._count?.accounts ?? 0), 0)),
+            },
+            {
+                id: 'emptySubgroups',
+                icon: <CircleOff aria-hidden />,
+                label: m.emptySubgroups,
+                value: n(keptSubgroups.filter((s) => (s._count?.accounts ?? 0) === 0).length),
+            },
+        ];
+        return items;
+    }, [visibleGroups, subgroups, locale, m]);
 
     const handleDelete = async () => {
         if (!pendingDelete) return;
@@ -187,6 +276,13 @@ export default function AccountGroupsPage() {
           )
         : '';
 
+    const railMessage = (() => {
+        if (loading) return t.common.loading;
+        if (groups.length === 0) return t.accountGroups.emptyGroups;
+        if (groupsByType.length === 0) return m.noMatch;
+        return null;
+    })();
+
     return (
         <AccountingPageShell>
             <PageHeader
@@ -199,93 +295,86 @@ export default function AccountGroupsPage() {
                     'accounting',
                 )}
                 actions={(
-                    <div className="flex flex-wrap gap-2">
-                        <Link
-                            href={routes.accounting.coa}
-                            className={`${compactDensity.btnSecondary} min-h-touch`}
-                        >
+                    <>
+                        <Link href={routes.accounting.coa} className={buttonClassName({ variant: 'secondary' })}>
                             <BookOpen className="h-4 w-4" />
                             {t.accountGroups.viewAccounts}
                         </Link>
-                        <button
-                            type="button"
+                        <Button
+                            variant="secondary"
+                            icon={<Layers className="h-4 w-4" />}
                             disabled={groups.length === 0}
                             onClick={() => {
                                 setEditingSubgroup(null);
                                 setSubgroupFormOpen(true);
                             }}
-                            className={`${compactDensity.btnSecondary} min-h-touch disabled:opacity-60`}
                         >
-                            <Layers className="h-4 w-4" />
                             {t.accountGroups.newSubgroup}
-                        </button>
-                        <button
-                            type="button"
+                        </Button>
+                        <Button
+                            variant="primary"
+                            icon={<Plus className="h-4 w-4" />}
                             onClick={() => {
                                 setEditingGroup(null);
                                 setGroupFormOpen(true);
                             }}
-                            className={`${compactDensity.btnPrimary} min-h-touch bg-blue-600 text-white hover:bg-blue-700`}
                         >
-                            <Plus className="h-4 w-4" />
                             {t.accountGroups.newGroup}
-                        </button>
-                    </div>
+                        </Button>
+                    </>
                 )}
+            />
+
+            <ListStats stats={stats} loading={loading} label={m.statsLabel} />
+
+            <ListToolbar
+                tableId="accounting-account-subgroups"
+                filters={filters}
+                search={{ value: search, onChange: setSearch, placeholder: m.searchPlaceholder }}
             />
 
             <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
                 <CompactSection className="lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto">
-                    {(() => {
-                        if (loading) {
-                            return <p className="py-6 text-center text-sm text-gray-400">{t.common.loading}</p>;
-                        }
-                        if (groupsByType.length === 0) {
-                            return (
-                                <p className="py-6 text-center text-sm text-gray-400">
-                                    {t.accountGroups.emptyGroups}
-                                </p>
-                            );
-                        }
-                        return (
-                            <div className="space-y-4">
-                                {groupsByType.map((section) => (
-                                    <div key={section.type}>
-                                        <p className="mb-1.5 px-1 text-xs font-medium uppercase tracking-wide text-gray-400">
-                                            {t.accountGroups.typeSections[section.type]}
-                                        </p>
-                                        <div className="space-y-1">
-                                            {section.items.map((group) => (
-                                                <GroupRailItem
-                                                    key={group.id}
-                                                    group={group}
-                                                    selected={group.id === selectedGroupId}
-                                                    meta={formatMessage(t.accountGroups.groupMeta, {
-                                                        subgroups: group._count?.subgroups ?? 0,
-                                                        accounts: group._count?.accounts ?? 0,
-                                                    })}
-                                                    editLabel={t.common.edit}
-                                                    deleteLabel={t.common.delete}
-                                                    onSelect={() => setSelectedGroupId(group.id)}
-                                                    onEdit={() => {
-                                                        setEditingGroup(group);
-                                                        setGroupFormOpen(true);
-                                                    }}
-                                                    onDelete={() =>
-                                                        setPendingDelete({
-                                                            kind: 'group',
-                                                            id: group.id,
-                                                            name: group.name,
-                                                        })
-                                                    }
-                                                />
-                                            ))}
-                                        </div>
+                    {railMessage ? (
+                        <p className="py-6 text-center text-sm text-gray-400">{railMessage}</p>
+                    ) : (
+                        <div className="space-y-4">
+                            {groupsByType.map((section) => (
+                                <div key={section.type}>
+                                    <p className="mb-1.5 px-1 text-xs font-medium text-gray-500">
+                                        {t.accountGroups.typeSections[section.type]}
+                                    </p>
+                                    <div className="space-y-1">
+                                        {section.items.map((group) => (
+                                            <GroupRailItem
+                                                key={group.id}
+                                                group={group}
+                                                selected={group.id === activeGroupId}
+                                                meta={formatMessage(t.accountGroups.groupMeta, {
+                                                    subgroups: group._count?.subgroups ?? 0,
+                                                    accounts: group._count?.accounts ?? 0,
+                                                })}
+                                                editLabel={t.common.edit}
+                                                deleteLabel={t.common.delete}
+                                                onSelect={() => setSelectedGroupId(group.id)}
+                                                onEdit={() => {
+                                                    setEditingGroup(group);
+                                                    setGroupFormOpen(true);
+                                                }}
+                                                onDelete={() =>
+                                                    setPendingDelete({
+                                                        kind: 'group',
+                                                        id: group.id,
+                                                        name: group.name,
+                                                    })
+                                                }
+                                            />
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
-                        );
-                    })()}
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </CompactSection>
 
                 <div>
@@ -294,21 +383,19 @@ export default function AccountGroupsPage() {
                             title={formatMessage(t.accountGroups.subgroupsIn, {
                                 group: selectedGroup.name,
                             })}
-                        >
-                            <div className="mb-3 flex justify-end">
-                                <button
-                                    type="button"
+                            actions={(
+                                <Button
+                                    variant="secondary"
+                                    icon={<Plus className="h-4 w-4" />}
                                     onClick={() => {
                                         setEditingSubgroup(null);
                                         setSubgroupFormOpen(true);
                                     }}
-                                    className={`${compactDensity.btnSecondary} min-h-touch`}
                                 >
-                                    <Plus className="h-4 w-4" />
                                     {t.accountGroups.addSubgroup}
-                                </button>
-                            </div>
-
+                                </Button>
+                            )}
+                        >
                             <DataTable<AccountSubgroup>
                                 tableId="accounting-account-subgroups"
                                 columns={subgroupColumns}
@@ -317,7 +404,10 @@ export default function AccountGroupsPage() {
                                 isLoading={loading}
                                 emptyMessage={t.accountGroups.emptySubgroups}
                                 emptyIcon={<Layers className="h-10 w-10 text-gray-200" />}
-                                searchPlaceholder={t.accountGroups.searchSubgroups}
+                                showSearch={false}
+                                enableColumnFilters={false}
+                                viewOptions
+                                getRowId={(row) => row.id}
                             />
                         </CompactSection>
                     ) : (
@@ -351,7 +441,7 @@ export default function AccountGroupsPage() {
                 <SubgroupFormModal
                     subgroup={editingSubgroup}
                     groups={groups}
-                    defaultGroupId={selectedGroupId}
+                    defaultGroupId={activeGroupId}
                     onClose={() => {
                         setEditingSubgroup(null);
                         setSubgroupFormOpen(false);
@@ -600,21 +690,12 @@ function GroupFormModal({
                 </div>
 
                 <ModalFooter>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        disabled={saving}
-                        className={`${compactDensity.btnSecondary} min-h-touch disabled:opacity-60`}
-                    >
+                    <Button variant="secondary" onClick={onClose} disabled={saving}>
                         {t.common.cancel}
-                    </button>
-                    <button
-                        type="submit"
-                        disabled={saving || !name.trim()}
-                        className={`${compactDensity.btnPrimary} min-h-touch bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60`}
-                    >
+                    </Button>
+                    <Button type="submit" variant="primary" disabled={saving || !name.trim()}>
                         {submitLabel}
-                    </button>
+                    </Button>
                 </ModalFooter>
             </form>
         </ModalShell>
@@ -777,21 +858,12 @@ function SubgroupFormModal({
                 </div>
 
                 <ModalFooter>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        disabled={saving}
-                        className={`${compactDensity.btnSecondary} min-h-touch disabled:opacity-60`}
-                    >
+                    <Button variant="secondary" onClick={onClose} disabled={saving}>
                         {t.common.cancel}
-                    </button>
-                    <button
-                        type="submit"
-                        disabled={saving || !name.trim() || !groupId}
-                        className={`${compactDensity.btnPrimary} min-h-touch bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60`}
-                    >
+                    </Button>
+                    <Button type="submit" variant="primary" disabled={saving || !name.trim() || !groupId}>
                         {submitLabel}
-                    </button>
+                    </Button>
                 </ModalFooter>
             </form>
         </ModalShell>

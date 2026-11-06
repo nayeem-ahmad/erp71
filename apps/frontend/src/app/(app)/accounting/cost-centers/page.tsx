@@ -1,194 +1,362 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Plus, Building2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Building2, CheckCircle2, Plus, Scale, TrendingDown, TrendingUp } from 'lucide-react';
 import {
-    AccountingPageShell,
-    CompactSection,
-} from '@/components/accounting/compact';
+    ListStats,
+    ListToolbar,
+    type ListFilter,
+    type ListStat,
+    type ResolvedListFilter,
+} from '@/components/data-table';
+import { AccountingPageShell, CompactSection } from '@/components/accounting/compact';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { Alert, Button, Field, FormGrid, Input } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
+import { createdRangeFromPreset, type CreatedRange } from '@/lib/created-range';
 import { formatBDT } from '@/lib/format';
-import { useI18n, formatMessage } from '@/lib/i18n';
-import { compactDensity } from '@/lib/ui/compact-density';
+import { useI18n } from '@/lib/i18n';
+import { matchesAnyOf, matchesSearch } from '@/lib/list-filter';
+import { toast } from '@/lib/toast';
 
 interface CostCenter { id: string; code: string; name: string; is_active: boolean; }
 
-function defaultFrom() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-}
+interface PlAccount { id: string; name: string; balance: number }
+interface PlGroup { group: { id: string; name: string }; total: number; accounts: PlAccount[] }
+interface PlSection { groups?: PlGroup[]; total?: number }
+interface CostCenterPl { revenue?: PlSection; expenses?: PlSection; net_profit: number }
+
+const SECTIONS = ['revenue', 'expenses'] as const;
+
+const defaultPeriod = () => createdRangeFromPreset('thisMonth');
+
+const statusOf = (center: CostCenter) => (center.is_active === false ? 'inactive' : 'active');
 
 export default function CostCentersPage() {
-    const { t, locale } = useI18n();
+    const { t, fmt, locale } = useI18n();
+    const c = t.costCenters;
+    const m = t.accountingMastersUi.costCenters;
+    const common = t.accountingMastersUi.common;
     const [centers, setCenters] = useState<CostCenter[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [period, setPeriod] = useState<CreatedRange>(defaultPeriod);
+    const [plData, setPlData] = useState<CostCenterPl | null>(null);
+    const [plLoading, setPlLoading] = useState(false);
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState<string[]>([]);
+
     const [showCreate, setShowCreate] = useState(false);
     const [code, setCode] = useState('');
     const [name, setName] = useState('');
+    const [fieldErrors, setFieldErrors] = useState<{ code?: string; name?: string }>({});
+    const [createError, setCreateError] = useState('');
     const [creating, setCreating] = useState(false);
-    const [selected, setSelected] = useState<CostCenter | null>(null);
-    const [from, setFrom] = useState(defaultFrom());
-    const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
-    const [plData, setPlData] = useState<any>(null);
-    const [plLoading, setPlLoading] = useState(false);
 
-    useEffect(() => { void load(); }, []);
-    useEffect(() => { if (selected) void loadPL(); }, [selected, from, to]);
+    const visibleCenters = useMemo(
+        () =>
+            centers.filter(
+                (center) => matchesAnyOf(statusFilter, statusOf(center)) && matchesSearch(search, center.code, center.name),
+            ),
+        [centers, statusFilter, search],
+    );
+
+    // A center the filters hide no longer shows its P&L.
+    const selected = visibleCenters.find((center) => center.id === selectedId) ?? null;
+
+    useEffect(() => {
+        void load();
+        // Loaded once; the loader reads only the copy.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        if (selected) void loadPL(selected);
+        // loadPL reads the period from this render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selected?.id, period.from, period.to]);
 
     const load = async () => {
         setLoading(true);
         try {
             const data = await api.listCostCenters();
-            setCenters(Array.isArray(data) ? data : data.data ?? []);
+            setCenters(Array.isArray(data) ? data : data?.data ?? []);
         } catch (e: any) {
-            setError(e?.message ?? 'Failed to load');
+            toast.error(e?.message ?? c.loadFailed);
         } finally {
             setLoading(false);
         }
     };
 
-    const loadPL = async () => {
-        if (!selected) return;
+    const loadPL = async (center: CostCenter) => {
         setPlLoading(true);
         try {
-            const data = await api.getCostCenterPL({ costCenterId: selected.id, from, to });
+            const data = await api.getCostCenterPL({ costCenterId: center.id, from: period.from, to: period.to });
             setPlData(data);
-        } catch { setPlData(null); }
-        finally { setPlLoading(false); }
+        } catch (e: any) {
+            setPlData(null);
+            toast.error(e?.message ?? m.plFailed);
+        } finally {
+            setPlLoading(false);
+        }
+    };
+
+    const openCreate = () => {
+        setCode('');
+        setName('');
+        setFieldErrors({});
+        setCreateError('');
+        setShowCreate(true);
+    };
+
+    const closeCreate = () => {
+        if (creating) return;
+        setShowCreate(false);
     };
 
     const handleCreate = async () => {
-        if (!code || !name) return;
+        const errors: { code?: string; name?: string } = {};
+        if (!code.trim()) errors.code = m.codeRequired;
+        if (!name.trim()) errors.name = m.nameRequired;
+        if (errors.code || errors.name) {
+            setFieldErrors(errors);
+            return;
+        }
         setCreating(true);
-        setError(null);
+        setCreateError('');
         try {
-            await api.createCostCenter({ code, name });
-            setCode(''); setName(''); setShowCreate(false);
+            await api.createCostCenter({ code: code.trim(), name: name.trim() });
+            toast.success(m.created);
+            setShowCreate(false);
             await load();
         } catch (e: any) {
-            setError(e?.message ?? 'Failed to create');
+            setCreateError(e?.message ?? c.createFailed);
         } finally {
             setCreating(false);
         }
     };
 
+    const filters = useMemo<ResolvedListFilter[]>(() => {
+        const list: ListFilter[] = [
+            {
+                id: 'period',
+                type: 'date-range',
+                label: m.period,
+                value: period,
+                // The P&L always covers a period: clearing the chip goes back to this month.
+                onChange: (next) => setPeriod(next?.from || next?.to ? next : defaultPeriod()),
+                operators: true,
+                presets: ['thisMonth', 'last30', 'last3Months', 'last6Months', 'thisYear'],
+            },
+            {
+                id: 'status',
+                type: 'multi-select',
+                label: t.accountingShared.status,
+                value: statusFilter,
+                onChange: setStatusFilter,
+                options: [
+                    { value: 'active', label: common.active },
+                    { value: 'inactive', label: common.inactive },
+                ],
+            },
+        ];
+        return list as ResolvedListFilter[];
+    }, [t, m, common, period, statusFilter]);
+
+    const pl = selected ? plData : null;
+    const revenue = pl?.revenue?.total ?? 0;
+    const expenses = pl?.expenses?.total ?? 0;
+    const net = pl?.net_profit ?? 0;
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const active = visibleCenters.filter((center) => statusOf(center) === 'active').length;
+        const items: ListStat[] = [
+            { id: 'centers', icon: <Building2 aria-hidden />, label: m.centers, value: n(visibleCenters.length) },
+            { id: 'active', icon: <CheckCircle2 aria-hidden />, label: common.active, value: n(active) },
+            { id: 'revenue', icon: <TrendingUp aria-hidden />, label: m.revenue, value: pl ? money(revenue) : '—', hint: selected?.code },
+            { id: 'expenses', icon: <TrendingDown aria-hidden />, label: m.expenses, value: pl ? money(expenses) : '—' },
+            {
+                id: 'net',
+                icon: <Scale aria-hidden />,
+                label: pl ? (net >= 0 ? c.netProfit : c.netLoss) : m.netResult,
+                value: pl ? money(Math.abs(net)) : '—',
+                tone: pl && net < 0 ? 'danger' : 'default',
+            },
+        ];
+        return items;
+    }, [visibleCenters, locale, m, c, common, pl, selected, revenue, expenses, net]);
+
+    const railMessage = (() => {
+        if (loading) return t.common.loading;
+        if (centers.length === 0) return m.empty;
+        if (visibleCenters.length === 0) return m.noMatch;
+        return null;
+    })();
+
+    const hasActivity = Boolean(pl && SECTIONS.some((section) => (pl[section]?.groups?.length ?? 0) > 0));
+
     return (
         <AccountingPageShell>
             <PageHeader
-                title={t.costCenters.title}
-                subtitle={t.costCenters.subtitle}
+                title={c.title}
+                subtitle={c.subtitle}
                 breadcrumbs={modulePageBreadcrumbs(
                     t.dashboardHome.breadcrumbHome,
                     t.sidebar.modules.accounting,
-                    t.costCenters.title,
+                    c.title,
                     'accounting',
                 )}
                 actions={(
-                    <button onClick={() => setShowCreate(true)} className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700`}>
-                        <Plus className="w-3.5 h-3.5" /> New Cost Center
-                    </button>
+                    <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={openCreate}>
+                        {c.newCostCenter}
+                    </Button>
                 )}
             />
 
-            {error && <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-700">{error}</div>}
+            <ListStats stats={stats} loading={loading || plLoading} label={m.statsLabel} />
 
-            {showCreate && (
-                <CompactSection title="New Cost Center">
-                    <div className="flex gap-3">
-                        <label className="flex-1 block">
-                            <span className={`${compactDensity.formLabel} block mb-1`}>Code</span>
-                            <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. DEPT-01" className={compactDensity.formField} />
-                        </label>
-                        <label className="flex-[2] block">
-                            <span className={`${compactDensity.formLabel} block mb-1`}>Name</span>
-                            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Retail Operations" className={compactDensity.formField} />
-                        </label>
-                    </div>
-                    <div className="flex gap-2 mt-3">
-                        <button onClick={() => setShowCreate(false)} className={compactDensity.btnSecondary}>Cancel</button>
-                        <button onClick={handleCreate} disabled={creating || !code || !name} className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-50`}>
-                            {creating ? 'Creating…' : 'Create'}
-                        </button>
-                    </div>
-                </CompactSection>
-            )}
+            <ListToolbar
+                tableId="accounting-cost-centers"
+                filters={filters}
+                search={{ value: search, onChange: setSearch, placeholder: m.searchPlaceholder }}
+            />
 
             <div className="grid gap-3 lg:grid-cols-[240px_1fr]">
                 <div className="space-y-2">
-                    {loading ? (
-                        <CompactSection className="text-center text-gray-400 text-sm py-6">Loading…</CompactSection>
-                    ) : centers.length === 0 ? (
-                        <CompactSection className="text-center text-gray-400 text-sm py-6">No cost centers yet.</CompactSection>
-                    ) : centers.map((c) => (
-                        <button key={c.id} onClick={() => setSelected(c)}
-                            className={`w-full text-start rounded-lg border p-3 transition ${selected?.id === c.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white border-gray-100 hover:border-gray-200'}`}>
-                                <div className="flex items-center gap-3">
-                                    <Building2 className="w-4 h-4 shrink-0" />
-                                    <div>
-                                        <div className="font-bold text-sm">{c.name}</div>
-                                        <div className={`text-xs ${selected?.id === c.id ? 'text-gray-300' : 'text-gray-400'}`}>{c.code}</div>
+                    {railMessage ? (
+                        <CompactSection className="py-6 text-center text-sm text-gray-400">{railMessage}</CompactSection>
+                    ) : (
+                        visibleCenters.map((center) => {
+                            const isSelected = selected?.id === center.id;
+                            return (
+                                <button
+                                    key={center.id}
+                                    type="button"
+                                    onClick={() => setSelectedId(center.id)}
+                                    aria-current={isSelected ? 'true' : undefined}
+                                    className={`min-h-touch w-full rounded-lg border p-3 text-start transition-colors ${
+                                        isSelected
+                                            ? 'border-blue-200 bg-blue-50'
+                                            : 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <Building2 className={`h-4 w-4 shrink-0 ${isSelected ? 'text-blue-600' : 'text-gray-400'}`} />
+                                        <div className="min-w-0">
+                                            <div className={`truncate text-sm font-semibold ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
+                                                {center.name}
+                                            </div>
+                                            <div className="text-xs text-gray-500">
+                                                <span className="font-mono">{center.code}</span>
+                                                {statusOf(center) === 'inactive' ? ` · ${common.inactive}` : ''}
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </button>
-                        ))}
-                    </div>
+                                </button>
+                            );
+                        })
+                    )}
+                </div>
 
                 <div>
                     {!selected ? (
-                        <CompactSection className="text-center text-gray-400 text-sm py-8">Select a cost center to view its P&L</CompactSection>
-                    ) : (
-                        <div className="space-y-3">
-                            <CompactSection flat>
-                                <div className={`${compactDensity.filterBar} !p-0 !border-0 !bg-transparent`}>
-                                    <label className="block">
-                                        <span className={`${compactDensity.formLabel} block mb-1`}>From</span>
-                                        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={compactDensity.formField} />
-                                    </label>
-                                    <label className="block">
-                                        <span className={`${compactDensity.formLabel} block mb-1`}>To</span>
-                                        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={compactDensity.formField} />
-                                    </label>
-                                </div>
-                            </CompactSection>
-
-                            {plLoading ? (
-                                <CompactSection className="text-center text-gray-400 text-sm py-6">Loading…</CompactSection>
-                            ) : plData ? (
-                                <CompactSection title={`${selected.name} — P&L`}>
-                                        {['revenue', 'expenses'].map((section) => (
-                                            <div key={section}>
-                                                <div className={`px-3 py-1.5 rounded-xl text-xs font-semibold mb-2 ${section === 'revenue' ? 'bg-emerald-50 text-emerald-700' : 'bg-danger-light text-danger-text'}`}>
-                                                    {section}
+                        <CompactSection className="py-8 text-center text-sm text-gray-400">{m.selectPrompt}</CompactSection>
+                    ) : plLoading ? (
+                        <CompactSection className="py-6 text-center text-sm text-gray-400">{t.common.loading}</CompactSection>
+                    ) : pl ? (
+                        <CompactSection title={fmt(m.plTitle, { name: selected.name })}>
+                            {hasActivity ? (
+                                SECTIONS.map((section) => (
+                                    <div key={section} className="mb-2">
+                                        <div className="mb-2 flex justify-between border-b border-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-500">
+                                            <span>{section === 'revenue' ? m.revenue : m.expenses}</span>
+                                            <span className="tabular-nums">
+                                                {formatBDT(pl[section]?.total ?? 0, { locale })}
+                                            </span>
+                                        </div>
+                                        {pl[section]?.groups?.map((g) => (
+                                            <div key={g.group.id} className="mb-3">
+                                                <div className="flex justify-between rounded-lg bg-gray-50 px-3 py-1.5 text-sm font-semibold text-gray-700">
+                                                    <span>{g.group.name}</span>
+                                                    <span className="tabular-nums">{formatBDT(g.total, { locale })}</span>
                                                 </div>
-                                                {plData[section]?.groups?.map((g: any) => (
-                                                    <div key={g.group.id} className="mb-3">
-                                                        <div className="flex justify-between px-3 py-1.5 bg-gray-50 rounded-lg text-sm font-bold text-gray-700">
-                                                            <span>{g.group.name}</span>
-                                                            <span>{formatBDT(g.total, { locale })}</span>
-                                                        </div>
-                                                        {g.accounts.map((a: any) => (
-                                                            <div key={a.id} className="flex justify-between px-5 py-1 text-sm text-gray-500">
-                                                                <span>{a.name}</span>
-                                                                <span>{formatBDT(a.balance, { locale })}</span>
-                                                            </div>
-                                                        ))}
+                                                {g.accounts.map((a) => (
+                                                    <div key={a.id} className="flex justify-between px-5 py-1 text-sm text-gray-500">
+                                                        <span>{a.name}</span>
+                                                        <span className="tabular-nums">{formatBDT(a.balance, { locale })}</span>
                                                     </div>
                                                 ))}
                                             </div>
                                         ))}
-                                    <div className={`flex justify-between px-3 py-2 rounded-lg font-semibold text-sm border ${plData.net_profit >= 0 ? 'bg-blue-50 text-blue-800 border-blue-100' : 'bg-red-50 text-red-800 border-red-100'}`}>
-                                        <span>{plData.net_profit >= 0 ? 'Net Profit' : 'Net Loss'}</span>
-                                        <span>{formatBDT(Math.abs(plData.net_profit))}</span>
                                     </div>
-                                </CompactSection>
-                            ) : null}
-                        </div>
-                    )}
+                                ))
+                            ) : (
+                                <p className="py-4 text-center text-sm text-gray-400">{m.noActivity}</p>
+                            )}
+                            <div
+                                className={`flex justify-between rounded-lg border px-3 py-2 text-sm font-semibold ${
+                                    net >= 0
+                                        ? 'border-emerald-100 bg-emerald-50 text-emerald-800'
+                                        : 'border-red-100 bg-red-50 text-red-800'
+                                }`}
+                            >
+                                <span>{net >= 0 ? c.netProfit : c.netLoss}</span>
+                                <span className="tabular-nums">{formatBDT(Math.abs(net), { locale })}</span>
+                            </div>
+                        </CompactSection>
+                    ) : null}
                 </div>
             </div>
+
+            {showCreate && (
+                <ModalShell size="sm" onBackdropClick={closeCreate}>
+                    <ModalHeader title={c.newCostCenter} onClose={closeCreate} closeLabel={t.common.close} />
+                    <div className="space-y-4 overflow-y-auto p-4">
+                        {createError && <Alert tone="danger">{createError}</Alert>}
+                        <FormGrid>
+                            <Field label={c.columns.code} required error={fieldErrors.code}>
+                                <Input
+                                    type="text"
+                                    value={code}
+                                    onChange={(e) => {
+                                        setCode(e.target.value);
+                                        setFieldErrors((prev) => ({ ...prev, code: undefined }));
+                                    }}
+                                    placeholder={m.codePlaceholder}
+                                    aria-label={c.columns.code}
+                                    error={!!fieldErrors.code}
+                                    autoFocus
+                                />
+                            </Field>
+                            <Field label={c.columns.name} required error={fieldErrors.name}>
+                                <Input
+                                    type="text"
+                                    value={name}
+                                    onChange={(e) => {
+                                        setName(e.target.value);
+                                        setFieldErrors((prev) => ({ ...prev, name: undefined }));
+                                    }}
+                                    placeholder={m.namePlaceholder}
+                                    aria-label={c.columns.name}
+                                    error={!!fieldErrors.name}
+                                />
+                            </Field>
+                        </FormGrid>
+                    </div>
+                    <ModalFooter>
+                        <Button variant="secondary" onClick={closeCreate} disabled={creating}>
+                            {t.common.cancel}
+                        </Button>
+                        <Button variant="primary" onClick={() => void handleCreate()} loading={creating}>
+                            {creating ? c.creating : c.create}
+                        </Button>
+                    </ModalFooter>
+                </ModalShell>
+            )}
         </AccountingPageShell>
     );
 }

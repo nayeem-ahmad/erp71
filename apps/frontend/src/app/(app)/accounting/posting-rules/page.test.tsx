@@ -12,9 +12,20 @@ jest.mock('@/lib/api', () => ({
 }));
 
 jest.mock('@/components/data-table', () => ({
-    DataTable: ({ title, data }: any) => (
-        <div>
+    DataTable: ({ title, data, isLoading, filterLayout, viewOptions, filters, stats }: any) => (
+        <div data-testid="data-table" data-filter-layout={filterLayout} data-view-options={String(Boolean(viewOptions))}>
             <div>{title}</div>
+            {isLoading && <div>Loading table</div>}
+            <span data-testid="filter-ids">{(filters ?? []).map((f: any) => f.id).join(',')}</span>
+            <button type="button" onClick={() => filters?.find((f: any) => f.id === 'event')?.onChange(['sale'])}>
+                Sale only
+            </button>
+            <button type="button" onClick={() => filters?.find((f: any) => f.id === 'status')?.onChange(['active'])}>
+                Active only
+            </button>
+            {(stats?.items ?? []).map((stat: any) => (
+                <span key={stat.id} data-testid={`stat-${stat.id}`}>{stat.value}</span>
+            ))}
             {data && data.map((item: any, i: number) => (
                 <div key={i} data-testid={`rule-row-${i}`}>
                     <span>{item.eventType}</span>
@@ -22,6 +33,10 @@ jest.mock('@/components/data-table', () => ({
             ))}
         </div>
     ),
+}));
+
+jest.mock('@/lib/toast', () => ({
+    toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 
 jest.mock('next/link', () => ({
@@ -89,7 +104,7 @@ describe('PostingRulesPage', () => {
         api.getAccounts.mockReturnValue(new Promise(() => {}));
 
         render(<PostingRulesPage />);
-        expect(screen.getByText('Loading posting rules...')).toBeInTheDocument();
+        expect(screen.getByText('Loading table')).toBeInTheDocument();
     });
 
     it('loads and displays posting rules from the API', async () => {
@@ -100,57 +115,55 @@ describe('PostingRulesPage', () => {
         render(<PostingRulesPage />);
 
         await waitFor(() => {
-            expect(screen.queryByText('Loading posting rules...')).not.toBeInTheDocument();
+            expect(screen.queryByText('Loading table')).not.toBeInTheDocument();
         });
         expect(api.getPostingRules).toHaveBeenCalledTimes(1);
         expect(api.getAccounts).toHaveBeenCalledTimes(1);
     });
 
-    it('renders event type and status filter dropdowns', async () => {
+    it('puts the filters in the toolbar row as chips', async () => {
         render(<PostingRulesPage />);
-        await waitFor(() => {
-            expect(screen.queryByText('Loading posting rules...')).not.toBeInTheDocument();
-        });
-
-        expect(screen.getByText('All events')).toBeInTheDocument();
-        expect(screen.getByText('All statuses')).toBeInTheDocument();
+        const table = await screen.findByTestId('data-table');
+        expect(table).toHaveAttribute('data-filter-layout', 'row');
+        expect(table).toHaveAttribute('data-view-options', 'true');
+        expect(screen.getByTestId('filter-ids')).toHaveTextContent(
+            'event,status,condition,debitAccount,creditAccount,priority',
+        );
+        // The old select row is gone.
+        expect(screen.queryAllByRole('combobox')).toHaveLength(0);
     });
 
-    it('filters rules by event type when filter is changed', async () => {
+    it('narrows rules by event type from the chip, and the strip follows', async () => {
         const { api } = require('@/lib/api');
         api.getPostingRules.mockResolvedValue({ data: mockRules });
         api.getAccounts.mockResolvedValue(mockAccounts);
 
         render(<PostingRulesPage />);
-        await waitFor(() => {
-            expect(screen.queryByText('Loading posting rules...')).not.toBeInTheDocument();
-        });
+        await waitFor(() => expect(screen.getByTestId('rule-row-1')).toBeInTheDocument());
+        expect(screen.getByTestId('stat-rules')).toHaveTextContent('2');
 
-        const eventTypeSelect = screen.getAllByRole('combobox')[0];
-        fireEvent.change(eventTypeSelect, { target: { value: 'sale' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Sale only' }));
 
-        // After filtering only 'sale' rules should be displayed
-        await waitFor(() => {
-            expect(eventTypeSelect).toHaveValue('sale');
-        });
+        await waitFor(() => expect(screen.queryByTestId('rule-row-1')).not.toBeInTheDocument());
+        expect(screen.getByTestId('rule-row-0')).toHaveTextContent('sale');
+        expect(screen.getByTestId('stat-rules')).toHaveTextContent('1');
+        expect(screen.getByTestId('stat-active')).toHaveTextContent('1');
     });
 
-    it('filters rules by active/inactive status', async () => {
+    it('narrows rules by status from the chip', async () => {
         const { api } = require('@/lib/api');
         api.getPostingRules.mockResolvedValue({ data: mockRules });
         api.getAccounts.mockResolvedValue(mockAccounts);
 
         render(<PostingRulesPage />);
-        await waitFor(() => {
-            expect(screen.queryByText('Loading posting rules...')).not.toBeInTheDocument();
-        });
+        await waitFor(() => expect(screen.getByTestId('rule-row-1')).toBeInTheDocument());
+        expect(screen.getByTestId('stat-inactive')).toHaveTextContent('1');
+        expect(screen.getByTestId('stat-conditional')).toHaveTextContent('1');
 
-        const statusSelect = screen.getAllByRole('combobox')[1];
-        fireEvent.change(statusSelect, { target: { value: 'active' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Active only' }));
 
-        await waitFor(() => {
-            expect(statusSelect).toHaveValue('active');
-        });
+        await waitFor(() => expect(screen.queryByTestId('rule-row-1')).not.toBeInTheDocument());
+        expect(screen.getByTestId('stat-inactive')).toHaveTextContent('0');
     });
 
     it('renders the breadcrumb back to Accounting', async () => {
@@ -169,7 +182,7 @@ describe('PostingRulesPage', () => {
 
         render(<PostingRulesPage />);
         await waitFor(() => {
-            expect(screen.queryByText('Loading posting rules...')).not.toBeInTheDocument();
+            expect(screen.queryByText('Loading table')).not.toBeInTheDocument();
             expect(screen.getAllByText('Posting Rules').length).toBeGreaterThan(0);
         });
     });
@@ -193,7 +206,7 @@ describe('PostingRulesPage', () => {
 
         render(<PostingRulesPage />);
         await waitFor(() => {
-            expect(screen.queryByText('Loading posting rules...')).not.toBeInTheDocument();
+            expect(screen.queryByText('Loading table')).not.toBeInTheDocument();
         });
         // Should not crash and should render the table with empty data
         expect(screen.getAllByText('Posting Rules').length).toBeGreaterThan(0);
