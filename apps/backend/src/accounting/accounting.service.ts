@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { Prisma } from '@prisma/client';
+import { PostingRuleEventType, Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { AccountCategory, AccountType, ReportScope, TOTAL_SCOPE_KEY, VoucherApprovalStatus, VoucherAttribution, VoucherType } from './accounting.constants';
 import { ageBalance, emptyAgingBuckets, type AgingEntry } from './aging.utils';
@@ -50,7 +50,7 @@ import { isCashDrawer } from './cash-drawer';
 import { manualDrawerProblem } from './cash-account';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
 import { createdAtRange } from '../common/created-range.util';
-import { searchClause } from '../common/document-list-filters';
+import { searchClause, statusSetClause } from '../common/document-list-filters';
 import { numberConditionFilter, readIdListQuery, readNumberConditionQuery } from '../common/number-condition.util';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { AuditService } from '../audit/audit.service';
@@ -77,6 +77,7 @@ import {
     UpdateAccountSubgroupDto,
     UpdatePostingRuleDto,
     ListPostingExceptionsQueryDto,
+    POSTING_EVENT_STATUSES,
     ProfitLossQueryDto,
     BalanceSheetQueryDto,
     CashbookQueryDto,
@@ -96,6 +97,7 @@ import {
     CreateCostCenterDto,
     CostCenterPLQueryDto,
     CreateFixedAssetDto,
+    UpdateFixedAssetDto,
     RunDepreciationDto,
     CreateRecurringJournalDto,
     CreateRecurringVoucherDto,
@@ -145,6 +147,18 @@ export interface VoucherListSummary {
 }
 
 type VoucherListQuery = ListVouchersQueryDto & { timezone: string };
+
+/** `GET accounting/reconciliation/posting-exceptions/summary`: events per status over the list's filters. */
+export interface PostingExceptionSummary {
+    count: number;
+    pending: number;
+    posted: number;
+    failed: number;
+    skipped: number;
+}
+
+/** The event's own text a posting-exceptions search looks in. */
+const POSTING_EVENT_SEARCH_PATHS = ['source_id', 'source_type', 'source_module', 'last_error', 'voucher.voucher_number'] as const;
 
 /** One value as an equality, several as `in` — a single value keeps the plain `where` it always had. */
 const oneOrIn = (values: string[]) => (values.length === 1 ? values[0] : { in: values });
@@ -2206,27 +2220,63 @@ export class AccountingService {
         };
     }
 
-    async listPostingExceptions(tenantId: string, query: ListPostingExceptionsQueryDto) {
+    /**
+     * The `where` behind the posting-exceptions list and its stats strip, so
+     * the two always describe the same events.
+     */
+    private postingEventListWhere(tenantId: string, query: ListPostingExceptionsQueryDto): Prisma.PostingEventWhereInput {
         this.validateDateRange(query.from, query.to);
-        const page = Math.max(1, Number(query.page ?? 1));
-        const limit = Math.min(Math.max(1, Number(query.limit ?? 20)), 100);
+        const statuses = readIdListQuery(query.status) ?? [];
+        const exclude = query.statusExclude === 'true' || query.statusExclude === '1';
+        const modules = readIdListQuery(query.module);
+        const search = query.search?.trim() || undefined;
+        const textMatch = searchClause(search, POSTING_EVENT_SEARCH_PATHS) as { OR: Prisma.PostingEventWhereInput[] } | undefined;
+        // The event type is an enum, which Postgres cannot `contains`; match
+        // the typed text against the type names instead ("sale return" finds
+        // sale_return).
+        const typeNeedle = search?.toLowerCase().replace(/[\s-]+/g, '_');
+        const types = typeNeedle
+            ? Object.values(PostingRuleEventType).filter((type) => type.includes(typeNeedle))
+            : [];
+        const searchWhere = textMatch
+            ? { OR: [...textMatch.OR, ...(types.length ? [{ event_type: { in: types } }] : [])] }
+            : undefined;
 
-        const where = {
+        return {
             tenant_id: tenantId,
-            ...(query.status ? { status: query.status } : {}),
-            ...(query.module ? { source_module: query.module } : {}),
-            ...(() => {
-                if (!query.from && !query.to) {
-                    return {};
-                }
-                return {
+            ...(statusSetClause(statuses, exclude) as Prisma.PostingEventWhereInput),
+            ...(modules ? { source_module: oneOrIn(modules) } : {}),
+            ...(query.from || query.to
+                ? {
                     updated_at: {
                         ...(query.from ? { gte: this.toStartOfDay(query.from) } : {}),
                         ...(query.to ? { lte: this.toEndOfDay(query.to) } : {}),
                     },
-                };
-            })(),
+                }
+                : {}),
+            ...(searchWhere ? { AND: [searchWhere] } : {}),
         };
+    }
+
+    /** The stats strip above the posting-exceptions list: the same filters, counted per status. */
+    async getPostingExceptionSummary(tenantId: string, query: ListPostingExceptionsQueryDto): Promise<PostingExceptionSummary> {
+        const where = this.postingEventListWhere(tenantId, query);
+        const byStatus = await this.db.postingEvent.groupBy({ by: ['status'], where, _count: { _all: true } });
+        const summary: PostingExceptionSummary = { count: 0, pending: 0, posted: 0, failed: 0, skipped: 0 };
+        for (const row of byStatus) {
+            const count = row._count?._all ?? 0;
+            summary.count += count;
+            if ((POSTING_EVENT_STATUSES as readonly string[]).includes(row.status)) {
+                summary[row.status as keyof Omit<PostingExceptionSummary, 'count'>] = count;
+            }
+        }
+        return summary;
+    }
+
+    async listPostingExceptions(tenantId: string, query: ListPostingExceptionsQueryDto) {
+        const page = Math.max(1, Number(query.page ?? 1));
+        const limit = Math.min(Math.max(1, Number(query.limit ?? 20)), 100);
+        const where = this.postingEventListWhere(tenantId, query);
 
         const [total, events] = await Promise.all([
             this.db.postingEvent.count({ where }),
@@ -3559,6 +3609,7 @@ export class AccountingService {
                     depreciation_method: (dto.depreciationMethod as any) ?? 'STRAIGHT_LINE',
                     asset_account_id: dto.assetAccountId,
                     depreciation_account_id: dto.depreciationAccountId,
+                    category: dto.category ?? null,
                 },
             });
 
@@ -3592,6 +3643,19 @@ export class AccountingService {
             where: { tenant_id: tenantId },
             include: { depreciationEntries: { orderBy: [{ period_year: 'desc' }, { period_month: 'desc' }], take: 1 } },
             orderBy: { asset_code: 'asc' },
+        });
+    }
+
+    /** Sets or clears an asset's category; `category` left out changes nothing. */
+    async updateFixedAsset(tenantId: string, id: string, dto: UpdateFixedAssetDto) {
+        const asset = await this.db.fixedAsset.findFirst({ where: { id, tenant_id: tenantId }, select: { id: true } });
+        if (!asset) throw new NotFoundException('Fixed asset not found');
+        if (dto.category === undefined) {
+            return this.db.fixedAsset.findFirst({ where: { id, tenant_id: tenantId } });
+        }
+        return this.db.fixedAsset.update({
+            where: { id: asset.id },
+            data: { category: dto.category ?? null },
         });
     }
 

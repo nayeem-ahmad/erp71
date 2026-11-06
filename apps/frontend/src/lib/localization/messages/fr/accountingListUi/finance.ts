@@ -41,11 +41,17 @@ export const accountingFinanceUiMessages = {
             inactive: 'Inactive',
             runDepreciation: 'Lancer l\'amortissement',
             addAsset: 'Ajouter une immobilisation',
-            search: 'Rechercher par code ou nom…',
+            search: 'Rechercher par code, nom ou catégorie…',
+            uncategorised: 'Sans catégorie',
+            categoryPlaceholder: 'ex. Mobilier, Véhicules',
+            setCategory: 'Définir la catégorie',
+            categoryHint: 'Laissez vide pour retirer la catégorie.',
+            categorySaved: 'Catégorie enregistrée.',
         },
         postingExceptions: {
             statsLabel: 'Chiffres des événements de comptabilisation',
             lastActivity: 'Dernière activité',
+            search: 'Rechercher une source, une pièce ou une erreur…',
         },
         bankReconciliation: {
             statsLabel: 'Chiffres du rapprochement',

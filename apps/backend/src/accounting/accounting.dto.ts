@@ -512,7 +512,7 @@ const POSTING_RULE_CONDITION_KEYS = [
     'none',
 ] as const;
 
-const POSTING_EVENT_STATUSES = ['pending', 'posted', 'failed', 'skipped'] as const;
+export const POSTING_EVENT_STATUSES = ['pending', 'posted', 'failed', 'skipped'] as const;
 
 export class ListPostingRulesQueryDto {
     @IsOptional()
@@ -555,15 +555,38 @@ export class UpdatePostingRuleDto {
     isActive?: boolean;
 }
 
+/**
+ * The posting-exceptions list and the stats strip above it. Every key is
+ * declared because the global ValidationPipe runs with `forbidNonWhitelisted`.
+ */
 export class ListPostingExceptionsQueryDto {
+    /** One status, or a comma-separated set (`pending,failed`). */
     @IsOptional()
     @IsString()
-    @IsIn(POSTING_EVENT_STATUSES)
-    status?: typeof POSTING_EVENT_STATUSES[number];
+    @Matches(oneOrSetOf(POSTING_EVENT_STATUSES), {
+        message: `status must be one or a comma-separated set of: ${POSTING_EVENT_STATUSES.join(', ')}`,
+    })
+    status?: string;
 
+    /** `true`: every status but those in `status`. */
+    @IsOptional()
+    @IsIn(['true', 'false', '1', '0'])
+    statusExclude?: string;
+
+    /** One source module, or a comma-separated set (`sales,purchases`). */
     @IsOptional()
     @IsString()
+    @MaxLength(500)
+    @Matches(/^[A-Za-z0-9_-]+(?:,[A-Za-z0-9_-]+)*$/, {
+        message: 'module must be one or a comma-separated set of module names',
+    })
     module?: string;
+
+    /** Source id/type/module, voucher number, error text or event type; case-insensitive. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    search?: string;
 
     @IsOptional()
     @IsDateString()
@@ -943,6 +966,14 @@ export class CostCenterPLQueryDto extends ApprovedOnlyQueryDto {
 }
 
 // Feature 12: Fixed Assets
+export const FIXED_ASSET_CATEGORY_MAX_LENGTH = 60;
+
+/** A trimmed string, with blank read as null (no value). */
+function trimToNull({ value }: { value: unknown }): unknown {
+    if (typeof value !== 'string') return value;
+    return value.trim() || null;
+}
+
 export class CreateFixedAssetDto {
     @IsString()
     @IsNotEmpty()
@@ -987,6 +1018,27 @@ export class CreateFixedAssetDto {
     @IsOptional()
     @IsString()
     paymentMethod?: string;
+
+    /** Free text (Furniture, Vehicles…). Trimmed; blank or null leaves the asset uncategorised. */
+    @IsOptional()
+    @Transform(trimToNull)
+    @IsString()
+    @MaxLength(FIXED_ASSET_CATEGORY_MAX_LENGTH)
+    category?: string | null;
+}
+
+/**
+ * What can change on an asset after it is recorded. Cost, dates and life feed
+ * the acquisition voucher and the depreciation runs, so only the category is
+ * editable here.
+ */
+export class UpdateFixedAssetDto {
+    /** Trimmed; blank or null clears it. */
+    @IsOptional()
+    @Transform(trimToNull)
+    @IsString()
+    @MaxLength(FIXED_ASSET_CATEGORY_MAX_LENGTH)
+    category?: string | null;
 }
 
 export class RunDepreciationDto {

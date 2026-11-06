@@ -41,11 +41,17 @@ export const accountingFinanceUiMessages = {
             inactive: 'Inactive',
             runDepreciation: 'Run depreciation',
             addAsset: 'Add asset',
-            search: 'Search by code or name…',
+            search: 'Search by code, name or category…',
+            uncategorised: 'Uncategorised',
+            categoryPlaceholder: 'e.g. Furniture, Vehicles',
+            setCategory: 'Set category',
+            categoryHint: 'Leave blank to remove the category.',
+            categorySaved: 'Category saved.',
         },
         postingExceptions: {
             statsLabel: 'Posting event figures',
             lastActivity: 'Last activity',
+            search: 'Search source, voucher or error…',
         },
         bankReconciliation: {
             statsLabel: 'Reconciliation figures',

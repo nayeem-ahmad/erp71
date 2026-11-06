@@ -41,11 +41,17 @@ export const accountingFinanceUiMessages = {
             inactive: 'निष्क्रिय',
             runDepreciation: 'मूल्यह्रास चलाएँ',
             addAsset: 'संपत्ति जोड़ें',
-            search: 'कोड या नाम से खोजें…',
+            search: 'कोड, नाम या श्रेणी से खोजें…',
+            uncategorised: 'बिना श्रेणी',
+            categoryPlaceholder: 'जैसे फ़र्नीचर, वाहन',
+            setCategory: 'श्रेणी तय करें',
+            categoryHint: 'श्रेणी हटाने के लिए खाली छोड़ें।',
+            categorySaved: 'श्रेणी सहेजी गई।',
         },
         postingExceptions: {
             statsLabel: 'पोस्टिंग इवेंट आँकड़े',
             lastActivity: 'अंतिम गतिविधि',
+            search: 'स्रोत, वाउचर या त्रुटि खोजें…',
         },
         bankReconciliation: {
             statsLabel: 'मिलान आँकड़े',

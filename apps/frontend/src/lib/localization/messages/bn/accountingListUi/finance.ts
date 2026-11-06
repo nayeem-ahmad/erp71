@@ -41,11 +41,17 @@ export const accountingFinanceUiMessages = {
             inactive: 'নিষ্ক্রিয়',
             runDepreciation: 'অবচয় চালান',
             addAsset: 'সম্পদ যোগ করুন',
-            search: 'কোড বা নাম দিয়ে খুঁজুন…',
+            search: 'কোড, নাম বা শ্রেণি দিয়ে খুঁজুন…',
+            uncategorised: 'শ্রেণিহীন',
+            categoryPlaceholder: 'যেমন আসবাবপত্র, যানবাহন',
+            setCategory: 'শ্রেণি ঠিক করুন',
+            categoryHint: 'শ্রেণি সরাতে ফাঁকা রাখুন।',
+            categorySaved: 'শ্রেণি সংরক্ষিত হয়েছে।',
         },
         postingExceptions: {
             statsLabel: 'পোস্টিং ইভেন্টের হিসাব',
             lastActivity: 'সর্বশেষ কার্যকলাপ',
+            search: 'উৎস, ভাউচার বা ত্রুটি খুঁজুন…',
         },
         bankReconciliation: {
             statsLabel: 'সমন্বয়ের হিসাব',

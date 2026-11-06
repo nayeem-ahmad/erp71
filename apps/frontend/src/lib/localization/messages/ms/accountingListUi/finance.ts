@@ -41,11 +41,17 @@ export const accountingFinanceUiMessages = {
             inactive: 'Tidak aktif',
             runDepreciation: 'Jalankan susut nilai',
             addAsset: 'Tambah aset',
-            search: 'Cari mengikut kod atau nama…',
+            search: 'Cari mengikut kod, nama atau kategori…',
+            uncategorised: 'Tiada kategori',
+            categoryPlaceholder: 'cth. Perabot, Kenderaan',
+            setCategory: 'Tetapkan kategori',
+            categoryHint: 'Biarkan kosong untuk membuang kategori.',
+            categorySaved: 'Kategori disimpan.',
         },
         postingExceptions: {
             statsLabel: 'Angka peristiwa pengeposan',
             lastActivity: 'Aktiviti terakhir',
+            search: 'Cari sumber, baucar atau ralat…',
         },
         bankReconciliation: {
             statsLabel: 'Angka penyesuaian',

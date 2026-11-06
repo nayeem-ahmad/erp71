@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Boxes, Banknote, Building2, Play, Plus, TrendingDown, Wallet } from 'lucide-react';
+import { Boxes, Banknote, Building2, Play, Plus, Tag, TrendingDown, Wallet } from 'lucide-react';
 import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import type { CreatedRange } from '@/lib/created-range';
 import type { NumberCondition } from '@/lib/number-condition';
@@ -12,12 +12,15 @@ import {
     CompactSection,
 } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { Alert, Button, StatusBadge } from '@/components/ui';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
+import { Alert, Button, Field, Input, StatusBadge } from '@/components/ui';
+import { RowActions, RowActionButton } from '@/components/table';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { compactDensity } from '@/lib/ui/compact-density';
+import { toast } from '@/lib/toast';
 
 interface FixedAsset {
     id: string;
@@ -30,6 +33,8 @@ interface FixedAsset {
     depreciation_method: string;
     accumulated_depreciation: number;
     is_active: boolean;
+    /** Free text; null is an uncategorised asset. */
+    category?: string | null;
 }
 
 const METHODS = ['STRAIGHT_LINE', 'DECLINING_BALANCE'] as const;
@@ -37,10 +42,19 @@ const STATUSES = ['active', 'inactive'] as const;
 
 const columnHelper = createColumnHelper<FixedAsset>();
 
+/** The server's limit on a category (`FIXED_ASSET_CATEGORY_MAX_LENGTH`). */
+const CATEGORY_MAX_LENGTH = 60;
+/** The Category chip's value for assets with no category. */
+const UNCATEGORISED = '__none__';
+const CATEGORY_LIST_ID = 'fixed-asset-categories';
+
+/** Categories are typed by hand, so "Vehicles" and "vehicles " are one category. */
+const categoryKeyOf = (asset: FixedAsset) => asset.category?.trim().toLowerCase() || UNCATEGORISED;
+
 const statusOf = (asset: FixedAsset) => (asset.is_active === false ? 'inactive' : 'active');
 const bookValueOf = (asset: FixedAsset) => Number(asset.cost || 0) - Number(asset.accumulated_depreciation || 0);
 
-const EMPTY_FORM = { assetCode: '', name: '', purchaseDate: '', cost: '', residualValue: '0', usefulLifeMonths: '60', depreciationMethod: 'STRAIGHT_LINE' };
+const EMPTY_FORM = { assetCode: '', name: '', category: '', purchaseDate: '', cost: '', residualValue: '0', usefulLifeMonths: '60', depreciationMethod: 'STRAIGHT_LINE' };
 
 export default function FixedAssetsPage() {
     const { t, locale } = useI18n();
@@ -60,7 +74,12 @@ export default function FixedAssetsPage() {
 
     const [search, setSearch] = useState('');
     const [statuses, setStatuses] = useState<string[]>([]);
+    const [categories, setCategories] = useState<string[]>([]);
     const [methods, setMethods] = useState<string[]>([]);
+    const [categoryTarget, setCategoryTarget] = useState<FixedAsset | null>(null);
+    const [categoryDraft, setCategoryDraft] = useState('');
+    const [savingCategory, setSavingCategory] = useState(false);
+    const [categoryError, setCategoryError] = useState<string | null>(null);
     const [purchaseRange, setPurchaseRange] = useState<CreatedRange | null>(null);
     const [costFilter, setCostFilter] = useState<NumberCondition | null>(null);
     const [bookValueFilter, setBookValueFilter] = useState<NumberCondition | null>(null);
@@ -87,6 +106,7 @@ export default function FixedAssetsPage() {
             await api.createFixedAsset({
                 assetCode: form.assetCode,
                 name: form.name,
+                category: form.category.trim() || undefined,
                 purchaseDate: form.purchaseDate,
                 cost: parseFloat(form.cost),
                 residualValue: parseFloat(form.residualValue) || 0,
@@ -100,6 +120,34 @@ export default function FixedAssetsPage() {
             setError(e?.message ?? fa.createFailed);
         } finally {
             setCreating(false);
+        }
+    };
+
+    const openCategory = (asset: FixedAsset) => {
+        setCategoryTarget(asset);
+        setCategoryDraft(asset.category ?? '');
+        setCategoryError(null);
+    };
+
+    const closeCategory = () => {
+        if (savingCategory) return;
+        setCategoryTarget(null);
+    };
+
+    const handleSaveCategory = async () => {
+        if (!categoryTarget) return;
+        setSavingCategory(true);
+        setCategoryError(null);
+        try {
+            const category = categoryDraft.trim() || null;
+            await api.updateFixedAsset(categoryTarget.id, { category });
+            setAssets((current) => current.map((asset) => (asset.id === categoryTarget.id ? { ...asset, category } : asset)));
+            toast.success(ui.categorySaved);
+            setCategoryTarget(null);
+        } catch (e: any) {
+            setCategoryError(e?.message ?? t.accountingShared.saveFailed);
+        } finally {
+            setSavingCategory(false);
         }
     };
 
@@ -125,16 +173,27 @@ export default function FixedAssetsPage() {
     const methodLabel = (method: string) => (method === 'DECLINING_BALANCE' ? fa.decliningBalance : fa.straightLine);
     const statusLabel = (status: string) => (status === 'inactive' ? ui.inactive : ui.active);
 
+    /** One entry per category the loaded assets use, spelled as first seen. */
+    const categoryNames = useMemo(() => {
+        const names = new Map<string, string>();
+        for (const asset of assets) {
+            const key = categoryKeyOf(asset);
+            if (key !== UNCATEGORISED && !names.has(key)) names.set(key, asset.category!.trim());
+        }
+        return [...names.entries()].sort((a, b) => a[1].localeCompare(b[1], locale));
+    }, [assets, locale]);
+
     const filtered = useMemo(
         () => assets.filter((asset) => {
             if (!matchesAnyOf(statuses, statusOf(asset))) return false;
+            if (!matchesAnyOf(categories, categoryKeyOf(asset))) return false;
             if (!matchesAnyOf(methods, asset.depreciation_method)) return false;
             if (!inDateRange(asset.purchase_date, purchaseRange)) return false;
             if (!matchesNumberCondition(Number(asset.cost || 0), costFilter)) return false;
             if (!matchesNumberCondition(bookValueOf(asset), bookValueFilter)) return false;
-            return matchesSearch(search, asset.asset_code, asset.name);
+            return matchesSearch(search, asset.asset_code, asset.name, asset.category);
         }),
-        [assets, statuses, methods, purchaseRange, costFilter, bookValueFilter, search],
+        [assets, statuses, categories, methods, purchaseRange, costFilter, bookValueFilter, search],
     );
 
     const filters = useMemo<ListFilter[]>(
@@ -146,6 +205,17 @@ export default function FixedAssetsPage() {
                 value: statuses,
                 onChange: setStatuses,
                 options: STATUSES.map((value) => ({ value, label: statusLabel(value) })),
+            },
+            {
+                id: 'category',
+                type: 'multi-select',
+                label: t.accountingShared.category,
+                value: categories,
+                onChange: setCategories,
+                options: [
+                    ...categoryNames.map(([value, label]) => ({ value, label })),
+                    { value: UNCATEGORISED, label: ui.uncategorised },
+                ],
             },
             {
                 id: 'purchaseDate',
@@ -181,7 +251,7 @@ export default function FixedAssetsPage() {
                 more: true,
             },
         ],
-        [fa, ui, statuses, purchaseRange, costFilter, methods, bookValueFilter],
+        [t, fa, ui, statuses, categories, categoryNames, purchaseRange, costFilter, methods, bookValueFilter],
     );
 
     const stats = useMemo(() => {
@@ -215,6 +285,13 @@ export default function FixedAssetsPage() {
             columnHelper.accessor('name', {
                 header: fa.columns.name,
                 size: 200,
+            }),
+            columnHelper.accessor((row) => row.category?.trim() ?? '', {
+                id: 'category',
+                header: t.accountingShared.category,
+                cell: (info) => info.getValue() || <span className="text-gray-400">—</span>,
+                meta: { hideOnMobile: true },
+                size: 140,
             }),
             columnHelper.accessor('purchase_date', {
                 header: fa.purchaseDate,
@@ -270,8 +347,25 @@ export default function FixedAssetsPage() {
                 ),
                 size: 100,
             }),
+            columnHelper.display({
+                id: 'actions',
+                header: t.common.actions,
+                cell: ({ row }) => (
+                    <RowActions>
+                        <RowActionButton
+                            icon={<Tag />}
+                            label={ui.setCategory}
+                            onClick={() => openCategory(row.original)}
+                        />
+                    </RowActions>
+                ),
+                enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
+                size: 70,
+            }),
         ],
-        [fa, ui, locale],
+        [t, fa, ui, locale],
     );
 
     return (
@@ -335,14 +429,15 @@ export default function FixedAssetsPage() {
                         {([
                             { label: fa.assetCode, key: 'assetCode', placeholder: fa.placeholders.assetCode },
                             { label: fa.name, key: 'name', placeholder: fa.placeholders.name },
+                            { label: t.accountingShared.category, key: 'category', placeholder: ui.categoryPlaceholder, list: CATEGORY_LIST_ID, maxLength: CATEGORY_MAX_LENGTH },
                             { label: fa.purchaseDate, key: 'purchaseDate', type: 'date', placeholder: '' },
                             { label: fa.cost, key: 'cost', type: 'number', placeholder: '0.00' },
                             { label: fa.residualValue, key: 'residualValue', type: 'number', placeholder: '0.00' },
                             { label: fa.usefulLifeMonths, key: 'usefulLifeMonths', type: 'number', placeholder: fa.placeholders.usefulLife },
-                        ] as Array<{ label: string; key: keyof typeof EMPTY_FORM; type?: string; placeholder: string }>).map(({ label, key, type, placeholder }) => (
+                        ] as Array<{ label: string; key: keyof typeof EMPTY_FORM; type?: string; placeholder: string; list?: string; maxLength?: number }>).map(({ label, key, type, placeholder, list, maxLength }) => (
                             <label key={key} className="block">
                                 <span className={`${compactDensity.formLabel} block mb-1`}>{label}</span>
-                                <input type={type ?? 'text'} value={form[key]} placeholder={placeholder}
+                                <input type={type ?? 'text'} value={form[key]} placeholder={placeholder} list={list} maxLength={maxLength}
                                     onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
                                     className={compactDensity.formField} />
                             </label>
@@ -363,6 +458,11 @@ export default function FixedAssetsPage() {
                 </CompactSection>
             )}
 
+            {/* Suggests the categories already in use, so one is not typed two ways. */}
+            <datalist id={CATEGORY_LIST_ID}>
+                {categoryNames.map(([key, name]) => <option key={key} value={name} />)}
+            </datalist>
+
             <DataTable
                 tableId="fixed-assets"
                 title={fa.title}
@@ -380,6 +480,40 @@ export default function FixedAssetsPage() {
                 emptyMessage={assets.length === 0 ? fa.emptyMessage : t.common.noData}
                 emptyIcon={<Boxes className="w-16 h-16 text-gray-200" />}
             />
+
+            {categoryTarget && (
+                <ModalShell size="sm" onBackdropClick={closeCategory}>
+                    <ModalHeader
+                        title={ui.setCategory}
+                        subtitle={`${categoryTarget.asset_code} · ${categoryTarget.name}`}
+                        onClose={closeCategory}
+                        closeLabel={t.common.close}
+                    />
+                    <div className="space-y-4 overflow-y-auto p-4">
+                        <Field label={t.accountingShared.category} hint={ui.categoryHint} error={categoryError ?? undefined}>
+                            <Input
+                                type="text"
+                                value={categoryDraft}
+                                onChange={(e) => { setCategoryDraft(e.target.value); setCategoryError(null); }}
+                                placeholder={ui.categoryPlaceholder}
+                                aria-label={t.accountingShared.category}
+                                list={CATEGORY_LIST_ID}
+                                maxLength={CATEGORY_MAX_LENGTH}
+                                error={!!categoryError}
+                                autoFocus
+                            />
+                        </Field>
+                    </div>
+                    <ModalFooter>
+                        <Button variant="secondary" onClick={closeCategory} disabled={savingCategory}>
+                            {t.common.cancel}
+                        </Button>
+                        <Button variant="primary" onClick={() => void handleSaveCategory()} loading={savingCategory}>
+                            {t.common.save}
+                        </Button>
+                    </ModalFooter>
+                </ModalShell>
+            )}
         </AccountingPageShell>
     );
 }

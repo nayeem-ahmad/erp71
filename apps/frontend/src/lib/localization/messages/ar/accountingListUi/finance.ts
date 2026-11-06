@@ -41,11 +41,17 @@ export const accountingFinanceUiMessages = {
             inactive: 'غير نشط',
             runDepreciation: 'تشغيل الإهلاك',
             addAsset: 'إضافة أصل',
-            search: 'ابحث بالرمز أو الاسم…',
+            search: 'ابحث بالرمز أو الاسم أو الفئة…',
+            uncategorised: 'بدون فئة',
+            categoryPlaceholder: 'مثلاً أثاث، مركبات',
+            setCategory: 'تعيين الفئة',
+            categoryHint: 'اتركه فارغاً لإزالة الفئة.',
+            categorySaved: 'تم حفظ الفئة.',
         },
         postingExceptions: {
             statsLabel: 'أرقام أحداث الترحيل',
             lastActivity: 'آخر نشاط',
+            search: 'ابحث عن المصدر أو القيد أو الخطأ…',
         },
         bankReconciliation: {
             statsLabel: 'أرقام التسوية',

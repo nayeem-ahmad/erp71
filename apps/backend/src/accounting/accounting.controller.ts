@@ -62,6 +62,7 @@ import {
     CreateCostCenterDto,
     CostCenterPLQueryDto,
     CreateFixedAssetDto,
+    UpdateFixedAssetDto,
     RunDepreciationDto,
     CreateRecurringJournalDto,
     CreateRecurringVoucherDto,
@@ -406,6 +407,15 @@ export class AccountingController {
         return this.accountingService.updatePostingRule(tenant.tenantId, id, dto);
     }
 
+    /** The strip above the list: events per status over the same filters. Declared before any `:id` route. */
+    @Get('reconciliation/posting-exceptions/summary')
+    getPostingExceptionSummary(
+        @Tenant() tenant: TenantContext,
+        @Query() query: ListPostingExceptionsQueryDto,
+    ) {
+        return this.accountingService.getPostingExceptionSummary(tenant.tenantId, query);
+    }
+
     @Get('reconciliation/posting-exceptions')
     listPostingExceptions(
         @Tenant() tenant: TenantContext,
@@ -589,6 +599,12 @@ export class AccountingController {
     @TenantRoles('OWNER', 'ACCOUNTANT')
     createFixedAsset(@Tenant() tenant: TenantContext, @Body() dto: CreateFixedAssetDto) {
         return this.accountingService.createFixedAsset(tenant.tenantId, dto);
+    }
+
+    @Patch('fixed-assets/:id')
+    @TenantRoles('OWNER', 'ACCOUNTANT')
+    updateFixedAsset(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateFixedAssetDto) {
+        return this.accountingService.updateFixedAsset(tenant.tenantId, id, dto);
     }
 
     @Post('fixed-assets/run-depreciation')

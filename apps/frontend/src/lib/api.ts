@@ -1684,6 +1684,43 @@ export interface VoucherListSummary {
     manualCount: number;
 }
 
+/** The posting-exceptions list's filters, shared by the list and its summary. */
+export interface PostingExceptionFilterParams {
+    /** One status, or several. */
+    status?: string | readonly string[];
+    /** With `status`: every status but those. */
+    statusExclude?: boolean;
+    /** One source module, or several. */
+    module?: string | readonly string[];
+    /** Source id/type/module, voucher number, error text or event type. */
+    search?: string;
+    /** Last activity, whole days. */
+    from?: string;
+    to?: string;
+}
+
+/** `GET /accounting/reconciliation/posting-exceptions/summary`. */
+export interface PostingExceptionSummary {
+    count: number;
+    pending: number;
+    posted: number;
+    failed: number;
+    skipped: number;
+}
+
+function setPostingExceptionParams(query: URLSearchParams, params: PostingExceptionFilterParams): void {
+    const list = (value: string | readonly string[] | undefined) =>
+        (typeof value === 'string' ? value : value?.join(',')) || undefined;
+    const status = list(params.status);
+    const modules = list(params.module);
+    if (status) query.set('status', status);
+    if (status && params.statusExclude) query.set('statusExclude', 'true');
+    if (modules) query.set('module', modules);
+    if (params.search) query.set('search', params.search);
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
+}
+
 function setVoucherListParams(query: URLSearchParams, params: VoucherListFilterParams): void {
     const list = (value: string | readonly string[] | undefined) =>
         (typeof value === 'string' ? value : value?.join(',')) || undefined;
@@ -3132,15 +3169,18 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getPostingExceptions: (params?: { status?: string; module?: string; from?: string; to?: string; page?: number; limit?: number }) => {
+    getPostingExceptions: (params?: PostingExceptionFilterParams & { page?: number; limit?: number }) => {
         const query = new URLSearchParams();
-        if (params?.status) query.set('status', params.status);
-        if (params?.module) query.set('module', params.module);
-        if (params?.from) query.set('from', params.from);
-        if (params?.to) query.set('to', params.to);
+        setPostingExceptionParams(query, params ?? {});
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
         return fetchWithAuth(`/accounting/reconciliation/posting-exceptions${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    /** The stats strip above the posting-exceptions list — the list's own filters, counted per status. */
+    getPostingExceptionsSummary: (params: PostingExceptionFilterParams = {}): Promise<PostingExceptionSummary> => {
+        const query = new URLSearchParams();
+        setPostingExceptionParams(query, params);
+        return fetchWithAuth(`/accounting/reconciliation/posting-exceptions/summary${query.toString() ? `?${query.toString()}` : ''}`);
     },
     retryPostingException: (id: string) => fetchWithAuth(`/accounting/reconciliation/posting-exceptions/${id}/retry`, {
         method: 'POST',
@@ -5847,6 +5887,9 @@ export const api = {
     listFixedAssets: () => fetchWithAuth('/accounting/fixed-assets'),
     createFixedAsset: (data: any) =>
         fetchWithAuth('/accounting/fixed-assets', { method: 'POST', body: JSON.stringify(data) }),
+    /** Only the category can change after an asset is recorded; null clears it. */
+    updateFixedAsset: (id: string, data: { category: string | null }) =>
+        fetchWithAuth(`/accounting/fixed-assets/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     runDepreciation: (data: { year: number; month: number }) =>
         fetchWithAuth('/accounting/fixed-assets/run-depreciation', { method: 'POST', body: JSON.stringify(data) }),
     getDepreciationSchedule: (id: string) => fetchWithAuth(`/accounting/fixed-assets/${id}/schedule`),

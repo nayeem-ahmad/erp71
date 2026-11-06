@@ -41,11 +41,17 @@ export const accountingFinanceUiMessages = {
             inactive: 'Inactivo',
             runDepreciation: 'Ejecutar depreciación',
             addAsset: 'Añadir activo',
-            search: 'Buscar por código o nombre…',
+            search: 'Buscar por código, nombre o categoría…',
+            uncategorised: 'Sin categoría',
+            categoryPlaceholder: 'p. ej. Mobiliario, Vehículos',
+            setCategory: 'Asignar categoría',
+            categoryHint: 'Déjelo en blanco para quitar la categoría.',
+            categorySaved: 'Categoría guardada.',
         },
         postingExceptions: {
             statsLabel: 'Cifras de eventos de contabilización',
             lastActivity: 'Última actividad',
+            search: 'Buscar origen, comprobante o error…',
         },
         bankReconciliation: {
             statsLabel: 'Cifras de la conciliación',

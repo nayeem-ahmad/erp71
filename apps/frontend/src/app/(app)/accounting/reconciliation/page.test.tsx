@@ -39,6 +39,7 @@ jest.mock('@/components/data-table', () => ({
 jest.mock('@/lib/api', () => ({
     api: {
         getPostingExceptions: jest.fn(),
+        getPostingExceptionsSummary: jest.fn(),
         retryPostingException: jest.fn(),
     },
 }));
@@ -82,6 +83,7 @@ describe('PostingExceptionsPage', () => {
             data: [],
             pagination: { page: 1, limit: 20, total: 0 },
         });
+        api.getPostingExceptionsSummary.mockResolvedValue({ count: 0, pending: 0, posted: 0, failed: 0, skipped: 0 });
         api.retryPostingException.mockResolvedValue({ message: 'Retry queued.' });
     });
 
@@ -106,7 +108,7 @@ describe('PostingExceptionsPage', () => {
         render(<PostingExceptionsPage />);
         await waitFor(() => {
             expect(api.getPostingExceptions).toHaveBeenCalledWith(
-                expect.objectContaining({ status: undefined, page: 1, limit: 20 }),
+                expect.objectContaining({ status: [], statusExclude: false, module: [], page: 1, limit: 20 }),
             );
         });
     });
@@ -144,33 +146,97 @@ describe('PostingExceptionsPage', () => {
         await waitFor(() => expect(screen.getByText('0 rows')).toBeInTheDocument());
 
         const status = lastTableProps.filters.find((f: { id: string }) => f.id === 'status');
-        act(() => status.onChange('failed'));
+        expect(status.type).toBe('multi-select');
+        act(() => status.onChange(['failed', 'pending']));
 
         await waitFor(() => {
             expect(api.getPostingExceptions).toHaveBeenCalledWith(
-                expect.objectContaining({ status: 'failed', page: 1, limit: 20 })
+                expect.objectContaining({ status: ['failed', 'pending'], page: 1, limit: 20 })
             );
         });
     });
 
-    it('counts each status for the strip, and only the chosen one once a status is set', async () => {
+    it('offers "is none of" on the status chip and sends it along', async () => {
         const api = getApi();
-        const totals: Record<string, number> = { pending: 3, failed: 2, posted: 10, skipped: 1 };
-        api.getPostingExceptions.mockImplementation((params: { status?: string; limit?: number }) => Promise.resolve({
-            data: [],
-            pagination: { page: 1, limit: params.limit ?? 20, total: params.status ? totals[params.status] : 16 },
-        }));
+        render(<PostingExceptionsPage />);
+        await waitFor(() => expect(screen.getByText('0 rows')).toBeInTheDocument());
+
+        act(() => lastTableProps.filters.find((f: { id: string }) => f.id === 'status').onChange(['posted']));
+        act(() => lastTableProps.filters.find((f: { id: string }) => f.id === 'status').exclude.onChange(true));
+
+        await waitFor(() => {
+            expect(api.getPostingExceptions).toHaveBeenLastCalledWith(
+                expect.objectContaining({ status: ['posted'], statusExclude: true }),
+            );
+        });
+        expect(api.getPostingExceptionsSummary).toHaveBeenLastCalledWith(
+            expect.objectContaining({ status: ['posted'], statusExclude: true }),
+        );
+    });
+
+    it('takes several modules at once', async () => {
+        const api = getApi();
+        render(<PostingExceptionsPage />);
+        await waitFor(() => expect(screen.getByText('0 rows')).toBeInTheDocument());
+
+        const moduleChip = lastTableProps.filters.find((f: { id: string }) => f.id === 'module');
+        expect(moduleChip.type).toBe('multi-select');
+        expect(moduleChip.options.map((o: { value: string }) => o.value)).toEqual(expect.arrayContaining(['sales', 'purchases']));
+        act(() => moduleChip.onChange(['sales', 'purchases']));
+
+        await waitFor(() => {
+            expect(api.getPostingExceptions).toHaveBeenLastCalledWith(
+                expect.objectContaining({ module: ['sales', 'purchases'], page: 1 }),
+            );
+        });
+    });
+
+    it('searches on the server once typing settles, back on the first page', async () => {
+        const api = getApi();
+        render(<PostingExceptionsPage />);
+        await waitFor(() => expect(screen.getByText('0 rows')).toBeInTheDocument());
+        expect(lastTableProps.showSearch).not.toBe(false);
+        expect(lastTableProps.searchPlaceholder).toBe('Search source, voucher or error…');
+
+        act(() => lastTableProps.serverPagination.onPageChange(3));
+        await waitFor(() => expect(api.getPostingExceptions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 3 })));
+
+        act(() => lastTableProps.onSearchChange(' INV-0042 '));
+        expect(lastTableProps.searchValue).toBe(' INV-0042 ');
+
+        await waitFor(() => {
+            expect(api.getPostingExceptions).toHaveBeenLastCalledWith(
+                expect.objectContaining({ search: 'INV-0042', page: 1 }),
+            );
+        });
+        expect(api.getPostingExceptionsSummary).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'INV-0042' }));
+    });
+
+    it('fills the strip from one summary request, which follows the chips', async () => {
+        const api = getApi();
+        api.getPostingExceptionsSummary.mockImplementation((params: { status?: string[] }) => Promise.resolve(
+            params.status?.length
+                ? { count: 2, pending: 0, posted: 0, failed: 2, skipped: 0 }
+                : { count: 16, pending: 3, posted: 10, failed: 2, skipped: 1 },
+        ));
         render(<PostingExceptionsPage />);
 
         await waitFor(() => expect(screen.getByTestId('stat-count')).toHaveTextContent('16'));
         expect(screen.getByTestId('stat-pending')).toHaveTextContent('3');
         expect(screen.getByTestId('stat-failed')).toHaveTextContent('2');
+        expect(screen.getByTestId('stat-posted')).toHaveTextContent('10');
+        expect(api.getPostingExceptionsSummary).toHaveBeenCalledTimes(1);
+        // No one-row request per status any more.
+        expect(api.getPostingExceptions).not.toHaveBeenCalledWith(expect.objectContaining({ limit: 1 }));
 
         const status = lastTableProps.filters.find((f: { id: string }) => f.id === 'status');
-        act(() => status.onChange('failed'));
+        act(() => status.onChange(['failed']));
 
         await waitFor(() => expect(screen.getByTestId('stat-count')).toHaveTextContent('2'));
         expect(screen.getByTestId('stat-pending')).toHaveTextContent('0');
+        expect(screen.getByTestId('stat-failed')).toHaveTextContent('2');
+        expect(api.getPostingExceptionsSummary).toHaveBeenLastCalledWith(expect.objectContaining({ status: ['failed'] }));
+        expect(lastTableProps.stats.items.find((i: { id: string }) => i.id === 'failed').tone).toBe('danger');
     });
 
     it('sends the date chip as from/to', async () => {
@@ -186,6 +252,9 @@ describe('PostingExceptionsPage', () => {
                 expect.objectContaining({ from: '2026-06-01', to: '2026-06-30' }),
             );
         });
+        expect(api.getPostingExceptionsSummary).toHaveBeenLastCalledWith(
+            expect.objectContaining({ from: '2026-06-01', to: '2026-06-30' }),
+        );
     });
 
     it('shows retry button in event row', async () => {

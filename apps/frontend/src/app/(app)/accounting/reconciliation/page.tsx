@@ -9,7 +9,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { Button, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { RowActions, RowActionButton } from '@/components/table';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { api } from '@/lib/api';
+import { api, type PostingExceptionFilterParams, type PostingExceptionSummary } from '@/lib/api';
 import { applyDateRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { formatDateTime } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -25,7 +25,7 @@ const STATUS_TONE: Record<PostingStatus, StatusBadgeTone> = {
     skipped: 'neutral',
 };
 
-/** The modules that queue posting events; the server filters on one of them. */
+/** The modules that queue posting events; the server filters on any set of them. */
 const MODULES = [
     'accounting',
     'cashier-sessions',
@@ -89,24 +89,46 @@ export default function PostingExceptionsPage() {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const [loading, setLoading] = useState(true);
-    const [filterStatus, setFilterStatus] = useState<string | null>(null);
-    const [filterModule, setFilterModule] = useState<string | null>(null);
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [statuses, setStatuses] = useState<string[]>([]);
+    const [statusExclude, setStatusExclude] = useState(false);
+    const [modules, setModules] = useState<string[]>([]);
     const [dateRange, setDateRange] = useState<CreatedRange | null>(null);
-    const [counts, setCounts] = useState<Record<PostingStatus, number> | null>(null);
-    const [countsLoading, setCountsLoading] = useState(true);
+    const [summary, setSummary] = useState<PostingExceptionSummary | null>(null);
+    const [summaryLoading, setSummaryLoading] = useState(true);
     const [retryingId, setRetryingId] = useState<string | null>(null);
 
-    const scope = useMemo(() => {
+    // Typing must not fire a request per keystroke.
+    useEffect(() => {
+        const next = search.trim();
+        if (next === debouncedSearch) return undefined;
+        const timer = setTimeout(() => {
+            setDebouncedSearch(next);
+            setPage(1);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [search, debouncedSearch]);
+
+    // One set of filters for the rows and the strip above them, so the two
+    // always describe the same events.
+    const filterParams = useMemo<PostingExceptionFilterParams>(() => {
         const range = applyDateRangeQuery(dateRange);
-        return { module: filterModule || undefined, from: range.dateFrom, to: range.dateTo };
-    }, [filterModule, dateRange]);
+        return {
+            status: statuses,
+            statusExclude,
+            module: modules,
+            search: debouncedSearch || undefined,
+            from: range.dateFrom,
+            to: range.dateTo,
+        };
+    }, [statuses, statusExclude, modules, debouncedSearch, dateRange]);
 
     const loadEvents = useCallback(async () => {
         setLoading(true);
         try {
             const data = await api.getPostingExceptions({
-                status: filterStatus || undefined,
-                ...scope,
+                ...filterParams,
                 page,
                 limit: pageSize,
             });
@@ -118,37 +140,32 @@ export default function PostingExceptionsPage() {
         } finally {
             setLoading(false);
         }
-    }, [filterStatus, scope, page, pageSize, t]);
+    }, [filterParams, page, pageSize, t]);
 
-    // The strip counts each status over the module and date chips: one
-    // one-row request per status, read for its total.
-    const loadCounts = useCallback(async () => {
-        setCountsLoading(true);
+    // The strip: every event the filters match, counted per status by the server.
+    const loadSummary = useCallback(async () => {
+        setSummaryLoading(true);
         try {
-            const totals = await Promise.all(
-                STATUSES.map((status) =>
-                    api.getPostingExceptions({ status, ...scope, page: 1, limit: 1 })
-                        .then((data: { pagination?: Pagination } | null) => Number(data?.pagination?.total ?? 0))
-                        .catch(() => 0),
-                ),
-            );
-            setCounts(Object.fromEntries(STATUSES.map((status, i) => [status, totals[i]])) as Record<PostingStatus, number>);
+            setSummary(await api.getPostingExceptionsSummary(filterParams));
+        } catch (err) {
+            console.error('Failed to load posting exception summary', err);
+            setSummary(null);
         } finally {
-            setCountsLoading(false);
+            setSummaryLoading(false);
         }
-    }, [scope]);
+    }, [filterParams]);
 
     useEffect(() => {
         void loadEvents();
     }, [loadEvents]);
 
     useEffect(() => {
-        void loadCounts();
-    }, [loadCounts]);
+        void loadSummary();
+    }, [loadSummary]);
 
     const refresh = () => {
         void loadEvents();
-        void loadCounts();
+        void loadSummary();
     };
 
     const handleRetry = async (id: string) => {
@@ -170,26 +187,27 @@ export default function PostingExceptionsPage() {
     const moduleOptions = useMemo(() => {
         const known = new Set<string>(MODULES);
         for (const event of events) known.add(event.sourceModule);
-        if (filterModule) known.add(filterModule);
+        for (const value of modules) known.add(value);
         return [...known].sort().map((value) => ({ value, label: value }));
-    }, [events, filterModule]);
+    }, [events, modules]);
 
     const filters = useMemo<ListFilter[]>(
         () => [
             {
                 id: 'status',
-                type: 'select',
+                type: 'multi-select',
                 label: t.accountingShared.status,
-                value: filterStatus,
-                onChange: (next) => { setFilterStatus(next); setPage(1); },
+                value: statuses,
+                onChange: (next) => { setStatuses(next); setPage(1); },
+                exclude: { value: statusExclude, onChange: (next) => { setStatusExclude(next); setPage(1); } },
                 options: STATUSES.map((value) => ({ value, label: statusLabel(value) })),
             },
             {
                 id: 'module',
-                type: 'select',
+                type: 'multi-select',
                 label: pe.columns.module,
-                value: filterModule,
-                onChange: (next) => { setFilterModule(next); setPage(1); },
+                value: modules,
+                onChange: (next) => { setModules(next); setPage(1); },
                 options: moduleOptions,
             },
             {
@@ -201,14 +219,15 @@ export default function PostingExceptionsPage() {
                 operators: true,
             },
         ],
-        [t, pe, ui, filterStatus, filterModule, moduleOptions, dateRange],
+        [t, pe, ui, statuses, statusExclude, modules, moduleOptions, dateRange],
     );
 
     const stats = useMemo(() => {
         const n = (value: number) => value.toLocaleString(locale);
-        // With a status chosen, the other statuses have no rows in the list.
-        const countOf = (status: PostingStatus) => (filterStatus && filterStatus !== status ? 0 : counts?.[status] ?? 0);
-        const total = STATUSES.reduce((sum, status) => sum + countOf(status), 0);
+        // The server counts over every chip, the status set included, so a
+        // status left out of the set reads 0.
+        const countOf = (status: PostingStatus) => summary?.[status] ?? 0;
+        const total = summary?.count ?? 0;
         const items: ListStat[] = [
             { id: 'count', icon: <ListChecks aria-hidden />, label: t.accountingShared.postingEvents, value: n(total) },
             {
@@ -228,8 +247,8 @@ export default function PostingExceptionsPage() {
             { id: 'posted', icon: <CircleCheck aria-hidden />, label: statusLabels.posted, value: n(countOf('posted')) },
             { id: 'skipped', icon: <CircleSlash aria-hidden />, label: statusLabels.skipped, value: n(countOf('skipped')) },
         ];
-        return { items, loading: countsLoading && !counts, label: ui.statsLabel };
-    }, [counts, countsLoading, filterStatus, locale, statusLabels, t, ui]);
+        return { items, loading: summaryLoading && !summary, label: ui.statsLabel };
+    }, [summary, summaryLoading, locale, statusLabels, t, ui]);
 
     const columns = useMemo<ColumnDef<PostingEvent, any>[]>(
         () => [
@@ -357,7 +376,9 @@ export default function PostingExceptionsPage() {
                 columns={columns}
                 data={events}
                 isLoading={loading}
-                showSearch={false}
+                searchPlaceholder={ui.search}
+                searchValue={search}
+                onSearchChange={setSearch}
                 filters={filters}
                 filterLayout="row"
                 stats={stats}

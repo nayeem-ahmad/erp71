@@ -41,11 +41,17 @@ export const accountingFinanceUiMessages = {
             inactive: 'Inaktiv',
             runDepreciation: 'Abschreibung buchen',
             addAsset: 'Anlage hinzufügen',
-            search: 'Nach Code oder Name suchen…',
+            search: 'Nach Code, Name oder Kategorie suchen…',
+            uncategorised: 'Ohne Kategorie',
+            categoryPlaceholder: 'z. B. Möbel, Fahrzeuge',
+            setCategory: 'Kategorie festlegen',
+            categoryHint: 'Leer lassen, um die Kategorie zu entfernen.',
+            categorySaved: 'Kategorie gespeichert.',
         },
         postingExceptions: {
             statsLabel: 'Kennzahlen der Buchungsereignisse',
             lastActivity: 'Letzte Aktivität',
+            search: 'Quelle, Beleg oder Fehler suchen…',
         },
         bankReconciliation: {
             statsLabel: 'Abstimmungskennzahlen',

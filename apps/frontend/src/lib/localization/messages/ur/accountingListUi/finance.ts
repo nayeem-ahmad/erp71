@@ -41,11 +41,17 @@ export const accountingFinanceUiMessages = {
             inactive: 'غیر فعال',
             runDepreciation: 'فرسودگی چلائیں',
             addAsset: 'اثاثہ شامل کریں',
-            search: 'کوڈ یا نام سے تلاش کریں…',
+            search: 'کوڈ، نام یا زمرے سے تلاش کریں…',
+            uncategorised: 'بغیر زمرہ',
+            categoryPlaceholder: 'مثلاً فرنیچر، گاڑیاں',
+            setCategory: 'زمرہ مقرر کریں',
+            categoryHint: 'زمرہ ہٹانے کے لیے خالی چھوڑ دیں۔',
+            categorySaved: 'زمرہ محفوظ ہو گیا۔',
         },
         postingExceptions: {
             statsLabel: 'پوسٹنگ ایونٹس کے اعداد و شمار',
             lastActivity: 'آخری سرگرمی',
+            search: 'ماخذ، واؤچر یا خرابی تلاش کریں…',
         },
         bankReconciliation: {
             statsLabel: 'مطابقت کے اعداد و شمار',
