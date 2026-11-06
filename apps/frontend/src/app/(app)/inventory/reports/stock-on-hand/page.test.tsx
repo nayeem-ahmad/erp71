@@ -156,6 +156,25 @@ describe('StockOnHandPage', () => {
         expect(screen.getByTestId('cell-1-salesPrice')).toHaveTextContent('৳ 40.00');
     });
 
+    it('shows a dash for a last purchase or sales price of zero rather than ৳ 0.00', async () => {
+        const { api } = require('@/lib/api');
+        api.getStockOnHand.mockResolvedValue({
+            ...mockReport,
+            rows: [
+                {
+                    ...mockReport.rows[0],
+                    lastPurchasePrice: 0,
+                    product: { ...mockReport.rows[0].product, sellingPrice: 0 },
+                },
+            ],
+        });
+
+        render(<StockOnHandPage />);
+
+        await waitFor(() => expect(screen.getByTestId('cell-0-lastPurchasePrice')).toHaveTextContent('-'));
+        expect(screen.getByTestId('cell-0-salesPrice')).toHaveTextContent('-');
+    });
+
     it('renders summary KPI cards', async () => {
         render(<StockOnHandPage />);
         await waitFor(() => expect(screen.getByText('Total Stock Value')).toBeInTheDocument());

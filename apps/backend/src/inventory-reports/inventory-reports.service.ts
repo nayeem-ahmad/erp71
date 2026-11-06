@@ -219,9 +219,13 @@ export class InventoryReportsService {
      *
      * Two extra figures sit beside that cost, and neither of them is it.
      * `product.sellingPrice` is `Product.price` — the catalogue price POS,
-     * sales entry and the valuation report already sell at. `lastPurchasePrice`
-     * is the supplier's unit price on the newest posted purchase bill for the
-     * product (see getLastPurchasePrices), or null when there is no such bill.
+     * sales entry and the valuation report already sell at. A catalogue of
+     * zero falls back to the last sold price (see getLastSalesPrices), so a
+     * product that has never been priced in the list still shows what it
+     * actually went out at. `lastPurchasePrice` is the supplier's unit price
+     * on the newest posted *paid* purchase bill (see getLastPurchasePrices),
+     * or null when there is no such bill. A later bill entered at 0 is not
+     * a price — it is skipped so it cannot blank out the paid one behind it.
      */
     async getStockOnHand(tenantId: string, query: GetStockOnHandDto) {
         const warehouses = await this.db.warehouse.findMany({
@@ -306,11 +310,12 @@ export class InventoryReportsService {
         });
 
         const productIds = products.map((product) => product.id);
-        const [poolCostByProduct, movementCostByProduct, latestCostByProduct, lastPurchaseByProduct] = await Promise.all([
+        const [poolCostByProduct, movementCostByProduct, latestCostByProduct, lastPurchaseByProduct, lastSaleByProduct] = await Promise.all([
             this.getPoolCosts(tenantId),
             this.getWeightedAveragePurchaseCosts(tenantId, query),
             this.getLatestRecordedCosts(tenantId),
             this.getLastPurchasePrices(tenantId, productIds, query),
+            this.getLastSalesPrices(tenantId, productIds, query),
         ]);
 
         const rows = products
@@ -327,6 +332,9 @@ export class InventoryReportsService {
                 const unitCost = averageCost ?? latestCost ?? null;
                 const costBasis = averageCost != null ? 'WEIGHTED_AVERAGE' : latestCost != null ? 'LATEST_COST' : 'UNCOSTED';
                 const lastPurchasePrice = lastPurchaseByProduct.get(product.id) ?? null;
+                const cataloguePrice = Number(product.price || 0);
+                const lastSalesPrice = lastSaleByProduct.get(product.id) ?? null;
+                const sellingPrice = cataloguePrice > 0 ? cataloguePrice : (lastSalesPrice ?? 0);
 
                 return {
                     product: {
@@ -334,7 +342,7 @@ export class InventoryReportsService {
                         name: product.name,
                         sku: product.sku,
                         unitType: product.unit_type,
-                        sellingPrice: Number(product.price || 0),
+                        sellingPrice,
                         brand: product.brand,
                         group: product.group,
                         subgroup: product.subgroup,
@@ -455,6 +463,11 @@ export class InventoryReportsService {
      * never recorded either still belongs to its branch via `store_id`, so a
      * branch filter does not blank those prices out. Neither filter set means
      * the tenant-wide latest bill.
+     *
+     * Zero-cost lines are out. A later bill entered without a rate (KH Tradind
+     * PUR-02015: 218 of 219 lines at 0) is not the last purchase *price* — it
+     * is a quantity receipt. Including it printed ৳ 0.00 over the paid bill
+     * behind it on 172 stocked products. No positive bill means null, a dash.
      */
     private async getLastPurchasePrices(tenantId: string, productIds: string[], query: GetStockOnHandDto) {
         const prices = new Map<string, number>();
@@ -488,6 +501,7 @@ export class InventoryReportsService {
             INNER JOIN "Purchase" p ON p.id = pi.purchase_id
             WHERE p.tenant_id = ${tenantId}
               AND p.status <> ${PurchaseStatus.CANCELLED}
+              AND pi.unit_cost > 0
               AND pi.product_id IN (${Prisma.join(productIds)})
               ${warehouseFilter}
               ${storeFilter}
@@ -496,8 +510,62 @@ export class InventoryReportsService {
 
         for (const row of rows) {
             const unitCost = Number(row.unit_cost);
-            if (!Number.isFinite(unitCost)) continue;
+            if (!Number.isFinite(unitCost) || unitCost <= 0) continue;
             prices.set(row.product_id, unitCost);
+        }
+        return prices;
+    }
+
+    /**
+     * Customer unit price on each product's newest posted sale. Used only when
+     * the catalogue price is zero, so a product that has never been priced in
+     * the list still has a sales price on this report.
+     *
+     * Same newest-first and location rules as getLastPurchasePrices. Draft and
+     * cancelled invoices are out; a free (0) line is skipped for the same
+     * reason a 0-cost bill is.
+     */
+    private async getLastSalesPrices(tenantId: string, productIds: string[], query: GetStockOnHandDto) {
+        const prices = new Map<string, number>();
+        if (productIds.length === 0) return prices;
+
+        const warehouseFilter = query.warehouseId
+            ? Prisma.sql`AND COALESCE(si.warehouse_id, s.warehouse_id) = ${query.warehouseId}`
+            : Prisma.empty;
+
+        const storeFilter = query.storeId
+            ? Prisma.sql`AND (
+                COALESCE(si.warehouse_id, s.warehouse_id) IN (
+                    SELECT id FROM "Warehouse" WHERE tenant_id = ${tenantId} AND store_id = ${query.storeId}
+                )
+                OR (
+                    si.warehouse_id IS NULL
+                    AND s.warehouse_id IS NULL
+                    AND s.store_id = ${query.storeId}
+                )
+            )`
+            : Prisma.empty;
+
+        const rows = await this.db.$queryRaw<{ product_id: string; price_at_sale: number | null }[]>`
+            SELECT DISTINCT ON (si.product_id)
+                si.product_id,
+                si.price_at_sale::float8 AS price_at_sale
+            FROM "SaleItem" si
+            INNER JOIN "Sale" s ON s.id = si.sale_id
+            WHERE s.tenant_id = ${tenantId}
+              AND s.status <> 'CANCELLED'
+              AND s.status <> 'DRAFT'
+              AND si.price_at_sale > 0
+              AND si.product_id IN (${Prisma.join(productIds)})
+              ${warehouseFilter}
+              ${storeFilter}
+            ORDER BY si.product_id, s.sale_date DESC, s.created_at DESC, si.id DESC
+        `;
+
+        for (const row of rows) {
+            const price = Number(row.price_at_sale);
+            if (!Number.isFinite(price) || price <= 0) continue;
+            prices.set(row.product_id, price);
         }
         return prices;
     }
