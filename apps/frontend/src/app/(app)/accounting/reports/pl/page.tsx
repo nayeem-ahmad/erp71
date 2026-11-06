@@ -1,14 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { TrendingUp } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Banknote, Percent, Receipt, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
 import {
     AccountingPageShell,
-    AccountingToolbar,
     CompactSection,
 } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import ReportScopeBar from '@/components/accounting/ReportScopeBar';
+import { ListStats, ListToolbar, type ListFilter, type ListStat, type ResolvedListFilter } from '@/components/data-table';
 import CompareMatrixTable, { type CompareMatrixSection } from '@/components/accounting/CompareMatrixTable';
 import StatementSection, {
     hideZeroGroups,
@@ -33,17 +32,20 @@ import {
     statementScopeParams,
     useApprovedOnly,
 } from '@/lib/accounting-report-scope';
-import { BranchFilter } from '@/components/ui';
+import { BranchFilter, Button } from '@/components/ui';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
-
-function defaultFrom() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-}
-
-function defaultTo() {
-    return new Date().toISOString().slice(0, 10);
-}
+import type { CreatedRange } from '@/lib/created-range';
+import {
+    PERIOD_PRESETS,
+    defaultPeriod,
+    requiredPeriod,
+    searchCompareSections,
+    searchStatementGroups,
+    signedPercent,
+    statementScopeFilters,
+    totalFigure,
+    wholeTaka,
+} from '../_shared/report-chips';
 
 type Group = StatementGroup;
 
@@ -75,8 +77,10 @@ export default function ProfitLossPage() {
     const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
     const [includeCompanyBucket, setIncludeCompanyBucket] = useState(false);
     const [hideZero, setHideZero] = useState(false);
-    const [fromDate, setFromDate] = useState(defaultFrom());
-    const [toDate, setToDate] = useState(defaultTo());
+    const [periodRange, setPeriodRange] = useState<CreatedRange>(defaultPeriod);
+    const fromDate = periodRange.from ?? '';
+    const toDate = periodRange.to ?? '';
+    const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [initialized, setInitialized] = useState(false);
@@ -210,6 +214,77 @@ export default function ProfitLossPage() {
         approvedOnly, approvalEnabled, printCopy, locale, hideZero, isProfit, netProfitValue,
     ]);
 
+    const filters = useMemo<ResolvedListFilter[]>(() => {
+        const list: ListFilter[] = [
+            {
+                id: 'period',
+                type: 'date-range',
+                label: t.accountingShared.period,
+                value: periodRange,
+                // A statement is always for some period: cleared, it goes back to this month.
+                onChange: (next) => setPeriodRange(requiredPeriod(next)),
+                presets: PERIOD_PRESETS,
+                operators: true,
+            },
+            ...statementScopeFilters(t, {
+                canConsolidate,
+                compare,
+                onCompareChange: setCompare,
+                stores,
+                selectedStoreIds,
+                onSelectedStoreIdsChange: setSelectedStoreIds,
+                includeCompanyBucket,
+                onIncludeCompanyBucketChange: setIncludeCompanyBucket,
+                level,
+                onLevelChange: setLevel,
+                hideZero,
+                onHideZeroChange: setHideZero,
+                approvalEnabled,
+                approvedOnly,
+                onApprovedOnlyChange: setApprovedOnly,
+            }),
+        ];
+        return list as ResolvedListFilter[];
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [t, periodRange, canConsolidate, compare, stores, selectedStoreIds, includeCompanyBucket, level, hideZero, approvalEnabled, approvedOnly]);
+
+    // The figures of the statement on screen: its own totals, or the "total"
+    // column of a branch comparison.
+    const stats = useMemo(() => {
+        const revenueTotal = isCompare ? totalFigure(data?.sections?.[0]?.subtotals) : (data?.revenue?.total ?? 0);
+        const expenseTotal = isCompare ? totalFigure(data?.sections?.[1]?.subtotals) : (data?.expenses?.total ?? 0);
+        const margin = revenueTotal !== 0 ? (netProfitValue / Math.abs(revenueTotal)) * 100 : null;
+        const items: ListStat[] = [
+            { id: 'revenue', icon: <Banknote aria-hidden />, label: t.accounting.reports.totalRevenue, value: wholeTaka(revenueTotal, locale) },
+            { id: 'expenses', icon: <Receipt aria-hidden />, label: t.accounting.reports.totalExpenses, value: wholeTaka(expenseTotal, locale) },
+            {
+                id: 'net',
+                icon: isProfit ? <TrendingUp aria-hidden /> : <TrendingDown aria-hidden />,
+                label: isProfit ? t.accounting.reports.netProfit : t.accounting.reports.netLoss,
+                value: wholeTaka(Math.abs(netProfitValue), locale),
+                tone: isProfit ? 'default' : 'danger',
+            },
+            {
+                id: 'margin',
+                icon: <Percent aria-hidden />,
+                label: t.accounting.reports.financialRatios.netMargin,
+                value: signedPercent(margin) ?? '—',
+                tone: margin !== null && margin < 0 ? 'danger' : 'default',
+            },
+        ];
+        return items;
+    }, [data, isCompare, isProfit, netProfitValue, locale, t]);
+
+    const revenueGroups = useMemo(
+        () => searchStatementGroups(hideZeroGroups(data?.revenue?.groups ?? [], hideZero), search),
+        [data, hideZero, search],
+    );
+    const expenseGroups = useMemo(
+        () => searchStatementGroups(hideZeroGroups(data?.expenses?.groups ?? [], hideZero), search),
+        [data, hideZero, search],
+    );
+    const compareSections = useMemo(() => searchCompareSections(data?.sections ?? [], search), [data, search]);
+
     return (
         <AccountingPageShell maxWidth={isCompare ? 'full' : 'narrow'}>
             <PageHeader
@@ -221,45 +296,33 @@ export default function ProfitLossPage() {
                     t.accounting.reports.pl.title,
                     'accounting',
                 )}
-                actions={compare ? null : <BranchFilter scope={branch} />}
-            />
-            <AccountingToolbar
                 actions={(
-                    <ReportPrintButton
-                        onPrint={() => void handlePrint()}
-                        disabled={!data || loading || isCompare}
-                        disabledReason={isCompare ? printCopy.unavailableInCompare : undefined}
-                    />
+                    <>
+                        {compare ? null : <BranchFilter scope={branch} />}
+                        <Button
+                            variant="secondary"
+                            onClick={() => void load()}
+                            disabled={loading || (compare && selectedStoreIds.length === 0)}
+                        >
+                            <RefreshCw aria-hidden className="h-3.5 w-3.5" />
+                            {t.accounting.reports.reportScope.generate}
+                        </Button>
+                        <ReportPrintButton
+                            onPrint={() => void handlePrint()}
+                            disabled={!data || loading || isCompare}
+                            disabledReason={isCompare ? printCopy.unavailableInCompare : undefined}
+                        />
+                    </>
                 )}
-            >
-                <ReportScopeBar
-                    compare={compare}
-                    onCompareChange={setCompare}
-                    selectedStoreIds={selectedStoreIds}
-                    onSelectedStoreIdsChange={setSelectedStoreIds}
-                    includeCompanyBucket={includeCompanyBucket}
-                    onIncludeCompanyBucketChange={setIncludeCompanyBucket}
-                    stores={stores}
-                    canConsolidate={canConsolidate}
-                    dateMode="range"
-                    from={fromDate}
-                    to={toDate}
-                    asOfDate={toDate}
-                    onDateChange={(field, value) => {
-                        if (field === 'from') setFromDate(value);
-                        if (field === 'to') setToDate(value);
-                    }}
-                    onGenerate={() => void load()}
-                    generating={loading}
-                    level={level}
-                    onLevelChange={setLevel}
-                    approvedOnly={approvedOnly}
-                    onApprovedOnlyChange={setApprovedOnly}
-                    approvalEnabled={approvalEnabled}
-                    hideZero={hideZero}
-                    onHideZeroChange={setHideZero}
-                />
-            </AccountingToolbar>
+            />
+
+            <ListStats stats={stats} loading={loading || !data} label={t.accountingReportsUi.common.stats} />
+
+            <ListToolbar
+                tableId="accounting-profit-loss"
+                filters={filters}
+                search={{ value: search, onChange: setSearch, placeholder: t.accountingReportsUi.common.searchAccounts }}
+            />
 
             {error && <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-700">{error}</div>}
 
@@ -278,7 +341,7 @@ export default function ProfitLossPage() {
                         ) : null}
                         <CompareMatrixTable
                             columns={data.columns}
-                            sections={data.sections}
+                            sections={compareSections}
                             footerRows={[
                                 {
                                     label: isProfit ? t.accounting.reports.netProfit : t.accounting.reports.netLoss,
@@ -297,14 +360,14 @@ export default function ProfitLossPage() {
                             </div>
                         ) : null}
 
-                        <StatementSection groups={hideZeroGroups(data.revenue.groups, hideZero)} label={t.accounting.reports.revenue} colorClass="bg-emerald-50 text-emerald-700" />
+                        <StatementSection groups={revenueGroups} label={t.accounting.reports.revenue} colorClass="bg-emerald-50 text-emerald-700" />
 
                         <div className="flex justify-between items-center px-3 py-2 bg-emerald-50 rounded-lg font-semibold text-sm text-emerald-800 border border-emerald-100">
                             <span>{t.accounting.reports.totalRevenue}</span>
                             <span>{formatBDT(data.revenue.total, { locale })}</span>
                         </div>
 
-                        <StatementSection groups={hideZeroGroups(data.expenses.groups, hideZero)} label={t.accounting.reports.expenses} colorClass="bg-danger-light text-danger-text" />
+                        <StatementSection groups={expenseGroups} label={t.accounting.reports.expenses} colorClass="bg-danger-light text-danger-text" />
 
                         <div className="flex justify-between items-center px-3 py-2 bg-danger-light rounded-lg font-semibold text-sm text-danger-text border border-red-100">
                             <span>{t.accounting.reports.totalExpenses}</span>

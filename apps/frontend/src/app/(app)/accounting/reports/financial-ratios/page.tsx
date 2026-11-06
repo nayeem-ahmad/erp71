@@ -1,26 +1,28 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import {
-    AccountingPageShell,
-    AccountingToolbar,
-    CompactSection,
-    CompactStat,
-} from '@/components/accounting/compact';
+import { useEffect, useMemo, useState } from 'react';
+import { CalendarClock, Hourglass, Percent, Scale, TrendingUp } from 'lucide-react';
+import { AccountingPageShell, CompactSection } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { ListStats, ListToolbar, type ListFilter, type ListStat, type ResolvedListFilter } from '@/components/data-table';
+import { StatusBadge } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { useApprovedOnly } from '@/lib/accounting-report-scope';
-import { ApprovedOnlyToggle } from '@/components/accounting/ApprovedOnlyToggle';
-
-function defaultFrom() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-}
-function defaultTo() { return new Date().toISOString().slice(0, 10); }
+import type { CreatedRange } from '@/lib/created-range';
+import {
+    AS_OF_PRESETS,
+    PERIOD_PRESETS,
+    approvedOnlyFilter,
+    asOfFromRange,
+    asOfRange,
+    defaultPeriod,
+    requiredPeriod,
+    todayDate,
+} from '../_shared/report-chips';
 
 interface RatiosData {
     as_of: string;
@@ -39,118 +41,177 @@ interface RatiosData {
     };
 }
 
-function RatioCard({ label, value, description, format, healthyCondition }: {
+type RatioKey = 'current_ratio' | 'gross_margin_pct' | 'net_profit_margin_pct' | 'dso_days' | 'dpo_days';
+
+interface RatioSpec {
+    key: RatioKey;
     label: string;
-    value: number | null;
     description: string;
-    format?: 'number' | 'pct' | 'days' | 'bdt';
-    healthyCondition?: (v: number) => boolean;
-}) {
-    const { locale } = useI18n();
-    const isHealthy = value !== null && healthyCondition ? healthyCondition(value) : null;
-    const formattedValue = value === null ? 'N/A' :
-        format === 'pct' ? `${value.toFixed(1)}%` :
-        format === 'days' ? `${value.toFixed(1)} days` :
-        format === 'bdt' ? formatBDT(value, { locale }) :
-        value.toFixed(2);
-
-    const tone = isHealthy === true ? 'positive' : isHealthy === false ? 'negative' : 'default';
-    const borderClass = isHealthy === true ? 'border-emerald-200' : isHealthy === false ? 'border-red-200' : 'border-gray-100';
-
-    return (
-        <div className={`${compactDensity.cardFlat} ${borderClass}`}>
-            <CompactStat
-                label={label}
-                value={formattedValue}
-                tone={tone}
-                className="border-0 p-0 shadow-none bg-transparent"
-            />
-            <p className="text-xs text-gray-400 mt-1">{description}</p>
-        </div>
-    );
+    format: 'number' | 'pct' | 'days';
+    healthy: (value: number) => boolean;
+    /** A margin below zero is a loss, not merely a ratio to watch. */
+    lossWhenNegative?: boolean;
+    icon: React.ReactNode;
 }
 
 export default function FinancialRatiosPage() {
     const { t, locale } = useI18n();
+    const fr = t.accounting.reports.financialRatios;
+    const ui = t.accountingReportsUi.ratios;
     const [data, setData] = useState<RatiosData | null>(null);
-    const [asOfDate, setAsOfDate] = useState(defaultTo());
-    const [fromDate, setFromDate] = useState(defaultFrom());
-    const [toDate, setToDate] = useState(defaultTo());
+    const [asOfDate, setAsOfDate] = useState(todayDate);
+    const [period, setPeriod] = useState<CreatedRange>(defaultPeriod);
     const [loading, setLoading] = useState(true);
     const { approvedOnly, setApprovedOnly, approvalEnabled, ready: approvalReady } = useApprovedOnly();
     const [error, setError] = useState<string | null>(null);
 
     // approvalReady holds the first fetch until the tenant's approved-only
     // setting is known, so the report is never generated against the wrong value.
-    useEffect(() => { if (approvalReady) void load(); }, [asOfDate, fromDate, toDate, approvalReady, approvedOnly]);
-
-    const load = async () => {
-        setLoading(true); setError(null);
-        try {
-            const result = await (api as any).getFinancialRatios({ approvedOnly,
-                asOfDate: asOfDate || undefined,
-                from: fromDate || undefined,
-                to: toDate || undefined,
+    useEffect(() => {
+        if (!approvalReady) return;
+        let active = true;
+        setLoading(true);
+        setError(null);
+        api.getFinancialRatios({
+            approvedOnly,
+            asOfDate: asOfDate || undefined,
+            from: period.from || undefined,
+            to: period.to || undefined,
+        })
+            .then((result: RatiosData) => {
+                if (active) setData(result);
+            })
+            .catch((err: unknown) => {
+                if (active) setError(err instanceof Error ? err.message : t.accounting.reports.loadFailed);
+            })
+            .finally(() => {
+                if (active) setLoading(false);
             });
-            setData(result);
-        } catch (err: any) { setError(err?.message ?? 'Failed to load'); }
-        finally { setLoading(false); }
+        return () => {
+            active = false;
+        };
+    }, [asOfDate, period, approvalReady, approvedOnly, t.accounting.reports.loadFailed]);
+
+    const specs = useMemo<RatioSpec[]>(() => [
+        { key: 'current_ratio', label: fr.currentRatio, description: fr.currentRatioDesc, format: 'number', healthy: (v) => v >= 1, icon: <Scale aria-hidden /> },
+        { key: 'gross_margin_pct', label: fr.grossMargin, description: fr.grossMarginDesc, format: 'pct', healthy: (v) => v >= 0, lossWhenNegative: true, icon: <Percent aria-hidden /> },
+        { key: 'net_profit_margin_pct', label: fr.netProfitMargin, description: fr.netProfitMarginDesc, format: 'pct', healthy: (v) => v >= 0, lossWhenNegative: true, icon: <TrendingUp aria-hidden /> },
+        { key: 'dso_days', label: fr.dso, description: fr.dsoDesc, format: 'days', healthy: (v) => v <= 45, icon: <CalendarClock aria-hidden /> },
+        { key: 'dpo_days', label: fr.dpo, description: fr.dpoDesc, format: 'days', healthy: (v) => v <= 60, icon: <Hourglass aria-hidden /> },
+    ], [fr]);
+
+    const formatRatio = (value: number | null, format: RatioSpec['format']) => {
+        if (value === null) return ui.notAvailable;
+        if (format === 'pct') return `${value.toFixed(1)}%`;
+        if (format === 'days') return formatMessage(ui.days, { value: value.toFixed(1) });
+        return value.toFixed(2);
     };
+
+    const filters = useMemo<ResolvedListFilter[]>(() => {
+        const list: ListFilter[] = [
+            {
+                id: 'asOf',
+                type: 'date-range',
+                label: ui.asOf,
+                value: asOfRange(asOfDate),
+                // The balance-sheet ratios are always as of some day: cleared, today.
+                onChange: (next) => setAsOfDate(asOfFromRange(next)),
+                presets: AS_OF_PRESETS,
+                operators: true,
+            },
+            {
+                id: 'period',
+                type: 'date-range',
+                label: ui.plPeriod,
+                value: period,
+                // The P&L ratios are always over some period: cleared, this month.
+                onChange: (next) => setPeriod(requiredPeriod(next)),
+                presets: PERIOD_PRESETS,
+                operators: true,
+            },
+            ...approvedOnlyFilter(t, { approvalEnabled, approvedOnly, onChange: setApprovedOnly }),
+        ];
+        return list as ResolvedListFilter[];
+    }, [t, ui, asOfDate, period, approvalEnabled, approvedOnly, setApprovedOnly]);
+
+    const stats = useMemo(() => specs.map((spec): ListStat => {
+        const value = data?.ratios[spec.key] ?? null;
+        const unhealthy = value !== null && !spec.healthy(value);
+        return {
+            id: spec.key,
+            icon: spec.icon,
+            label: spec.label,
+            value: formatRatio(value, spec.format),
+            tone: !unhealthy ? 'default' : spec.lossWhenNegative ? 'danger' : 'warning',
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }), [specs, data, ui]);
+
+    const summary = data ? [
+        { id: 'revenue', label: t.accounting.reports.revenue, value: data.ratios.revenue },
+        { id: 'expenses', label: fr.totalExpenses, value: data.ratios.total_expenses },
+        { id: 'net', label: t.accounting.reports.netProfit, value: data.ratios.net_profit, signed: true },
+        { id: 'assets', label: fr.totalAssets, value: data.ratios.total_assets },
+        { id: 'liabilities', label: ui.totalLiabilities, value: data.ratios.total_liabilities },
+    ] : [];
 
     return (
         <AccountingPageShell maxWidth="narrow">
             <PageHeader
-                title={t.accounting.reports.financialRatios.title}
-                subtitle={t.accounting.reports.financialRatios.subtitle}
+                title={fr.title}
+                subtitle={fr.subtitle}
                 breadcrumbs={modulePageBreadcrumbs(
                     t.dashboardHome.breadcrumbHome,
                     t.sidebar.modules.accounting,
-                    t.accounting.reports.financialRatios.title,
+                    fr.title,
                     'accounting',
                 )}
             />
-            <AccountingToolbar>
-                <div className={compactDensity.filterBar}>
-                    <div className="flex flex-col gap-1">
-                        <span className={compactDensity.formLabel}>As Of (Balance Sheet)</span>
-                        <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)}
-                            className={compactDensity.formField} />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        <span className={compactDensity.formLabel}>From (P&L)</span>
-                        <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
-                            className={compactDensity.formField} />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        <span className={compactDensity.formLabel}>To (P&L)</span>
-                        <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
-                            className={compactDensity.formField} />
-                    </div>
 
-                    <ApprovedOnlyToggle checked={approvedOnly} onChange={setApprovedOnly} enabled={approvalEnabled} />
-                </div>
-            </AccountingToolbar>
+            <ListStats stats={stats} loading={loading || !data} label={t.accountingReportsUi.common.stats} />
+
+            <ListToolbar tableId="accounting-financial-ratios" filters={filters} />
 
             {error && <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-700">{error}</div>}
 
             {loading ? (
-                <CompactSection className="py-8 text-center text-gray-400 text-sm font-medium">Loading…</CompactSection>
+                <CompactSection className="py-8 text-center text-gray-400 text-sm font-medium">{t.accountingShared.loading}</CompactSection>
             ) : data ? (
                 <div className="space-y-3">
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        <RatioCard label={t.accounting.reports.financialRatios.currentRatio} value={data.ratios.current_ratio} description={t.accounting.reports.financialRatios.currentRatioDesc} format="number" healthyCondition={(v) => v >= 1} />
-                        <RatioCard label={t.accounting.reports.financialRatios.grossMargin} value={data.ratios.gross_margin_pct} description={t.accounting.reports.financialRatios.grossMarginDesc} format="pct" healthyCondition={(v) => v >= 0} />
-                        <RatioCard label={t.accounting.reports.financialRatios.netProfitMargin} value={data.ratios.net_profit_margin_pct} description={t.accounting.reports.financialRatios.grossMarginDesc} format="pct" healthyCondition={(v) => v >= 0} />
-                        <RatioCard label={t.accounting.reports.financialRatios.dso} value={data.ratios.dso_days} description={t.accounting.reports.financialRatios.dsoDesc} format="days" healthyCondition={(v) => v <= 45} />
-                        <RatioCard label={t.accounting.reports.financialRatios.dpo} value={data.ratios.dpo_days} description={t.accounting.reports.financialRatios.dpoDesc} format="days" healthyCondition={(v) => v <= 60} />
-                    </div>
-                    <CompactSection title="Summary">
+                    <CompactSection className="p-0 overflow-hidden">
+                        <ul className="divide-y divide-gray-100">
+                            {specs.map((spec) => {
+                                const value = data.ratios[spec.key];
+                                const healthy = value === null ? null : spec.healthy(value);
+                                return (
+                                    <li key={spec.key} className="flex items-center justify-between gap-3 px-3 py-2">
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-medium text-gray-800">{spec.label}</p>
+                                            <p className="text-xs text-gray-500">{spec.description}</p>
+                                        </div>
+                                        <div className="flex shrink-0 items-center gap-2">
+                                            <span className="text-sm font-semibold tabular-nums text-gray-900">{formatRatio(value, spec.format)}</span>
+                                            {healthy === null ? null : (
+                                                <StatusBadge tone={healthy ? 'success' : spec.lossWhenNegative ? 'danger' : 'warning'}>
+                                                    {healthy ? ui.healthy : ui.attention}
+                                                </StatusBadge>
+                                            )}
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </CompactSection>
+                    <CompactSection title={ui.summary}>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                            <div><p className={compactDensity.formLabel}>{t.accounting.reports.revenue}</p><p className="font-semibold">{formatBDT(data.ratios.revenue, { locale })}</p></div>
-                            <div><p className={compactDensity.formLabel}>{t.accounting.reports.financialRatios.totalExpenses}</p><p className="font-semibold">{formatBDT(data.ratios.total_expenses, { locale })}</p></div>
-                            <div><p className={compactDensity.formLabel}>{t.accounting.reports.netProfit}</p><p className={`font-semibold ${data.ratios.net_profit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{formatBDT(data.ratios.net_profit, { locale })}</p></div>
-                            <div><p className={compactDensity.formLabel}>{t.accounting.reports.financialRatios.totalAssets}</p><p className="font-semibold">{formatBDT(data.ratios.total_assets, { locale })}</p></div>
-                            <div><p className={compactDensity.formLabel}>Total Liabilities</p><p className="font-semibold">{formatBDT(data.ratios.total_liabilities, { locale })}</p></div>
+                            {summary.map((item) => (
+                                <div key={item.id}>
+                                    <p className={compactDensity.formLabel}>{item.label}</p>
+                                    <p className={`font-semibold tabular-nums ${item.signed ? (item.value >= 0 ? 'text-emerald-700' : 'text-red-600') : ''}`}>
+                                        {formatBDT(item.value, { locale })}
+                                    </p>
+                                </div>
+                            ))}
                         </div>
                     </CompactSection>
                 </div>
