@@ -139,6 +139,55 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
         expect(screen.getByRole('link', { name: 'PUR-00001' })).toHaveAttribute('href', '/purchases/purchase-1');
     });
 
+    it('marks a row that has purchase returns and opens their details from the icon', async () => {
+        const { api } = require('@/lib/api');
+        api.getPurchases.mockResolvedValue([
+            {
+                id: 'purchase-1',
+                purchase_number: 'PUR-00001',
+                total_amount: 42,
+                created_at: '2026-03-20T10:00:00.000Z',
+                supplier: { name: 'Fresh Farms' },
+                items: [{ id: 'item-1', quantity: 2, unit_cost: 10, product: { name: 'Coffee Beans' } }],
+            },
+            {
+                id: 'purchase-2',
+                purchase_number: 'PUR-00002',
+                total_amount: 80,
+                created_at: '2026-03-21T11:00:00.000Z',
+                supplier: { name: 'Dairy Co' },
+                items: [{ id: 'item-2', quantity: 1, unit_cost: 80, product: { name: 'Milk' } }],
+                returns: [
+                    {
+                        id: 'ret-1',
+                        return_number: 'PR-00009',
+                        total_amount: '20.00',
+                        notes: 'Spoiled',
+                        status: 'RECORDED',
+                        created_at: '2026-03-22T09:00:00.000Z',
+                        _count: { items: 1 },
+                    },
+                ],
+            },
+        ]);
+
+        renderWithQueryClient(<PurchasesPage />);
+        await screen.findByText('PUR-00002');
+
+        expect(screen.queryByRole('button', { name: 'View purchase returns (0)' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'View purchase returns (1)' })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'View purchase returns (1)' }));
+
+        expect(await screen.findByRole('heading', { name: 'Purchase returns for PUR-00002' })).toBeInTheDocument();
+        expect(screen.getByText('PR-00009')).toBeInTheDocument();
+        expect(screen.getByText('Spoiled')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /Open return/i })).toHaveAttribute(
+            'href',
+            '/purchases/returns/ret-1',
+        );
+    });
+
     it('prints from the row icon without opening an invoice page', async () => {
         const { api } = require('@/lib/api');
         const { printPurchaseInvoiceFromRecord } = require('@/lib/purchase-print-actions');

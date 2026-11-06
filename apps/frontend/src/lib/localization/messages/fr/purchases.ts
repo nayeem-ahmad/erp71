@@ -153,6 +153,13 @@ export const purchasesMessages = {
             RECORDED: 'Enregistré',
             CANCELLED: 'Annulée',
         },
+        returnsModal: {
+            viewReturns: 'Voir les retours d\'achat ({count})',
+            title: 'Retours d\'achat pour {number}',
+            empty: 'Aucun retour sur cette facture',
+            notes: 'Notes',
+            openReturn: 'Ouvrir le retour',
+        },
         printInvoice: "Imprimer la facture",
         printLoadFailed: "Impossible de charger l'achat à imprimer.",
         modal: {

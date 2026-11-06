@@ -153,6 +153,13 @@ export const purchasesMessages = {
                 RECORDED: 'Direkodkan',
                 CANCELLED: 'Dibatalkan',
             },
+            returnsModal: {
+                viewReturns: 'Lihat pulangan belian ({count})',
+                title: 'Pulangan belian untuk {number}',
+                empty: 'Tiada pulangan pada bil ini',
+                notes: 'Nota',
+                openReturn: 'Buka pulangan',
+            },
             printInvoice: 'Cetak Invois',
             printLoadFailed: 'Tidak dapat memuatkan belian untuk dicetak.',
             modal: {

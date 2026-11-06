@@ -153,6 +153,13 @@ export const purchasesMessages = {
             RECORDED: 'दर्ज',
             CANCELLED: 'रद्द',
         },
+        returnsModal: {
+            viewReturns: 'खरीद वापसी देखें ({count})',
+            title: '{number} की खरीद वापसी',
+            empty: 'इस बिल पर कोई खरीद वापसी नहीं',
+            notes: 'नोट्स',
+            openReturn: 'वापसी खोलें',
+        },
         printInvoice: "चालान प्रिंट करें",
         printLoadFailed: "प्रिंट करने के लिए खरीद लोड नहीं हो सकी।",
         modal: {
