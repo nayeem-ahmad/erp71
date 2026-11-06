@@ -13,6 +13,7 @@ import {
     ValidateNested,
     IsBoolean,
     IsUUID,
+    Matches,
     MaxLength,
     Min,
     Max,
@@ -307,16 +308,53 @@ export class CreateVoucherDto {
     attachments?: CreateVoucherAttachmentDto[];
 }
 
+/** Where a voucher came from: keyed in by hand, or posted by another module. */
+export const VOUCHER_SOURCES = ['manual', 'system'] as const;
+export type VoucherSource = (typeof VOUCHER_SOURCES)[number];
+
+/** Matches one of `values`, or a comma-separated set of them. */
+function oneOrSetOf(values: readonly string[]): RegExp {
+    const one = `(?:${values.map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`;
+    return new RegExp(`^${one}(?:,${one})*$`);
+}
+
 export class ListVouchersQueryDto {
     /** A branch's own vouchers, or `all` (company-level vouchers included). Resolved against the caller's access. */
     @IsOptional()
     @IsStoreIdOrAll()
     storeId?: string;
 
+    /** One voucher type, or a comma-separated set (`cash_payment,bank_payment`). */
     @IsOptional()
     @IsString()
-    @IsIn(Object.values(VoucherType))
-    voucherType?: VoucherType;
+    @Matches(oneOrSetOf(Object.values(VoucherType)), {
+        message: `voucherType must be one or a comma-separated set of: ${Object.values(VoucherType).join(', ')}`,
+    })
+    voucherType?: string;
+
+    /** Voucher number, reference or narration; case-insensitive. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    search?: string;
+
+    /** The voucher's total (its debits): `gt:100`, `between:100,500` — see `readNumberConditionQuery`. */
+    @IsOptional()
+    @IsString()
+    amount?: string;
+
+    /** `manual`: keyed in by hand; `system`: posted by another module (a sale, a purchase…). */
+    @IsOptional()
+    @IsIn(VOUCHER_SOURCES)
+    source?: VoucherSource;
+
+    @IsOptional()
+    @IsString()
+    sortBy?: string;
+
+    @IsOptional()
+    @IsIn(['asc', 'desc'])
+    sortDir?: 'asc' | 'desc';
 
     @IsOptional()
     @IsDateString()
@@ -334,11 +372,13 @@ export class ListVouchersQueryDto {
     @IsDateString()
     createdTo?: string;
 
-    /** Drives the approval queue: `?approvalStatus=PENDING`. */
+    /** Drives the approval queue: `?approvalStatus=PENDING`. One status or a comma-separated set. */
     @IsOptional()
     @IsString()
-    @IsIn(Object.values(VoucherApprovalStatus))
-    approvalStatus?: VoucherApprovalStatus;
+    @Matches(oneOrSetOf(Object.values(VoucherApprovalStatus)), {
+        message: `approvalStatus must be one or a comma-separated set of: ${Object.values(VoucherApprovalStatus).join(', ')}`,
+    })
+    approvalStatus?: string;
 
     @IsOptional()
     @Type(() => Number)

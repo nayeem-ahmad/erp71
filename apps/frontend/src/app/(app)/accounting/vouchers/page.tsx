@@ -3,19 +3,20 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Check, ChevronLeft, ChevronRight, Copy, Eye, FileText, Pencil, Plus, Printer, Trash2, X } from 'lucide-react';
+import { Check, Copy, Eye, FileText, Pencil, Plus, Printer, Trash2, X } from 'lucide-react';
+import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { AccountingPageShell } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { compactDensity } from '@/lib/ui/compact-density';
-import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { VoucherType } from '@erp71/shared-types';
-import { DataTable, createdAtColumn, CreatedRangeFilter, DateRangeFilter } from '@/components/data-table';
-import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
-import { api } from '@/lib/api';
-import { BranchFilter } from '@/components/ui';
-import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { DataTable, createdAtColumn } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
+import { api, type VoucherListFilterParams, type VoucherListSummary } from '@/lib/api';
+import { BranchFilter, Button, ConfirmDialog, Field, Textarea, buttonClassName } from '@/components/ui';
+import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 import { fetchMe } from '@/hooks/use-me';
+import { useServerList } from '@/hooks/useServerList';
+import { useListSummary } from '@/hooks/useListSummary';
 import { useBranding } from '@/lib/branding';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { sheetPaper } from '@/lib/print';
@@ -28,11 +29,12 @@ import { VoucherApprovalBadge } from '@/components/accounting/VoucherApprovalBad
 import { toast } from '@/lib/toast';
 import { notifyVoucherApprovalChanged } from '@/hooks/usePendingVoucherCount';
 import { getWorkspaceItem } from '@/lib/session-store';
+import { toPaginated, useVoucherListFilters, useVoucherSummaryStats, voucherTypeLabel } from './voucher-list-filters';
 
 type VoucherRow = {
     id: string;
     voucher_number: string;
-    voucher_type: VoucherType;
+    voucher_type: string;
     reference_number?: string | null;
     description?: string | null;
     date: string;
@@ -42,22 +44,10 @@ type VoucherRow = {
     source?: { module: string | null; type: string | null; id: string | null };
 };
 
-type VoucherListResponse = {
-    data: VoucherRow[];
-    meta: { page: number; limit: number; total: number; totalPages: number };
-};
+/** Who a rejection is for: one row's action, or the pending rows of a selection. */
+type RejectTarget = { rows: VoucherRow[]; single: boolean };
 
 const columnHelper = createColumnHelper<VoucherRow>();
-
-const voucherTypeOptions = [
-    { value: '', label: 'All voucher types' },
-    { value: VoucherType.CASH_PAYMENT, label: 'Cash Payment' },
-    { value: VoucherType.CASH_RECEIVE, label: 'Cash Receive' },
-    { value: VoucherType.BANK_PAYMENT, label: 'Bank Payment' },
-    { value: VoucherType.BANK_RECEIVE, label: 'Bank Receive' },
-    { value: VoucherType.FUND_TRANSFER, label: 'Fund Transfer' },
-    { value: VoucherType.JOURNAL, label: 'Journal Voucher' },
-];
 
 function VouchersListLoading() {
     const { t } = useI18n();
@@ -73,33 +63,28 @@ export default function AccountingVouchersListPage() {
 }
 
 function AccountingVouchersListPageContent() {
-    const { t, locale } = useI18n();
+    const { t, locale, fmt } = useI18n();
+    const copy = t.accountingVouchersUi;
     const branch = useBranchScope();
     const { businessName } = useBranding();
     const printHeader = usePrintHeader('VOUCHER');
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [response, setResponse] = useState<VoucherListResponse>({
-        data: [],
-        meta: { page: 1, limit: 20, total: 0, totalPages: 1 },
-    });
-    const [loading, setLoading] = useState(true);
-    const [voucherType, setVoucherType] = useState('');
-    const [dateRange, setDateRange] = useState<CreatedRange | null>(null);
-    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
-    const [page, setPage] = useState(1);
-    // A branch change is page 1 of a fresh list, like any other filter.
-    const [pagedBranch, setPagedBranch] = useState(branch.apiStoreId);
-    if (pagedBranch !== branch.apiStoreId) {
-        setPagedBranch(branch.apiStoreId);
-        setPage(1);
-    }
+    const [canApprove, setCanApprove] = useState(false);
+    const [bulkWorking, setBulkWorking] = useState(false);
+    const [clearSelection, setClearSelection] = useState(0);
+    const [deleteTarget, setDeleteTarget] = useState<VoucherRow | null>(null);
+    const [deleting, setDeleting] = useState(false);
+    const [rejectTarget, setRejectTarget] = useState<RejectTarget | null>(null);
+    const [rejectReason, setRejectReason] = useState('');
+    const [rejecting, setRejecting] = useState(false);
+
     // `?approvalStatus=PENDING` turns this page into the approval queue, which is
     // what the sidebar/settings copy points at rather than a second list page.
-    const [approvalStatus, setApprovalStatus] = useState(searchParams.get('approvalStatus') ?? '');
-    const [canApprove, setCanApprove] = useState(false);
-    const [, setSelectedRows] = useState<VoucherRow[]>([]);
-    const [bulkWorking, setBulkWorking] = useState(false);
+    const [initialApproval] = useState(() =>
+        (searchParams.get('approvalStatus') ?? '').split(',').map((value) => value.trim()).filter(Boolean),
+    );
+    const { search, setSearch, filterParams, filters } = useVoucherListFilters({ initialApprovalStatus: initialApproval });
 
     const createdVoucherNumber = searchParams.get('voucher');
 
@@ -113,36 +98,30 @@ function AccountingVouchersListPageContent() {
             .catch(() => setCanApprove(false));
     }, []);
 
-    const loadVouchers = useCallback(async () => {
-        if (!branch.ready) return;
-        setLoading(true);
-        try {
-            const data = await api.getVouchers({
-                voucherType: voucherType || undefined,
-                from: dateRange?.from,
-                to: dateRange?.to,
-                ...applyCreatedRangeQuery(createdRange),
-                approvalStatus: approvalStatus || undefined,
-                page,
-                limit: 20,
-                storeId: branch.apiStoreId,
-            });
-            setResponse(data);
-            setSelectedRows([]);
-        } catch (error) {
-            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
-            console.error('Failed to load vouchers', error);
-            setResponse({ data: [], meta: { page: 1, limit: 20, total: 0, totalPages: 1 } });
-        } finally {
-            setLoading(false);
-        }
-        // `branch` is a fresh object every render; what it asks for is these two.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [voucherType, dateRange, createdRange, approvalStatus, page, branch.ready, branch.apiStoreId]);
+    // One set of filters for the rows and the stats strip above them.
+    const scopedParams = useMemo<VoucherListFilterParams>(
+        () => ({ ...filterParams, storeId: branch.apiStoreId }),
+        [filterParams, branch.apiStoreId],
+    );
 
-    useEffect(() => {
-        void loadVouchers();
-    }, [loadVouchers]);
+    const { items: vouchers, loading, error: listError, serverPagination, reload } = useServerList<VoucherRow>({
+        tableId: 'accounting-vouchers-list',
+        initialSort: { id: 'date', desc: true },
+        deps: [scopedParams],
+        enabled: branch.ready,
+        fetch: async (params) => toPaginated<VoucherRow>(await api.getVouchers({ ...params, ...scopedParams })),
+    });
+    useBranchForbiddenReset(listError, branch, t.dashboardLayout.branchFilterForbidden);
+
+    const { summary, loading: summaryLoading, reload: reloadSummary } = useListSummary<
+        VoucherListFilterParams,
+        VoucherListSummary
+    >({ fetch: api.getVouchersSummary, params: scopedParams, enabled: branch.ready });
+
+    const refresh = useCallback(() => {
+        void reload();
+        reloadSummary();
+    }, [reload, reloadSummary]);
 
     useEffect(() => {
         if (createdVoucherNumber) {
@@ -197,48 +176,78 @@ function AccountingVouchersListPageContent() {
         }
     }, [businessName, printHeader, locale, t]);
 
-    const handleDelete = useCallback(async (voucher: VoucherRow) => {
-        if (voucher.source?.module) {
-            toast.info(t.vouchers.list.systemVoucherLocked);
-            return;
-        }
-        if (!window.confirm(t.vouchers.list.deleteConfirm.replace('{voucherNumber}', voucher.voucher_number))) {
-            return;
-        }
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
         try {
-            await api.deleteVoucher(voucher.id);
+            await api.deleteVoucher(deleteTarget.id);
             toast.success(t.vouchers.list.deleteSuccess);
-            void loadVouchers();
+            setDeleteTarget(null);
+            refresh();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : t.vouchers.list.deleteFailed);
+        } finally {
+            setDeleting(false);
         }
-    }, [loadVouchers, t]);
+    };
 
     const handleApprove = useCallback(async (voucher: VoucherRow) => {
         try {
             await api.approveVoucher(voucher.id);
             toast.success(t.vouchers.approval.approveSuccess);
             notifyVoucherApprovalChanged();
-            void loadVouchers();
+            refresh();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : t.vouchers.approval.approveFailed);
         }
-    }, [loadVouchers, t]);
+    }, [refresh, t]);
 
-    const handleReject = useCallback(async (voucher: VoucherRow) => {
-        const reason = window.prompt(t.vouchers.approval.rejectPrompt);
-        if (reason === null) {
-            return;
+    const openReject = useCallback((target: RejectTarget) => {
+        setRejectReason('');
+        setRejectTarget(target);
+    }, []);
+
+    const closeReject = () => {
+        if (!rejecting) setRejectTarget(null);
+    };
+
+    const reportBulk = useCallback((action: 'approve' | 'reject', result: any, ids: string[]) => {
+        toast.success(
+            (action === 'approve' ? t.vouchers.approval.bulkApproved : t.vouchers.approval.bulkRejected)
+                .replace('{count}', String(result?.updated ?? ids.length)),
+        );
+        // Approving into a closed month is refused per voucher rather than
+        // failing the batch, so say which rows were left behind — otherwise
+        // "3 vouchers approved" out of 4 selected looks like a lost click.
+        if (result?.lockedPeriod > 0) {
+            toast.info(t.vouchers.approval.bulkLockedPeriod.replace('{count}', String(result.lockedPeriod)));
         }
+    }, [t]);
+
+    const handleReject = async () => {
+        if (!rejectTarget) return;
+        const reason = rejectReason.trim() || undefined;
+        setRejecting(true);
         try {
-            await api.rejectVoucher(voucher.id, reason || undefined);
-            toast.success(t.vouchers.approval.rejectSuccess);
+            if (rejectTarget.single) {
+                await api.rejectVoucher(rejectTarget.rows[0].id, reason);
+                toast.success(t.vouchers.approval.rejectSuccess);
+            } else {
+                setBulkWorking(true);
+                const ids = rejectTarget.rows.map((row) => row.id);
+                reportBulk('reject', await api.bulkRejectVouchers(ids, reason), ids);
+                setClearSelection((n) => n + 1);
+            }
+            setRejectTarget(null);
             notifyVoucherApprovalChanged();
-            void loadVouchers();
+            refresh();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : t.vouchers.approval.rejectFailed);
+        } finally {
+            setRejecting(false);
+            setBulkWorking(false);
         }
-    }, [loadVouchers, t]);
+    };
 
     const runBulk = useCallback(async (action: 'approve' | 'reject', rows: VoucherRow[]) => {
         // Only PENDING rows are actionable; the backend counts the rest as
@@ -248,78 +257,67 @@ function AccountingVouchersListPageContent() {
             toast.info(t.vouchers.approval.bulkNoPending);
             return;
         }
-
-        let reason: string | undefined;
         if (action === 'reject') {
-            const answer = window.prompt(t.vouchers.approval.rejectPrompt);
-            if (answer === null) {
-                return;
-            }
-            reason = answer || undefined;
+            openReject({ rows: pending, single: false });
+            return;
         }
 
         setBulkWorking(true);
         try {
             const ids = pending.map((row) => row.id);
-            const result = action === 'approve'
-                ? await api.bulkApproveVouchers(ids)
-                : await api.bulkRejectVouchers(ids, reason);
-            toast.success(
-                (action === 'approve' ? t.vouchers.approval.bulkApproved : t.vouchers.approval.bulkRejected)
-                    .replace('{count}', String(result?.updated ?? ids.length)),
-            );
-            // Approving into a closed month is refused per voucher rather than
-            // failing the batch, so say which rows were left behind — otherwise
-            // "3 vouchers approved" out of 4 selected looks like a lost click.
-            if (result?.lockedPeriod > 0) {
-                toast.info(
-                    t.vouchers.approval.bulkLockedPeriod.replace('{count}', String(result.lockedPeriod)),
-                );
-            }
+            reportBulk('approve', await api.bulkApproveVouchers(ids), ids);
+            setClearSelection((n) => n + 1);
             notifyVoucherApprovalChanged();
-            void loadVouchers();
+            refresh();
         } catch (error) {
-            toast.error(error instanceof Error
-                ? error.message
-                : (action === 'approve' ? t.vouchers.approval.approveFailed : t.vouchers.approval.rejectFailed));
+            toast.error(error instanceof Error ? error.message : t.vouchers.approval.approveFailed);
         } finally {
             setBulkWorking(false);
         }
-    }, [loadVouchers, t]);
+    }, [openReject, refresh, reportBulk, t]);
 
     const columns: ColumnDef<VoucherRow, any>[] = useMemo(
         () => [
             columnHelper.accessor('voucher_number', {
                 header: t.journal.columns.voucherNumber,
-                cell: (info) => <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>,
+                cell: (info) => (
+                    <Link
+                        href={`/accounting/vouchers/${info.row.original.id}`}
+                        className="font-medium text-gray-900 hover:text-blue-600 hover:underline"
+                    >
+                        {info.getValue()}
+                    </Link>
+                ),
                 size: 130,
             }),
             columnHelper.accessor('date', {
                 header: t.accountingShared.date,
-                cell: (info) => <span className="text-sm text-gray-700">{formatDate(info.getValue(), locale)}</span>,
+                // The toolbar date chip filters this on the server.
+                enableColumnFilter: false,
+                cell: (info) => formatDate(info.getValue(), locale),
                 size: 110,
             }),
-            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale, enableColumnFilter: false, hideOnMobile: true }),
             columnHelper.accessor('voucher_type', {
                 header: t.accountingShared.type,
-                cell: (info) => (
-                    <span className="text-xs font-bold uppercase tracking-wide text-sky-700">
-                        {info.getValue().replaceAll('_', ' ')}
-                    </span>
-                ),
+                enableColumnFilter: false,
+                cell: (info) => voucherTypeLabel(t, info.getValue()),
                 size: 130,
             }),
             columnHelper.accessor('reference_number', {
                 header: t.accountingShared.reference,
-                cell: (info) => <span className="text-sm text-gray-600">{info.getValue() || '—'}</span>,
+                cell: (info) => info.getValue() || '—',
                 size: 120,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('description', {
                 header: t.accountingShared.narration,
+                // Searched through the toolbar box; there is no column sort for prose.
+                enableSorting: false,
                 cell: (info) => {
                     const narration = info.getValue();
                     return (
-                        <span className="block max-w-[22rem] truncate text-sm text-gray-600" title={narration || undefined}>
+                        <span className="block max-w-[22rem] truncate text-gray-600" title={narration || undefined}>
                             {narration || '—'}
                         </span>
                     );
@@ -329,15 +327,16 @@ function AccountingVouchersListPageContent() {
             }),
             columnHelper.accessor('total_amount', {
                 header: t.accountingShared.amount,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-emerald-600">
-                        {formatBDT(Number(info.getValue() || 0), { locale })}
-                    </span>
-                ),
-                size: 110,
+                // The sum of the voucher's lines, not a stored column the server can sort.
+                enableSorting: false,
+                enableColumnFilter: false,
+                cell: (info) => formatBDT(Number(info.getValue() || 0), { locale }),
+                size: 120,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('approval_status', {
                 header: t.vouchers.approval.status,
+                enableColumnFilter: false,
                 cell: (info) => <VoucherApprovalBadge status={info.getValue()} />,
                 size: 100,
             }),
@@ -349,111 +348,61 @@ function AccountingVouchersListPageContent() {
                     const isSystem = Boolean(voucher.source?.module);
                     const isPending = voucher.approval_status === 'PENDING';
                     return (
-                        <div className="flex items-center gap-0.5">
+                        <RowActions>
                             {canApprove && isPending ? (
                                 <>
-                                    <button
-                                        type="button"
+                                    <RowActionButton
+                                        icon={<Check />}
+                                        label={t.vouchers.approval.approve}
+                                        intent="success"
                                         onClick={() => void handleApprove(voucher)}
-                                        className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50"
-                                        title={t.vouchers.approval.approve}
-                                    >
-                                        <Check className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => void handleReject(voucher)}
-                                        className="p-1.5 rounded-lg text-danger hover:bg-red-50"
-                                        title={t.vouchers.approval.reject}
-                                    >
-                                        <X className="w-4 h-4" />
-                                    </button>
+                                    />
+                                    <RowActionButton
+                                        icon={<X />}
+                                        label={t.vouchers.approval.reject}
+                                        intent="danger"
+                                        onClick={() => openReject({ rows: [voucher], single: true })}
+                                    />
                                 </>
                             ) : null}
-                            <Link
-                                href={`/accounting/vouchers/${voucher.id}`}
-                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50"
-                                title={t.common.view}
-                            >
-                                <Eye className="w-4 h-4" />
-                            </Link>
-                            <Link
+                            <RowActionButton icon={<Eye />} label={t.common.view} href={`/accounting/vouchers/${voucher.id}`} />
+                            <RowActionButton
+                                icon={<Copy />}
+                                label={t.vouchers.list.duplicate}
                                 href={`/accounting/vouchers/new?duplicate=${voucher.id}`}
-                                className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50"
-                                title={t.vouchers.list.duplicate}
-                            >
-                                <Copy className="w-4 h-4" />
-                            </Link>
-                            <Link
-                                href={isSystem ? '#' : `/accounting/vouchers/new?edit=${voucher.id}`}
-                                onClick={isSystem ? (e) => { e.preventDefault(); toast.info(t.vouchers.list.systemVoucherLocked); } : undefined}
-                                className={`p-1.5 rounded-lg ${isSystem ? 'text-gray-300 cursor-not-allowed' : 'text-amber-600 hover:bg-amber-50'}`}
-                                title={t.common.edit}
-                            >
-                                <Pencil className="w-4 h-4" />
-                            </Link>
-                            <button
-                                type="button"
-                                onClick={() => void handlePrint(voucher)}
-                                className="p-1.5 rounded-lg text-purple-600 hover:bg-purple-50"
-                                title={t.vouchers.list.print}
-                            >
-                                <Printer className="w-4 h-4" />
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => void handleDelete(voucher)}
+                            />
+                            <RowActionButton
+                                icon={<Pencil />}
+                                // A system-posted voucher belongs to the document that posted it.
+                                label={isSystem ? t.vouchers.list.systemVoucherLocked : t.common.edit}
                                 disabled={isSystem}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-danger hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                                title={t.common.delete}
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        </div>
+                                href={`/accounting/vouchers/new?edit=${voucher.id}`}
+                            />
+                            <RowActionButton
+                                icon={<Printer />}
+                                label={t.vouchers.list.print}
+                                onClick={() => void handlePrint(voucher)}
+                            />
+                            <RowActionButton
+                                icon={<Trash2 />}
+                                label={isSystem ? t.vouchers.list.systemVoucherLocked : t.common.delete}
+                                intent="danger"
+                                disabled={isSystem}
+                                onClick={() => setDeleteTarget(voucher)}
+                            />
+                        </RowActions>
                     );
                 },
                 enableSorting: false,
-                size: 230,
+                enableColumnFilter: false,
+                enableResizing: false,
+                size: 210,
             }),
         ],
-        [canApprove, handleApprove, handleDelete, handlePrint, handleReject, locale, t],
+        [canApprove, handleApprove, handlePrint, openReject, locale, t],
     );
 
-    const filterControls = (
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-            <select
-                aria-label={t.journal.voucherTypeAria}
-                value={voucherType}
-                onChange={(e) => { setVoucherType(e.target.value); setPage(1); }}
-                className="px-1.5 py-0.5 border rounded text-xs"
-            >
-                {voucherTypeOptions.map((option) => (
-                    <option key={option.label} value={option.value}>{option.label}</option>
-                ))}
-            </select>
-            <DateRangeFilter
-                label={t.common.date}
-                value={dateRange}
-                onChange={(next) => { setDateRange(next); setPage(1); }}
-            />
-            <CreatedRangeFilter
-                value={createdRange}
-                onChange={(next) => { setCreatedRange(next); setPage(1); }}
-            />
-            <select
-                aria-label={t.vouchers.approval.status}
-                value={approvalStatus}
-                onChange={(e) => { setApprovalStatus(e.target.value); setPage(1); }}
-                className="px-1.5 py-0.5 border rounded text-xs"
-            >
-                <option value="">{t.vouchers.approval.all}</option>
-                <option value="PENDING">{t.vouchers.approval.pending}</option>
-                <option value="APPROVED">{t.vouchers.approval.approved}</option>
-                <option value="REJECTED">{t.vouchers.approval.rejected}</option>
-            </select>
-            <span className="text-gray-500">{response.meta.total} total</span>
-        </div>
-    );
+    const stats = useVoucherSummaryStats(summary, summaryLoading, copy.stats.vouchersLabel);
 
     return (
         <AccountingPageShell>
@@ -468,12 +417,8 @@ function AccountingVouchersListPageContent() {
                 actions={(
                     <>
                         <BranchFilter scope={branch} />
-                        {filterControls}
-                        <Link
-                            href="/accounting/vouchers/new"
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700"
-                        >
-                            <Plus className="w-3.5 h-3.5" />
+                        <Link href="/accounting/vouchers/new" className={buttonClassName()}>
+                            <Plus className="w-4 h-4" />
                             {t.vouchers.list.newVoucher}
                         </Link>
                     </>
@@ -481,46 +426,84 @@ function AccountingVouchersListPageContent() {
             />
 
             <DataTable<VoucherRow>
-                    tableId="accounting-vouchers-list"
-                    columns={columns}
-                    data={response.data}
-                    title={t.vouchers.list.title}
-                    isLoading={loading}
-                    emptyMessage={t.vouchers.list.emptyMessage}
-                    emptyIcon={<FileText className="w-10 h-10 text-gray-200" />}
-                    searchPlaceholder={t.vouchers.list.searchPlaceholder}
-                    enableRowSelection={canApprove}
-                    onRowSelectionChange={setSelectedRows}
-                    bulkActionsDisabled={bulkWorking}
-                    bulkActions={canApprove ? [
-                        { label: t.vouchers.approval.bulkApprove, onClick: (rows) => void runBulk('approve', rows) },
-                        { label: t.vouchers.approval.bulkReject, tone: 'danger', onClick: (rows) => void runBulk('reject', rows) },
-                    ] : undefined}
-                />
+                tableId="accounting-vouchers-list"
+                columns={columns}
+                data={vouchers}
+                title={t.vouchers.list.title}
+                isLoading={loading}
+                emptyMessage={t.vouchers.list.emptyMessage}
+                emptyIcon={<FileText className="w-10 h-10 text-gray-200" />}
+                searchPlaceholder={copy.common.searchVouchers}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+                serverPagination={serverPagination}
+                getRowId={(row) => row.id}
+                enableRowSelection={canApprove}
+                clearSelectionSignal={clearSelection}
+                bulkActionsDisabled={bulkWorking}
+                bulkActions={canApprove ? [
+                    { label: t.vouchers.approval.bulkApprove, onClick: (rows) => void runBulk('approve', rows) },
+                    { label: t.vouchers.approval.bulkReject, tone: 'danger', onClick: (rows) => void runBulk('reject', rows) },
+                ] : undefined}
+            />
 
-            <div className={`flex items-center justify-end gap-2 ${compactDensity.filterBar} !mt-0`}>
-                <button
-                    type="button"
-                    onClick={() => setPage((current) => Math.max(1, current - 1))}
-                    disabled={response.meta.page <= 1}
-                    className="inline-flex items-center px-3 py-1.5 border rounded text-xs font-medium disabled:opacity-40"
-                >
-                    <ChevronLeft className="me-1 h-3.5 w-3.5" />
-                    {t.common.prevPage}
-                </button>
-                <span className="text-xs text-gray-500">
-                    {response.meta.page} / {response.meta.totalPages}
-                </span>
-                <button
-                    type="button"
-                    onClick={() => setPage((current) => Math.min(response.meta.totalPages, current + 1))}
-                    disabled={response.meta.page >= response.meta.totalPages}
-                    className="inline-flex items-center px-3 py-1.5 border rounded text-xs font-medium disabled:opacity-40"
-                >
-                    {t.common.nextPage}
-                    <ChevronRight className="ms-1 h-3.5 w-3.5" />
-                </button>
-            </div>
+            <ConfirmDialog
+                open={deleteTarget !== null}
+                title={copy.vouchers.deleteTitle}
+                prompt={fmt(copy.vouchers.deleteBody, { voucherNumber: deleteTarget?.voucher_number ?? '' })}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                loading={deleting}
+                danger
+                onConfirm={() => void handleDelete()}
+                onCancel={() => { if (!deleting) setDeleteTarget(null); }}
+            />
+
+            {rejectTarget && (
+                <ModalShell size="sm" onBackdropClick={closeReject}>
+                    <ModalHeader
+                        title={rejectTarget.single
+                            ? fmt(copy.vouchers.rejectTitle, { voucherNumber: rejectTarget.rows[0].voucher_number })
+                            : copy.vouchers.bulkRejectTitle}
+                        subtitle={rejectTarget.single
+                            ? undefined
+                            : fmt(copy.vouchers.bulkRejectBody, { count: rejectTarget.rows.length })}
+                        onClose={closeReject}
+                        closeLabel={t.common.close}
+                    />
+                    <form
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            void handleReject();
+                        }}
+                    >
+                        <div className="p-4">
+                            <Field label={t.vouchers.approval.rejectPrompt}>
+                                <Textarea
+                                    rows={3}
+                                    maxLength={500}
+                                    value={rejectReason}
+                                    onChange={(event) => setRejectReason(event.target.value)}
+                                    autoFocus
+                                />
+                            </Field>
+                        </div>
+                        <ModalFooter>
+                            <Button type="button" variant="secondary" onClick={closeReject} disabled={rejecting}>
+                                {t.common.cancel}
+                            </Button>
+                            <Button type="submit" variant="danger" loading={rejecting}>
+                                {t.vouchers.approval.reject}
+                            </Button>
+                        </ModalFooter>
+                    </form>
+                </ModalShell>
+            )}
         </AccountingPageShell>
     );
 }

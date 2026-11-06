@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import VoucherTemplatesPage from './page';
 
 jest.mock('@/lib/api', () => ({
@@ -12,7 +12,18 @@ jest.mock('@/lib/api', () => ({
 }));
 
 jest.mock('@/lib/format', () => ({
+    ...jest.requireActual('@/lib/format'),
     formatBDT: (v: number) => `৳${v}`,
+}));
+
+jest.mock('@/lib/toast', () => ({
+    toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
+}));
+
+// A wide screen, so the chips sit in the toolbar rather than the phone's Filters sheet.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
 }));
 
 jest.mock('next/navigation', () => ({
@@ -23,6 +34,16 @@ jest.mock('next/navigation', () => ({
 }));
 
 const mockTemplates = [
+    {
+        id: 'vt-2',
+        name: 'Petty Cash',
+        description: 'Small office spend',
+        voucher_type: 'cash_payment',
+        lines: [
+            { account: { name: 'Office Supplies' }, debit_amount: 300, credit_amount: 0 },
+            { account: { name: 'Cash' }, debit_amount: 0, credit_amount: 300 },
+        ],
+    },
     {
         id: 'vt-1',
         name: 'Office Rent',
@@ -75,27 +96,46 @@ describe('VoucherTemplatesPage', () => {
         render(<VoucherTemplatesPage />);
         await waitFor(() => {
             expect(screen.getByText('Office Rent')).toBeInTheDocument();
-            const link = screen.getByRole('link', { name: /use template/i });
-            expect(link).toHaveAttribute('href', '/accounting/vouchers/new?templateId=vt-1');
+            const links = screen.getAllByRole('link', { name: /use template/i });
+            expect(links.map((link) => link.getAttribute('href'))).toContain('/accounting/vouchers/new?templateId=vt-1');
         });
+    });
+
+    it('narrows the rows and the strip together through the Type chip', async () => {
+        const api = getApi();
+        api.listVoucherTemplates.mockResolvedValue(mockTemplates);
+        render(<VoucherTemplatesPage />);
+        await screen.findByText('Office Rent');
+        const strip = screen.getByRole('region', { name: 'Voucher template figures' });
+        expect(within(strip).getByText('৳5300')).toBeInTheDocument();
+
+        fireEvent.click(
+            screen.getAllByRole('button', { name: /^Type/ })
+                .find((button) => button.getAttribute('aria-haspopup') === 'dialog')!,
+        );
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Bank Payment' }));
+
+        await waitFor(() => expect(screen.queryByText('Petty Cash')).not.toBeInTheDocument());
+        expect(screen.getByText('Office Rent')).toBeInTheDocument();
+        expect(within(strip).getByText('৳5000')).toBeInTheDocument();
     });
 
     it('shows create form and disables save until two lines are picked', async () => {
         render(<VoucherTemplatesPage />);
-        await waitFor(() => screen.getByRole('button', { name: /new template/i }));
-        fireEvent.click(screen.getByRole('button', { name: /new template/i }));
-        await waitFor(() => {
-            const saveBtn = screen.getByRole('button', { name: /save template/i });
-            expect(saveBtn).toBeDisabled();
-        });
+        fireEvent.click(await screen.findByRole('button', { name: /new template/i }));
+        const dialog = await screen.findByRole('dialog');
+        expect(within(dialog).getByRole('button', { name: /save template/i })).toBeDisabled();
     });
 
-    it('calls deleteVoucherTemplate when the delete button is clicked', async () => {
+    it('deletes a template once the dialog is confirmed', async () => {
         const api = getApi();
         api.listVoucherTemplates.mockResolvedValue(mockTemplates);
         render(<VoucherTemplatesPage />);
-        await waitFor(() => screen.getByText('Office Rent'));
-        fireEvent.click(screen.getByRole('button', { name: /delete template/i }));
+        await screen.findByText('Office Rent');
+        fireEvent.click(screen.getAllByRole('button', { name: /delete template/i })[1]);
+        const dialog = await screen.findByRole('dialog');
+        expect(api.deleteVoucherTemplate).not.toHaveBeenCalled();
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
         await waitFor(() => {
             expect(api.deleteVoucherTemplate).toHaveBeenCalledWith('vt-1');
         });

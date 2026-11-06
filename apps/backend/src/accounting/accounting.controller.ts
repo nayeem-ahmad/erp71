@@ -275,6 +275,17 @@ export class AccountingController {
         return this.accountingService.findVouchers(tenant.tenantId, { ...scoped, timezone: tenant.timezone });
     }
 
+    /**
+     * The stats strip above the voucher list — the list's own filters and
+     * branch scope. Declared before `vouchers/:id`, which would otherwise take
+     * "summary" for an id.
+     */
+    @Get('vouchers/summary')
+    async getVoucherListSummary(@Tenant() tenant: TenantContext, @Query() query: ListVouchersQueryDto) {
+        const scoped = await this.branchQuery(tenant, query);
+        return this.accountingService.getVoucherListSummary(tenant.tenantId, { ...scoped, timezone: tenant.timezone });
+    }
+
     @Get('vouchers/next-number')
     getVoucherNumberPreview(
         @Tenant() tenant: TenantContext,

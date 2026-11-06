@@ -50,6 +50,9 @@ import { isCashDrawer } from './cash-drawer';
 import { manualDrawerProblem } from './cash-account';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
 import { createdAtRange } from '../common/created-range.util';
+import { searchClause } from '../common/document-list-filters';
+import { numberConditionFilter, readIdListQuery, readNumberConditionQuery } from '../common/number-condition.util';
+import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { AuditService } from '../audit/audit.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { JOB_NAMES } from '../system-health/jobs/job-names';
@@ -112,6 +115,39 @@ export const VOUCHER_NUMBER_PREFIXES: Record<VoucherType, string> = {
 };
 
 export const VOUCHER_NUMBER_PADDING = 5;
+
+/**
+ * The voucher list's sortable columns. The amount is the sum of a voucher's
+ * debit lines rather than a stored column, so it is not one of them.
+ */
+const VOUCHER_SORTABLE: SortableMap = {
+    voucher_number: (dir) => ({ voucher_number: dir }),
+    date: (dir) => [{ date: dir }, { created_at: dir }],
+    created_at: (dir) => ({ created_at: dir }),
+    voucher_type: (dir) => [{ voucher_type: dir }, { date: 'desc' }],
+    reference_number: (dir) => [{ reference_number: dir }, { date: 'desc' }],
+    approval_status: (dir) => [{ approval_status: dir }, { date: 'desc' }],
+};
+const VOUCHER_DEFAULT_ORDER = [{ date: 'desc' }, { created_at: 'desc' }];
+
+/** `GET accounting/vouchers/summary`: the stats strip over every voucher the list's filters match. */
+export interface VoucherListSummary {
+    count: number;
+    /** The vouchers' debits added up — each voucher's total, as the list shows it. */
+    totalAmount: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+    /** Posted by another module (a sale, a purchase, payroll…). */
+    systemCount: number;
+    /** Keyed in by hand. */
+    manualCount: number;
+}
+
+type VoucherListQuery = ListVouchersQueryDto & { timezone: string };
+
+/** One value as an equality, several as `in` — a single value keeps the plain `where` it always had. */
+const oneOrIn = (values: string[]) => (values.length === 1 ? values[0] : { in: values });
 
 const CREDIT_NORMAL_ACCOUNT_TYPES = new Set<AccountType>([
     AccountType.LIABILITY,
@@ -957,21 +993,47 @@ export class AccountingService {
         }
     }
 
-    async findVouchers(tenantId: string, query: ListVouchersQueryDto & { timezone: string }) {
-        const page = Math.max(1, Number(query.page ?? 1));
-        const limit = Math.min(Math.max(1, Number(query.limit ?? 20)), 100);
+    /**
+     * The `where` behind the voucher list and its stats strip, so the two
+     * always describe the same vouchers.
+     */
+    private async voucherListWhere(tenantId: string, query: VoucherListQuery): Promise<Prisma.VoucherWhereInput> {
         this.validateDateRange(query.from, query.to);
         const created = createdAtRange(query.createdFrom, query.createdTo, query.timezone);
-        const where = {
+        const types = readIdListQuery(query.voucherType);
+        const approvals = readIdListQuery(query.approvalStatus);
+        const search = searchClause(query.search?.trim() || undefined, ['voucher_number', 'reference_number', 'description']);
+        const where: Prisma.VoucherWhereInput = {
             tenant_id: tenantId,
             // A branch lists its own vouchers; company-level ones (no branch)
             // appear only for the whole tenant.
             ...(query.storeId ? { store_id: query.storeId } : {}),
-            ...(query.voucherType ? { voucher_type: query.voucherType } : {}),
-            ...(query.approvalStatus ? { approval_status: query.approvalStatus } : {}),
+            ...(types ? { voucher_type: oneOrIn(types) } : {}),
+            ...(approvals ? { approval_status: oneOrIn(approvals) } : {}),
+            ...(query.source === 'manual' ? { source_module: null } : {}),
+            ...(query.source === 'system' ? { source_module: { not: null } } : {}),
             ...this.buildVoucherDateRangeFilter(query.from, query.to),
             ...(created ? { created_at: created } : {}),
+            ...(search ? { AND: [search as Prisma.VoucherWhereInput] } : {}),
         };
+
+        const amount = readNumberConditionQuery(query.amount, 'amount');
+        if (!amount) return where;
+        // A voucher's total is the sum of its debit lines, not a stored column,
+        // so the condition is met by grouping the lines of the vouchers the
+        // other filters already match.
+        const matching = await this.db.voucherDetail.groupBy({
+            by: ['voucher_id'],
+            where: { voucher: where },
+            having: { debit_amount: { _sum: numberConditionFilter(amount) } },
+        });
+        return { ...where, id: { in: matching.map((row) => row.voucher_id) } };
+    }
+
+    async findVouchers(tenantId: string, query: VoucherListQuery) {
+        const page = Math.max(1, Number(query.page ?? 1));
+        const limit = Math.min(Math.max(1, Number(query.limit ?? 20)), 100);
+        const where = await this.voucherListWhere(tenantId, query);
 
         const [total, vouchers] = await Promise.all([
             this.db.voucher.count({ where }),
@@ -990,7 +1052,9 @@ export class AccountingService {
                         orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
                     },
                 },
-                orderBy: [{ date: 'desc' }, { created_at: 'desc' }],
+                orderBy: resolveOrderBy(query.sortBy, query.sortDir, VOUCHER_SORTABLE, VOUCHER_DEFAULT_ORDER) as
+                    | Prisma.VoucherOrderByWithRelationInput
+                    | Prisma.VoucherOrderByWithRelationInput[],
                 skip: (page - 1) * limit,
                 take: limit,
             }),
@@ -1004,6 +1068,28 @@ export class AccountingService {
                 total,
                 totalPages: Math.max(1, Math.ceil(total / limit)),
             },
+        };
+    }
+
+    /** The stats strip above the voucher list: the same filters, every matching voucher counted. */
+    async getVoucherListSummary(tenantId: string, query: VoucherListQuery): Promise<VoucherListSummary> {
+        const where = await this.voucherListWhere(tenantId, query);
+        const [count, byStatus, systemCount, totals] = await Promise.all([
+            this.db.voucher.count({ where }),
+            this.db.voucher.groupBy({ by: ['approval_status'], where, _count: { _all: true } }),
+            this.db.voucher.count({ where: { AND: [where, { source_module: { not: null } }] } }),
+            this.db.voucherDetail.aggregate({ where: { voucher: where }, _sum: { debit_amount: true } }),
+        ]);
+        const inStatus = (status: string) =>
+            byStatus.find((row) => row.approval_status === status)?._count?._all ?? 0;
+        return {
+            count,
+            totalAmount: Math.round(Number(totals._sum?.debit_amount ?? 0) * 100) / 100,
+            pending: inStatus(VoucherApprovalStatus.PENDING),
+            approved: inStatus(VoucherApprovalStatus.APPROVED),
+            rejected: inStatus(VoucherApprovalStatus.REJECTED),
+            systemCount,
+            manualCount: Math.max(count - systemCount, 0),
         };
     }
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import RecurringJournalsPage from './page';
 
 jest.mock('@/lib/api', () => ({
@@ -12,8 +12,19 @@ jest.mock('@/lib/api', () => ({
 }));
 
 jest.mock('@/lib/format', () => ({
+    ...jest.requireActual('@/lib/format'),
     formatBDT: (v: number) => `৳${v}`,
     formatDate: (v: string) => v,
+}));
+
+jest.mock('@/lib/toast', () => ({
+    toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
+}));
+
+// A wide screen, so the chips sit in the toolbar rather than the phone's Filters sheet.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
 }));
 
 jest.mock('next/navigation', () => ({
@@ -100,13 +111,31 @@ describe('RecurringJournalsPage', () => {
         });
     });
 
-    it('shows template details', async () => {
+    it('shows the frequency in words', async () => {
         const api = getApi();
         api.listRecurringJournals.mockResolvedValue(mockTemplates);
         render(<RecurringJournalsPage />);
-        await waitFor(() => {
-            expect(screen.getByText('MONTHLY')).toBeInTheDocument();
-        });
+        await screen.findByText('Monthly Rent');
+        expect(screen.getByRole('cell', { name: 'Monthly' })).toBeInTheDocument();
+    });
+
+    it('narrows the rows and the strip together through the Frequency chip', async () => {
+        const api = getApi();
+        api.listRecurringJournals.mockResolvedValue(mockTemplates);
+        render(<RecurringJournalsPage />);
+        await screen.findByText('Monthly Rent');
+        const strip = screen.getByRole('region', { name: 'Recurring journal figures' });
+        expect(within(strip).getByText('৳5000')).toBeInTheDocument();
+
+        fireEvent.click(
+            screen.getAllByRole('button', { name: /^Frequency/ })
+                .find((button) => button.getAttribute('aria-haspopup') === 'dialog')!,
+        );
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Weekly' }));
+
+        await waitFor(() => expect(screen.queryByText('Monthly Rent')).not.toBeInTheDocument());
+        expect(screen.getByText('Weekly Payroll')).toBeInTheDocument();
+        expect(within(strip).getByText('৳0')).toBeInTheDocument();
     });
 
     it('shows New Template button', async () => {
@@ -127,12 +156,10 @@ describe('RecurringJournalsPage', () => {
 
     it('shows frequency select in create form', async () => {
         render(<RecurringJournalsPage />);
-        await waitFor(() => screen.getByRole('button', { name: /new template/i }));
-        fireEvent.click(screen.getByRole('button', { name: /new template/i }));
-        await waitFor(() => {
-            expect(screen.getByText('Monthly')).toBeInTheDocument();
-            expect(screen.getByText('Weekly')).toBeInTheDocument();
-        });
+        fireEvent.click(await screen.findByRole('button', { name: /new template/i }));
+        const dialog = await screen.findByRole('dialog');
+        expect(within(dialog).getByRole('option', { name: 'Monthly' })).toBeInTheDocument();
+        expect(within(dialog).getByRole('option', { name: 'Weekly' })).toBeInTheDocument();
     });
 
     it('shows error message when load fails', async () => {

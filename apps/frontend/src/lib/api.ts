@@ -1642,6 +1642,66 @@ const purchaseReturnsList = purchaseDocumentList<PurchaseDocumentListFilterParam
 const purchaseOrdersList = purchaseDocumentList<PurchaseDocumentListFilterParams, PurchaseOrderListSummary>('/purchase-orders');
 const purchaseQuotationsList = purchaseDocumentList<PurchaseDocumentListFilterParams, PurchaseQuotationListSummary>('/purchase-quotations');
 
+/** What narrows the voucher list — sent alike to the list and to its stats strip. */
+export interface VoucherListFilterParams {
+    /** Voucher number, reference or narration. */
+    search?: string;
+    /** One voucher type, or several (any of them). */
+    voucherType?: string | readonly string[];
+    /** The voucher date, whole days. */
+    from?: string;
+    to?: string;
+    createdFrom?: string;
+    createdTo?: string;
+    /** One approval status, or several. `PENDING` alone is the approval queue. */
+    approvalStatus?: string | readonly string[];
+    /** The voucher's total. */
+    amount?: NumberCondition | null;
+    /** Keyed in by hand, or posted by another module. */
+    source?: 'manual' | 'system';
+    /** A branch or `'all'`, from the page's branch filter. */
+    storeId?: string;
+}
+
+/** One server page of the voucher list. */
+export type VoucherListPageParams = {
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortDir?: 'asc' | 'desc';
+};
+
+/** `GET /accounting/vouchers/summary`. */
+export interface VoucherListSummary {
+    count: number;
+    totalAmount: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+    /** Posted by another module — a sale, a purchase, payroll. */
+    systemCount: number;
+    /** Keyed in by hand. */
+    manualCount: number;
+}
+
+function setVoucherListParams(query: URLSearchParams, params: VoucherListFilterParams): void {
+    const list = (value: string | readonly string[] | undefined) =>
+        (typeof value === 'string' ? value : value?.join(',')) || undefined;
+    const voucherType = list(params.voucherType);
+    const approvalStatus = list(params.approvalStatus);
+    if (params.search) query.set('search', params.search);
+    if (voucherType) query.set('voucherType', voucherType);
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
+    if (params.createdFrom) query.set('createdFrom', params.createdFrom);
+    if (params.createdTo) query.set('createdTo', params.createdTo);
+    if (approvalStatus) query.set('approvalStatus', approvalStatus);
+    const amount = numberConditionParam(params.amount);
+    if (amount) query.set('amount', amount);
+    if (params.source) query.set('source', params.source);
+    if (params.storeId) query.set('storeId', params.storeId);
+}
+
 /** A payment method as `/payment-methods` and its layout routes return it. */
 export interface PaymentMethodRow {
     id: string;
@@ -2961,18 +3021,20 @@ export const api = {
         return fetchWithAuth(`/accounting/accounts/next-code?${query.toString()}`);
     },
     getVoucherNumberPreview: (voucherType: string) => fetchWithAuth(`/accounting/vouchers/next-number?voucherType=${encodeURIComponent(voucherType)}`),
-    getVouchers: (params?: { voucherType?: string; from?: string; to?: string; createdFrom?: string; createdTo?: string; approvalStatus?: string; page?: number; limit?: number; storeId?: string }) => {
+    getVouchers: (params?: VoucherListFilterParams & VoucherListPageParams) => {
         const query = new URLSearchParams();
-        if (params?.voucherType) query.set('voucherType', params.voucherType);
-        if (params?.from) query.set('from', params.from);
-        if (params?.to) query.set('to', params.to);
-        if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
-        if (params?.createdTo) query.set('createdTo', params.createdTo);
-        if (params?.approvalStatus) query.set('approvalStatus', params.approvalStatus);
+        setVoucherListParams(query, params ?? {});
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
-        if (params?.storeId) query.set('storeId', params.storeId);
+        if (params?.sortBy) query.set('sortBy', params.sortBy);
+        if (params?.sortDir) query.set('sortDir', params.sortDir);
         return fetchWithAuth(`/accounting/vouchers${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    /** The stats strip above the voucher list — the list's own filters, every matching voucher counted. */
+    getVouchersSummary: (params: VoucherListFilterParams = {}): Promise<VoucherListSummary> => {
+        const query = new URLSearchParams();
+        setVoucherListParams(query, params);
+        return fetchWithAuth(`/accounting/vouchers/summary${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getVoucher: (id: string) => fetchWithAuth(`/accounting/vouchers/${id}`),
     getLedger: (accountId: string, params?: { from?: string; to?: string; storeId?: string } & ApprovedOnlyParams) => {
