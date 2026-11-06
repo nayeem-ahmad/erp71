@@ -1642,6 +1642,75 @@ const purchaseReturnsList = purchaseDocumentList<PurchaseDocumentListFilterParam
 const purchaseOrdersList = purchaseDocumentList<PurchaseDocumentListFilterParams, PurchaseOrderListSummary>('/purchase-orders');
 const purchaseQuotationsList = purchaseDocumentList<PurchaseDocumentListFilterParams, PurchaseQuotationListSummary>('/purchase-quotations');
 
+/**
+ * What narrows a customer-side document list — sales returns, exchanges,
+ * quotations, sales orders, customer payments — sent alike to the list and
+ * its stats strip. The backend reads it with `SalesDocumentListQueryDto`.
+ */
+export interface SalesDocumentListFilterParams {
+    search?: string;
+    /** One status or a comma-separated set. */
+    status?: string;
+    /** Every status but those in `status`. */
+    statusExclude?: boolean;
+    /** Customer ids; `none` is a walk-in document with no customer. */
+    customerIds?: readonly string[];
+    total?: NumberCondition | null;
+    createdFrom?: string;
+    createdTo?: string;
+    /** The document's own date — return date, valid-until, delivery date. */
+    dateFrom?: string;
+    dateTo?: string;
+    /** A branch or `'all'`, from the page's branch filter. */
+    storeId?: string;
+}
+
+function setSalesDocumentListParams(query: URLSearchParams, params: SalesDocumentListFilterParams): void {
+    if (params.search) query.set('search', params.search);
+    if (params.status) query.set('status', params.status);
+    if (params.status && params.statusExclude) query.set('statusExclude', 'true');
+    if (params.customerIds?.length) query.set('customerId', params.customerIds.join(','));
+    const total = numberConditionParam(params.total);
+    if (total) query.set('total', total);
+    if (params.createdFrom) query.set('createdFrom', params.createdFrom);
+    if (params.createdTo) query.set('createdTo', params.createdTo);
+    if (params.dateFrom) query.set('dateFrom', params.dateFrom);
+    if (params.dateTo) query.set('dateTo', params.dateTo);
+    if (params.storeId) query.set('storeId', params.storeId);
+}
+
+/**
+ * The list page and summary callers for one customer-side endpoint. A list
+ * with keys of its own passes `extra` to write them onto the query.
+ */
+function salesDocumentList<P extends SalesDocumentListFilterParams, S>(
+    path: string,
+    extra?: (query: URLSearchParams, params: P) => void,
+) {
+    const build = (query: URLSearchParams, params: P) => {
+        setSalesDocumentListParams(query, params);
+        extra?.(query, params);
+    };
+    return {
+        list: (params: P & PurchaseDocumentPageParams) => {
+            const query = new URLSearchParams();
+            if (params.page) query.set('page', String(params.page));
+            if (params.limit) query.set('limit', String(params.limit));
+            if (params.sortBy) query.set('sortBy', params.sortBy);
+            if (params.sortDir) query.set('sortDir', params.sortDir);
+            build(query, params);
+            return fetchPaginated(`${path}?${query.toString()}`);
+        },
+        summary: (params: P): Promise<S> => {
+            const query = new URLSearchParams();
+            build(query, params);
+            return fetchWithAuth(`${path}/summary?${query.toString()}`);
+        },
+    };
+}
+// Each sales-side list declares its caller here, e.g.
+// const salesReturnsList = salesDocumentList<SalesDocumentListFilterParams, SalesReturnListSummary>('/sales-returns');
+
 /** A payment method as `/payment-methods` and its layout routes return it. */
 export interface PaymentMethodRow {
     id: string;
