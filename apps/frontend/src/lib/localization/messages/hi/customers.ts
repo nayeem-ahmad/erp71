@@ -25,7 +25,9 @@ export const customersMessages = {
             "points": "पॉइंट",
             "pointsSuffix": "पॉ.",
             "segment": "वर्ग",
-            "registered": "पंजीकृत"
+            "registered": "पंजीकृत",
+            "lastSale": "अंतिम बिक्री",
+            "noSales": "अभी तक कोई बिक्री नहीं"
         },
         "filters": {
             "vip": 'VIP',

@@ -1,5 +1,67 @@
 export const purchasesMessages = {
     purchaseShared: {
+        lists: {
+            purchases: {
+                statsLabel: "Résumé des achats",
+                stats: {
+                    bills: "Achats",
+                    cancelled: "{count} annulés",
+                    total: "Acheté",
+                    paid: "Payé",
+                    due: "À payer",
+                    average: "Facture moy.",
+                    returns: "Retours",
+                    returnsCount: "{count} retours",
+                },
+                filters: {
+                    paid: "Payé",
+                    paymentStatus: "Statut de paiement",
+                    paymentStatuses: {
+                        PAID: "Entièrement payé",
+                        PARTIAL: "Partiellement payé",
+                        UNPAID: "Impayé",
+                    },
+                },
+            },
+            returns: {
+                statsLabel: "Résumé des retours d’achat",
+                stats: {
+                    returns: "Retours",
+                    amount: "Valeur retournée",
+                    refunded: "Remboursement reçu",
+                    adjusted: "Imputé sur la dette",
+                    average: "Retour moy.",
+                },
+                deleted: "Retour d’achat supprimé",
+            },
+            orders: {
+                statsLabel: "Résumé des bons de commande",
+                stats: {
+                    orders: "Commandes",
+                    cancelled: "{count} annulées",
+                    value: "Valeur des commandes",
+                    open: "Ouvertes",
+                    openCount: "{count} ouvertes",
+                    received: "Reçues",
+                    receivedCount: "{count} reçues",
+                    overdue: "En retard",
+                },
+                expectedDate: "Date prévue",
+            },
+            quotations: {
+                statsLabel: "Résumé des devis d’achat",
+                stats: {
+                    rfqs: "Demandes",
+                    value: "Valeur des devis",
+                    pending: "En attente",
+                    accepted: "Acceptés",
+                    acceptedCount: "{count} acceptés",
+                    converted: "Convertis en BC",
+                    expired: "Expirés",
+                },
+                deleted: "Demande supprimée",
+            },
+        },
         unlinked: "Non rattaché",
         unlinkedSupplier: "Fournisseur non rattaché",
         noSupplier: "Aucun fournisseur sélectionné",

@@ -2,8 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Layers, Plus, Pencil, Trash2, Power, Upload } from 'lucide-react';
-import { DataTable, type ListFilter } from '@/components/data-table';
+import { Layers, Plus, Pencil, Trash2, Power, Upload, CheckCircle2, CircleOff, BadgeCheck, Users } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
+import type { NumberCondition } from '@/lib/number-condition';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
@@ -24,13 +27,17 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = { code: '', name: '', description: '', reports_to: '' };
+/** The reports-to chip's value for a department that names no one. */
+const NONE = '__none__';
+
+const statusOf = (row: { is_active?: boolean }) => (row.is_active === false ? 'inactive' : 'active');
 
 /**
  * The department master. A department with employees or designations is
  * deactivated rather than deleted, so it stays on every record that names it.
  */
 export default function DepartmentsPage() {
-    const { t, fmt } = useI18n();
+    const { t, fmt, locale } = useI18n();
     const o = t.orgStructure;
     const [departments, setDepartments] = useState<Department[]>([]);
     const [loading, setLoading] = useState(true);
@@ -44,6 +51,10 @@ export default function DepartmentsPage() {
     const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
     const [statusTarget, setStatusTarget] = useState<Department | null>(null);
     const [busy, setBusy] = useState(false);
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState<string[]>([]);
+    const [reportsTo, setReportsTo] = useState<string[]>([]);
+    const [employeeCount, setEmployeeCount] = useState<NumberCondition | null>(null);
 
     useEffect(() => {
         void load();
@@ -158,25 +169,81 @@ export default function DepartmentsPage() {
         }
     };
 
+    const reportsToOptions = useMemo(
+        () => [...new Set(departments.map((d) => d.reports_to?.trim()).filter((v): v is string => Boolean(v)))]
+            .sort((a, b) => a.localeCompare(b))
+            .map((value) => ({ value, label: value })),
+        [departments],
+    );
+
+    const filtered = useMemo(
+        () => departments.filter((d) => {
+            if (!matchesAnyOf(statusFilter, statusOf(d))) return false;
+            if (!matchesAnyOf(reportsTo, d.reports_to?.trim() || NONE)) return false;
+            if (!matchesNumberCondition(d._count?.employees ?? 0, employeeCount)) return false;
+            return matchesSearch(search, d.code, d.name, d.description, d.reports_to);
+        }),
+        [departments, statusFilter, reportsTo, employeeCount, search],
+    );
+
     const filters = useMemo<ListFilter[]>(() => [
         {
             id: 'status',
-            type: 'select',
+            type: 'multi-select',
             label: o.status,
-            columnId: 'status',
+            value: statusFilter,
+            onChange: setStatusFilter,
             options: [
                 { value: 'active', label: o.active },
                 { value: 'inactive', label: o.inactive },
             ],
         },
-    ], [o]);
+        {
+            id: 'reportsTo',
+            type: 'multi-select',
+            label: o.reportsTo,
+            value: reportsTo,
+            onChange: setReportsTo,
+            options: [{ value: NONE, label: t.hr.reports.common.unassigned }, ...reportsToOptions],
+        },
+        {
+            id: 'employees',
+            type: 'number',
+            label: o.employees,
+            value: employeeCount,
+            onChange: setEmployeeCount,
+        },
+    ], [o, t, statusFilter, reportsTo, reportsToOptions, employeeCount]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const inactive = filtered.filter((d) => statusOf(d) === 'inactive').length;
+        const items: ListStat[] = [
+            { id: 'count', icon: <Layers aria-hidden />, label: t.departments.title, value: n(filtered.length) },
+            { id: 'active', icon: <CheckCircle2 aria-hidden />, label: o.active, value: n(filtered.length - inactive) },
+            { id: 'inactive', icon: <CircleOff aria-hidden />, label: o.inactive, value: n(inactive) },
+            {
+                id: 'designations',
+                icon: <BadgeCheck aria-hidden />,
+                label: o.designations,
+                value: n(filtered.reduce((sum, d) => sum + (d._count?.designations ?? 0), 0)),
+            },
+            {
+                id: 'employees',
+                icon: <Users aria-hidden />,
+                label: o.employees,
+                value: n(filtered.reduce((sum, d) => sum + (d._count?.employees ?? 0), 0)),
+            },
+        ];
+        return { items, loading, label: t.hr.listUi.departmentsStats };
+    }, [filtered, loading, locale, o, t]);
 
     const columns: ColumnDef<Department, any>[] = useMemo(
         () => [
             columnHelper.accessor((row) => row.code ?? '', {
                 id: 'code',
                 header: o.code,
-                cell: (info) => <span className="text-sm font-medium text-gray-900">{info.getValue() || '—'}</span>,
+                cell: (info) => info.getValue() || '—',
                 size: 90,
             }),
             columnHelper.accessor('name', {
@@ -185,8 +252,8 @@ export default function DepartmentsPage() {
                     const d = info.row.original;
                     return (
                         <div className="min-w-0">
-                            <span className="block text-sm font-medium text-gray-900">{d.name}</span>
-                            {d.description && <span className="block text-xs text-gray-500 truncate">{d.description}</span>}
+                            <span className="block">{d.name}</span>
+                            {d.description && <span className="block text-gray-500 truncate">{d.description}</span>}
                         </div>
                     );
                 },
@@ -195,33 +262,30 @@ export default function DepartmentsPage() {
             columnHelper.accessor((row) => row.reports_to ?? '', {
                 id: 'reports_to',
                 header: o.reportsTo,
-                cell: (info) => <span className="text-sm text-gray-700">{info.getValue() || '—'}</span>,
+                cell: (info) => info.getValue() || '—',
                 size: 160,
                 meta: { hideOnMobile: true },
             }),
             columnHelper.accessor((row) => row._count?.designations ?? 0, {
                 id: 'designations',
                 header: o.designations,
-                cell: (info) => <span className="text-sm text-gray-700 tabular-nums">{info.getValue()}</span>,
-                enableColumnFilter: false,
+                cell: (info) => info.getValue(),
                 size: 110,
-                meta: { hideOnMobile: true },
+                meta: { hideOnMobile: true, align: 'end' },
             }),
             columnHelper.accessor((row) => row._count?.employees ?? 0, {
                 id: 'employees',
                 header: o.employees,
-                cell: (info) => <span className="text-sm text-gray-700 tabular-nums">{info.getValue()}</span>,
-                enableColumnFilter: false,
+                cell: (info) => info.getValue(),
                 size: 100,
-                meta: { hideOnMobile: true },
+                meta: { hideOnMobile: true, align: 'end' },
             }),
-            columnHelper.accessor((row) => (row.is_active === false ? 'inactive' : 'active'), {
+            columnHelper.accessor(statusOf, {
                 id: 'status',
                 header: o.status,
                 cell: (info) => info.getValue() === 'active'
                     ? <StatusBadge tone="success">{o.active}</StatusBadge>
                     : <StatusBadge tone="neutral">{o.inactive}</StatusBadge>,
-                filterFn: 'equalsString',
                 size: 110,
             }),
             columnHelper.display({
@@ -232,38 +296,26 @@ export default function DepartmentsPage() {
                     const inUse = (d._count?.employees ?? 0) > 0 || (d._count?.designations ?? 0) > 0;
                     const active = d.is_active !== false;
                     return (
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={() => openEdit(d)}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                title={t.common.edit}
-                                aria-label={`${t.common.edit} ${d.name}`}
-                            >
-                                <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
+                        <RowActions>
+                            <RowActionButton icon={<Pencil />} label={t.common.edit} onClick={() => openEdit(d)} />
+                            <RowActionButton
+                                icon={<Power />}
+                                label={active ? o.deactivate : o.activate}
+                                intent={active ? 'warning' : 'success'}
                                 onClick={() => setStatusTarget(d)}
-                                className={`p-1.5 rounded-lg transition-colors ${active
-                                    ? 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'
-                                    : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
-                                title={active ? o.deactivate : o.activate}
-                                aria-label={`${active ? o.deactivate : o.activate} ${d.name}`}
-                            >
-                                <Power className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={() => setDeleteTarget(d)}
+                            />
+                            <RowActionButton
+                                icon={<Trash2 />}
+                                label={inUse ? o.inUse : t.common.delete}
+                                intent="danger"
                                 disabled={inUse}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:cursor-not-allowed"
-                                title={inUse ? o.inUse : t.common.delete}
-                                aria-label={`${t.common.delete} ${d.name}`}
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        </div>
+                                onClick={() => setDeleteTarget(d)}
+                            />
+                        </RowActions>
                     );
                 },
                 enableSorting: false,
+                enableColumnFilter: false,
                 enableResizing: false,
                 size: 120,
             }),
@@ -299,13 +351,19 @@ export default function DepartmentsPage() {
             <DataTable<Department>
                 tableId="departments"
                 columns={columns}
-                data={departments}
+                data={filtered}
                 title={t.departments.title}
                 isLoading={loading}
                 emptyMessage={t.departments.emptyMessage}
                 emptyIcon={<Layers className="w-16 h-16 text-gray-200" />}
                 searchPlaceholder={t.departments.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={setSearch}
                 filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
             />
 
             {modalOpen && (

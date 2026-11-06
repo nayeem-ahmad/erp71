@@ -25,7 +25,9 @@ export const customersMessages = {
             "points": "Points",
             "pointsSuffix": "pts",
             "segment": "Segment",
-            "registered": "Registered"
+            "registered": "Registered",
+            "lastSale": "Last Sale",
+            "noSales": "No sales yet"
         },
         "filters": {
             "vip": "VIP",

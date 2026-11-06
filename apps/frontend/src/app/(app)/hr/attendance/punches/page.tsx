@@ -1,17 +1,20 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, Clock, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, Clock, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
+import { createdRangeFromPreset, type CreatedRange } from '@/lib/created-range';
+import { matchesAnyOf, matchesSearch } from '@/lib/list-filter';
 import { useI18n } from '@/lib/i18n';
 import { useToastStore } from '@/lib/toast';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
-import { PageShell, Button, Field, Input, Select, FormGrid, FormFooter, Alert } from '@/components/ui';
+import { PageShell, Button, Field, Input, Select, FormGrid, FormFooter, Alert, ConfirmDialog, StatusBadge } from '@/components/ui';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
 import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 
@@ -43,16 +46,8 @@ interface Punch {
     employee?: { id: string; name: string; employee_code: string } | null;
 }
 
-function getMonthRange() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
-    return {
-        start: `${year}-${month}-01`,
-        end: `${year}-${month}-${String(lastDay).padStart(2, '0')}`,
-    };
-}
+const DIRECTIONS = ['IN', 'OUT'] as const;
+const SOURCES = ['SELF', 'ADMIN', 'IMPORT'] as const;
 
 /** The `YYYY-MM-DD` and `HH:MM` halves of a stored punch, for the form. */
 function splitMoment(value: string): { date: string; time: string } {
@@ -76,18 +71,19 @@ const columnHelper = createColumnHelper<Punch>();
 const EMPTY_FORM = { employee_id: '', date: '', time: '', direction: 'IN' as 'IN' | 'OUT', notes: '' };
 
 export default function AttendancePunchesPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const copy = t.attendancePunches;
     const toast = useToastStore((state) => state.show);
-    const range = getMonthRange();
 
     const [punches, setPunches] = useState<Punch[]>([]);
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
-    const [startDate, setStartDate] = useState(range.start);
-    const [endDate, setEndDate] = useState(range.end);
-    const [filterEmployee, setFilterEmployee] = useState('');
-    const [filterDirection, setFilterDirection] = useState('');
+    // Opens on this month, on the workspace's calendar; cleared, the whole log.
+    const [dateRange, setDateRange] = useState<CreatedRange | null>(() => createdRangeFromPreset('thisMonth'));
+    const [employeeIds, setEmployeeIds] = useState<string[]>([]);
+    const [directions, setDirections] = useState<string[]>([]);
+    const [sources, setSources] = useState<string[]>([]);
+    const [search, setSearch] = useState('');
 
     const [modal, setModal] = useState<{ open: boolean; editing: Punch | null }>({ open: false, editing: null });
     const [form, setForm] = useState(EMPTY_FORM);
@@ -99,11 +95,13 @@ export default function AttendancePunchesPage() {
         setLoading(true);
         try {
             const [rows, emps] = await Promise.all([
+                // The server narrows by one employee and one direction; more
+                // than one of either is narrowed here, from the same rows.
                 api.getAttendancePunches({
-                    startDate: startDate || undefined,
-                    endDate: endDate || undefined,
-                    employeeId: filterEmployee || undefined,
-                    direction: (filterDirection as 'IN' | 'OUT') || undefined,
+                    startDate: dateRange?.from?.slice(0, 10) || undefined,
+                    endDate: dateRange?.to?.slice(0, 10) || undefined,
+                    employeeId: employeeIds.length === 1 ? employeeIds[0] : undefined,
+                    direction: directions.length === 1 ? (directions[0] as 'IN' | 'OUT') : undefined,
                 }),
                 api.getEmployees(),
             ]);
@@ -114,7 +112,7 @@ export default function AttendancePunchesPage() {
         } finally {
             setLoading(false);
         }
-    }, [startDate, endDate, filterEmployee, filterDirection, toast, copy.loadFailed]);
+    }, [dateRange, employeeIds, directions, toast, copy.loadFailed]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -212,8 +210,8 @@ export default function AttendancePunchesPage() {
                 const punch = info.row.original;
                 return (
                     <div>
-                        <span className="block text-sm font-semibold text-gray-900">{punch.employee?.name ?? '—'}</span>
-                        <span className="block text-xs text-gray-400 font-mono">{punch.employee?.employee_code ?? ''}</span>
+                        <span className="block">{punch.employee?.name ?? '—'}</span>
+                        <span className="block text-gray-500">{punch.employee?.employee_code ?? ''}</span>
                     </div>
                 );
             },
@@ -221,42 +219,37 @@ export default function AttendancePunchesPage() {
         }),
         columnHelper.accessor('date', {
             header: copy.columns.date,
-            cell: (info) => <span className="text-sm text-gray-700">{formatDate(info.getValue())}</span>,
+            cell: (info) => formatDate(info.getValue(), locale),
             size: 120,
         }),
         columnHelper.accessor('direction', {
             header: copy.columns.direction,
             cell: (info) => {
                 const isIn = info.getValue() !== 'OUT';
-                const cls = isIn
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-amber-50 text-amber-700 border-amber-200';
                 const Icon = isIn ? ArrowDownLeft : ArrowUpRight;
                 return (
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${cls}`}>
-                        <Icon className="w-3 h-3" />
+                    <StatusBadge tone={isIn ? 'success' : 'warning'}>
+                        <Icon className="w-3 h-3" aria-hidden />
                         {directionLabels[info.getValue()] ?? info.getValue()}
-                    </span>
+                    </StatusBadge>
                 );
             },
             size: 110,
         }),
         columnHelper.accessor('punched_at', {
             header: copy.columns.time,
-            cell: (info) => <span className="text-sm text-gray-700 font-mono">{formatClock(info.getValue())}</span>,
+            cell: (info) => <span className="tabular-nums">{formatClock(info.getValue())}</span>,
             size: 90,
         }),
         columnHelper.accessor('source', {
             header: copy.columns.source,
-            cell: (info) => (
-                <span className="text-xs text-gray-500">{sourceLabels[info.getValue()] ?? info.getValue()}</span>
-            ),
+            cell: (info) => sourceLabels[info.getValue()] ?? info.getValue(),
             size: 100,
             meta: { hideOnMobile: true },
         }),
         columnHelper.accessor('notes', {
             header: copy.columns.notes,
-            cell: (info) => <span className="text-sm text-gray-500">{info.getValue() || '—'}</span>,
+            cell: (info) => info.getValue() || '—',
             size: 180,
             meta: { hideOnMobile: true },
         }),
@@ -264,29 +257,90 @@ export default function AttendancePunchesPage() {
             id: 'actions',
             header: copy.columns.actions,
             cell: (info) => (
-                <div className="flex items-center justify-end gap-1">
-                    <button
-                        type="button"
-                        onClick={() => openModal(info.row.original)}
-                        className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-                        title={t.common.edit}
-                    >
-                        <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                        type="button"
+                <RowActions>
+                    <RowActionButton icon={<Pencil />} label={t.common.edit} onClick={() => openModal(info.row.original)} />
+                    <RowActionButton
+                        icon={<Trash2 />}
+                        label={t.common.delete}
+                        intent="danger"
                         onClick={() => setDeleting(info.row.original)}
-                        className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
-                        title={t.common.delete}
-                    >
-                        <Trash2 className="w-4 h-4" />
-                    </button>
-                </div>
+                    />
+                </RowActions>
             ),
             enableSorting: false,
+            enableColumnFilter: false,
+            enableResizing: false,
             size: 90,
         }),
-    ], [copy.columns, directionLabels, sourceLabels, t.common.edit, t.common.delete]);
+    ], [copy.columns, directionLabels, sourceLabels, t.common.edit, t.common.delete, locale]);
+
+    const filtered = useMemo(
+        () => punches.filter((p) => {
+            if (!matchesAnyOf(employeeIds, p.employee_id)) return false;
+            if (!matchesAnyOf(directions, p.direction)) return false;
+            if (!matchesAnyOf(sources, p.source)) return false;
+            return matchesSearch(search, p.employee?.name, p.employee?.employee_code, p.notes);
+        }),
+        [punches, employeeIds, directions, sources, search],
+    );
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'date',
+            type: 'date-range',
+            label: copy.columns.date,
+            value: dateRange,
+            onChange: setDateRange,
+            operators: true,
+        },
+        {
+            id: 'employee',
+            type: 'multi-select',
+            label: copy.columns.employee,
+            value: employeeIds,
+            onChange: setEmployeeIds,
+            options: employees.map((emp) => ({ value: emp.id, label: `${emp.name} · ${emp.employee_code}` })),
+        },
+        {
+            id: 'direction',
+            type: 'multi-select',
+            label: copy.columns.direction,
+            value: directions,
+            onChange: setDirections,
+            options: DIRECTIONS.map((value) => ({ value, label: directionLabels[value] })),
+        },
+        {
+            id: 'source',
+            type: 'multi-select',
+            label: copy.columns.source,
+            value: sources,
+            onChange: setSources,
+            options: SOURCES.map((value) => ({ value, label: sourceLabels[value] })),
+        },
+    ], [copy.columns, dateRange, employeeIds, employees, directions, directionLabels, sources, sourceLabels]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const ins = filtered.filter((p) => p.direction !== 'OUT').length;
+        const items: ListStat[] = [
+            { id: 'count', icon: <Clock aria-hidden />, label: t.hr.listUi.punches.records, value: n(filtered.length) },
+            { id: 'in', icon: <ArrowDownLeft aria-hidden />, label: copy.directions.in, value: n(ins) },
+            { id: 'out', icon: <ArrowUpRight aria-hidden />, label: copy.directions.out, value: n(filtered.length - ins) },
+            {
+                id: 'people',
+                icon: <Users aria-hidden />,
+                label: t.hr.listUi.punches.people,
+                value: n(new Set(filtered.map((p) => p.employee_id)).size),
+            },
+            {
+                id: 'days',
+                icon: <CalendarDays aria-hidden />,
+                label: t.hr.listUi.punches.days,
+                value: n(new Set(filtered.map((p) => p.date.slice(0, 10))).size),
+            },
+        ];
+        return { items, loading, label: t.hr.listUi.punches.statsLabel };
+    }, [filtered, loading, locale, copy.directions, t]);
 
     return (
         <PageShell>
@@ -309,45 +363,22 @@ export default function AttendancePunchesPage() {
 
             <Alert tone="info">{copy.derivationNote}</Alert>
 
-            <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-3 md:p-4">
-                <div className="flex flex-wrap gap-3 items-end">
-                    <Field label={copy.filters.from} htmlFor="punch-filter-from">
-                        <Input id="punch-filter-from" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                    </Field>
-                    <Field label={copy.filters.to} htmlFor="punch-filter-to">
-                        <Input id="punch-filter-to" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-                    </Field>
-                    <Field label={copy.columns.employee} htmlFor="punch-filter-employee">
-                        <IdSearchSelect
-                            id="punch-filter-employee"
-                            items={employees}
-                            value={filterEmployee}
-                            onChange={setFilterEmployee}
-                            placeholder={copy.filters.allEmployees}
-                            emptyLabel={copy.filters.allEmployees}
-                            noMatchLabel={t.common.noData}
-                            subtitle={(emp) => emp.employee_code ?? ''}
-                        />
-                    </Field>
-                    <Field label={copy.columns.direction} htmlFor="punch-filter-direction">
-                        <Select id="punch-filter-direction" value={filterDirection} onChange={(e) => setFilterDirection(e.target.value)}>
-                            <option value="">{copy.filters.allDirections}</option>
-                            <option value="IN">{copy.directions.in}</option>
-                            <option value="OUT">{copy.directions.out}</option>
-                        </Select>
-                    </Field>
-                </div>
-            </div>
-
             <DataTable<Punch>
                 tableId="attendance-punches"
                 columns={columns}
-                data={punches}
+                data={filtered}
                 title={copy.recordsTitle}
                 isLoading={loading}
                 emptyMessage={copy.emptyMessage}
                 emptyIcon={<Clock className="w-16 h-16 text-gray-200" />}
                 searchPlaceholder={copy.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
             />
 
             {modal.open && (
@@ -428,22 +459,16 @@ export default function AttendancePunchesPage() {
                 </ModalShell>
             )}
 
-            {deleting && (
-                <ModalShell size="sm" onBackdropClick={() => setDeleting(null)}>
-                    <ModalHeader title={copy.deleteTitle} onClose={() => setDeleting(null)} />
-                    <div className="p-4 space-y-4">
-                        <p className="text-sm text-gray-600">{copy.deleteConfirm}</p>
-                        <FormFooter>
-                            <Button type="button" variant="secondary" onClick={() => setDeleting(null)}>
-                                {t.common.cancel}
-                            </Button>
-                            <Button type="button" variant="danger" onClick={confirmDelete}>
-                                {t.common.delete}
-                            </Button>
-                        </FormFooter>
-                    </div>
-                </ModalShell>
-            )}
+            <ConfirmDialog
+                open={deleting !== null}
+                title={copy.deleteTitle}
+                prompt={copy.deleteConfirm}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                danger
+                onConfirm={() => void confirmDelete()}
+                onCancel={() => setDeleting(null)}
+            />
         </PageShell>
     );
 }

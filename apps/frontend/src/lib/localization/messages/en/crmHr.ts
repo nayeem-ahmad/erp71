@@ -771,6 +771,70 @@ export const crmHrMessages = {
                 serviceBook: { title: "Service Book", description: "One employee’s record: joining, salary revisions, leave taken and exit." },
             },
         },
+        listUi: {
+            hasAccess: 'Has access',
+            unfilled: 'Unfilled',
+            departmentsStats: 'Department summary',
+            designationsStats: 'Designation summary',
+            levelsStats: 'Level summary',
+            jobPostsStats: 'Job post summary',
+            applicantsStats: 'Applicant summary',
+            applicationsStats: 'Application summary',
+            stage: 'Stage',
+            period: 'Period',
+            reportStats: 'Report summary',
+            attendanceStats: 'Attendance summary',
+            averageExpected: 'Average expected salary',
+            leaves: {
+                statsLabel: 'Leave request summary',
+                requests: 'Requests',
+                approvedDays: 'Approved days',
+                typesStatsLabel: 'Leave type summary',
+                daysPerYearTotal: 'Days a year, all types',
+            },
+            salaryPayments: {
+                paySalary: 'Pay Salary',
+                employee: 'Employee',
+                payPeriod: 'Pay period',
+                payPeriodMonth: 'Pay period (month)',
+                paymentDate: 'Payment date',
+                method: 'Method',
+                notes: 'Notes',
+                searchPlaceholder: 'Search payments…',
+                addEmployeeFirst: 'Add an employee first to record salary payments.',
+                required: 'Employee, amount and pay period are required.',
+                recorded: 'Salary payment recorded.',
+                deleted: 'Salary payment deleted.',
+                deleteConfirm: 'Delete this salary payment?',
+                statsLabel: 'Salary payment summary',
+                payments: 'Payments',
+                total: 'Total paid',
+                people: 'Employees paid',
+                average: 'Average payment',
+                cash: 'Paid in cash',
+                methods: {
+                    CASH: 'Cash',
+                    BKASH: 'bKash',
+                    NAGAD: 'Nagad',
+                    CARD: 'Card',
+                    BANK: 'Bank',
+                },
+            },
+            punches: {
+                statsLabel: 'In/out summary',
+                records: 'Records',
+                people: 'People',
+                days: 'Days',
+            },
+            employees: {
+                statsLabel: 'Employee summary',
+                employees: 'Employees',
+                active: 'Active',
+                probation: 'Probation',
+                left: 'Inactive or left',
+                systemAccess: 'With system access',
+            },
+        },
         reports: {
             common: {
                 from: "From",
@@ -1714,10 +1778,10 @@ export const crmHrMessages = {
             "actions": "Actions"
         },
         "statuses": {
-            "pending": "PENDING",
-            "approved": "APPROVED",
-            "rejected": "REJECTED",
-            "cancelled": "CANCELLED"
+            "pending": "Pending",
+            "approved": "Approved",
+            "rejected": "Rejected",
+            "cancelled": "Cancelled"
         },
         "approve": "Approve",
         "reject": "Reject",
@@ -1755,11 +1819,11 @@ export const crmHrMessages = {
             "saleId": "Link to a sale ID"
         },
         "statuses": {
-            "pending": "PENDING",
+            "pending": "Pending",
             "inTransit": "IN_TRANSIT",
             "delivered": "DELIVERED",
             "failed": "FAILED",
-            "cancelled": "CANCELLED"
+            "cancelled": "Cancelled"
         }
     },
     "manufacturing": {

@@ -25,7 +25,9 @@ export const customersMessages = {
             "points": "پوائنٹس",
             "pointsSuffix": "پوائنٹ",
             "segment": "درجہ",
-            "registered": "رجسٹرڈ"
+            "registered": "رجسٹرڈ",
+            "lastSale": "آخری فروخت",
+            "noSales": "ابھی تک کوئی فروخت نہیں"
         },
         "filters": {
             "vip": 'VIP',

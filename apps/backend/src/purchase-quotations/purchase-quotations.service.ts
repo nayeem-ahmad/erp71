@@ -1,5 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { paginatedFindMany } from '../common/list-pagination.util';
+import { idsOrNoneClause, searchClause, statusSetClause, type DocumentListFilters } from '../common/document-list-filters';
+import { numberConditionFilter } from '../common/number-condition.util';
+import { resolveOrderBy, type SortableMap } from '../common/sort.util';
+import { startOfZonedToday, zonedDayRange } from '../common/tenant-time.util';
+import { roundMoney } from '@erp71/shared-types';
+import { Prisma } from '@prisma/client';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
@@ -11,6 +17,37 @@ const INCLUDE = {
     store: { select: { name: true } },
     items: { include: { product: { select: { id: true, name: true, sku: true } } } },
 } as const;
+
+const PURCHASE_QUOTATION_SORTABLE: SortableMap = {
+    rfq_number: (dir) => ({ rfq_number: dir }),
+    status: (dir) => ({ status: dir }),
+    total_amount: (dir) => ({ total_amount: dir }),
+    valid_until: (dir) => ({ valid_until: dir }),
+    created_at: (dir) => ({ created_at: dir }),
+    supplier: (dir) => ({ supplier: { name: dir } }),
+};
+
+/** A quotation still waiting on the supplier or on our decision. */
+const PENDING_RFQ_STATUSES = ['DRAFT', 'SENT', 'RECEIVED'];
+/** A quotation that came to nothing carries no value. */
+const DEAD_RFQ_STATUSES = ['CANCELLED', 'REJECTED'];
+
+/** What narrows the purchase-quotations list — and, alike, its stats strip. */
+export interface PurchaseQuotationListFilters extends Partial<Omit<DocumentListFilters, 'timezone'>> {
+    timezone: string;
+}
+
+/** `GET /purchase-quotations/summary` — see `PurchaseQuotationsService.summary`. */
+export interface PurchaseQuotationListSummary {
+    count: number;
+    /** Quoted totals, cancelled and rejected quotations left out. */
+    value: number;
+    pending: number;
+    accepted: { count: number; amount: number };
+    converted: number;
+    /** Still pending or accepted, past their valid-until date. */
+    expired: number;
+}
 
 @Injectable()
 export class PurchaseQuotationsService {
@@ -60,13 +97,37 @@ export class PurchaseQuotationsService {
         });
     }
 
+    /**
+     * The `where` behind the list and its stats strip, so the two always
+     * describe the same documents. The date filter is the document's own
+     * `valid_until`; the created date has a filter of its own.
+     */
+    private listWhere(tenantId: string, opts?: PurchaseQuotationListFilters): Prisma.PurchaseQuotationWhereInput {
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
+        const ownDate = zonedDayRange(opts?.dateFrom, opts?.dateTo, opts?.timezone);
+        const where: Prisma.PurchaseQuotationWhereInput = {
+            tenant_id: tenantId,
+            ...(opts?.storeId ? { store_id: opts.storeId } : {}),
+            ...(created ? { created_at: created } : {}),
+            ...(ownDate ? { valid_until: ownDate } : {}),
+            ...(statusSetClause(opts?.statuses, opts?.statusExclude) as Prisma.PurchaseQuotationWhereInput),
+            ...(opts?.total ? { total_amount: numberConditionFilter(opts.total) } : {}),
+        };
+        const and: Prisma.PurchaseQuotationWhereInput[] = [];
+        const search = searchClause(opts?.search, ['rfq_number', 'notes', 'supplier.name']);
+        if (search) and.push(search as Prisma.PurchaseQuotationWhereInput);
+        const supplier = idsOrNoneClause('supplier_id', opts?.supplierIds);
+        if (supplier) and.push(supplier as Prisma.PurchaseQuotationWhereInput);
+        if (and.length) where.AND = and;
+        return where;
+    }
+
     async findAll(
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string; timezone: string; storeId?: string },
+        opts?: PurchaseQuotationListFilters & { sortBy?: string; sortDir?: string },
     ): Promise<PaginatedResult<unknown>> {
-        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         return paginatedFindMany({
             findMany: (args) =>
                 this.db.purchaseQuotation.findMany({
@@ -74,11 +135,46 @@ export class PurchaseQuotationsService {
                     include: INCLUDE,
                 }),
             count: (args) => this.db.purchaseQuotation.count(args as any),
-            where: { tenant_id: tenantId, ...(opts?.storeId ? { store_id: opts.storeId } : {}), ...(created ? { created_at: created } : {}) },
-            orderBy: { created_at: 'desc' },
+            where: this.listWhere(tenantId, opts) as Record<string, unknown>,
+            orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, PURCHASE_QUOTATION_SORTABLE, { created_at: 'desc' }),
             page,
             limit,
         });
+    }
+
+    /**
+     * The stats strip above the purchase-quotations list, over exactly the
+     * rows it shows: how much is quoted, what is still pending, what was
+     * accepted and turned into orders, and what has run past its validity.
+     */
+    async summary(tenantId: string, opts: PurchaseQuotationListFilters): Promise<PurchaseQuotationListSummary> {
+        const where = this.listWhere(tenantId, opts);
+        const within = (extra: Prisma.PurchaseQuotationWhereInput): Prisma.PurchaseQuotationWhereInput => ({ AND: [where, extra] });
+        const [count, live, pending, accepted, converted, expired] = await Promise.all([
+            this.db.purchaseQuotation.count({ where }),
+            this.db.purchaseQuotation.aggregate({ where: within({ status: { notIn: DEAD_RFQ_STATUSES } }), _sum: { total_amount: true } }),
+            this.db.purchaseQuotation.count({ where: within({ status: { in: PENDING_RFQ_STATUSES } }) }),
+            this.db.purchaseQuotation.aggregate({
+                where: within({ status: 'ACCEPTED' }),
+                _count: { _all: true },
+                _sum: { total_amount: true },
+            }),
+            this.db.purchaseQuotation.count({ where: within({ status: 'CONVERTED' }) }),
+            this.db.purchaseQuotation.count({
+                where: within({
+                    status: { in: [...PENDING_RFQ_STATUSES, 'ACCEPTED'] },
+                    valid_until: { lt: startOfZonedToday(opts.timezone) },
+                }),
+            }),
+        ]);
+        return {
+            count,
+            value: roundMoney(Number(live._sum.total_amount ?? 0)),
+            pending,
+            accepted: { count: accepted._count._all, amount: roundMoney(Number(accepted._sum.total_amount ?? 0)) },
+            converted,
+            expired,
+        };
     }
 
     async findOne(tenantId: string, id: string) {

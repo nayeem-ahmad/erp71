@@ -26,6 +26,8 @@ export const customersMessages = {
                 pointsSuffix: "mata",
                 segment: "Segmen",
                 registered: "Didaftarkan",
+                lastSale: "Jualan Terakhir",
+                noSales: "Tiada jualan lagi",
             },
             filters: {
                 vip: "VIP",
