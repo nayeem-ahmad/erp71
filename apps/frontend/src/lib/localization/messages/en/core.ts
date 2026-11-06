@@ -92,6 +92,9 @@ export const coreMessages = {
             fromAfterTo: 'From must be on or before To',
             date: 'Date',
             pickDate: 'Pick a date',
+            endOfLastMonth: 'End of last month',
+            endOfLastQuarter: 'End of last quarter',
+            endOfLastYear: 'End of last year',
             ops: {
                 between: 'is between',
                 on: 'is on',

@@ -92,6 +92,9 @@ export const coreMessages = {
             fromAfterTo: "„Von“ muss vor oder gleich „Bis“ sein",
             date: 'Datum',
             pickDate: 'Datum wählen',
+            endOfLastMonth: 'Ende letzten Monats',
+            endOfLastQuarter: 'Ende letzten Quartals',
+            endOfLastYear: 'Ende letzten Jahres',
             ops: {
                 between: 'liegt zwischen',
                 on: 'ist am',

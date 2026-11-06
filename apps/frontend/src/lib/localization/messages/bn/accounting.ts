@@ -560,9 +560,6 @@ export const accountingMessages = {
             loadAccountsFailed: "খতিয়ানের হিসাব তালিকা লোড করা যায়নি।",
             openJournal: "জার্নাল খুলুন",
             openVoucherDetail: "সর্বশেষ ভাউচারের বিবরণ খুলুন",
-            accountAria: "লেজার হিসাব",
-            fromDateAria: "লেজার শুরুর তারিখ",
-            toDateAria: "লেজার শেষ তারিখ",
             columns: {
                 voucherNumber: "ভাউচার নং",
                 date: "তারিখ",
@@ -590,10 +587,6 @@ export const accountingMessages = {
             open: "খুলুন",
             accountingJournal: "অ্যাকাউন্টিং জার্নাল",
             emptyMessage: "নির্বাচিত ফিল্টারের জন্য কোনো ভাউচার পাওয়া যায়নি",
-            searchPlaceholder: "ভাউচার নং, বিবরণ বা ধরন দিয়ে জার্নাল সারি অনুসন্ধান...",
-            voucherTypeAria: "জার্নাল ভাউচার ধরন",
-            fromDateAria: "জার্নাল শুরুর তারিখ",
-            toDateAria: "জার্নাল শেষ তারিখ",
             detail: {
                 loading: "ভাউচারের বিবরণ লোড হচ্ছে...",
                 loadFailed: "ভাউচারের বিবরণ লোড করা যায়নি।",
@@ -644,7 +637,6 @@ export const accountingMessages = {
                 editVoucher: "ভাউচার সম্পাদনা",
                 saveChanges: "পরিবর্তন সংরক্ষণ",
                 emptyMessage: "নির্বাচিত ফিল্টারের জন্য কোনো ভাউচার পাওয়া যায়নি",
-                searchPlaceholder: "ভাউচার নং, রেফারেন্স বা ধরন দিয়ে অনুসন্ধান...",
                 deleteConfirm: "ভাউচার {voucherNumber} মুছবেন?",
                 deleteSuccess: "ভাউচার মুছে ফেলা হয়েছে।",
                 deleteFailed: "ভাউচার মুছতে ব্যর্থ।",

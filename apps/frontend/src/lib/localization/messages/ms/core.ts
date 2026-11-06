@@ -92,6 +92,9 @@ export const coreMessages = {
                 fromAfterTo: "\"Dari\" mesti sebelum atau sama dengan \"Hingga\"",
                 date: 'Tarikh',
                 pickDate: 'Pilih tarikh',
+                endOfLastMonth: 'Akhir bulan lepas',
+                endOfLastQuarter: 'Akhir suku tahun lepas',
+                endOfLastYear: 'Akhir tahun lepas',
                 ops: {
                     between: 'antara',
                     on: 'pada',

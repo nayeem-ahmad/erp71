@@ -461,9 +461,6 @@ export const accountingMessages = {
         loadAccountsFailed: 'تعذّر تحميل خيارات حسابات الأستاذ.',
         openJournal: 'فتح اليومية',
         openVoucherDetail: 'فتح تفاصيل آخر قيد',
-        accountAria: 'حساب الأستاذ',
-        fromDateAria: 'تاريخ بداية الأستاذ',
-        toDateAria: 'تاريخ نهاية الأستاذ',
         columns: {
             voucherNumber: 'رقم القيد',
             date: 'التاريخ',
@@ -491,10 +488,6 @@ export const accountingMessages = {
         open: 'فتح',
         accountingJournal: 'يومية المحاسبة',
         emptyMessage: 'لم يُعثر على قيود للفلاتر المحددة',
-        searchPlaceholder: 'ابحث في صفوف اليومية برقم القيد أو الوصف أو النوع...',
-        voucherTypeAria: 'نوع قيد اليومية',
-        fromDateAria: 'تاريخ بداية اليومية',
-        toDateAria: 'تاريخ نهاية اليومية',
         detail: {
             loading: 'جارٍ تحميل تفاصيل القيد...',
             loadFailed: 'تعذّر تحميل تفاصيل القيد.',
@@ -545,7 +538,6 @@ export const accountingMessages = {
             editVoucher: 'تحرير القيد',
             saveChanges: 'حفظ التغييرات',
             emptyMessage: 'لم يُعثر على قيود للفلاتر المحددة',
-            searchPlaceholder: 'ابحث برقم القيد أو المرجع أو النوع...',
             deleteConfirm: 'حذف القيد {voucherNumber}؟',
             deleteSuccess: 'تم حذف القيد.',
             deleteFailed: 'تعذّر حذف القيد.',

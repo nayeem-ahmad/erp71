@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { Prisma } from '@prisma/client';
+import { PostingRuleEventType, Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { AccountCategory, AccountType, ReportScope, TOTAL_SCOPE_KEY, VoucherApprovalStatus, VoucherAttribution, VoucherType } from './accounting.constants';
 import { ageBalance, emptyAgingBuckets, type AgingEntry } from './aging.utils';
@@ -50,6 +50,9 @@ import { isCashDrawer } from './cash-drawer';
 import { manualDrawerProblem } from './cash-account';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
 import { createdAtRange } from '../common/created-range.util';
+import { searchClause, statusSetClause } from '../common/document-list-filters';
+import { numberConditionFilter, readIdListQuery, readNumberConditionQuery } from '../common/number-condition.util';
+import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { AuditService } from '../audit/audit.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { JOB_NAMES } from '../system-health/jobs/job-names';
@@ -74,6 +77,7 @@ import {
     UpdateAccountSubgroupDto,
     UpdatePostingRuleDto,
     ListPostingExceptionsQueryDto,
+    POSTING_EVENT_STATUSES,
     ProfitLossQueryDto,
     BalanceSheetQueryDto,
     CashbookQueryDto,
@@ -93,6 +97,7 @@ import {
     CreateCostCenterDto,
     CostCenterPLQueryDto,
     CreateFixedAssetDto,
+    UpdateFixedAssetDto,
     RunDepreciationDto,
     CreateRecurringJournalDto,
     CreateRecurringVoucherDto,
@@ -112,6 +117,51 @@ export const VOUCHER_NUMBER_PREFIXES: Record<VoucherType, string> = {
 };
 
 export const VOUCHER_NUMBER_PADDING = 5;
+
+/**
+ * The voucher list's sortable columns. The amount is the sum of a voucher's
+ * debit lines rather than a stored column, so it is not one of them.
+ */
+const VOUCHER_SORTABLE: SortableMap = {
+    voucher_number: (dir) => ({ voucher_number: dir }),
+    date: (dir) => [{ date: dir }, { created_at: dir }],
+    created_at: (dir) => ({ created_at: dir }),
+    voucher_type: (dir) => [{ voucher_type: dir }, { date: 'desc' }],
+    reference_number: (dir) => [{ reference_number: dir }, { date: 'desc' }],
+    approval_status: (dir) => [{ approval_status: dir }, { date: 'desc' }],
+};
+const VOUCHER_DEFAULT_ORDER = [{ date: 'desc' }, { created_at: 'desc' }];
+
+/** `GET accounting/vouchers/summary`: the stats strip over every voucher the list's filters match. */
+export interface VoucherListSummary {
+    count: number;
+    /** The vouchers' debits added up — each voucher's total, as the list shows it. */
+    totalAmount: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+    /** Posted by another module (a sale, a purchase, payroll…). */
+    systemCount: number;
+    /** Keyed in by hand. */
+    manualCount: number;
+}
+
+type VoucherListQuery = ListVouchersQueryDto & { timezone: string };
+
+/** `GET accounting/reconciliation/posting-exceptions/summary`: events per status over the list's filters. */
+export interface PostingExceptionSummary {
+    count: number;
+    pending: number;
+    posted: number;
+    failed: number;
+    skipped: number;
+}
+
+/** The event's own text a posting-exceptions search looks in. */
+const POSTING_EVENT_SEARCH_PATHS = ['source_id', 'source_type', 'source_module', 'last_error', 'voucher.voucher_number'] as const;
+
+/** One value as an equality, several as `in` — a single value keeps the plain `where` it always had. */
+const oneOrIn = (values: string[]) => (values.length === 1 ? values[0] : { in: values });
 
 const CREDIT_NORMAL_ACCOUNT_TYPES = new Set<AccountType>([
     AccountType.LIABILITY,
@@ -957,21 +1007,47 @@ export class AccountingService {
         }
     }
 
-    async findVouchers(tenantId: string, query: ListVouchersQueryDto & { timezone: string }) {
-        const page = Math.max(1, Number(query.page ?? 1));
-        const limit = Math.min(Math.max(1, Number(query.limit ?? 20)), 100);
+    /**
+     * The `where` behind the voucher list and its stats strip, so the two
+     * always describe the same vouchers.
+     */
+    private async voucherListWhere(tenantId: string, query: VoucherListQuery): Promise<Prisma.VoucherWhereInput> {
         this.validateDateRange(query.from, query.to);
         const created = createdAtRange(query.createdFrom, query.createdTo, query.timezone);
-        const where = {
+        const types = readIdListQuery(query.voucherType);
+        const approvals = readIdListQuery(query.approvalStatus);
+        const search = searchClause(query.search?.trim() || undefined, ['voucher_number', 'reference_number', 'description']);
+        const where: Prisma.VoucherWhereInput = {
             tenant_id: tenantId,
             // A branch lists its own vouchers; company-level ones (no branch)
             // appear only for the whole tenant.
             ...(query.storeId ? { store_id: query.storeId } : {}),
-            ...(query.voucherType ? { voucher_type: query.voucherType } : {}),
-            ...(query.approvalStatus ? { approval_status: query.approvalStatus } : {}),
+            ...(types ? { voucher_type: oneOrIn(types) } : {}),
+            ...(approvals ? { approval_status: oneOrIn(approvals) } : {}),
+            ...(query.source === 'manual' ? { source_module: null } : {}),
+            ...(query.source === 'system' ? { source_module: { not: null } } : {}),
             ...this.buildVoucherDateRangeFilter(query.from, query.to),
             ...(created ? { created_at: created } : {}),
+            ...(search ? { AND: [search as Prisma.VoucherWhereInput] } : {}),
         };
+
+        const amount = readNumberConditionQuery(query.amount, 'amount');
+        if (!amount) return where;
+        // A voucher's total is the sum of its debit lines, not a stored column,
+        // so the condition is met by grouping the lines of the vouchers the
+        // other filters already match.
+        const matching = await this.db.voucherDetail.groupBy({
+            by: ['voucher_id'],
+            where: { voucher: where },
+            having: { debit_amount: { _sum: numberConditionFilter(amount) } },
+        });
+        return { ...where, id: { in: matching.map((row) => row.voucher_id) } };
+    }
+
+    async findVouchers(tenantId: string, query: VoucherListQuery) {
+        const page = Math.max(1, Number(query.page ?? 1));
+        const limit = Math.min(Math.max(1, Number(query.limit ?? 20)), 100);
+        const where = await this.voucherListWhere(tenantId, query);
 
         const [total, vouchers] = await Promise.all([
             this.db.voucher.count({ where }),
@@ -990,7 +1066,9 @@ export class AccountingService {
                         orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
                     },
                 },
-                orderBy: [{ date: 'desc' }, { created_at: 'desc' }],
+                orderBy: resolveOrderBy(query.sortBy, query.sortDir, VOUCHER_SORTABLE, VOUCHER_DEFAULT_ORDER) as
+                    | Prisma.VoucherOrderByWithRelationInput
+                    | Prisma.VoucherOrderByWithRelationInput[],
                 skip: (page - 1) * limit,
                 take: limit,
             }),
@@ -1004,6 +1082,28 @@ export class AccountingService {
                 total,
                 totalPages: Math.max(1, Math.ceil(total / limit)),
             },
+        };
+    }
+
+    /** The stats strip above the voucher list: the same filters, every matching voucher counted. */
+    async getVoucherListSummary(tenantId: string, query: VoucherListQuery): Promise<VoucherListSummary> {
+        const where = await this.voucherListWhere(tenantId, query);
+        const [count, byStatus, systemCount, totals] = await Promise.all([
+            this.db.voucher.count({ where }),
+            this.db.voucher.groupBy({ by: ['approval_status'], where, _count: { _all: true } }),
+            this.db.voucher.count({ where: { AND: [where, { source_module: { not: null } }] } }),
+            this.db.voucherDetail.aggregate({ where: { voucher: where }, _sum: { debit_amount: true } }),
+        ]);
+        const inStatus = (status: string) =>
+            byStatus.find((row) => row.approval_status === status)?._count?._all ?? 0;
+        return {
+            count,
+            totalAmount: Math.round(Number(totals._sum?.debit_amount ?? 0) * 100) / 100,
+            pending: inStatus(VoucherApprovalStatus.PENDING),
+            approved: inStatus(VoucherApprovalStatus.APPROVED),
+            rejected: inStatus(VoucherApprovalStatus.REJECTED),
+            systemCount,
+            manualCount: Math.max(count - systemCount, 0),
         };
     }
 
@@ -2120,27 +2220,63 @@ export class AccountingService {
         };
     }
 
-    async listPostingExceptions(tenantId: string, query: ListPostingExceptionsQueryDto) {
+    /**
+     * The `where` behind the posting-exceptions list and its stats strip, so
+     * the two always describe the same events.
+     */
+    private postingEventListWhere(tenantId: string, query: ListPostingExceptionsQueryDto): Prisma.PostingEventWhereInput {
         this.validateDateRange(query.from, query.to);
-        const page = Math.max(1, Number(query.page ?? 1));
-        const limit = Math.min(Math.max(1, Number(query.limit ?? 20)), 100);
+        const statuses = readIdListQuery(query.status) ?? [];
+        const exclude = query.statusExclude === 'true' || query.statusExclude === '1';
+        const modules = readIdListQuery(query.module);
+        const search = query.search?.trim() || undefined;
+        const textMatch = searchClause(search, POSTING_EVENT_SEARCH_PATHS) as { OR: Prisma.PostingEventWhereInput[] } | undefined;
+        // The event type is an enum, which Postgres cannot `contains`; match
+        // the typed text against the type names instead ("sale return" finds
+        // sale_return).
+        const typeNeedle = search?.toLowerCase().replace(/[\s-]+/g, '_');
+        const types = typeNeedle
+            ? Object.values(PostingRuleEventType).filter((type) => type.includes(typeNeedle))
+            : [];
+        const searchWhere = textMatch
+            ? { OR: [...textMatch.OR, ...(types.length ? [{ event_type: { in: types } }] : [])] }
+            : undefined;
 
-        const where = {
+        return {
             tenant_id: tenantId,
-            ...(query.status ? { status: query.status } : {}),
-            ...(query.module ? { source_module: query.module } : {}),
-            ...(() => {
-                if (!query.from && !query.to) {
-                    return {};
-                }
-                return {
+            ...(statusSetClause(statuses, exclude) as Prisma.PostingEventWhereInput),
+            ...(modules ? { source_module: oneOrIn(modules) } : {}),
+            ...(query.from || query.to
+                ? {
                     updated_at: {
                         ...(query.from ? { gte: this.toStartOfDay(query.from) } : {}),
                         ...(query.to ? { lte: this.toEndOfDay(query.to) } : {}),
                     },
-                };
-            })(),
+                }
+                : {}),
+            ...(searchWhere ? { AND: [searchWhere] } : {}),
         };
+    }
+
+    /** The stats strip above the posting-exceptions list: the same filters, counted per status. */
+    async getPostingExceptionSummary(tenantId: string, query: ListPostingExceptionsQueryDto): Promise<PostingExceptionSummary> {
+        const where = this.postingEventListWhere(tenantId, query);
+        const byStatus = await this.db.postingEvent.groupBy({ by: ['status'], where, _count: { _all: true } });
+        const summary: PostingExceptionSummary = { count: 0, pending: 0, posted: 0, failed: 0, skipped: 0 };
+        for (const row of byStatus) {
+            const count = row._count?._all ?? 0;
+            summary.count += count;
+            if ((POSTING_EVENT_STATUSES as readonly string[]).includes(row.status)) {
+                summary[row.status as keyof Omit<PostingExceptionSummary, 'count'>] = count;
+            }
+        }
+        return summary;
+    }
+
+    async listPostingExceptions(tenantId: string, query: ListPostingExceptionsQueryDto) {
+        const page = Math.max(1, Number(query.page ?? 1));
+        const limit = Math.min(Math.max(1, Number(query.limit ?? 20)), 100);
+        const where = this.postingEventListWhere(tenantId, query);
 
         const [total, events] = await Promise.all([
             this.db.postingEvent.count({ where }),
@@ -3277,12 +3413,30 @@ export class AccountingService {
         });
     }
 
+    /**
+     * Budget vs actual — always one row per account, so an account's actual is
+     * counted once however many budget rows it has.
+     *
+     * A budget row (AccountBudget) is either monthly (month 1–12) or annual
+     * (month null). The rule:
+     *  - Month view (`month` given): the account's budget row for that month
+     *    against its actual for that calendar month. Annual rows carry no
+     *    monthly phasing, so an account budgeted only annually is not listed.
+     *  - Full-year view: an annual row, when the account has one, is the year's
+     *    budget and its monthly rows are read as the phasing of it (not added
+     *    on top); otherwise the budget is the sum of the account's monthly rows
+     *    for the year. The actual is the account's actual for the whole
+     *    calendar year. `months` is how many monthly rows make up the budget
+     *    (null when it is the annual row), so a year budgeted for only some of
+     *    its months shows as such.
+     */
     async getBudgetVsActual(tenantId: string, query: BudgetVsActualQueryDto, storeId?: string) {
+        const isMonthView = query.month !== undefined && query.month !== null;
         const budgets = await this.db.accountBudget.findMany({
             where: {
                 tenant_id: tenantId,
                 fiscal_year: query.fiscalYear,
-                ...(query.month !== undefined ? { month: query.month } : {}),
+                ...(isMonthView ? { month: query.month } : {}),
             },
             include: { account: { include: { group: true } } },
         });
@@ -3291,18 +3445,43 @@ export class AccountingService {
             return { fiscal_year: query.fiscalYear, month: query.month ?? null, rows: [], totals: { budget: 0, actual: 0, variance: 0 } };
         }
 
-        // Determine date range for actuals
+        type AccountBudgetLine = {
+            account: (typeof budgets)[number]['account'];
+            /** The annual row's amount and when it was last set, if the account has one. */
+            annual: { amount: number; updatedAt: number } | null;
+            monthly: number;
+            months: number;
+        };
+        const byAccount = new Map<string, AccountBudgetLine>();
+        for (const budget of budgets) {
+            const line = byAccount.get(budget.account_id)
+                ?? { account: budget.account, annual: null, monthly: 0, months: 0 };
+            const amount = Number(budget.amount);
+            if (budget.month === null || budget.month === undefined) {
+                // The unique key treats a null month as distinct, so a second annual
+                // row can exist; the one set last is the budget.
+                const updatedAt = budget.updated_at ? new Date(budget.updated_at).getTime() : 0;
+                if (!line.annual || updatedAt >= line.annual.updatedAt) line.annual = { amount, updatedAt };
+            } else {
+                line.monthly += amount;
+                line.months += 1;
+            }
+            byAccount.set(budget.account_id, line);
+        }
+
+        // Determine date range for actuals: the month's window in a month view,
+        // the calendar year otherwise.
         let fromDate: Date;
         let toDate: Date;
-        if (query.month) {
-            fromDate = new Date(Date.UTC(query.fiscalYear, query.month - 1, 1));
-            toDate = new Date(Date.UTC(query.fiscalYear, query.month, 0, 23, 59, 59, 999));
+        if (isMonthView) {
+            fromDate = new Date(Date.UTC(query.fiscalYear, query.month! - 1, 1));
+            toDate = new Date(Date.UTC(query.fiscalYear, query.month!, 0, 23, 59, 59, 999));
         } else {
             fromDate = new Date(Date.UTC(query.fiscalYear, 0, 1));
             toDate = new Date(Date.UTC(query.fiscalYear, 11, 31, 23, 59, 59, 999));
         }
 
-        const accountIds = budgets.map((b) => b.account_id);
+        const accountIds = [...byAccount.keys()];
         const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
         const details = await this.db.voucherDetail.findMany({
             where: {
@@ -3323,13 +3502,18 @@ export class AccountingService {
         let totalBudget = 0;
         let totalActual = 0;
 
-        const rows = budgets.map((budget) => {
-            const t = actualMap.get(budget.account_id) ?? { debit: 0, credit: 0 };
-            const accountType = budget.account.type as AccountType;
+        const lines = [...byAccount.values()].sort((a, b) =>
+            (a.account.code ?? '').localeCompare(b.account.code ?? '') || a.account.name.localeCompare(b.account.name));
+
+        const rows = lines.map((line) => {
+            const account = line.account;
+            const t = actualMap.get(account.id) ?? { debit: 0, credit: 0 };
+            const accountType = account.type as AccountType;
             const actual = CREDIT_NORMAL_ACCOUNT_TYPES.has(accountType)
                 ? this.roundAmount(t.credit - t.debit)
                 : this.roundAmount(t.debit - t.credit);
-            const budgetAmount = this.roundAmount(Number(budget.amount));
+            const useAnnual = !isMonthView && line.annual !== null;
+            const budgetAmount = this.roundAmount(useAnnual ? line.annual!.amount : line.monthly);
             const variance = this.roundAmount(budgetAmount - actual);
             const variancePct = budgetAmount !== 0 ? this.roundAmount((variance / Math.abs(budgetAmount)) * 100) : null;
 
@@ -3338,16 +3522,18 @@ export class AccountingService {
 
             return {
                 account: {
-                    id: budget.account.id,
-                    name: budget.account.name,
-                    code: budget.account.code,
-                    type: budget.account.type,
-                    group: { id: budget.account.group.id, name: budget.account.group.name },
+                    id: account.id,
+                    name: account.name,
+                    code: account.code,
+                    type: account.type,
+                    group: { id: account.group.id, name: account.group.name },
                 },
                 budget: budgetAmount,
                 actual,
                 variance,
                 variance_pct: variancePct,
+                /** Monthly budget rows behind `budget`; null when it is the annual budget. */
+                months: useAnnual ? null : line.months,
             };
         });
 
@@ -3473,6 +3659,7 @@ export class AccountingService {
                     depreciation_method: (dto.depreciationMethod as any) ?? 'STRAIGHT_LINE',
                     asset_account_id: dto.assetAccountId,
                     depreciation_account_id: dto.depreciationAccountId,
+                    category: dto.category ?? null,
                 },
             });
 
@@ -3506,6 +3693,19 @@ export class AccountingService {
             where: { tenant_id: tenantId },
             include: { depreciationEntries: { orderBy: [{ period_year: 'desc' }, { period_month: 'desc' }], take: 1 } },
             orderBy: { asset_code: 'asc' },
+        });
+    }
+
+    /** Sets or clears an asset's category; `category` left out changes nothing. */
+    async updateFixedAsset(tenantId: string, id: string, dto: UpdateFixedAssetDto) {
+        const asset = await this.db.fixedAsset.findFirst({ where: { id, tenant_id: tenantId }, select: { id: true } });
+        if (!asset) throw new NotFoundException('Fixed asset not found');
+        if (dto.category === undefined) {
+            return this.db.fixedAsset.findFirst({ where: { id, tenant_id: tenantId } });
+        }
+        return this.db.fixedAsset.update({
+            where: { id: asset.id },
+            data: { category: dto.category ?? null },
         });
     }
 

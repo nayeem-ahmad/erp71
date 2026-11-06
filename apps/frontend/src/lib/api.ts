@@ -1655,6 +1655,27 @@ const purchaseReturnsList = purchaseDocumentList<PurchaseDocumentListFilterParam
 const purchaseOrdersList = purchaseDocumentList<PurchaseDocumentListFilterParams, PurchaseOrderListSummary>('/purchase-orders');
 const purchaseQuotationsList = purchaseDocumentList<PurchaseDocumentListFilterParams, PurchaseQuotationListSummary>('/purchase-quotations');
 
+/** What narrows the voucher list — sent alike to the list and to its stats strip. */
+export interface VoucherListFilterParams {
+    /** Voucher number, reference or narration. */
+    search?: string;
+    /** One voucher type, or several (any of them). */
+    voucherType?: string | readonly string[];
+    /** The voucher date, whole days. */
+    from?: string;
+    to?: string;
+    createdFrom?: string;
+    createdTo?: string;
+    /** One approval status, or several. `PENDING` alone is the approval queue. */
+    approvalStatus?: string | readonly string[];
+    /** The voucher's total. */
+    amount?: NumberCondition | null;
+    /** Keyed in by hand, or posted by another module. */
+    source?: 'manual' | 'system';
+    /** A branch or `'all'`, from the page's branch filter. */
+    storeId?: string;
+}
+
 /**
  * What narrows a customer-side document list — sales returns, exchanges,
  * quotations, sales orders, customer payments — sent alike to the list and
@@ -1676,6 +1697,82 @@ export interface SalesDocumentListFilterParams {
     dateTo?: string;
     /** A branch or `'all'`, from the page's branch filter. */
     storeId?: string;
+}
+
+/** One server page of the voucher list. */
+export type VoucherListPageParams = {
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortDir?: 'asc' | 'desc';
+};
+
+/** `GET /accounting/vouchers/summary`. */
+export interface VoucherListSummary {
+    count: number;
+    totalAmount: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+    /** Posted by another module — a sale, a purchase, payroll. */
+    systemCount: number;
+    /** Keyed in by hand. */
+    manualCount: number;
+}
+
+/** The posting-exceptions list's filters, shared by the list and its summary. */
+export interface PostingExceptionFilterParams {
+    /** One status, or several. */
+    status?: string | readonly string[];
+    /** With `status`: every status but those. */
+    statusExclude?: boolean;
+    /** One source module, or several. */
+    module?: string | readonly string[];
+    /** Source id/type/module, voucher number, error text or event type. */
+    search?: string;
+    /** Last activity, whole days. */
+    from?: string;
+    to?: string;
+}
+
+/** `GET /accounting/reconciliation/posting-exceptions/summary`. */
+export interface PostingExceptionSummary {
+    count: number;
+    pending: number;
+    posted: number;
+    failed: number;
+    skipped: number;
+}
+
+function setPostingExceptionParams(query: URLSearchParams, params: PostingExceptionFilterParams): void {
+    const list = (value: string | readonly string[] | undefined) =>
+        (typeof value === 'string' ? value : value?.join(',')) || undefined;
+    const status = list(params.status);
+    const modules = list(params.module);
+    if (status) query.set('status', status);
+    if (status && params.statusExclude) query.set('statusExclude', 'true');
+    if (modules) query.set('module', modules);
+    if (params.search) query.set('search', params.search);
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
+}
+
+function setVoucherListParams(query: URLSearchParams, params: VoucherListFilterParams): void {
+    const list = (value: string | readonly string[] | undefined) =>
+        (typeof value === 'string' ? value : value?.join(',')) || undefined;
+    const voucherType = list(params.voucherType);
+    const approvalStatus = list(params.approvalStatus);
+    if (params.search) query.set('search', params.search);
+    if (voucherType) query.set('voucherType', voucherType);
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
+    if (params.createdFrom) query.set('createdFrom', params.createdFrom);
+    if (params.createdTo) query.set('createdTo', params.createdTo);
+    if (approvalStatus) query.set('approvalStatus', approvalStatus);
+    const amount = numberConditionParam(params.amount);
+    if (amount) query.set('amount', amount);
+    if (params.source) query.set('source', params.source);
+    if (params.storeId) query.set('storeId', params.storeId);
 }
 
 function setSalesDocumentListParams(query: URLSearchParams, params: SalesDocumentListFilterParams): void {
@@ -3317,18 +3414,20 @@ export const api = {
         return fetchWithAuth(`/accounting/accounts/next-code?${query.toString()}`);
     },
     getVoucherNumberPreview: (voucherType: string) => fetchWithAuth(`/accounting/vouchers/next-number?voucherType=${encodeURIComponent(voucherType)}`),
-    getVouchers: (params?: { voucherType?: string; from?: string; to?: string; createdFrom?: string; createdTo?: string; approvalStatus?: string; page?: number; limit?: number; storeId?: string }) => {
+    getVouchers: (params?: VoucherListFilterParams & VoucherListPageParams) => {
         const query = new URLSearchParams();
-        if (params?.voucherType) query.set('voucherType', params.voucherType);
-        if (params?.from) query.set('from', params.from);
-        if (params?.to) query.set('to', params.to);
-        if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
-        if (params?.createdTo) query.set('createdTo', params.createdTo);
-        if (params?.approvalStatus) query.set('approvalStatus', params.approvalStatus);
+        setVoucherListParams(query, params ?? {});
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
-        if (params?.storeId) query.set('storeId', params.storeId);
+        if (params?.sortBy) query.set('sortBy', params.sortBy);
+        if (params?.sortDir) query.set('sortDir', params.sortDir);
         return fetchWithAuth(`/accounting/vouchers${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    /** The stats strip above the voucher list — the list's own filters, every matching voucher counted. */
+    getVouchersSummary: (params: VoucherListFilterParams = {}): Promise<VoucherListSummary> => {
+        const query = new URLSearchParams();
+        setVoucherListParams(query, params);
+        return fetchWithAuth(`/accounting/vouchers/summary${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getVoucher: (id: string) => fetchWithAuth(`/accounting/vouchers/${id}`),
     getLedger: (accountId: string, params?: { from?: string; to?: string; storeId?: string } & ApprovedOnlyParams) => {
@@ -3426,15 +3525,18 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getPostingExceptions: (params?: { status?: string; module?: string; from?: string; to?: string; page?: number; limit?: number }) => {
+    getPostingExceptions: (params?: PostingExceptionFilterParams & { page?: number; limit?: number }) => {
         const query = new URLSearchParams();
-        if (params?.status) query.set('status', params.status);
-        if (params?.module) query.set('module', params.module);
-        if (params?.from) query.set('from', params.from);
-        if (params?.to) query.set('to', params.to);
+        setPostingExceptionParams(query, params ?? {});
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
         return fetchWithAuth(`/accounting/reconciliation/posting-exceptions${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    /** The stats strip above the posting-exceptions list — the list's own filters, counted per status. */
+    getPostingExceptionsSummary: (params: PostingExceptionFilterParams = {}): Promise<PostingExceptionSummary> => {
+        const query = new URLSearchParams();
+        setPostingExceptionParams(query, params);
+        return fetchWithAuth(`/accounting/reconciliation/posting-exceptions/summary${query.toString() ? `?${query.toString()}` : ''}`);
     },
     retryPostingException: (id: string) => fetchWithAuth(`/accounting/reconciliation/posting-exceptions/${id}/retry`, {
         method: 'POST',
@@ -6186,6 +6288,9 @@ export const api = {
     listFixedAssets: () => fetchWithAuth('/accounting/fixed-assets'),
     createFixedAsset: (data: any) =>
         fetchWithAuth('/accounting/fixed-assets', { method: 'POST', body: JSON.stringify(data) }),
+    /** Only the category can change after an asset is recorded; null clears it. */
+    updateFixedAsset: (id: string, data: { category: string | null }) =>
+        fetchWithAuth(`/accounting/fixed-assets/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     runDepreciation: (data: { year: number; month: number }) =>
         fetchWithAuth('/accounting/fixed-assets/run-depreciation', { method: 'POST', body: JSON.stringify(data) }),
     getDepreciationSchedule: (id: string) => fetchWithAuth(`/accounting/fixed-assets/${id}/schedule`),

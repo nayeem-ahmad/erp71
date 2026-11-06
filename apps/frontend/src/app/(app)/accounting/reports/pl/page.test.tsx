@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ProfitLossPage from './page';
 import { api } from '@/lib/api';
 import { printStatementReport } from '@/lib/statement-printer';
@@ -8,6 +8,12 @@ import { mockBranchScope, resetToHeaderSpy } from '@/test-utils/branch-scope';
 
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 jest.mock('@/lib/hooks/useSalePrintPrefs', () => require('@/test-utils/print-paper').salePrintPrefsModuleMock());
+
+// A wide screen, so the report's chips sit in the toolbar rather than the phone's Filters sheet.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
+}));
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -88,7 +94,7 @@ describe('ProfitLossPage — report scope', () => {
         render(<ProfitLossPage />);
         await waitFor(() => expect(api.getProfitLoss).toHaveBeenCalled());
 
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Compare branches' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Compare branches' }));
 
         await waitFor(() => {
             expect(api.getProfitLoss).toHaveBeenLastCalledWith(
@@ -96,6 +102,9 @@ describe('ProfitLossPage — report scope', () => {
             );
         });
         expect(screen.queryByRole('combobox', { name: 'Branch' })).not.toBeInTheDocument();
+        // A rarer option: behind More in the one-row toolbar.
+        expect(screen.queryByText('Company overhead')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /^More/ }));
         expect(screen.getByText('Company overhead')).toBeInTheDocument();
         expect(localStorage.getItem('report_scope')).toBe('compare');
     });
@@ -105,7 +114,7 @@ describe('ProfitLossPage — report scope', () => {
         render(<ProfitLossPage />);
         await waitFor(() => expect(api.getProfitLoss).toHaveBeenCalled());
 
-        expect(screen.queryByRole('checkbox', { name: 'Compare branches' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Compare branches' })).not.toBeInTheDocument();
         expect(screen.queryByRole('option', { name: 'All branches' })).not.toBeInTheDocument();
     });
 
@@ -170,7 +179,7 @@ describe('ProfitLossPage — detail level', () => {
         (api.getProfitLoss as jest.Mock).mockResolvedValue(
             groupedResponse('subgroup', [{ id: 'sg-sales', name: 'Sales', balance: 1700 }]),
         );
-        fireEvent.click(screen.getByRole('radio', { name: 'Subgroup' }));
+        fireEvent.change(screen.getByRole('combobox', { name: 'Detail' }), { target: { value: 'subgroup' } });
 
         await waitFor(() => {
             expect(api.getProfitLoss).toHaveBeenCalledWith(
@@ -307,5 +316,54 @@ describe('ProfitLossPage — print', () => {
         resolveReport(response);
         await screen.findByText('Sales Revenue');
         expect(screen.getByRole('button', { name: /print/i })).toBeEnabled();
+    });
+});
+
+describe('ProfitLossPage — strip and search', () => {
+    const response = {
+        filters: { from: '2026-01-01', to: '2026-06-30' },
+        revenue: {
+            groups: [{
+                group: { id: 'g-rev', name: 'Sales', code: '4100' },
+                rows: [
+                    { id: 'a-sales', name: 'Sales Revenue', code: '4101', balance: 2000 },
+                    { id: 'a-other', name: 'Other Income', code: '4102', balance: 500 },
+                ],
+                total: 2500,
+            }],
+            total: 2500,
+        },
+        expenses: { groups: [], total: 3000 },
+        net_profit: -500,
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        localStorage.clear();
+        setWorkspaceItem('tenant_id', 'tenant-1');
+        setWorkspaceItem('store_id', 's1');
+        mockBranchScope({ branches: mockStores, headerBranchId: 's1', value: 's1', canSeeAll: true });
+        (api.getProfitLoss as jest.Mock).mockResolvedValue(response);
+    });
+
+    it('carries the statement totals into the strip, a loss in red', async () => {
+        render(<ProfitLossPage />);
+        await screen.findByText('Sales Revenue');
+
+        const strip = screen.getByRole('region', { name: 'Report figures' });
+        const loss = within(strip).getByText('Net Loss').closest('div') as HTMLElement;
+        expect(within(loss).getByText('৳ 500')).toHaveClass('text-red-600');
+        expect(within(strip).getByText('-20.0%')).toBeInTheDocument();
+    });
+
+    it('finds an account row without changing the statement totals', async () => {
+        render(<ProfitLossPage />);
+        await screen.findByText('Sales Revenue');
+
+        fireEvent.change(screen.getByPlaceholderText('Search accounts…'), { target: { value: 'other' } });
+
+        expect(screen.queryByText('Sales Revenue')).not.toBeInTheDocument();
+        expect(screen.getByText('Other Income')).toBeInTheDocument();
+        expect(screen.getByText('Total Revenue', { selector: 'span' }).nextSibling).toHaveTextContent('2,500');
     });
 });

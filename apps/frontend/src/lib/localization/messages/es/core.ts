@@ -92,6 +92,9 @@ export const coreMessages = {
             fromAfterTo: "«Desde» debe ser anterior o igual a «Hasta»",
             date: 'Fecha',
             pickDate: 'Elige una fecha',
+            endOfLastMonth: 'Fin del mes pasado',
+            endOfLastQuarter: 'Fin del trimestre pasado',
+            endOfLastYear: 'Fin del año pasado',
             ops: {
                 between: 'está entre',
                 on: 'es el',

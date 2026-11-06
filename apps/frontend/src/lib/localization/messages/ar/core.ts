@@ -92,6 +92,9 @@ export const coreMessages = {
             fromAfterTo: 'يجب أن يكون «من» قبل «إلى» أو مساويًا له',
             date: 'التاريخ',
             pickDate: 'اختر تاريخًا',
+            endOfLastMonth: 'نهاية الشهر الماضي',
+            endOfLastQuarter: 'نهاية الربع الماضي',
+            endOfLastYear: 'نهاية العام الماضي',
             ops: {
                 between: 'بين',
                 on: 'في',

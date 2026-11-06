@@ -1,0 +1,62 @@
+/** Accounting list UI (Sales list pattern) — books pages. */
+export const accountingBooksUiMessages = {
+    accountingBooksUi: {
+        common: {
+            voucherType: 'Tipo de comprobante',
+            side: 'Lado',
+            entries: 'Asientos',
+            openingBalance: 'Saldo inicial',
+            closingBalance: 'Saldo final',
+            totalDebit: 'Total débito',
+            totalCredit: 'Total crédito',
+            neutral: 'Neutro',
+        },
+        ledger: {
+            subtitle: 'Revise una cuenta a la vez con saldo inicial, movimiento del período, posición de cierre y detalle de comprobantes.',
+            loadFailed: 'No se pudo cargar el libro mayor.',
+            statsLabel: 'Resumen del libro mayor',
+        },
+        cashbook: {
+            loadFailed: 'No se pudo cargar el libro de caja',
+            statsLabel: 'Resumen del libro de caja',
+            flow: 'Cobro o pago',
+            totalReceipts: 'Total de cobros',
+            totalPayments: 'Total de pagos',
+        },
+        bankbook: {
+            loadFailed: 'No se pudo cargar el libro de bancos',
+            statsLabel: 'Resumen del libro de bancos',
+            bankAccount: 'Cuenta bancaria',
+            flow: 'Depósito o retiro',
+            totalDeposits: 'Total de depósitos',
+            totalWithdrawals: 'Total de retiros',
+        },
+        expenseReports: {
+            statsLabel: 'Resumen del informe de gastos',
+            months: 'Meses',
+            periods: 'Períodos',
+            highestMonth: 'Mes más alto',
+            highestPeriod: 'Período más alto',
+            topHead: 'Concepto principal',
+        },
+        trialBalance: {
+            statsLabel: 'Resumen del balance de comprobación',
+            accountType: 'Tipo de cuenta',
+            accounts: 'Cuentas',
+            rows: 'Filas',
+            branches: 'Sucursales',
+            searchPlaceholder: 'Buscar por código, cuenta o grupo…',
+        },
+        cashFlow: {
+            statsLabel: 'Resumen del flujo de efectivo',
+            operating: 'Operación',
+            investing: 'Inversión',
+            financing: 'Financiación',
+            netSection: '{label} neto',
+            openingCash: 'Saldo inicial de efectivo',
+            closingCash: 'Saldo final de efectivo',
+            searchPlaceholder: 'Buscar actividades…',
+            noMatches: 'Ninguna actividad coincide con la búsqueda',
+        },
+    },
+} as const;

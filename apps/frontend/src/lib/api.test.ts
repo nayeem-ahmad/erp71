@@ -1599,6 +1599,44 @@ describe('api.getPostingExceptions', () => {
         expect(url).toContain('/accounting/reconciliation/posting-exceptions');
         expect(url).toContain('status=FAILED');
     });
+
+    it('sends status and module sets comma-joined, with the search and the exclude switch', async () => {
+        mockOk({ data: [] });
+        await api.getPostingExceptions({
+            status: ['posted', 'skipped'],
+            statusExclude: true,
+            module: ['sales', 'purchases'],
+            search: 'INV 1',
+            page: 2,
+            limit: 20,
+        });
+        const query = new URL(lastUrl(), 'http://localhost').searchParams;
+        expect(query.get('status')).toBe('posted,skipped');
+        expect(query.get('statusExclude')).toBe('true');
+        expect(query.get('module')).toBe('sales,purchases');
+        expect(query.get('search')).toBe('INV 1');
+        expect(query.get('page')).toBe('2');
+    });
+
+    it('drops the exclude switch when no status is chosen', async () => {
+        mockOk({ data: [] });
+        await api.getPostingExceptions({ status: [], statusExclude: true });
+        expect(lastUrl()).not.toContain('statusExclude');
+    });
+});
+
+describe('api.getPostingExceptionsSummary', () => {
+    it('fetches the summary with the list\'s filters and no paging', async () => {
+        mockOk({ count: 0 });
+        await api.getPostingExceptionsSummary({ status: 'failed', module: 'sales', from: '2026-06-01' });
+        const url = lastUrl();
+        expect(url).toContain('/accounting/reconciliation/posting-exceptions/summary?');
+        const query = new URL(url, 'http://localhost').searchParams;
+        expect(query.get('status')).toBe('failed');
+        expect(query.get('module')).toBe('sales');
+        expect(query.get('from')).toBe('2026-06-01');
+        expect(query.has('page')).toBe(false);
+    });
 });
 
 describe('api.retryPostingException', () => {
@@ -1809,6 +1847,16 @@ describe('api.createFixedAsset', () => {
         mockOk({ data: {} });
         await api.createFixedAsset({ name: 'Server', value: 50000 });
         expect(lastOpts().method).toBe('POST');
+    });
+});
+
+describe('api.updateFixedAsset', () => {
+    it('patches the category of /accounting/fixed-assets/:id', async () => {
+        mockOk({ data: {} });
+        await api.updateFixedAsset('fa1', { category: 'Vehicles' });
+        expect(lastOpts().method).toBe('PATCH');
+        expect(lastUrl()).toContain('/accounting/fixed-assets/fa1');
+        expect(JSON.parse(lastOpts().body as string)).toEqual({ category: 'Vehicles' });
     });
 });
 

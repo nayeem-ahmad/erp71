@@ -9,9 +9,18 @@ import { formatMessage, useI18n } from '@/lib/i18n';
 import { formatCreatedRangeLabel, isCreatedRangeEmpty, type CreatedRange, type CreatedRangePreset } from '@/lib/created-range';
 import { formatNumberCondition, type NumberCondition } from '@/lib/number-condition';
 import CreatedRangeFilter, { CreatedRangePanel } from './CreatedRangeFilter';
-import { MultiSelectPanel, NumberConditionPanel, optionLabel, type ListFilterOption } from './filter-panels';
+import {
+    DatePanel,
+    MultiSelectPanel,
+    NumberConditionPanel,
+    SingleSelectPanel,
+    formatDateChip,
+    optionLabel,
+    type DatePreset,
+    type ListFilterOption,
+} from './filter-panels';
 
-export type { ListFilterOption } from './filter-panels';
+export type { DatePreset, ListFilterOption } from './filter-panels';
 
 /**
  * A list's filters, declared as data and drawn by `DataTable` in its toolbar —
@@ -20,14 +29,34 @@ export type { ListFilterOption } from './filter-panels';
  *
  * A `select` filter either narrows one of the table's own columns
  * (`columnId`, filtered on the rows already loaded) or is the page's to apply
- * (`value`/`onChange`, e.g. sent to the server).
+ * (`value`/`onChange`, e.g. sent to the server). With `searchable` it is a
+ * chip opening a searchable list instead of a native select.
+ *
+ * A `date` filter is one day — a report's as-of date.
+ *
+ * `required` marks a filter the page cannot run without — a report's as-of
+ * date, its period, its fiscal year (see `RequiredFilter`).
  *
  * `more` keeps a filter behind the toolbar's More button in the one-row
  * layout (`DataTable`'s `filterLayout="row"`) — the rarely used ones, so the
  * row holds the few people reach for.
  */
+/**
+ * A filter that always holds a value: a report is always run for some day,
+ * some period, some year. It offers no "All" and no Clear, its chip has no ✕,
+ * and sitting at its default it is not "on" — not counted, not tinted, left
+ * alone by Clear all. With `defaultValue`, a required filter moved off that
+ * value counts as on, and Clear all puts it back. Its chip still names its
+ * value, so the report's scope stays in sight.
+ */
+export type RequiredFilter<V> = {
+    required?: boolean;
+    /** What Clear all goes back to; without it a required filter is never "on". */
+    defaultValue?: V;
+};
+
 export type ListFilter =
-    | {
+    | ({
           id: string;
           type: 'select';
           label: string;
@@ -39,9 +68,16 @@ export type ListFilter =
           /** A scope can pin the value, so the control stays visible but refuses a choice. */
           disabled?: boolean;
           title?: string;
+          /**
+           * A chip opening a search box over the options, for a list too long
+           * to scroll (an account out of the chart of accounts). Still one pick.
+           */
+          searchable?: boolean;
+          /** Asks for options matching typed text, as `multi-select` does. Implies `searchable`. */
+          loadOptions?: (query: string) => Promise<readonly ListFilterOption[]>;
           more?: boolean;
-      }
-    | {
+      } & RequiredFilter<string>)
+    | ({
           id: string;
           type: 'multi-select';
           label: string;
@@ -58,7 +94,7 @@ export type ListFilter =
           /** A search box over `options`; on by default past eight of them. */
           searchable?: boolean;
           more?: boolean;
-      }
+      } & RequiredFilter<readonly string[]>)
     | {
           id: string;
           type: 'number';
@@ -69,7 +105,7 @@ export type ListFilter =
           money?: boolean;
           more?: boolean;
       }
-    | {
+    | ({
           id: string;
           type: 'date-range';
           /** Names the date; defaults to "Created". */
@@ -83,7 +119,18 @@ export type ListFilter =
           /** Asks for a custom range as is between / on / before / after. */
           operators?: boolean;
           more?: boolean;
-      }
+      } & RequiredFilter<CreatedRange>)
+    | ({
+          id: string;
+          type: 'date';
+          label: string;
+          /** `YYYY-MM-DD`, or null for no day. */
+          value: string | null;
+          onChange: (next: string | null) => void;
+          /** The shortcuts the chip offers; defaults to today, yesterday, end of last month and of last year. */
+          presets?: readonly DatePreset[];
+          more?: boolean;
+      } & RequiredFilter<string>)
     | {
           id: string;
           type: 'toggle';
@@ -104,11 +151,53 @@ export type ResolvedListFilter =
     | Extract<ListFilter, { type: 'multi-select' }>
     | Extract<ListFilter, { type: 'number' }>
     | Extract<ListFilter, { type: 'date-range' }>
+    | Extract<ListFilter, { type: 'date' }>
     | Extract<ListFilter, { type: 'toggle' }>;
 
-export function isFilterActive(filter: ResolvedListFilter): boolean {
+/** A select drawn as a chip with a searchable list rather than a native select. */
+function isSearchableSelect(filter: ResolvedListFilter): boolean {
+    return filter.type === 'select' && Boolean(filter.searchable || filter.loadOptions);
+}
+
+/** Filters whose editor is a panel of its own — a chip with a popover, a row that opens in the sheet. */
+type PanelFilter = Extract<ResolvedListFilter, { type: 'multi-select' | 'number' | 'date-range' | 'date' | 'select' }>;
+
+type RequirableFilter = Extract<ResolvedListFilter, { type: 'select' | 'multi-select' | 'date' | 'date-range' }>;
+
+/** The filter, when it is one the page cannot run without — see `RequiredFilter`. */
+function requiredFilter(filter: ResolvedListFilter): RequirableFilter | null {
+    return filter.type !== 'number' && filter.type !== 'toggle' && filter.required ? filter : null;
+}
+
+/** Whether a filter is one the page cannot run without — see `RequiredFilter`. */
+export function isRequiredFilter(filter: ResolvedListFilter): boolean {
+    return requiredFilter(filter) !== null;
+}
+
+/** Whether a required filter sits at its default — or has no default to leave. */
+function atDefault(filter: RequirableFilter): boolean {
     switch (filter.type) {
         case 'select':
+        case 'date':
+            return filter.defaultValue === undefined || (filter.value ?? null) === filter.defaultValue;
+        case 'multi-select': {
+            const fallback = filter.defaultValue;
+            if (fallback === undefined) return true;
+            return filter.value.length === fallback.length && fallback.every((v) => filter.value.includes(v));
+        }
+        case 'date-range': {
+            const fallback = filter.defaultValue;
+            if (fallback === undefined) return true;
+            return (filter.value?.from ?? '') === (fallback.from ?? '') && (filter.value?.to ?? '') === (fallback.to ?? '');
+        }
+    }
+}
+
+/** Whether a filter holds anything at all, ignoring whether that is its default. */
+function hasValue(filter: ResolvedListFilter): boolean {
+    switch (filter.type) {
+        case 'select':
+        case 'date':
             return Boolean(filter.value);
         case 'multi-select':
             return filter.value.length > 0;
@@ -121,7 +210,43 @@ export function isFilterActive(filter: ResolvedListFilter): boolean {
     }
 }
 
+/**
+ * Whether a filter is "on": narrowing the list, counted, tinted, and undone by
+ * Clear all. A required filter is on only once moved off its default.
+ */
+export function isFilterActive(filter: ResolvedListFilter): boolean {
+    const required = requiredFilter(filter);
+    if (required) return !atDefault(required);
+    return hasValue(filter);
+}
+
+/** Whether a chip names its value: when on, and a required filter always. */
+function showsValue(filter: ResolvedListFilter): boolean {
+    return isFilterActive(filter) || (isRequiredFilter(filter) && hasValue(filter));
+}
+
+/** Puts a required filter back on its default; one without a default is left as it is. */
+function resetRequired(filter: RequirableFilter): void {
+    if (atDefault(filter)) return;
+    switch (filter.type) {
+        case 'select':
+        case 'date':
+            if (filter.defaultValue !== undefined) filter.onChange(filter.defaultValue);
+            return;
+        case 'multi-select':
+            if (filter.defaultValue !== undefined) filter.onChange([...filter.defaultValue]);
+            return;
+        case 'date-range':
+            if (filter.defaultValue !== undefined) filter.onChange(filter.defaultValue);
+    }
+}
+
 function clearFilter(filter: ResolvedListFilter): void {
+    const required = requiredFilter(filter);
+    if (required) {
+        resetRequired(required);
+        return;
+    }
     switch (filter.type) {
         case 'toggle':
             filter.onChange(false);
@@ -144,10 +269,10 @@ type Copy = ReturnType<typeof useI18n>['t'];
 /** What an active filter is set to, as its chip shows it: "Completed +1", "৳1,000 – ৳5,000". */
 function filterValueText(filter: ResolvedListFilter, t: Copy, locale: string): string {
     switch (filter.type) {
-        case 'select': {
-            const option = filter.options.find((o) => o.value === filter.value);
-            return option?.label ?? filter.value ?? '';
-        }
+        case 'select':
+            return filter.value ? optionLabel(filter.id, filter.options, filter.value) : '';
+        case 'date':
+            return filter.value ? formatDateChip(filter.value) : '';
         case 'multi-select': {
             const [first, ...rest] = filter.value;
             if (first === undefined) return '';
@@ -181,7 +306,7 @@ function chipText(filter: ResolvedListFilter, t: Copy, locale: string): string {
 function SelectChip({ filter, block = false }: { filter: Extract<ResolvedListFilter, { type: 'select' }>; block?: boolean }) {
     const { t } = useI18n();
     const id = useId();
-    const active = Boolean(filter.value);
+    const active = isFilterActive(filter);
     return (
         <label
             htmlFor={id}
@@ -201,7 +326,12 @@ function SelectChip({ filter, block = false }: { filter: Extract<ResolvedListFil
                     filter.disabled ? '' : 'cursor-pointer'
                 } ${block ? 'flex-1' : ''}`}
             >
-                <option value="">{t.common.dataTable.filterAll}</option>
+                {filter.required ? (
+                    // A required select offers no "All" — only a blank to stand in until it has a value.
+                    filter.value ? null : <option value="" disabled />
+                ) : (
+                    <option value="">{t.common.dataTable.filterAll}</option>
+                )}
                 {filter.options.map((option) => (
                     <option key={option.value} value={option.value}>
                         {option.label}
@@ -243,9 +373,9 @@ function ToggleControl({ filter }: { filter: Extract<ResolvedListFilter, { type:
 }
 
 function FilterControl({ filter, block = false }: { filter: ResolvedListFilter; block?: boolean }) {
-    if (filter.type === 'select') return <SelectChip filter={filter} block={block} />;
+    if (filter.type === 'select' && !isSearchableSelect(filter)) return <SelectChip filter={filter} block={block} />;
     if (filter.type === 'toggle') return <ToggleControl filter={filter} />;
-    if (filter.type === 'multi-select' || filter.type === 'number') return <PopoverChip filter={filter} />;
+    if (filter.type !== 'date-range') return <PopoverChip filter={filter} />;
     const range = (
         <CreatedRangeFilter
             value={filter.value}
@@ -254,6 +384,7 @@ function FilterControl({ filter, block = false }: { filter: ResolvedListFilter; 
             withTime={filter.withTime}
             presets={filter.presets}
             operators={filter.operators}
+            required={filter.required}
         />
     );
     // In the phone sheet the trigger spans the sheet like the selects above it.
@@ -274,6 +405,7 @@ function FilterPanel({ filter, onDone }: { filter: ResolvedListFilter; onDone?: 
                     exclude={filter.exclude}
                     loadOptions={filter.loadOptions}
                     searchable={filter.searchable}
+                    required={filter.required}
                 />
             );
         case 'number':
@@ -295,11 +427,37 @@ function FilterPanel({ filter, onDone }: { filter: ResolvedListFilter; onDone?: 
                         withTime={filter.withTime}
                         presets={filter.presets}
                         operators={filter.operators}
+                        required={filter.required}
                         onDone={onDone}
                     />
                 </div>
             );
+        case 'date':
+            return (
+                <DatePanel
+                    label={filter.label}
+                    value={filter.value}
+                    onChange={filter.onChange}
+                    presets={filter.presets}
+                    required={filter.required}
+                    onDone={onDone}
+                />
+            );
         case 'select':
+            if (isSearchableSelect(filter)) {
+                return (
+                    <SingleSelectPanel
+                        filterId={filter.id}
+                        label={filter.label}
+                        options={filter.options}
+                        value={filter.value}
+                        onChange={filter.onChange}
+                        loadOptions={filter.loadOptions}
+                        required={filter.required}
+                        onDone={onDone}
+                    />
+                );
+            }
             return (
                 <div className="p-2">
                     <SelectChip filter={filter} block />
@@ -374,10 +532,13 @@ const chipClass = (active: boolean) =>
  * A filter drawn as a chip that opens its editor: "Status ▾" while idle,
  * "Status: Completed +1 ✕" once it narrows the list.
  */
-function PopoverChip({ filter }: { filter: Extract<ResolvedListFilter, { type: 'multi-select' | 'number' | 'date-range' }> }) {
+function PopoverChip({ filter }: { filter: PanelFilter }) {
     const { t, locale } = useI18n();
     const popover = useChipPopover();
     const active = isFilterActive(filter);
+    const shown = showsValue(filter);
+    // A required filter has nothing to remove: Clear all puts it back on its default.
+    const removable = active && !isRequiredFilter(filter) && !(filter.type === 'select' && filter.disabled);
     const label = filterLabel(filter, t.common.createdAt);
     return (
         <div ref={popover.rootRef} className="relative shrink-0">
@@ -386,17 +547,19 @@ function PopoverChip({ filter }: { filter: Extract<ResolvedListFilter, { type: '
                     type="button"
                     aria-expanded={popover.open}
                     aria-haspopup="dialog"
+                    disabled={filter.type === 'select' ? filter.disabled : undefined}
+                    title={filter.type === 'select' ? filter.title : undefined}
                     onClick={() => popover.setOpen(!popover.open)}
-                    className={`inline-flex items-center gap-1 py-1.5 ps-2.5 max-md:min-h-touch ${active ? 'pe-1' : 'pe-2'}`}
+                    className={`inline-flex items-center gap-1 py-1.5 ps-2.5 max-md:min-h-touch disabled:cursor-not-allowed ${removable ? 'pe-1' : 'pe-2'}`}
                 >
                     <span className={active ? 'text-blue-700' : 'text-gray-500'}>
                         {label}
-                        {active ? ':' : ''}
+                        {shown ? ':' : ''}
                     </span>
-                    {active ? <span className="max-w-[10rem] truncate font-semibold">{filterValueText(filter, t, locale)}</span> : null}
+                    {shown ? <span className="max-w-[10rem] truncate font-semibold">{filterValueText(filter, t, locale)}</span> : null}
                     <ChevronDown aria-hidden className="h-3.5 w-3.5 opacity-60" />
                 </button>
-                {active ? (
+                {removable ? (
                     <button
                         type="button"
                         onClick={() => {
@@ -428,7 +591,7 @@ function PopoverChip({ filter }: { filter: Extract<ResolvedListFilter, { type: '
 
 /** One chip of the one-row layout. */
 function RowChip({ filter }: { filter: ResolvedListFilter }) {
-    if (filter.type === 'select') return <SelectChip filter={filter} />;
+    if (filter.type === 'select' && !isSearchableSelect(filter)) return <SelectChip filter={filter} />;
     if (filter.type === 'toggle') return <ToggleControl filter={filter} />;
     return <PopoverChip filter={filter} />;
 }
@@ -451,6 +614,7 @@ function FilterAccordion({ filters }: { filters: ResolvedListFilter[] }) {
                     );
                 }
                 const active = isFilterActive(filter);
+                const shown = showsValue(filter);
                 const open = openId === filter.id;
                 const label = filterLabel(filter, t.common.createdAt);
                 return (
@@ -462,8 +626,12 @@ function FilterAccordion({ filters }: { filters: ResolvedListFilter[] }) {
                             className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-xs hover:bg-gray-50 max-md:min-h-touch"
                         >
                             <span className="font-medium text-gray-700">{label}</span>
-                            <span className={`flex min-w-0 items-center gap-1 ${active ? 'font-semibold text-blue-700' : 'text-gray-400'}`}>
-                                <span className="truncate">{active ? filterValueText(filter, t, locale) : t.common.dataTable.anyValue}</span>
+                            <span
+                                className={`flex min-w-0 items-center gap-1 ${
+                                    active ? 'font-semibold text-blue-700' : shown ? 'font-semibold text-gray-700' : 'text-gray-400'
+                                }`}
+                            >
+                                <span className="truncate">{shown ? filterValueText(filter, t, locale) : t.common.dataTable.anyValue}</span>
                                 {open ? <ChevronUp aria-hidden className="h-3.5 w-3.5 shrink-0" /> : <ChevronDown aria-hidden className="h-3.5 w-3.5 shrink-0" />}
                             </span>
                         </button>
@@ -619,6 +787,8 @@ export default function FilterBar({
     const [sheetOpen, setSheetOpen] = useState(false);
     const active = filters.filter(isFilterActive);
     const clearAll = () => active.forEach(clearFilter);
+    // Under the phone toolbar: what is on, and what a required filter is set to.
+    const listed = filters.filter(showsValue);
 
     if (filters.length === 0) return null;
 
@@ -648,7 +818,7 @@ export default function FilterBar({
         panelGroup = [];
     };
     for (const filter of filters) {
-        if (filter.type === 'multi-select' || filter.type === 'number') {
+        if (filter.type === 'multi-select' || filter.type === 'number' || filter.type === 'date' || isSearchableSelect(filter)) {
             panelGroup.push(filter);
             continue;
         }
@@ -678,24 +848,38 @@ export default function FilterBar({
                     </span>
                 ) : null}
             </button>
-            {active.length > 0 ? (
+            {listed.length > 0 ? (
                 <div className="flex w-full flex-wrap items-center gap-1.5">
-                    {active.map((filter) => (
-                        <span key={filter.id} className="inline-flex max-w-full items-center gap-1 rounded-full border border-blue-200 bg-blue-50 ps-2.5 text-xs text-blue-700">
-                            <span className="truncate">{chipText(filter, t, locale)}</span>
-                            <button
-                                type="button"
-                                onClick={() => clearFilter(filter)}
-                                aria-label={`${copy.removeFilter} ${filterLabel(filter, t.common.createdAt)}`}
-                                className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-full hover:text-blue-900"
+                    {listed.map((filter) =>
+                        isRequiredFilter(filter) ? (
+                            // A required filter names its value but cannot be removed.
+                            <span
+                                key={filter.id}
+                                className={`inline-flex min-h-touch max-w-full items-center rounded-full border px-2.5 text-xs ${
+                                    isFilterActive(filter) ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-700'
+                                }`}
                             >
-                                <X className="h-3.5 w-3.5" />
-                            </button>
-                        </span>
-                    ))}
-                    <button type="button" onClick={clearAll} className="min-h-touch text-xs font-medium text-blue-600">
-                        {copy.clearAll}
-                    </button>
+                                <span className="truncate">{chipText(filter, t, locale)}</span>
+                            </span>
+                        ) : (
+                            <span key={filter.id} className="inline-flex max-w-full items-center gap-1 rounded-full border border-blue-200 bg-blue-50 ps-2.5 text-xs text-blue-700">
+                                <span className="truncate">{chipText(filter, t, locale)}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => clearFilter(filter)}
+                                    aria-label={`${copy.removeFilter} ${filterLabel(filter, t.common.createdAt)}`}
+                                    className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-full hover:text-blue-900"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            </span>
+                        ),
+                    )}
+                    {active.length > 0 ? (
+                        <button type="button" onClick={clearAll} className="min-h-touch text-xs font-medium text-blue-600">
+                            {copy.clearAll}
+                        </button>
+                    ) : null}
                 </div>
             ) : null}
             {sheetOpen ? (

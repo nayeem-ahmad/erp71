@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import BalanceSheetPage from './page';
 import { api } from '@/lib/api';
 import { printStatementReport } from '@/lib/statement-printer';
@@ -8,6 +8,12 @@ import { mockBranchScope } from '@/test-utils/branch-scope';
 
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 jest.mock('@/lib/hooks/useSalePrintPrefs', () => require('@/test-utils/print-paper').salePrintPrefsModuleMock());
+
+// A wide screen, so the report's chips sit in the toolbar rather than the phone's Filters sheet.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
+}));
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -139,12 +145,43 @@ describe('BalanceSheetPage — print', () => {
         render(<BalanceSheetPage />);
         await screen.findByText('Petty Cash');
 
-        fireEvent.click(screen.getByRole('checkbox', { name: /hide zero/i }));
+        fireEvent.click(screen.getByRole('button', { name: /hide zero/i }));
         fireEvent.click(screen.getByRole('button', { name: /print/i }));
 
         await waitFor(() => expect(printStatementReport).toHaveBeenCalled());
         const sections = (printStatementReport as jest.Mock).mock.calls[0][1];
         const assetRowNames = sections[0].groups[0].rows.map((row: { name: string }) => row.name);
         expect(assetRowNames).toEqual(['Cash in Hand']);
+    });
+});
+
+describe('BalanceSheetPage — strip', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockBranchScope({ branches: mockStores, headerBranchId: 's1', value: 's1', hidden: true });
+        localStorage.clear();
+        setWorkspaceItem('tenant_id', 'tenant-1');
+        setWorkspaceItem('store_id', 's1');
+    });
+
+    it('shows the totals, and the difference in amber when the sheet does not balance', async () => {
+        (api.getBalanceSheet as jest.Mock).mockResolvedValue({ ...RESPONSE, is_balanced: false, total_liabilities_and_equity: 37_000 });
+
+        render(<BalanceSheetPage />);
+        await screen.findByText('Cash in Hand');
+
+        const strip = screen.getByRole('region', { name: 'Report figures' });
+        expect(within(strip).getByText('৳ 38,000')).toBeInTheDocument();
+        const difference = within(strip).getByText('Difference').closest('div') as HTMLElement;
+        expect(within(difference).getByText(/৳ 1,000/)).toHaveClass('text-amber-700');
+        expect(within(difference).getByText(/Not balanced/)).toBeInTheDocument();
+    });
+
+    it('opens as of today, on the as-of chip', async () => {
+        (api.getBalanceSheet as jest.Mock).mockResolvedValue(RESPONSE);
+        render(<BalanceSheetPage />);
+        await screen.findByText('Cash in Hand');
+
+        expect(api.getBalanceSheet).toHaveBeenCalledWith(expect.objectContaining({ asOfDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }));
     });
 });

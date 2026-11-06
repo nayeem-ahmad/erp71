@@ -2,20 +2,21 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Loader2, Plus, Trash2, Wallet } from 'lucide-react';
-import { DataTable, createdAtColumn, CreatedRangeFilter, DateRangeFilter } from '@/components/data-table';
-import { applyCreatedRangeQuery, applyDateRangeQuery, type CreatedRange } from '@/lib/created-range';
-import {
-    AccountingPageShell,
-    CompactStat,
-} from '@/components/accounting/compact';
+import { AlarmClock, ArrowDownLeft, ArrowUpRight, Banknote, CircleCheck, Eye, HandCoins, Landmark, Pencil, Plus, Trash2, Wallet } from 'lucide-react';
+import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
+import { applyCreatedRangeQuery, applyDateRangeQuery, tenantDateOnly, type CreatedRange } from '@/lib/created-range';
+import type { NumberCondition } from '@/lib/number-condition';
+import { calendarDayOf, inDateRange, matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
+import { AccountingPageShell, CompactStat } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { BranchFilter, Button } from '@/components/ui';
+import { BranchFilter, Button, ConfirmDialog, StatusBadge } from '@/components/ui';
+import { RowActions, RowActionButton } from '@/components/table';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { toast } from '@/lib/toast';
 import { formatBDT, formatDate } from '@/lib/format';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { getWorkspaceItem } from '@/lib/session-store';
@@ -46,35 +47,45 @@ interface Loan {
     store?: { id: string; name: string } | null;
 }
 
-interface LoanSummary {
-    payable: { count: number; principal: number; paid: number; outstanding: number };
-    receivable: { count: number; principal: number; paid: number; outstanding: number };
-    activeCount: number;
-    closedCount: number;
-}
-
 const PAYMENT_METHODS = ['CASH', 'BKASH', 'CARD', 'BANK'] as const;
+const DIRECTIONS = ['PAYABLE', 'RECEIVABLE'] as const;
+const STATUSES = ['ACTIVE', 'CLOSED'] as const;
 
 const columnHelper = createColumnHelper<Loan>();
 
-const today = () => new Date().toISOString().slice(0, 10);
+/** Today on the workspace's calendar, not the UTC day. */
+const today = () => tenantDateOnly();
+
+/** An open loan with money still owed whose due date has passed. */
+function isOverdue(loan: Loan, onDay: string): boolean {
+    if (loan.status === 'CLOSED' || Number(loan.outstanding || 0) <= 0) return false;
+    const due = calendarDayOf(loan.due_date);
+    return Boolean(due && due < onDay);
+}
 
 export default function LoansPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
+    const ui = t.accountingFinanceUi.loans;
+    const methodLabels = t.accountingFinanceUi.common.paymentMethods;
     // Which branch's loans (or the company's) to list and total. A new loan is
     // still booked on the header branch.
     const branch = useBranchScope();
     const [loans, setLoans] = useState<Loan[]>([]);
-    const [summary, setSummary] = useState<LoanSummary | null>(null);
     const [loading, setLoading] = useState(true);
-    const [directionFilter, setDirectionFilter] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
+    const [search, setSearch] = useState('');
+    const [directions, setDirections] = useState<string[]>([]);
+    const [statuses, setStatuses] = useState<string[]>([]);
+    const [statusExclude, setStatusExclude] = useState(false);
+    const [overdueOnly, setOverdueOnly] = useState(false);
     const [dateRange, setDateRange] = useState<CreatedRange | null>(null);
+    const [dueRange, setDueRange] = useState<CreatedRange | null>(null);
+    const [principalFilter, setPrincipalFilter] = useState<NumberCondition | null>(null);
+    const [outstandingFilter, setOutstandingFilter] = useState<NumberCondition | null>(null);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
-    const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     const [showForm, setShowForm] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [formError, setFormError] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
     const [form, setForm] = useState({
         counterparty: '',
@@ -91,24 +102,26 @@ export default function LoansPage() {
     const [payForm, setPayForm] = useState({ amount: '', paymentDate: today(), paymentMethod: 'CASH', notes: '' });
     const [paying, setPaying] = useState(false);
 
+    const [deleteTarget, setDeleteTarget] = useState<Loan | null>(null);
+    const [paymentToDelete, setPaymentToDelete] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    // Branch, start date and created narrow what the server sends; every page
+    // of that window arrives, so the other chips and the strip narrow the same
+    // rows here.
     const loadData = async () => {
         setLoading(true);
         try {
-            const [loansData, summaryData] = await Promise.all([
-                api.getLoans({
-                    storeId: branch.apiStoreId,
-                    direction: directionFilter || undefined,
-                    status: statusFilter || undefined,
-                    ...applyDateRangeQuery(dateRange),
-                    ...applyCreatedRangeQuery(createdRange),
-                }),
-                api.getLoanSummary({ storeId: branch.apiStoreId }),
-            ]);
-            setLoans(loansData ?? []);
-            setSummary(summaryData ?? null);
+            const loansData = await api.getLoans({
+                storeId: branch.apiStoreId,
+                ...applyDateRangeQuery(dateRange),
+                ...applyCreatedRangeQuery(createdRange),
+            });
+            setLoans(Array.isArray(loansData) ? loansData : []);
         } catch (error) {
             if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load loans', error);
+            toast.error(error instanceof Error && error.message ? error.message : t.common.error);
         } finally {
             setLoading(false);
         }
@@ -117,10 +130,11 @@ export default function LoansPage() {
     useEffect(() => {
         if (!branch.ready) return;
         void loadData();
-    }, [branch.ready, branch.apiStoreId, directionFilter, statusFilter, dateRange, createdRange]);
+    }, [branch.ready, branch.apiStoreId, dateRange, createdRange]);
 
     const openCreate = () => {
         setEditingId(null);
+        setFormError('');
         setForm({
             counterparty: '',
             direction: 'PAYABLE',
@@ -136,6 +150,7 @@ export default function LoansPage() {
 
     const openEdit = (loan: Loan) => {
         setEditingId(loan.id);
+        setFormError('');
         setForm({
             counterparty: loan.counterparty,
             direction: loan.direction,
@@ -152,9 +167,10 @@ export default function LoansPage() {
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.counterparty.trim() || !form.principal) {
-            setToast({ type: 'error', message: t.loans.counterpartyRequired });
+            setFormError(t.loans.counterpartyRequired);
             return;
         }
+        setFormError('');
         setSaving(true);
         try {
             const payload = {
@@ -173,24 +189,28 @@ export default function LoansPage() {
             } else {
                 await api.createLoan(payload);
             }
-            setToast({ type: 'success', message: t.loans.loanSaved });
+            toast.success(t.loans.loanSaved);
             setShowForm(false);
             await loadData();
         } catch (error: any) {
-            setToast({ type: 'error', message: error?.message || t.common.error });
+            setFormError(error?.message || t.common.error);
         } finally {
             setSaving(false);
         }
     };
 
-    const handleDelete = async (loan: Loan) => {
-        if (!globalThis.confirm(t.loans.deleteConfirm)) return;
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setBusy(true);
         try {
-            await api.deleteLoan(loan.id);
-            setToast({ type: 'success', message: t.loans.loanDeleted });
+            await api.deleteLoan(deleteTarget.id);
+            toast.success(t.loans.loanDeleted);
+            setDeleteTarget(null);
             await loadData();
         } catch (error: any) {
-            setToast({ type: 'error', message: error?.message || t.common.error });
+            toast.error(error?.message || t.common.error);
+        } finally {
+            setBusy(false);
         }
     };
 
@@ -199,7 +219,7 @@ export default function LoansPage() {
             await api.updateLoan(loan.id, { status: loan.status === 'CLOSED' ? 'ACTIVE' : 'CLOSED' });
             await loadData();
         } catch (error: any) {
-            setToast({ type: 'error', message: error?.message || t.common.error });
+            toast.error(error?.message || t.common.error);
         }
     };
 
@@ -209,7 +229,7 @@ export default function LoansPage() {
             setDetail(full);
             setPayForm({ amount: '', paymentDate: today(), paymentMethod: 'CASH', notes: '' });
         } catch (error: any) {
-            setToast({ type: 'error', message: error?.message || t.common.error });
+            toast.error(error?.message || t.common.error);
         }
     };
 
@@ -226,26 +246,179 @@ export default function LoansPage() {
             });
             setDetail(updated);
             setPayForm({ amount: '', paymentDate: today(), paymentMethod: 'CASH', notes: '' });
-            setToast({ type: 'success', message: t.loans.paymentSaved });
+            toast.success(t.loans.paymentSaved);
             await loadData();
         } catch (error: any) {
-            setToast({ type: 'error', message: error?.message || t.common.error });
+            toast.error(error?.message || t.common.error);
         } finally {
             setPaying(false);
         }
     };
 
-    const handleDeletePayment = async (paymentId: string) => {
-        if (!detail || !globalThis.confirm(t.loans.deletePaymentConfirm)) return;
+    const handleDeletePayment = async () => {
+        if (!detail || !paymentToDelete) return;
+        setBusy(true);
         try {
-            const updated = await api.deleteLoanPayment(detail.id, paymentId);
+            const updated = await api.deleteLoanPayment(detail.id, paymentToDelete);
             setDetail(updated);
-            setToast({ type: 'success', message: t.loans.paymentDeleted });
+            setPaymentToDelete(null);
+            toast.success(t.loans.paymentDeleted);
             await loadData();
         } catch (error: any) {
-            setToast({ type: 'error', message: error?.message || t.common.error });
+            toast.error(error?.message || t.common.error);
+        } finally {
+            setBusy(false);
         }
     };
+
+    const directionLabel = (direction: string) => (direction === 'RECEIVABLE' ? t.loans.receivable : t.loans.payable);
+    const statusLabel = (status: string) => (status === 'CLOSED' ? t.loans.closed : t.loans.active);
+    const methodLabel = (method: string) => methodLabels[method as keyof typeof methodLabels] ?? method;
+
+    const todayKey = tenantDateOnly();
+
+    const filtered = useMemo(
+        () => loans.filter((loan) => {
+            if (!matchesAnyOf(directions, loan.direction)) return false;
+            if (!matchesAnyOf(statuses, loan.status, statusExclude)) return false;
+            if (overdueOnly && !isOverdue(loan, todayKey)) return false;
+            if (!inDateRange(loan.due_date, dueRange)) return false;
+            if (!matchesNumberCondition(Number(loan.principal || 0), principalFilter)) return false;
+            if (!matchesNumberCondition(Number(loan.outstanding || 0), outstandingFilter)) return false;
+            return matchesSearch(
+                search,
+                loan.counterparty,
+                loan.reference,
+                loan.notes,
+                loan.store?.name,
+                directionLabel(loan.direction),
+            );
+        }),
+        [loans, directions, statuses, statusExclude, overdueOnly, todayKey, dueRange, principalFilter, outstandingFilter, search, t],
+    );
+
+    const filters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'direction',
+                type: 'multi-select',
+                label: t.loans.direction,
+                value: directions,
+                onChange: setDirections,
+                options: DIRECTIONS.map((value) => ({ value, label: directionLabel(value) })),
+            },
+            {
+                id: 'status',
+                type: 'multi-select',
+                label: t.loans.status,
+                value: statuses,
+                onChange: setStatuses,
+                exclude: { value: statusExclude, onChange: setStatusExclude },
+                options: STATUSES.map((value) => ({ value, label: statusLabel(value) })),
+            },
+            {
+                id: 'startDate',
+                type: 'date-range',
+                label: t.loans.startDate,
+                value: dateRange,
+                onChange: setDateRange,
+                operators: true,
+            },
+            {
+                id: 'principal',
+                type: 'number',
+                label: t.loans.principal,
+                value: principalFilter,
+                onChange: setPrincipalFilter,
+                money: true,
+            },
+            {
+                id: 'outstanding',
+                type: 'number',
+                label: t.loans.outstanding,
+                value: outstandingFilter,
+                onChange: setOutstandingFilter,
+                money: true,
+            },
+            {
+                id: 'overdue',
+                type: 'toggle',
+                label: ui.overdueOnly,
+                pressed: overdueOnly,
+                onChange: setOverdueOnly,
+                control: 'button',
+            },
+            {
+                id: 'dueDate',
+                type: 'date-range',
+                label: t.loans.dueDate,
+                value: dueRange,
+                onChange: setDueRange,
+                operators: true,
+                more: true,
+            },
+            { id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange, operators: true, more: true },
+        ],
+        [t, ui, directions, statuses, statusExclude, dateRange, principalFilter, outstandingFilter, overdueOnly, dueRange, createdRange],
+    );
+
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const n = (value: number) => value.toLocaleString(locale);
+        let principal = 0;
+        let repaid = 0;
+        let owedByYou = 0;
+        let owedToYou = 0;
+        let overdueCount = 0;
+        let overdueAmount = 0;
+        let active = 0;
+        for (const loan of filtered) {
+            const outstanding = Number(loan.outstanding || 0);
+            principal += Number(loan.principal || 0);
+            repaid += Number(loan.total_paid || 0);
+            if (loan.direction === 'RECEIVABLE') owedToYou += outstanding;
+            else owedByYou += outstanding;
+            if (loan.status !== 'CLOSED') active += 1;
+            if (isOverdue(loan, todayKey)) {
+                overdueCount += 1;
+                overdueAmount += outstanding;
+            }
+        }
+        const items: ListStat[] = [
+            {
+                id: 'count',
+                icon: <Landmark aria-hidden />,
+                label: t.loans.title,
+                value: n(filtered.length),
+                hint: `${n(active)} ${t.loans.active.toLowerCase()}`,
+            },
+            { id: 'principal', icon: <Banknote aria-hidden />, label: t.loans.principal, value: money(principal) },
+            { id: 'repaid', icon: <CircleCheck aria-hidden />, label: ui.repaid, value: money(repaid) },
+            {
+                id: 'owedByYou',
+                icon: <ArrowUpRight aria-hidden />,
+                label: t.loans.payableOutstanding,
+                value: money(owedByYou),
+                tone: owedByYou > 0 ? 'warning' : 'default',
+            },
+            {
+                id: 'owedToYou',
+                icon: <ArrowDownLeft aria-hidden />,
+                label: t.loans.receivableOutstanding,
+                value: money(owedToYou),
+                tone: owedToYou > 0 ? 'warning' : 'default',
+            },
+            {
+                id: 'overdue',
+                icon: <AlarmClock aria-hidden />,
+                label: ui.overdue,
+                value: money(overdueAmount),
+                hint: n(overdueCount),
+                tone: overdueCount > 0 ? 'danger' : 'default',
+            },
+        ];
+        return { items, loading, label: ui.statsLabel };
+    }, [filtered, loading, locale, t, ui, todayKey]);
 
     const columns: ColumnDef<Loan, any>[] = useMemo(
         () => [
@@ -255,7 +428,7 @@ export default function LoansPage() {
                     <button
                         type="button"
                         onClick={() => openDetail(info.row.original)}
-                        className="text-sm font-bold text-primary hover:underline text-start"
+                        className="text-primary hover:underline text-start"
                     >
                         {info.getValue()}
                     </button>
@@ -265,70 +438,88 @@ export default function LoansPage() {
             columnHelper.accessor('direction', {
                 header: t.loans.direction,
                 cell: (info) => (
-                    <span
-                        className={`text-[10px] font-semibold px-2 py-1 rounded-full ${info.getValue() === 'RECEIVABLE' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}
-                    >
-                        {info.getValue() === 'RECEIVABLE' ? t.loans.receivable : t.loans.payable}
-                    </span>
+                    <StatusBadge tone={info.getValue() === 'RECEIVABLE' ? 'success' : 'warning'}>
+                        {directionLabel(info.getValue())}
+                    </StatusBadge>
                 ),
                 size: 120,
             }),
-            columnHelper.accessor('principal', {
+            columnHelper.accessor((row) => Number(row.principal || 0), {
+                id: 'principal',
                 header: t.loans.principal,
-                cell: (info) => <span className="text-sm font-semibold text-gray-700">{formatBDT(Number(info.getValue()))}</span>,
+                cell: (info) => formatBDT(info.getValue(), { locale }),
+                meta: { align: 'end' },
                 size: 120,
             }),
-            columnHelper.accessor('total_paid', {
+            columnHelper.accessor((row) => Number(row.total_paid || 0), {
+                id: 'total_paid',
                 header: t.loans.totalPaid,
-                cell: (info) => <span className="text-sm text-emerald-600">{formatBDT(Number(info.getValue() || 0))}</span>,
+                cell: (info) => formatBDT(info.getValue(), { locale }),
+                meta: { align: 'end', hideOnMobile: true },
                 size: 110,
             }),
-            columnHelper.accessor('outstanding', {
+            columnHelper.accessor((row) => Number(row.outstanding || 0), {
+                id: 'outstanding',
                 header: t.loans.outstanding,
-                cell: (info) => <span className="text-sm font-bold text-danger">{formatBDT(Number(info.getValue() || 0))}</span>,
+                cell: (info) => formatBDT(info.getValue(), { locale }),
+                meta: { align: 'end' },
                 size: 120,
             }),
-            columnHelper.accessor('due_date', {
-                header: t.loans.dueDate,
-                cell: (info) => <span className="text-sm text-gray-500">{info.getValue() ? formatDate(info.getValue() as string) : '—'}</span>,
+            columnHelper.accessor('start_date', {
+                header: t.loans.startDate,
+                cell: (info) => formatDate(info.getValue(), locale),
+                sortingFn: 'datetime',
+                meta: { hideOnMobile: true },
                 size: 110,
             }),
-            createdAtColumn(columnHelper, { header: t.common.createdAt }),
+            columnHelper.accessor((row) => row.due_date ?? '', {
+                id: 'due_date',
+                header: t.loans.dueDate,
+                cell: (info) => {
+                    const loan = info.row.original;
+                    if (!loan.due_date) return '—';
+                    return (
+                        <span className={isOverdue(loan, todayKey) ? 'text-red-600' : undefined}>
+                            {formatDate(loan.due_date, locale)}
+                        </span>
+                    );
+                },
+                meta: { hideOnMobile: true },
+                size: 110,
+            }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.accessor('status', {
                 header: t.loans.status,
-                cell: (info) => (
-                    <span className={`text-[10px] font-semibold ${info.getValue() === 'CLOSED' ? 'text-gray-400' : 'text-primary'}`}>
-                        {info.getValue() === 'CLOSED' ? t.loans.closed : t.loans.active}
-                    </span>
-                ),
-                size: 90,
+                cell: (info) => {
+                    const loan = info.row.original;
+                    if (loan.status === 'CLOSED') return <StatusBadge tone="neutral">{t.loans.closed}</StatusBadge>;
+                    if (isOverdue(loan, todayKey)) return <StatusBadge tone="danger">{ui.overdue}</StatusBadge>;
+                    return <StatusBadge tone="info">{t.loans.active}</StatusBadge>;
+                },
+                size: 100,
             }),
             columnHelper.display({
                 id: 'actions',
                 header: t.common.actions,
                 cell: ({ row }) => (
-                    <div className="flex items-center gap-1">
-                        <button
-                            type="button"
-                            onClick={() => openEdit(row.original)}
-                            className="px-2 py-1 rounded-lg text-xs font-bold text-gray-500 hover:bg-gray-100"
-                        >
-                            {t.common.edit}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => handleDelete(row.original)}
-                            className="p-2 rounded-lg text-gray-400 hover:text-danger hover:bg-red-50"
-                            title={t.common.delete}
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    </div>
+                    <RowActions>
+                        <RowActionButton icon={<Eye />} label={t.loans.viewDetails} onClick={() => void openDetail(row.original)} />
+                        <RowActionButton icon={<Pencil />} label={t.common.edit} onClick={() => openEdit(row.original)} />
+                        <RowActionButton
+                            icon={<Trash2 />}
+                            label={t.common.delete}
+                            intent="danger"
+                            onClick={() => setDeleteTarget(row.original)}
+                        />
+                    </RowActions>
                 ),
-                size: 110,
+                enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
+                size: 120,
             }),
         ],
-        [t],
+        [t, ui, locale, todayKey],
     );
 
     return (
@@ -345,62 +536,30 @@ export default function LoansPage() {
                 actions={(
                     <>
                         <BranchFilter scope={branch} />
-                        <button type="button" onClick={openCreate} className={`${compactDensity.btnPrimary} bg-primary text-white hover:bg-primary-hover`}>
-                            <Plus className="w-3.5 h-3.5" />
+                        <Button variant="primary" icon={<Plus className="w-3.5 h-3.5" />} onClick={openCreate}>
                             {t.loans.addLoan}
-                        </button>
+                        </Button>
                     </>
                 )}
             />
 
-            {toast && (
-                <div className={`rounded-lg px-3 py-2 text-sm ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-danger-light text-danger-text border border-red-200'}`}>
-                    {toast.message}
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <CompactStat label={t.loans.payableOutstanding} value={formatBDT(summary?.payable.outstanding ?? 0)} tone="warning" />
-                <CompactStat label={t.loans.receivableOutstanding} value={formatBDT(summary?.receivable.outstanding ?? 0)} tone="positive" />
-                <CompactStat label={t.loans.activeLoans} value={summary?.activeCount ?? 0} tone="info" />
-            </div>
-
-            <div className={compactDensity.filterBar}>
-                <label className="block">
-                    <span className={`${compactDensity.formLabel} block mb-1`}>{t.loans.direction}</span>
-                    <select value={directionFilter} onChange={(e) => setDirectionFilter(e.target.value)} className={compactDensity.formField}>
-                        <option value="">{t.loans.allTypes}</option>
-                        <option value="PAYABLE">{t.loans.payable}</option>
-                        <option value="RECEIVABLE">{t.loans.receivable}</option>
-                    </select>
-                </label>
-                <label className="block">
-                    <span className={`${compactDensity.formLabel} block mb-1`}>{t.loans.status}</span>
-                    <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={compactDensity.formField}>
-                        <option value="">{t.loans.allStatuses}</option>
-                        <option value="ACTIVE">{t.loans.active}</option>
-                        <option value="CLOSED">{t.loans.closed}</option>
-                    </select>
-                </label>
-                <DateRangeFilter label={t.common.date} value={dateRange} onChange={setDateRange} />
-                <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
-            </div>
-
-            {loading ? (
-                <div className="flex items-center justify-center py-12 text-gray-400">
-                    <Loader2 className="w-5 h-5 animate-spin me-2" />
-                    {t.common.loading}
-                </div>
-            ) : (
-                <DataTable
-                    tableId="loans"
-                    title="Loans"
-                    data={loans}
-                    columns={columns}
-                    searchPlaceholder={t.loans.searchLoans}
-                    emptyMessage={t.common.noData}
-                />
-            )}
+            <DataTable
+                tableId="loans"
+                title={t.loans.title}
+                data={filtered}
+                columns={columns}
+                isLoading={loading}
+                searchPlaceholder={t.loans.searchLoans}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+                emptyMessage={t.common.noData}
+                emptyIcon={<HandCoins className="w-16 h-16 text-gray-200" />}
+            />
 
             {showForm && (
                 <ModalShell size="sm" onBackdropClick={() => setShowForm(false)}>
@@ -455,6 +614,7 @@ export default function LoansPage() {
                                 <span className={`${compactDensity.formLabel} block mb-1`}>{t.loans.notes}</span>
                                 <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className={compactDensity.formField} />
                             </label>
+                            {formError && <p role="alert" className="text-xs text-red-600">{formError}</p>}
                         </div>
                         <ModalFooter>
                             <Button variant="secondary" type="button" onClick={() => setShowForm(false)}>
@@ -483,9 +643,9 @@ export default function LoansPage() {
                         />
                         <div className={`${compactDensity.modalPadding} space-y-4 overflow-y-auto`}>
                             <div className="grid grid-cols-3 gap-2 text-center">
-                                <CompactStat label={t.loans.principal} value={formatBDT(Number(detail.principal))} />
-                                <CompactStat label={t.loans.totalPaid} value={formatBDT(Number(detail.total_paid || 0))} tone="positive" />
-                                <CompactStat label={t.loans.outstanding} value={formatBDT(Number(detail.outstanding || 0))} tone="negative" />
+                                <CompactStat label={t.loans.principal} value={formatBDT(Number(detail.principal), { locale })} />
+                                <CompactStat label={t.loans.totalPaid} value={formatBDT(Number(detail.total_paid || 0), { locale })} tone="positive" />
+                                <CompactStat label={t.loans.outstanding} value={formatBDT(Number(detail.outstanding || 0), { locale })} tone="negative" />
                             </div>
 
                             <div className="flex items-center justify-between">
@@ -502,14 +662,17 @@ export default function LoansPage() {
                             {detail.payments && detail.payments.length > 0 ? (
                                 <div className="space-y-2">
                                     {detail.payments.map((p) => (
-                                        <div key={p.id} className="flex items-center justify-between rounded-xl border border-gray-100 px-3 py-2">
+                                        <div key={p.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2">
                                             <div>
-                                                <p className="text-sm font-bold text-gray-700">{formatBDT(Number(p.amount))}</p>
-                                                <p className="text-[11px] text-gray-400">{formatDate(p.payment_date)} • {p.payment_method}{p.notes ? ` • ${p.notes}` : ''}</p>
+                                                <p className="text-sm font-semibold text-gray-700">{formatBDT(Number(p.amount), { locale })}</p>
+                                                <p className="text-xs text-gray-400">{formatDate(p.payment_date, locale)} • {methodLabel(p.payment_method)}{p.notes ? ` • ${p.notes}` : ''}</p>
                                             </div>
-                                            <button type="button" onClick={() => handleDeletePayment(p.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-danger hover:bg-red-50">
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            <RowActionButton
+                                                icon={<Trash2 />}
+                                                label={t.common.delete}
+                                                intent="danger"
+                                                onClick={() => setPaymentToDelete(p.id)}
+                                            />
                                         </div>
                                     ))}
                                 </div>
@@ -524,19 +687,43 @@ export default function LoansPage() {
                                         <input type="number" min="0.01" step="0.01" max={detail.outstanding} value={payForm.amount} onChange={(e) => setPayForm((f) => ({ ...f, amount: e.target.value }))} placeholder={t.loans.paymentAmount} className={compactDensity.formField} required />
                                         <input type="date" value={payForm.paymentDate} onChange={(e) => setPayForm((f) => ({ ...f, paymentDate: e.target.value }))} className={compactDensity.formField} required />
                                         <select value={payForm.paymentMethod} onChange={(e) => setPayForm((f) => ({ ...f, paymentMethod: e.target.value }))} className={compactDensity.formField}>
-                                            {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+                                            {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{methodLabel(m)}</option>)}
                                         </select>
                                         <input value={payForm.notes} onChange={(e) => setPayForm((f) => ({ ...f, notes: e.target.value }))} placeholder={t.loans.notes} className={compactDensity.formField} />
                                     </div>
-                                    <button type="submit" disabled={paying} className={`${compactDensity.btnPrimary} w-full bg-primary text-white hover:bg-primary-hover disabled:opacity-50`}>
-                                        {paying ? t.common.loading : t.loans.addPayment}
-                                    </button>
+                                    <Button variant="primary" type="submit" loading={paying} className="w-full justify-center">
+                                        {t.loans.addPayment}
+                                    </Button>
                                 </form>
                             )}
                         </div>
                     </div>
                 </ModalShell>
             )}
+
+            <ConfirmDialog
+                open={deleteTarget !== null}
+                title={ui.deleteTitle}
+                prompt={t.loans.deleteConfirm}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                loading={busy}
+                danger
+                onConfirm={() => void handleDelete()}
+                onCancel={() => { if (!busy) setDeleteTarget(null); }}
+            />
+
+            <ConfirmDialog
+                open={paymentToDelete !== null}
+                title={ui.deletePaymentTitle}
+                prompt={t.loans.deletePaymentConfirm}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                loading={busy}
+                danger
+                onConfirm={() => void handleDeletePayment()}
+                onCancel={() => { if (!busy) setPaymentToDelete(null); }}
+            />
         </AccountingPageShell>
     );
 }

@@ -1,240 +1,349 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Plus, FilePlus2, Trash2 } from 'lucide-react';
+import { useEffect, useId, useMemo, useState } from 'react';
+import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
+import { BookOpen, FilePlus2, Layers, ListOrdered, Plus, Trash2, Wallet } from 'lucide-react';
 import { VoucherType } from '@erp71/shared-types';
-import {
-    AccountingPageShell,
-    AccountingToolbar,
-    CompactSection,
-} from '@/components/accounting/compact';
+import { AccountingPageShell } from '@/components/accounting/compact';
+import PageHeader from '@/components/ui/compact/PageHeader';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
+import { Alert, Button, ConfirmDialog, Field, FormGrid, Input, Select } from '@/components/ui';
+import type { AccountOption } from '@/components/accounting/AccountSelect';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
+import type { NumberCondition } from '@/lib/number-condition';
+import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
-import AccountSelect from '@/components/accounting/AccountSelect';
-import { compactDensity } from '@/lib/ui/compact-density';
+import { toast } from '@/lib/toast';
+import { voucherTypeLabel, voucherTypeOptions } from '../vouchers/voucher-list-filters';
+import {
+    TemplateLinesCell,
+    TemplateLinesEditor,
+    emptyLines,
+    linePayload,
+    templateAccountNames,
+    templateAmount,
+    type StoredTemplateLine,
+    type TemplateLineDraft,
+} from './template-ui';
 
-const voucherTypeOptions = [
-    { value: VoucherType.CASH_PAYMENT, label: 'Cash Payment' },
-    { value: VoucherType.CASH_RECEIVE, label: 'Cash Receive' },
-    { value: VoucherType.BANK_PAYMENT, label: 'Bank Payment' },
-    { value: VoucherType.BANK_RECEIVE, label: 'Bank Receive' },
-    { value: VoucherType.FUND_TRANSFER, label: 'Fund Transfer' },
-    { value: VoucherType.JOURNAL, label: 'Journal Voucher' },
-];
-
-const voucherTypeLabel = (value: string) =>
-    voucherTypeOptions.find((option) => option.value === value)?.label ?? value;
-
-interface VTLine { accountId: string; debitAmount: string; creditAmount: string; comment: string; }
 interface VoucherTemplate {
     id: string;
     name: string;
-    description?: string;
+    description?: string | null;
     voucher_type: string;
-    lines: Array<{ account: { name: string }; debit_amount: number; credit_amount: number }>;
+    lines: StoredTemplateLine[];
 }
 
+type FormState = { name: string; description: string; voucherType: string };
+
+const EMPTY_FORM: FormState = { name: '', description: '', voucherType: VoucherType.JOURNAL };
+
+const columnHelper = createColumnHelper<VoucherTemplate>();
+
 export default function VoucherTemplatesPage() {
-    const { locale } = useI18n();
+    const { t, locale, fmt } = useI18n();
+    const copy = t.accountingVouchersUi;
+    const vt = copy.voucherTemplates;
+    const title = t.accounting.links.voucherTemplates.title;
+    const formId = useId();
     const [templates, setTemplates] = useState<VoucherTemplate[]>([]);
-    const [accounts, setAccounts] = useState<any[]>([]);
+    const [accounts, setAccounts] = useState<AccountOption[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [showCreate, setShowCreate] = useState(false);
-    const [form, setForm] = useState({ name: '', description: '', voucherType: VoucherType.JOURNAL as string });
-    const [lines, setLines] = useState<VTLine[]>([{ accountId: '', debitAmount: '', creditAmount: '', comment: '' }, { accountId: '', debitAmount: '', creditAmount: '', comment: '' }]);
+    const [form, setForm] = useState<FormState>(EMPTY_FORM);
+    const [lines, setLines] = useState<TemplateLineDraft[]>(emptyLines);
+    const [formError, setFormError] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<VoucherTemplate | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
+    const [search, setSearch] = useState('');
+    const [types, setTypes] = useState<string[]>([]);
+    const [amount, setAmount] = useState<NumberCondition | null>(null);
 
     useEffect(() => {
         void load();
         api.getAccounts({}).then((d: any) => setAccounts(Array.isArray(d) ? d : d.data ?? [])).catch(() => {});
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const load = async () => {
         setLoading(true);
-        setError(null);
+        setLoadError(null);
         try {
             const data = await api.listVoucherTemplates();
             setTemplates(Array.isArray(data) ? data : data.data ?? []);
         } catch (e: any) {
-            setError(e?.message ?? 'Failed to load');
+            setLoadError(e?.message ?? t.accountingShared.loadFailed);
         } finally {
             setLoading(false);
         }
     };
 
-    const setLine = (i: number, field: keyof VTLine, value: string) =>
-        setLines((prev) => prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l));
+    const openCreate = () => {
+        setForm(EMPTY_FORM);
+        setLines(emptyLines());
+        setFormError(null);
+        setShowCreate(true);
+    };
+
+    const closeCreate = () => {
+        if (!creating) setShowCreate(false);
+    };
 
     const handleCreate = async () => {
         setCreating(true);
-        setError(null);
+        setFormError(null);
         try {
-            const payload = {
+            await api.createVoucherTemplate({
                 name: form.name,
                 description: form.description || undefined,
                 voucherType: form.voucherType,
-                lines: lines
-                    .filter((l) => l.accountId)
-                    .map((l) => ({
-                        accountId: l.accountId,
-                        debitAmount: parseFloat(l.debitAmount) || 0,
-                        creditAmount: parseFloat(l.creditAmount) || 0,
-                        comment: l.comment || undefined,
-                    })),
-            };
-            await api.createVoucherTemplate(payload);
+                lines: linePayload(lines),
+            });
             setShowCreate(false);
-            setForm({ name: '', description: '', voucherType: VoucherType.JOURNAL });
-            setLines([{ accountId: '', debitAmount: '', creditAmount: '', comment: '' }, { accountId: '', debitAmount: '', creditAmount: '', comment: '' }]);
+            toast.success(t.common.created);
             await load();
         } catch (e: any) {
-            setError(e?.message ?? 'Failed to create');
+            setFormError(e?.message ?? t.accountingShared.createFailed);
         } finally {
             setCreating(false);
         }
     };
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
         try {
-            await api.deleteVoucherTemplate(id);
+            await api.deleteVoucherTemplate(deleteTarget.id);
+            toast.success(t.common.deleted);
+            setDeleteTarget(null);
             await load();
         } catch (e: any) {
-            setError(e?.message ?? 'Failed to delete');
+            toast.error(e?.message ?? t.common.deleteFailed);
+        } finally {
+            setDeleting(false);
         }
     };
 
+    const filtered = useMemo(
+        () => templates.filter((row) => {
+            if (!matchesAnyOf(types, row.voucher_type)) return false;
+            if (!matchesNumberCondition(templateAmount(row.lines), amount)) return false;
+            return matchesSearch(search, row.name, row.description, ...templateAccountNames(row.lines));
+        }),
+        [templates, types, amount, search],
+    );
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'voucherType',
+            type: 'multi-select',
+            label: t.accountingShared.type,
+            value: types,
+            onChange: setTypes,
+            options: voucherTypeOptions(t),
+        },
+        {
+            id: 'amount',
+            type: 'number',
+            label: t.accountingShared.amount,
+            value: amount,
+            onChange: setAmount,
+            money: true,
+        },
+    ], [t, types, amount]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const lineCount = filtered.reduce((sum, row) => sum + (row.lines?.length ?? 0), 0);
+        const accountsUsed = new Set(filtered.flatMap((row) => templateAccountNames(row.lines))).size;
+        const items: ListStat[] = [
+            { id: 'count', icon: <Layers aria-hidden />, label: title, value: n(filtered.length) },
+            { id: 'lines', icon: <ListOrdered aria-hidden />, label: copy.common.lines, value: n(lineCount) },
+            { id: 'accounts', icon: <BookOpen aria-hidden />, label: copy.common.accounts, value: n(accountsUsed) },
+            {
+                id: 'amount',
+                icon: <Wallet aria-hidden />,
+                label: t.accountingShared.amount,
+                value: formatBDT(
+                    filtered.reduce((sum, row) => sum + templateAmount(row.lines), 0),
+                    { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 },
+                ),
+            },
+        ];
+        return { items, loading, label: vt.statsLabel };
+    }, [filtered, loading, locale, title, t, copy, vt]);
+
+    const columns: ColumnDef<VoucherTemplate, any>[] = useMemo(
+        () => [
+            columnHelper.accessor('name', {
+                header: t.recurringJournals.columns.name,
+                cell: (info) => {
+                    const row = info.row.original;
+                    return (
+                        <div className="min-w-0">
+                            <span className="block font-medium text-gray-900">{row.name}</span>
+                            {row.description ? <span className="block truncate text-gray-500">{row.description}</span> : null}
+                        </div>
+                    );
+                },
+                size: 220,
+            }),
+            columnHelper.accessor('voucher_type', {
+                header: t.accountingShared.type,
+                cell: (info) => voucherTypeLabel(t, info.getValue()),
+                size: 130,
+            }),
+            columnHelper.accessor((row) => templateAccountNames(row.lines).join(', '), {
+                id: 'lines',
+                header: copy.common.lines,
+                enableSorting: false,
+                cell: (info) => <TemplateLinesCell lines={info.row.original.lines} />,
+                size: 300,
+                meta: { hideOnMobile: true },
+            }),
+            columnHelper.accessor((row) => templateAmount(row.lines), {
+                id: 'amount',
+                header: t.accountingShared.amount,
+                cell: (info) => formatBDT(info.getValue(), { locale }),
+                size: 120,
+                meta: { align: 'end' },
+            }),
+            columnHelper.display({
+                id: 'actions',
+                header: t.common.actions,
+                cell: ({ row }) => (
+                    <RowActions>
+                        <RowActionButton
+                            icon={<FilePlus2 />}
+                            label={vt.useTemplate}
+                            href={`${routes.accounting.voucherEntry}?templateId=${row.original.id}`}
+                        />
+                        <RowActionButton
+                            icon={<Trash2 />}
+                            label={vt.deleteLabel}
+                            intent="danger"
+                            onClick={() => setDeleteTarget(row.original)}
+                        />
+                    </RowActions>
+                ),
+                enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
+                size: 90,
+            }),
+        ],
+        [t, copy, vt, locale],
+    );
+
+    const canSave = Boolean(form.name && lines.filter((line) => line.accountId).length >= 2);
+
     return (
         <AccountingPageShell>
-            <AccountingToolbar
-                subtitle="Save reusable account line templates for quick voucher entry"
+            <PageHeader
+                title={title}
+                subtitle={t.accounting.links.voucherTemplates.description}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.accounting,
+                    title,
+                    'accounting',
+                )}
                 actions={(
-                    <button onClick={() => setShowCreate(true)} className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700`}>
-                        <Plus className="w-3.5 h-3.5" /> New Template
-                    </button>
+                    <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={openCreate}>
+                        {t.recurringJournals.newTemplate}
+                    </Button>
                 )}
             />
 
-            {error && <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-700">{error}</div>}
+            {loadError ? <Alert tone="danger">{loadError}</Alert> : null}
+
+            <DataTable<VoucherTemplate>
+                tableId="accounting-voucher-templates"
+                columns={columns}
+                data={filtered}
+                title={title}
+                isLoading={loading}
+                emptyMessage={vt.emptyMessage}
+                emptyIcon={<Layers className="w-10 h-10 text-gray-200" />}
+                searchPlaceholder={vt.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+            />
 
             {showCreate && (
-                <CompactSection title="New Voucher Template">
-                    <div className="grid grid-cols-2 gap-3">
-                        <label className="col-span-2 block">
-                            <span className={`${compactDensity.formLabel} block mb-1`}>Template Name</span>
-                            <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Office Rent" className={compactDensity.formField} />
-                        </label>
-                        <label className="col-span-2 block">
-                            <span className={`${compactDensity.formLabel} block mb-1`}>Voucher Type</span>
-                            <select value={form.voucherType} onChange={(e) => setForm((f) => ({ ...f, voucherType: e.target.value }))} className={compactDensity.formField}>
-                                {voucherTypeOptions.map((option) => (
-                                    <option key={option.value} value={option.value}>{option.label}</option>
-                                ))}
-                            </select>
-                        </label>
+                <ModalShell size="lg" onBackdropClick={closeCreate}>
+                    <ModalHeader title={vt.formTitle} onClose={closeCreate} closeLabel={t.common.close} />
+                    <div className="p-4 space-y-4 overflow-y-auto">
+                        {formError ? <Alert tone="danger">{formError}</Alert> : null}
+                        <FormGrid>
+                            <Field label={copy.common.templateName} htmlFor={`${formId}-name`} required>
+                                <Input
+                                    id={`${formId}-name`}
+                                    value={form.name}
+                                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                                    placeholder={vt.namePlaceholder}
+                                    autoFocus
+                                />
+                            </Field>
+                            <Field label={copy.common.voucherType} htmlFor={`${formId}-type`}>
+                                <Select
+                                    id={`${formId}-type`}
+                                    value={form.voucherType}
+                                    onChange={(e) => setForm((f) => ({ ...f, voucherType: e.target.value }))}
+                                >
+                                    {voucherTypeOptions(t).map((option) => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                </Select>
+                            </Field>
+                            <FormGrid.Full>
+                                <Field label={t.accountingShared.description} htmlFor={`${formId}-description`}>
+                                    <Input
+                                        id={`${formId}-description`}
+                                        value={form.description}
+                                        onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                                    />
+                                </Field>
+                            </FormGrid.Full>
+                        </FormGrid>
+                        {/* A template may leave the amounts for the voucher it starts. */}
+                        <TemplateLinesEditor accounts={accounts} lines={lines} onChange={setLines} showBalance={false} />
                     </div>
-
-                    <table className="w-full text-sm border border-gray-100 rounded-xl overflow-hidden">
-                        <thead>
-                            <tr className="bg-gray-50">
-                                <th className="text-start px-3 py-2 text-xs font-semibold text-gray-400">Account</th>
-                                <th className="text-end px-3 py-2 text-xs font-semibold text-gray-400">Debit</th>
-                                <th className="text-end px-3 py-2 text-xs font-semibold text-gray-400">Credit</th>
-                                <th className="w-8" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {lines.map((l, i) => (
-                                <tr key={i} className="border-t border-gray-100">
-                                    <td className="px-3 py-1.5">
-                                        <AccountSelect
-                                            accounts={accounts}
-                                            value={l.accountId}
-                                            onChange={(accountId) => setLine(i, 'accountId', accountId)}
-                                            ariaLabel={`Account line ${i + 1}`}
-                                            className={compactDensity.formField}
-                                        />
-                                    </td>
-                                    <td className="px-3 py-1.5">
-                                        <input type="number" min="0" step="0.01" value={l.debitAmount}
-                                            onChange={(e) => { setLine(i, 'debitAmount', e.target.value); if (e.target.value) setLine(i, 'creditAmount', ''); }}
-                                            className={`${compactDensity.formField} text-end`} placeholder="0.00" />
-                                    </td>
-                                    <td className="px-3 py-1.5">
-                                        <input type="number" min="0" step="0.01" value={l.creditAmount}
-                                            onChange={(e) => { setLine(i, 'creditAmount', e.target.value); if (e.target.value) setLine(i, 'debitAmount', ''); }}
-                                            className={`${compactDensity.formField} text-end`} placeholder="0.00" />
-                                    </td>
-                                    <td className="px-2 py-1.5 text-center">
-                                        {lines.length > 2 && (
-                                            <button onClick={() => setLines((p) => p.filter((_, idx) => idx !== i))}
-                                                className="text-gray-300 hover:text-red-500 transition"><Trash2 className="w-3.5 h-3.5" /></button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-
-                    <button onClick={() => setLines((p) => [...p, { accountId: '', debitAmount: '', creditAmount: '', comment: '' }])}
-                        className="inline-flex items-center gap-1.5 text-sm font-bold text-gray-500 hover:text-gray-900 transition">
-                        <Plus className="w-3.5 h-3.5" /> Add Line
-                    </button>
-
-                    <div className="flex gap-2 mt-3">
-                        <button onClick={() => setShowCreate(false)} className={compactDensity.btnSecondary}>Cancel</button>
-                        <button onClick={handleCreate} disabled={creating || !form.name || lines.filter((l) => l.accountId).length < 2}
-                            className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-50`}>
-                            {creating ? 'Saving…' : 'Save Template'}
-                        </button>
-                    </div>
-                </CompactSection>
+                    <ModalFooter>
+                        <Button variant="secondary" onClick={closeCreate} disabled={creating}>
+                            {t.common.cancel}
+                        </Button>
+                        <Button variant="primary" onClick={() => void handleCreate()} loading={creating} disabled={!canSave || creating}>
+                            {creating ? copy.common.saving : copy.common.saveTemplate}
+                        </Button>
+                    </ModalFooter>
+                </ModalShell>
             )}
 
-            {loading ? (
-                <CompactSection className="text-center text-gray-400 text-sm py-8">Loading…</CompactSection>
-            ) : templates.length === 0 ? (
-                <CompactSection className="text-center text-gray-400 text-sm py-6">No voucher templates yet.</CompactSection>
-            ) : (
-                <div className="space-y-2">
-                    {templates.map((t) => (
-                        <CompactSection key={t.id}>
-                            <div className="flex items-start justify-between gap-4">
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-bold text-gray-900">{t.name}</span>
-                                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">{voucherTypeLabel(t.voucher_type)}</span>
-                                    </div>
-                                    {t.description && <div className="text-sm text-gray-500 mt-0.5">{t.description}</div>}
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <Link href={`${routes.accounting.voucherEntry}?templateId=${t.id}`}
-                                        className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition">
-                                        <FilePlus2 className="w-3 h-3" /> Use Template
-                                    </Link>
-                                    <button onClick={() => handleDelete(t.id)} aria-label="Delete template"
-                                        className="inline-flex items-center gap-2 rounded-xl bg-danger-light border border-red-100 px-2 py-1.5 text-xs font-bold text-danger-text hover:bg-danger-light transition">
-                                        <Trash2 className="w-3 h-3" />
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="mt-3 border-t border-gray-50 pt-3 space-y-1">
-                                {t.lines.map((l, i) => (
-                                    <div key={i} className="flex justify-between text-xs text-gray-500">
-                                        <span>{l.account.name}</span>
-                                        <span>
-                                            {Number(l.debit_amount) > 0 ? <span className="text-gray-700">Dr {formatBDT(Number(l.debit_amount), { locale })}</span> : <span className="text-gray-400">Cr {formatBDT(Number(l.credit_amount), { locale })}</span>}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        </CompactSection>
-                    ))}
-                </div>
-            )}
+            <ConfirmDialog
+                open={deleteTarget !== null}
+                title={vt.deleteTitle}
+                prompt={fmt(vt.deleteBody, { name: deleteTarget?.name ?? '' })}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                loading={deleting}
+                danger
+                onConfirm={() => void handleDelete()}
+                onCancel={() => { if (!deleting) setDeleteTarget(null); }}
+            />
         </AccountingPageShell>
     );
 }

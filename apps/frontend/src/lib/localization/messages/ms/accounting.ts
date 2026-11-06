@@ -365,9 +365,6 @@ export const accountingMessages = {
         loadAccountsFailed: 'Gagal memuatkan pilihan akaun lejar.',
         openJournal: 'Buka jurnal',
         openVoucherDetail: 'Buka butiran baucar terkini',
-        accountAria: 'Akaun lejar',
-        fromDateAria: 'Tarikh dari lejar',
-        toDateAria: 'Tarikh hingga lejar',
         columns: { voucherNumber: 'Baucar #', date: 'Tarikh', type: 'Jenis', narration: 'Keterangan', debit: 'Debit', credit: 'Kredit', runningBalance: 'Baki semasa' },
     },
     journal: {
@@ -380,10 +377,6 @@ export const accountingMessages = {
         open: 'Buka',
         accountingJournal: 'Jurnal Perakaunan',
         emptyMessage: 'Tiada baucar ditemui untuk penapis yang dipilih',
-        searchPlaceholder: 'Cari baris jurnal mengikut nombor baucar, penerangan, atau jenis...',
-        voucherTypeAria: 'Jenis baucar jurnal',
-        fromDateAria: 'Tarikh dari jurnal',
-        toDateAria: 'Tarikh hingga jurnal',
         detail: {
             loading: 'Memuatkan butiran baucar...',
             loadFailed: 'Gagal memuatkan butiran baucar.',
@@ -428,7 +421,6 @@ export const accountingMessages = {
             editVoucher: 'Sunting Baucar',
             saveChanges: 'Simpan Perubahan',
             emptyMessage: 'Tiada baucar ditemui untuk penapis yang dipilih',
-            searchPlaceholder: 'Cari mengikut nombor baucar, rujukan, atau jenis...',
             deleteConfirm: 'Padam baucar {voucherNumber}?',
             deleteSuccess: 'Baucar dipadam.',
             deleteFailed: 'Gagal memadam baucar.',

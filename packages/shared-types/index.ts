@@ -1303,6 +1303,7 @@ export const VoucherApprovalStatus = {
 export type VoucherApprovalStatus =
   (typeof VoucherApprovalStatus)[keyof typeof VoucherApprovalStatus];
 
+/** Mirrors the Prisma `PostingRuleEventType` enum, in its order — keep the two in step. */
 export const PostingRuleEventType = {
   SALE: 'sale',
   SALE_RETURN: 'sale_return',
@@ -1310,20 +1311,61 @@ export const PostingRuleEventType = {
   PURCHASE_RETURN: 'purchase_return',
   INVENTORY_ADJUSTMENT: 'inventory_adjustment',
   FUND_MOVEMENT: 'fund_movement',
+  EXPENSE: 'expense',
   LOAN_DISBURSEMENT: 'loan_disbursement',
   LOAN_REPAYMENT: 'loan_repayment',
+  CUSTOMER_PAYMENT: 'customer_payment',
+  SUPPLIER_PAYMENT: 'supplier_payment',
+  DEPRECIATION: 'depreciation',
+  CASH_TRANSACTION: 'cash_transaction',
+  SALARY_ACCRUAL: 'salary_accrual',
+  SALARY_PAYMENT: 'salary_payment',
+  ASSET_ACQUISITION: 'asset_acquisition',
+  FUND_TRANSFER: 'fund_transfer',
   INVESTOR_CONTRIBUTION: 'investor_contribution',
   INVESTOR_WITHDRAWAL: 'investor_withdrawal',
   INVESTOR_PROFIT_ACCRUAL: 'investor_profit_accrual',
   INVESTOR_PROFIT_PAYOUT: 'investor_profit_payout',
+  IMPORT_COST: 'import_cost',
+  IMPORT_ACCEPTANCE: 'import_acceptance',
+  IMPORT_RECEIPT: 'import_receipt',
+  IMPORT_SETTLEMENT: 'import_settlement',
+  IMPORT_WRITE_OFF: 'import_write_off',
+  PLATFORM_BILLING: 'platform_billing',
+  PLATFORM_EXPENSE: 'platform_expense',
+  BAD_DEBT_WRITE_OFF: 'bad_debt_write_off',
+  PARTY_OPENING_BALANCE: 'party_opening_balance',
 } as const;
 export type PostingRuleEventType = (typeof PostingRuleEventType)[keyof typeof PostingRuleEventType];
 
+/**
+ * Events posted through fixed multi-leg routes (`postMultiLeg`), never by a
+ * tenant's posting rule: the shipment events, the platform's own books, and
+ * party opening balances. See the Prisma enum's notes.
+ */
+const FIXED_ROUTE_EVENT_TYPES: readonly PostingRuleEventType[] = [
+  PostingRuleEventType.IMPORT_COST,
+  PostingRuleEventType.IMPORT_ACCEPTANCE,
+  PostingRuleEventType.IMPORT_RECEIPT,
+  PostingRuleEventType.IMPORT_SETTLEMENT,
+  PostingRuleEventType.IMPORT_WRITE_OFF,
+  PostingRuleEventType.PLATFORM_BILLING,
+  PostingRuleEventType.PLATFORM_EXPENSE,
+  PostingRuleEventType.PARTY_OPENING_BALANCE,
+];
+
+/** The events a tenant's posting rules can map to accounts, in enum order. */
+export const POSTING_RULE_EVENT_TYPES: readonly PostingRuleEventType[] = Object.values(PostingRuleEventType).filter(
+  (type) => !FIXED_ROUTE_EVENT_TYPES.includes(type),
+);
+
+/** Mirrors the Prisma `PostingRuleConditionKey` enum — keep the two in step. */
 export const PostingRuleConditionKey = {
   PAYMENT_MODE: 'payment_mode',
   REASON_TYPE: 'reason_type',
   TRANSFER_SCOPE: 'transfer_scope',
   LOAN_DIRECTION: 'loan_direction',
+  PAYMENT_DIRECTION: 'payment_direction',
   NONE: 'none',
 } as const;
 export type PostingRuleConditionKey = (typeof PostingRuleConditionKey)[keyof typeof PostingRuleConditionKey];
