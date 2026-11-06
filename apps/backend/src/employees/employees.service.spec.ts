@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { EmployeesService } from './employees.service';
+import { EmployeesService, findReportingCycle } from './employees.service';
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
@@ -43,6 +43,12 @@ describe('EmployeesService', () => {
         delete: jest.fn(),
         count: jest.fn(),
       },
+      designationLevel: {
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
       tenantUser: {
         findFirst: jest.fn(),
       },
@@ -77,10 +83,10 @@ describe('EmployeesService', () => {
       const result = await service.listDepartments('t1');
 
       expect(result).toEqual(depts);
-      expect(db.department.findMany).toHaveBeenCalledWith({
+      expect(db.department.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: { tenant_id: 't1', deleted_at: null },
         orderBy: { name: 'asc' },
-      });
+      }));
     });
 
     it('returns empty array when tenant has no departments', async () => {
@@ -101,7 +107,7 @@ describe('EmployeesService', () => {
 
       expect(result.id).toBe('d1');
       expect(db.department.create).toHaveBeenCalledWith({
-        data: { tenant_id: 't1', name: 'HR' },
+        data: { tenant_id: 't1', name: 'HR', code: null, description: null, reports_to: null, is_active: true },
       });
     });
 
@@ -122,10 +128,9 @@ describe('EmployeesService', () => {
       const result = await service.listDesignations('t1');
 
       expect(result).toEqual(desigs);
-      expect(db.designation.findMany).toHaveBeenCalledWith({
+      expect(db.designation.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: { tenant_id: 't1', deleted_at: null },
-        orderBy: { name: 'asc' },
-      });
+      }));
     });
 
     it('returns empty array when no designations exist', async () => {
@@ -902,6 +907,135 @@ describe('EmployeesService', () => {
       await expect(service.create('t1', { name: 'Alice', phone: '01700000000' } as any))
         .rejects.toThrow('An employee needs a branch.');
       expect(db.employee.create).not.toHaveBeenCalled();
+    });
+  });
+  // ── Designation master ────────────────────────────────────────────────────
+
+  describe('designation master', () => {
+    it('stores a designation code upper-case', async () => {
+      db.designation.findFirst.mockResolvedValue(null);
+      db.designation.create.mockImplementation(async ({ data }: any) => ({ id: 'dsg1', ...data }));
+
+      const result = await service.createDesignation('t1', { name: 'Head of Import', code: ' imp-01 ' });
+
+      expect(result.code).toBe('IMP-01');
+    });
+
+    it('refuses a designation code another designation already has', async () => {
+      db.designation.findFirst.mockImplementation(async ({ where }: any) =>
+        where.code === 'IMP-01' ? { id: 'other', code: 'IMP-01' } : null,
+      );
+
+      await expect(service.createDesignation('t1', { name: 'Sourcing Head', code: 'imp-01' }))
+        .rejects.toThrow('A designation with this code already exists.');
+      expect(db.designation.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a department code another department already has', async () => {
+      db.department.findFirst.mockImplementation(async ({ where }: any) =>
+        where.code === 'IMP' ? { id: 'other', code: 'IMP' } : null,
+      );
+
+      await expect(service.createDepartment('t1', { name: 'Imports', code: 'imp' }))
+        .rejects.toThrow('A department with this code already exists.');
+    });
+
+    it('deactivates a designation without deleting it', async () => {
+      db.designation.findFirst.mockResolvedValueOnce({ id: 'dsg1', department_id: null, level_id: null, reports_to_id: null });
+      db.designation.findFirst.mockResolvedValue(null);
+      db.designation.update.mockImplementation(async ({ data }: any) => ({ id: 'dsg1', ...data }));
+
+      await service.updateDesignation('t1', 'dsg1', { is_active: false });
+
+      expect(db.designation.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'dsg1' },
+        data: { is_active: false },
+      }));
+      expect(db.designation.update.mock.calls[0][0].data).not.toHaveProperty('deleted_at');
+    });
+
+    it('refuses a reporting line that loops back', async () => {
+      // A reports to B; making B report to A closes the loop.
+      db.designation.findFirst.mockResolvedValueOnce({ id: 'B', department_id: null, level_id: null, reports_to_id: null });
+      db.designation.findFirst.mockResolvedValue(null);
+      db.designation.findMany.mockResolvedValue([
+        { id: 'A', reports_to_id: 'B', is_active: true },
+        { id: 'B', reports_to_id: null, is_active: true },
+      ]);
+
+      await expect(service.updateDesignation('t1', 'B', { reports_to_id: 'A' }))
+        .rejects.toThrow('This reporting line would loop back to the same designation.');
+    });
+
+    it('refuses to report to an inactive designation', async () => {
+      db.designation.findFirst.mockResolvedValue(null);
+      db.designation.findMany.mockResolvedValue([{ id: 'A', reports_to_id: null, is_active: false }]);
+
+      await expect(service.createDesignation('t1', { name: 'New', reports_to_id: 'A' }))
+        .rejects.toThrow('The reporting designation is inactive.');
+    });
+
+    it('releases the code when a designation is deleted', async () => {
+      db.designation.findFirst.mockResolvedValue({ id: 'dsg1', name: 'Typo' });
+      db.employee.count.mockResolvedValue(0);
+      db.designation.count.mockResolvedValue(0);
+
+      await service.deleteDesignation('t1', 'dsg1');
+
+      expect(db.designation.update).toHaveBeenCalledWith({
+        where: { id: 'dsg1' },
+        data: { deleted_at: expect.any(Date), code: null },
+      });
+    });
+
+    it('refuses to delete a designation others report to', async () => {
+      db.designation.findFirst.mockResolvedValue({ id: 'dsg1', name: 'Head' });
+      db.employee.count.mockResolvedValue(0);
+      db.designation.count.mockResolvedValue(3);
+
+      await expect(service.deleteDesignation('t1', 'dsg1')).rejects.toThrow('This designation is still in use.');
+    });
+
+    it('filters designations by department, level and status', async () => {
+      db.designation.findMany.mockResolvedValue([]);
+
+      await service.listDesignations('t1', { departmentId: 'dep-1', levelId: 'lvl-3', status: 'active' });
+
+      expect(db.designation.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { tenant_id: 't1', deleted_at: null, is_active: true, department_id: 'dep-1', level_id: 'lvl-3' },
+      }));
+    });
+
+    it('refuses a level number that already exists', async () => {
+      db.designationLevel.findFirst.mockResolvedValue({ id: 'lvl', level: 3 });
+
+      await expect(service.createDesignationLevel('t1', { level: 3, name: 'Head' }))
+        .rejects.toThrow('This level number already exists.');
+    });
+
+    it('refuses to give a new employee an inactive designation', async () => {
+      db.employee.findFirst.mockResolvedValue(null);
+      db.designation.findFirst.mockResolvedValue({ id: 'dsg1', is_active: false });
+
+      await expect(service.create('t1', { name: 'Rahim', phone: '01700000001', designation_id: 'dsg1', storeId: 'store-a' } as any))
+        .rejects.toThrow('This designation is inactive.');
+      expect(db.employee.create).not.toHaveBeenCalled();
+    });
+
+    it('keeps an inactive designation an employee already holds when other fields change', async () => {
+      db.employee.findFirst.mockResolvedValue({ id: 'emp-1', phone: '017', designation_id: 'dsg1', department_id: null });
+      db.employee.update.mockResolvedValue({ id: 'emp-1', name: 'Rahim' });
+
+      await service.update('t1', 'emp-1', { name: 'Rahim', designation_id: 'dsg1' });
+
+      expect(db.designation.findFirst).not.toHaveBeenCalled();
+      expect(db.employee.update).toHaveBeenCalled();
+    });
+
+    it('findReportingCycle spots a loop and stops on an unrelated one', () => {
+      expect(findReportingCycle(new Map([['A', 'B'], ['B', 'A']]), 'A')).toBe(true);
+      expect(findReportingCycle(new Map([['A', 'B'], ['B', null]]), 'A')).toBe(false);
+      expect(findReportingCycle(new Map([['A', 'B'], ['B', 'C'], ['C', 'B']]), 'A')).toBe(false);
     });
   });
 });

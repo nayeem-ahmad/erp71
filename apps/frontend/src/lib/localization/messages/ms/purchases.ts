@@ -1,5 +1,67 @@
 export const purchasesMessages = {
         purchaseShared: {
+            lists: {
+                purchases: {
+                    statsLabel: "Ringkasan pembelian",
+                    stats: {
+                        bills: "Pembelian",
+                        cancelled: "{count} dibatalkan",
+                        total: "Dibeli",
+                        paid: "Dibayar",
+                        due: "Belum dibayar",
+                        average: "Purata bil",
+                        returns: "Pemulangan",
+                        returnsCount: "{count} pemulangan",
+                    },
+                    filters: {
+                        paid: "Dibayar",
+                        paymentStatus: "Status bayaran",
+                        paymentStatuses: {
+                            PAID: "Dibayar penuh",
+                            PARTIAL: "Dibayar sebahagian",
+                            UNPAID: "Belum dibayar",
+                        },
+                    },
+                },
+                returns: {
+                    statsLabel: "Ringkasan pemulangan pembelian",
+                    stats: {
+                        returns: "Pemulangan",
+                        amount: "Nilai dipulangkan",
+                        refunded: "Bayaran balik diterima",
+                        adjusted: "Dilaraskan pada hutang",
+                        average: "Purata pemulangan",
+                    },
+                    deleted: "Pemulangan pembelian dipadam",
+                },
+                orders: {
+                    statsLabel: "Ringkasan pesanan pembelian",
+                    stats: {
+                        orders: "Pesanan",
+                        cancelled: "{count} dibatalkan",
+                        value: "Nilai pesanan",
+                        open: "Terbuka",
+                        openCount: "{count} terbuka",
+                        received: "Diterima",
+                        receivedCount: "{count} diterima",
+                        overdue: "Lewat tempoh",
+                    },
+                    expectedDate: "Tarikh dijangka",
+                },
+                quotations: {
+                    statsLabel: "Ringkasan sebut harga pembelian",
+                    stats: {
+                        rfqs: "RFQ",
+                        value: "Nilai sebut harga",
+                        pending: "Menunggu",
+                        accepted: "Diterima",
+                        acceptedCount: "{count} diterima",
+                        converted: "Ditukar kepada PO",
+                        expired: "Tamat tempoh",
+                    },
+                    deleted: "RFQ dipadam",
+                },
+            },
             unlinked: 'Tidak dipautkan',
             unlinkedSupplier: 'Pembekal tidak dipautkan',
             noSupplier: 'Tiada pembekal dipilih',
@@ -152,6 +214,13 @@ export const purchasesMessages = {
             statuses: {
                 RECORDED: 'Direkodkan',
                 CANCELLED: 'Dibatalkan',
+            },
+            returnsModal: {
+                viewReturns: 'Lihat pulangan belian ({count})',
+                title: 'Pulangan belian untuk {number}',
+                empty: 'Tiada pulangan pada bil ini',
+                notes: 'Nota',
+                openReturn: 'Buka pulangan',
             },
             printInvoice: 'Cetak Invois',
             printLoadFailed: 'Tidak dapat memuatkan belian untuk dicetak.',

@@ -1,5 +1,67 @@
 export const purchasesMessages = {
     purchaseShared: {
+        lists: {
+            purchases: {
+                statsLabel: "Einkaufsübersicht",
+                stats: {
+                    bills: "Einkäufe",
+                    cancelled: "{count} storniert",
+                    total: "Eingekauft",
+                    paid: "Bezahlt",
+                    due: "Verbindlichkeit",
+                    average: "Ø Rechnung",
+                    returns: "Retouren",
+                    returnsCount: "{count} Retouren",
+                },
+                filters: {
+                    paid: "Bezahlt",
+                    paymentStatus: "Zahlungsstatus",
+                    paymentStatuses: {
+                        PAID: "Vollständig bezahlt",
+                        PARTIAL: "Teilweise bezahlt",
+                        UNPAID: "Unbezahlt",
+                    },
+                },
+            },
+            returns: {
+                statsLabel: "Übersicht Einkaufsretouren",
+                stats: {
+                    returns: "Retouren",
+                    amount: "Retourenwert",
+                    refunded: "Erstattung erhalten",
+                    adjusted: "Mit Verbindlichkeit verrechnet",
+                    average: "Ø Retoure",
+                },
+                deleted: "Einkaufsretoure gelöscht",
+            },
+            orders: {
+                statsLabel: "Übersicht Bestellungen",
+                stats: {
+                    orders: "Bestellungen",
+                    cancelled: "{count} storniert",
+                    value: "Bestellwert",
+                    open: "Offen",
+                    openCount: "{count} offen",
+                    received: "Erhalten",
+                    receivedCount: "{count} erhalten",
+                    overdue: "Überfällig",
+                },
+                expectedDate: "Erwartetes Datum",
+            },
+            quotations: {
+                statsLabel: "Übersicht Einkaufsangebote",
+                stats: {
+                    rfqs: "Anfragen",
+                    value: "Angebotswert",
+                    pending: "Ausstehend",
+                    accepted: "Angenommen",
+                    acceptedCount: "{count} angenommen",
+                    converted: "In Bestellung umgewandelt",
+                    expired: "Abgelaufen",
+                },
+                deleted: "Anfrage gelöscht",
+            },
+        },
         unlinked: "Nicht verknüpft",
         unlinkedSupplier: "Nicht verknüpfter Lieferant",
         noSupplier: "Kein Lieferant ausgewählt",
@@ -152,6 +214,13 @@ export const purchasesMessages = {
         statuses: {
             RECORDED: 'Erfasst',
             CANCELLED: 'Storniert',
+        },
+        returnsModal: {
+            viewReturns: 'Einkaufsretouren anzeigen ({count})',
+            title: 'Einkaufsretouren für {number}',
+            empty: 'Keine Retouren zu diesem Beleg',
+            notes: 'Notizen',
+            openReturn: 'Retoure öffnen',
         },
         printInvoice: "Rechnung drucken",
         printLoadFailed: "Der Einkauf konnte nicht zum Drucken geladen werden.",

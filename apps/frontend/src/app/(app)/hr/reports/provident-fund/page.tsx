@@ -1,14 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { PageShell, PageHeader, Select } from '@/components/ui';
-import DataTable from '@/components/data-table/DataTable';
+import { CalendarRange, PiggyBank, Users } from 'lucide-react';
+import { PageShell, PageHeader } from '@/components/ui';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import type { NumberCondition } from '@/lib/number-condition';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import ReportTile from '@/components/hr/ReportTile';
 import ReportNotes from '@/components/hr/ReportNotes';
 
 interface Row {
@@ -32,15 +34,20 @@ function fiscalLabel(startYear: number): string {
     return `${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}`;
 }
 
+/** The department chip's value for an employee without one. */
+const NONE = '__none__';
+
 export default function ProvidentFundPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const r = t.hr.reports;
     const c = r.common;
     const pf = r.providentFund;
 
     const [startYear, setStartYear] = useState(currentStartYear);
     const [rows, setRows] = useState<Row[]>([]);
-    const [grandTotal, setGrandTotal] = useState(0);
+    const [search, setSearch] = useState('');
+    const [departments, setDepartments] = useState<string[]>([]);
+    const [contributionFilter, setContributionFilter] = useState<NumberCondition | null>(null);
     const [notes, setNotes] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -49,12 +56,10 @@ export default function ProvidentFundPage() {
         try {
             const data = await api.getProvidentFundRegister({ startYear });
             setRows((data?.rows ?? []) as Row[]);
-            setGrandTotal(Number(data?.grand_total ?? 0));
             setNotes((data?.notes ?? []) as string[]);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : c.loadFailed);
             setRows([]);
-            setGrandTotal(0);
             setNotes([]);
         } finally {
             setLoading(false);
@@ -73,8 +78,8 @@ export default function ProvidentFundPage() {
                 accessorKey: 'employee',
                 cell: ({ row }: { row: { original: Row } }) => (
                     <div className="min-w-0">
-                        <span className="font-medium">{row.original.employee?.name}</span>
-                        <span className="block truncate text-xs text-gray-500">
+                        <span>{row.original.employee?.name}</span>
+                        <span className="block truncate text-gray-500">
                             {row.original.employee?.employee_code}
                             {row.original.employee?.department?.name
                                 ? ` · ${row.original.employee.department.name}`
@@ -87,7 +92,7 @@ export default function ProvidentFundPage() {
                 id: 'months',
                 header: pf.columns.months,
                 accessorKey: 'months',
-                meta: { hideOnMobile: true },
+                meta: { hideOnMobile: true, align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
                     <span className="tabular-nums">{row.original.months?.length ?? 0}</span>
                 ),
@@ -96,15 +101,73 @@ export default function ProvidentFundPage() {
                 id: 'total_employee_contribution',
                 header: pf.columns.contribution,
                 accessorKey: 'total_employee_contribution',
+                meta: { align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
-                    <span className="font-semibold tabular-nums text-blue-600">
-                        {formatBDT(row.original.total_employee_contribution)}
-                    </span>
+                    <span className="tabular-nums">{formatBDT(row.original.total_employee_contribution, { locale })}</span>
                 ),
             },
         ],
-        [pf],
+        [pf, locale],
     );
+
+    const filtered = useMemo(
+        () => rows.filter((row) => {
+            if (!matchesAnyOf(departments, row.employee?.department?.name ?? NONE)) return false;
+            if (!matchesNumberCondition(row.total_employee_contribution, contributionFilter)) return false;
+            return matchesSearch(search, row.employee?.name, row.employee?.employee_code, row.employee?.department?.name);
+        }),
+        [rows, departments, contributionFilter, search],
+    );
+
+    const departmentOptions = useMemo(
+        () => [...new Set(rows.map((row) => row.employee?.department?.name).filter((v): v is string => Boolean(v)))]
+            .sort((a, b) => a.localeCompare(b))
+            .map((value) => ({ value, label: value })),
+        [rows],
+    );
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'incomeYear',
+            type: 'select',
+            label: r.taxDeduction.incomeYear,
+            value: String(startYear),
+            // A register is always for some income year: All goes back to the current one.
+            onChange: (next) => setStartYear(next ? Number(next) : currentStartYear()),
+            options: startYearOptions().map((year) => ({ value: String(year), label: fiscalLabel(year) })),
+        },
+        {
+            id: 'department',
+            type: 'multi-select',
+            label: c.department,
+            value: departments,
+            onChange: setDepartments,
+            options: [{ value: NONE, label: c.unassigned }, ...departmentOptions],
+        },
+        {
+            id: 'contribution',
+            type: 'number',
+            label: pf.columns.contribution,
+            value: contributionFilter,
+            onChange: setContributionFilter,
+            money: true,
+        },
+    ], [r, c, pf, startYear, departments, departmentOptions, contributionFilter]);
+
+    const stats = useMemo(() => {
+        const total = filtered.reduce((sum, row) => sum + row.total_employee_contribution, 0);
+        const items: ListStat[] = [
+            { id: 'year', icon: <CalendarRange aria-hidden />, label: r.taxDeduction.incomeYear, value: fiscalLabel(startYear) },
+            { id: 'employees', icon: <Users aria-hidden />, label: t.hr.listUi.employees.employees, value: filtered.length.toLocaleString(locale) },
+            {
+                id: 'total',
+                icon: <PiggyBank aria-hidden />,
+                label: pf.grandTotal,
+                value: formatBDT(total, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 }),
+            },
+        ];
+        return { items, loading, label: t.hr.listUi.reportStats };
+    }, [filtered, startYear, loading, locale, r, pf, t]);
 
     return (
         <PageShell>
@@ -119,25 +182,7 @@ export default function ProvidentFundPage() {
                 )}
             />
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                <ReportTile label={r.taxDeduction.incomeYear} value={fiscalLabel(startYear)} />
-                <ReportTile label={pf.columns.name} value={String(rows.length)} />
-                <ReportTile label={pf.grandTotal} value={formatBDT(grandTotal)} accent />
-            </div>
-
-            <div className="flex flex-col gap-2 md:flex-row md:items-center">
-                <Select
-                    value={startYear}
-                    onChange={(event) => setStartYear(Number(event.target.value))}
-                    className="md:w-44"
-                    aria-label={r.taxDeduction.incomeYear}
-                >
-                    {startYearOptions().map((year) => (
-                        <option key={year} value={year}>{fiscalLabel(year)}</option>
-                    ))}
-                </Select>
-                <span className="text-xs text-gray-500">{r.taxDeduction.incomeYearHint}</span>
-            </div>
+            <p className="text-xs text-gray-500">{r.taxDeduction.incomeYearHint}</p>
 
             <ReportNotes notes={notes} />
 
@@ -145,9 +190,16 @@ export default function ProvidentFundPage() {
                 title={pf.title}
                 tableId="hr-provident-fund"
                 columns={columns as never}
-                data={rows}
+                data={filtered}
                 isLoading={loading}
                 emptyMessage={c.empty}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
             />
         </PageShell>
     );

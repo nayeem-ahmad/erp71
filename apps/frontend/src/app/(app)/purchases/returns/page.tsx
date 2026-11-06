@@ -2,20 +2,26 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Eye, Pencil, Plus, Printer, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowDownToLine, Calculator, Eye, Pencil, Plus, Printer, RotateCcw, Scale, Trash2, Undo2 } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
-import { api } from '@/lib/api';
-import { BranchFilter } from '@/components/ui';
-import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { api, type PurchaseDocumentListFilterParams, type PurchaseReturnListSummary } from '@/lib/api';
+import { BranchFilter, ConfirmDialog, PageShell, buttonClassName } from '@/components/ui';
+import { RowActions, RowActionButton } from '@/components/table';
+import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 import CreatePurchaseReturnModal from './CreatePurchaseReturnModal';
 import { PostingBadge } from '@/components/PostingBadge';
 import { formatBDT } from '@/lib/format';
-import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { routes } from '@/lib/routes';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import type { NumberCondition } from '@/lib/number-condition';
+import { toast } from '@/lib/toast';
+import { useServerList } from '@/hooks/useServerList';
+import { useListSummary } from '@/hooks/useListSummary';
+import { supplierListFilter } from '../components/supplier-list-filter';
 
 interface PurchaseReturnRecord {
     id: string;
@@ -40,46 +46,67 @@ const columnHelper = createColumnHelper<PurchaseReturnRecord>();
 export default function PurchaseReturnsPage() {
     const { t, locale } = useI18n();
     const branch = useBranchScope();
-    const [purchaseReturns, setPurchaseReturns] = useState<PurchaseReturnRecord[]>([]);
-    const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [initialPurchaseId, setInitialPurchaseId] = useState<string | null>(null);
+    const [pendingDelete, setPendingDelete] = useState<PurchaseReturnRecord | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
+    const [supplierIds, setSupplierIds] = useState<string[]>([]);
+    const [totalFilter, setTotalFilter] = useState<NumberCondition | null>(null);
 
     useEffect(() => {
-        if (!branch.ready) return;
-        loadPurchaseReturns();
-    }, [createdRange, branch.ready, branch.apiStoreId]);
+        const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
 
-    const loadPurchaseReturns = async () => {
-        setLoading(true);
-        try {
-            const data = await api.getPurchaseReturns({ ...applyCreatedRangeQuery(createdRange), storeId: branch.apiStoreId });
-            setPurchaseReturns(data);
-        } catch (error) {
-            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
-            console.error('Failed to load purchase returns', error);
-        } finally {
-            setLoading(false);
-        }
+    // A return is dated when it is recorded, so its one date is `created_at`.
+    const filterParams = useMemo<PurchaseDocumentListFilterParams>(
+        () => ({
+            search: debouncedSearch || undefined,
+            ...applyCreatedRangeQuery(createdRange),
+            storeId: branch.apiStoreId,
+            supplierIds,
+            total: totalFilter,
+        }),
+        [debouncedSearch, createdRange, branch.apiStoreId, supplierIds, totalFilter],
+    );
+
+    const { items: purchaseReturns, loading, error: listError, serverPagination, reload } = useServerList<PurchaseReturnRecord>({
+        tableId: 'purchase-returns',
+        initialSort: { id: 'created_at', desc: true },
+        deps: [filterParams],
+        enabled: branch.ready,
+        fetch: (params) => api.getPurchaseReturnsList({ ...params, ...filterParams }),
+    });
+    useBranchForbiddenReset(listError, branch, t.dashboardLayout.branchFilterForbidden);
+
+    const { summary, loading: summaryLoading, reload: reloadSummary } = useListSummary<
+        PurchaseDocumentListFilterParams,
+        PurchaseReturnListSummary
+    >({ fetch: api.getPurchaseReturnsListSummary, params: filterParams, enabled: branch.ready });
+
+    const refresh = () => {
+        void reload();
+        reloadSummary();
     };
 
-    const handleDelete = async (id: string) => {
-        if (!window.confirm(t.purchaseReturns.deleteConfirm)) {
-            return;
-        }
-
+    const confirmDelete = async () => {
+        if (!pendingDelete) return;
+        setDeleting(true);
         try {
-            await api.deletePurchaseReturn(id);
-            setPurchaseReturns((current) => current.filter((purchaseReturn) => purchaseReturn.id !== id));
-        } catch (error) {
+            await api.deletePurchaseReturn(pendingDelete.id);
+            setPendingDelete(null);
+            refresh();
+            toast.success(t.purchaseShared.lists.returns.deleted);
+        } catch (error: any) {
             console.error('Failed to delete purchase return', error);
-            window.alert(t.purchaseReturns.deleteFailed);
+            toast.error(error?.message || t.purchaseReturns.deleteFailed);
+        } finally {
+            setDeleting(false);
         }
-    };
-
-    const handlePrint = (id: string) => {
-        window.open(`/purchases/returns/${id}?print=true`, '_blank');
     };
 
     const openCreateModal = (purchaseId?: string | null) => {
@@ -91,42 +118,53 @@ export default function PurchaseReturnsPage() {
         () => [
             columnHelper.accessor('return_number', {
                 header: t.purchaseReturns.columns.returnNumber,
-                cell: (info) => <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>,
+                cell: (info) => (
+                    <Link
+                        href={routes.purchases.returnDetail(info.row.original.id)}
+                        className="font-medium text-gray-900 hover:text-blue-600 hover:underline"
+                    >
+                        {info.getValue()}
+                    </Link>
+                ),
                 size: 150,
             }),
-            columnHelper.accessor((row) => row.purchase?.purchase_number ?? '-', {
+            createdAtColumn(columnHelper, { header: t.common.date, locale, enableColumnFilter: false }),
+            columnHelper.accessor((row) => row.purchase?.purchase_number ?? '', {
                 id: 'purchase_number',
                 header: t.purchaseReturns.columns.sourcePurchase,
-                cell: (info) => <span className="text-sm font-bold text-gray-700">{info.getValue()}</span>,
+                enableSorting: false,
+                cell: (info) => {
+                    const purchase = info.row.original.purchase;
+                    return purchase ? (
+                        <Link href={routes.purchases.purchaseDetail(purchase.id)} className="text-blue-600 hover:underline">
+                            {purchase.purchase_number}
+                        </Link>
+                    ) : (
+                        <span className="text-gray-400">—</span>
+                    );
+                },
                 size: 160,
             }),
-            columnHelper.accessor((row) => row.supplier?.name ?? t.purchaseShared.unlinked, {
+            columnHelper.accessor((row) => row.supplier?.name ?? '', {
                 id: 'supplier',
-                header: t.purchaseQuotations.columns.supplier,
-                cell: (info) => <span className="text-sm font-bold text-gray-700">{info.getValue()}</span>,
+                header: t.purchaseReturns.columns.supplier,
+                cell: (info) => info.getValue() || <span className="text-gray-400">{t.purchaseShared.unlinked}</span>,
                 size: 190,
             }),
             columnHelper.accessor((row) => row.items?.length ?? 0, {
                 id: 'item_count',
                 header: t.purchaseReturns.columns.items,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-gray-700">
-                        {formatMessage(t.purchaseShared.linesCount, { count: info.getValue() })}
-                    </span>
-                ),
+                enableSorting: false,
+                cell: (info) => formatMessage(t.purchaseShared.linesCount, { count: info.getValue() }),
                 size: 100,
+                meta: { align: 'end', hideOnMobile: true },
             }),
             columnHelper.accessor('total_amount', {
-                header: t.purchaseQuotations.columns.total,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-emerald-600">
-                        {formatBDT(Number(info.getValue() || 0), { locale })}
-                    </span>
-                ),
-                sortingFn: (a, b) => Number(a.getValue('total_amount') || 0) - Number(b.getValue('total_amount') || 0),
+                header: t.purchaseReturns.columns.total,
+                cell: (info) => formatBDT(Number(info.getValue() || 0), { locale }),
                 size: 120,
+                meta: { align: 'end' },
             }),
-            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.display({
                 id: 'posting',
                 header: t.purchaseReturns.columns.voucher,
@@ -137,106 +175,162 @@ export default function PurchaseReturnsPage() {
                     />
                 ),
                 size: 120,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.display({
                 id: 'actions',
-                header: t.purchaseQuotations.columns.actions,
+                header: t.purchaseReturns.columns.actions,
                 cell: (info) => {
                     const row = info.row.original;
                     return (
-                        <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
-                            <button
+                        <RowActions>
+                            <RowActionButton icon={<Eye />} label={t.common.view} href={routes.purchases.returnDetail(row.id)} />
+                            <RowActionButton
+                                icon={<Printer />}
+                                label={t.purchaseReturns.detail.print}
+                                onClick={() => window.open(`${routes.purchases.returnDetail(row.id)}?print=true`, '_blank')}
+                            />
+                            <RowActionButton
+                                icon={<Pencil />}
+                                label={t.common.edit}
+                                href={`${routes.purchases.returnDetail(row.id)}?edit=true`}
+                            />
+                            <RowActionButton
+                                icon={<Plus />}
+                                label={t.purchaseReturns.createAnother}
                                 onClick={() => openCreateModal(row.purchase?.id)}
-                                className="p-1.5 rounded-lg text-primary hover:bg-primary-light transition-colors"
-                                title={t.purchaseReturns.createAnother}
-                            >
-                                <Plus className="w-4 h-4" />
-                            </button>
-                            <Link
-                                href={`/purchases/returns/${row.id}`}
-                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                                title={t.common.view}
-                            >
-                                <Eye className="w-4 h-4" />
-                            </Link>
-                            <Link
-                                href={`/purchases/returns/${row.id}?edit=true`}
-                                className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors"
-                                title={t.common.edit}
-                            >
-                                <Pencil className="w-4 h-4" />
-                            </Link>
-                            <button
-                                onClick={() => handlePrint(row.id)}
-                                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-                                title={t.purchaseReturns.detail.print}
-                            >
-                                <Printer className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={() => handleDelete(row.id)}
-                                className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
-                                title={t.common.delete}
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        </div>
+                            />
+                            <RowActionButton
+                                icon={<Trash2 />}
+                                label={t.common.delete}
+                                intent="danger"
+                                onClick={() => setPendingDelete(row)}
+                            />
+                        </RowActions>
                     );
                 },
                 enableSorting: false,
                 enableColumnFilter: false,
                 enableResizing: false,
-                size: 180,
+                size: 190,
             }),
         ],
         [t, locale],
     );
 
+    const filters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'created',
+                type: 'date-range',
+                label: t.common.date,
+                value: createdRange,
+                onChange: setCreatedRange,
+                operators: true,
+            },
+            supplierListFilter({
+                label: t.purchaseReturns.columns.supplier,
+                noSupplierLabel: t.purchaseShared.noSupplierShort,
+                value: supplierIds,
+                onChange: setSupplierIds,
+            }),
+            {
+                id: 'total',
+                type: 'number',
+                label: t.purchaseReturns.columns.total,
+                value: totalFilter,
+                onChange: setTotalFilter,
+                money: true,
+            },
+        ],
+        [t, createdRange, supplierIds, totalFilter],
+    );
+
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const copy = t.purchaseShared.lists.returns.stats;
+        const dash = '—';
+        const items: ListStat[] = [
+            {
+                id: 'count',
+                icon: <RotateCcw aria-hidden />,
+                label: copy.returns,
+                value: summary ? summary.count.toLocaleString(locale) : dash,
+            },
+            { id: 'amount', icon: <Undo2 aria-hidden />, label: copy.amount, value: summary ? money(summary.amount) : dash },
+            {
+                id: 'refunded',
+                icon: <ArrowDownToLine aria-hidden />,
+                label: copy.refunded,
+                value: summary ? money(summary.refunded) : dash,
+                hint: summary && summary.amount > 0
+                    ? new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(summary.refunded / summary.amount)
+                    : undefined,
+            },
+            { id: 'adjusted', icon: <Scale aria-hidden />, label: copy.adjusted, value: summary ? money(summary.adjusted) : dash },
+            { id: 'average', icon: <Calculator aria-hidden />, label: copy.average, value: summary ? money(summary.average) : dash },
+        ];
+        return { items, loading: summaryLoading && !summary, label: t.purchaseShared.lists.returns.statsLabel };
+    }, [summary, summaryLoading, locale, t]);
+
     return (
         <PageShell>
-                <PageHeader
-                    title={t.purchaseReturns.title}
-                    subtitle={t.purchaseReturns.subtitle}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.purchase,
-                        t.purchaseReturns.title,
-                        'purchases',
-                    )}
-                    actions={(
-                        <>
-                            <BranchFilter scope={branch} />
-                            <button
-                                onClick={() => openCreateModal()}
-                                className="bg-primary hover:bg-primary-hover text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg transition-all"
-                            >
-                                <Plus className="w-4 h-4 me-2" />
-                                New Return
-                            </button>
-                        </>
-                    )}
-                />
+            <PageHeader
+                title={t.purchaseReturns.title}
+                subtitle={t.purchaseReturns.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.purchase,
+                    t.purchaseReturns.title,
+                    'purchases',
+                )}
+                actions={(
+                    <>
+                        <BranchFilter scope={branch} />
+                        <button type="button" onClick={() => openCreateModal()} className={buttonClassName()}>
+                            <Plus className="w-4 h-4" />
+                            {t.purchaseReturns.newReturn}
+                        </button>
+                    </>
+                )}
+            />
 
-                <CreatePurchaseReturnModal
-                    isOpen={isModalOpen}
-                    onClose={() => setIsModalOpen(false)}
-                    onSuccess={loadPurchaseReturns}
-                    initialPurchaseId={initialPurchaseId}
-                />
+            <CreatePurchaseReturnModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSuccess={refresh}
+                initialPurchaseId={initialPurchaseId}
+            />
 
-                <div className="flex flex-wrap items-center gap-2">
-                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
-                </div>
-                <DataTable<PurchaseReturnRecord>
-                    tableId="purchase-returns"
-                    columns={columns}
-                    data={purchaseReturns}
-                    title={t.purchaseReturns.tableTitle}
-                    isLoading={loading}
-                    emptyMessage={t.purchaseReturns.emptyMessage}
-                    emptyIcon={<RotateCcw className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.purchaseReturns.searchPlaceholder}
-                />
-    </PageShell>
+            <DataTable<PurchaseReturnRecord>
+                tableId="purchase-returns"
+                columns={columns}
+                data={purchaseReturns}
+                title={t.purchaseReturns.tableTitle}
+                isLoading={loading}
+                emptyMessage={t.purchaseReturns.emptyMessage}
+                emptyIcon={<RotateCcw className="w-16 h-16 text-gray-200" />}
+                searchPlaceholder={t.purchaseReturns.searchPlaceholder}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+                serverPagination={serverPagination}
+            />
+
+            <ConfirmDialog
+                open={pendingDelete !== null}
+                title={t.common.delete}
+                prompt={t.purchaseReturns.deleteConfirm}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                loading={deleting}
+                danger
+                onConfirm={() => void confirmDelete()}
+                onCancel={() => { if (!deleting) setPendingDelete(null); }}
+            />
+        </PageShell>
     );
 }

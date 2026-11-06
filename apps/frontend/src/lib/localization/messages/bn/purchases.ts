@@ -1,5 +1,67 @@
 export const purchasesMessages = {
         purchaseShared: {
+            lists: {
+                purchases: {
+                    statsLabel: "ক্রয়ের সারাংশ",
+                    stats: {
+                        bills: "ক্রয়",
+                        cancelled: "{count}টি বাতিল",
+                        total: "মোট ক্রয়",
+                        paid: "পরিশোধিত",
+                        due: "প্রদেয়",
+                        average: "গড় বিল",
+                        returns: "ফেরত",
+                        returnsCount: "{count}টি ফেরত",
+                    },
+                    filters: {
+                        paid: "পরিশোধিত",
+                        paymentStatus: "পরিশোধের অবস্থা",
+                        paymentStatuses: {
+                            PAID: "সম্পূর্ণ পরিশোধিত",
+                            PARTIAL: "আংশিক পরিশোধিত",
+                            UNPAID: "অপরিশোধিত",
+                        },
+                    },
+                },
+                returns: {
+                    statsLabel: "ক্রয় ফেরতের সারাংশ",
+                    stats: {
+                        returns: "ফেরত",
+                        amount: "ফেরতের মূল্য",
+                        refunded: "প্রাপ্ত রিফান্ড",
+                        adjusted: "প্রদেয়তে সমন্বিত",
+                        average: "গড় ফেরত",
+                    },
+                    deleted: "ক্রয় ফেরত মুছে ফেলা হয়েছে",
+                },
+                orders: {
+                    statsLabel: "ক্রয় আদেশের সারাংশ",
+                    stats: {
+                        orders: "আদেশ",
+                        cancelled: "{count}টি বাতিল",
+                        value: "আদেশের মূল্য",
+                        open: "খোলা",
+                        openCount: "{count}টি খোলা",
+                        received: "গৃহীত",
+                        receivedCount: "{count}টি গৃহীত",
+                        overdue: "মেয়াদোত্তীর্ণ",
+                    },
+                    expectedDate: "প্রত্যাশিত তারিখ",
+                },
+                quotations: {
+                    statsLabel: "ক্রয় কোটেশনের সারাংশ",
+                    stats: {
+                        rfqs: "আরএফকিউ",
+                        value: "উদ্ধৃত মূল্য",
+                        pending: "অপেক্ষমাণ",
+                        accepted: "গৃহীত",
+                        acceptedCount: "{count}টি গৃহীত",
+                        converted: "পিও-তে রূপান্তরিত",
+                        expired: "মেয়াদ শেষ",
+                    },
+                    deleted: "আরএফকিউ মুছে ফেলা হয়েছে",
+                },
+            },
             unlinked: "অনুবন্ধহীন",
             unlinkedSupplier: "অনুবন্ধহীন সরবরাহকারী",
             noSupplier: "কোনো সরবরাহকারী নির্বাচন করা হয়নি",
@@ -152,6 +214,13 @@ export const purchasesMessages = {
             statuses: {
                 RECORDED: 'রেকর্ডকৃত',
                 CANCELLED: 'বাতিল',
+            },
+            returnsModal: {
+                viewReturns: 'ক্রয় ফেরত দেখুন ({count})',
+                title: '{number}-এর ক্রয় ফেরত',
+                empty: 'এই বিলে কোনো ক্রয় ফেরত নেই',
+                notes: 'নোট',
+                openReturn: 'ফেরত খুলুন',
             },
             printInvoice: "ইনভয়েস প্রিন্ট",
             printLoadFailed: "প্রিন্ট করতে ক্রয় লোড করা যায়নি।",

@@ -4,6 +4,7 @@ import {
     IsArray,
     IsBoolean,
     IsEmail,
+    IsIn,
     IsInt,
     IsNotEmpty,
     IsOptional,
@@ -103,4 +104,13 @@ export class InviteMeet71Dto {
 export class InternalInviteMeet71Dto extends InviteMeet71Dto {
     @IsEmail()
     actorEmail: string;
+}
+
+export class StartMeet71CallDto {
+    @IsEmail()
+    to: string;
+
+    @IsOptional()
+    @IsIn(['voice', 'video'])
+    mode?: 'voice' | 'video';
 }

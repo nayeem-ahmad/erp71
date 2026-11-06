@@ -1,14 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Clock, LogOut, UserCheck, Users } from 'lucide-react';
 import { PageShell, PageHeader, StatusBadge, statusToneFor } from '@/components/ui';
-import DataTable from '@/components/data-table/DataTable';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import type { CreatedRange } from '@/lib/created-range';
+import { inDateRange, matchesAnyOf, matchesSearch } from '@/lib/list-filter';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import ReportTile from '@/components/hr/ReportTile';
 import ReportNotes from '@/components/hr/ReportNotes';
 
 interface Row {
@@ -23,6 +25,12 @@ interface Row {
     exit_reason: string | null;
 }
 
+const STATUSES = ['ACTIVE', 'PROBATION', 'INACTIVE', 'RESIGNED', 'TERMINATED', 'CONTRACT_ENDED'] as const;
+/** Still on staff; anyone else on the register has left or been switched off. */
+const ON_STAFF = new Set(['ACTIVE', 'PROBATION']);
+/** The department chip's value for an employee without one. */
+const NONE = '__none__';
+
 export default function EmployeeRegisterPage() {
     const { t, locale } = useI18n();
     const r = t.hr.reports;
@@ -32,6 +40,12 @@ export default function EmployeeRegisterPage() {
     const [rows, setRows] = useState<Row[]>([]);
     const [notes, setNotes] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
+    const [statuses, setStatuses] = useState<string[]>([]);
+    const [statusExclude, setStatusExclude] = useState(false);
+    const [departments, setDepartments] = useState<string[]>([]);
+    const [joinedRange, setJoinedRange] = useState<CreatedRange | null>(null);
+    const [leftRange, setLeftRange] = useState<CreatedRange | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -52,6 +66,11 @@ export default function EmployeeRegisterPage() {
         void load();
     }, [load]);
 
+    const statusLabel = useCallback(
+        (status: string) => (t.employees.statuses as Record<string, string>)[status] ?? status,
+        [t],
+    );
+
     const columns = useMemo(
         () => [
             {
@@ -60,8 +79,8 @@ export default function EmployeeRegisterPage() {
                 accessorKey: 'name',
                 cell: ({ row }: { row: { original: Row } }) => (
                     <div className="min-w-0">
-                        <span className="font-medium">{row.original.name}</span>
-                        <span className="block truncate text-xs text-gray-500">
+                        <span>{row.original.name}</span>
+                        <span className="block truncate text-gray-500">
                             {row.original.employee_code}
                             {row.original.designation ? ` · ${row.original.designation}` : ''}
                         </span>
@@ -102,7 +121,7 @@ export default function EmployeeRegisterPage() {
                 accessorKey: 'status',
                 cell: ({ row }: { row: { original: Row } }) => (
                     <StatusBadge tone={statusToneFor(row.original.status)}>
-                        {row.original.status}
+                        {statusLabel(row.original.status)}
                     </StatusBadge>
                 ),
             },
@@ -125,14 +144,84 @@ export default function EmployeeRegisterPage() {
                 accessorKey: 'exit_reason',
                 meta: { hideOnMobile: true },
                 cell: ({ row }: { row: { original: Row } }) => (
-                    <span className="text-gray-600">{row.original.exit_reason ?? '—'}</span>
+                    <span>{row.original.exit_reason ?? '—'}</span>
                 ),
             },
         ],
-        [er, c.unassigned, locale],
+        [er, c.unassigned, locale, statusLabel],
     );
 
-    const active = rows.filter((row) => row.status === 'ACTIVE').length;
+    const filtered = useMemo(
+        () => rows.filter((row) => {
+            if (!matchesAnyOf(statuses, row.status, statusExclude)) return false;
+            if (!matchesAnyOf(departments, row.department ?? NONE)) return false;
+            if (!inDateRange(row.date_of_joining, joinedRange)) return false;
+            if (!inDateRange(row.last_working_day, leftRange)) return false;
+            return matchesSearch(search, row.name, row.employee_code, row.phone, row.designation, row.department, row.exit_reason);
+        }),
+        [rows, statuses, statusExclude, departments, joinedRange, leftRange, search],
+    );
+
+    const departmentOptions = useMemo(
+        () => [...new Set(rows.map((row) => row.department).filter((v): v is string => Boolean(v)))]
+            .sort((a, b) => a.localeCompare(b))
+            .map((value) => ({ value, label: value })),
+        [rows],
+    );
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'status',
+            type: 'multi-select',
+            label: er.columns.status,
+            value: statuses,
+            onChange: setStatuses,
+            exclude: { value: statusExclude, onChange: setStatusExclude },
+            options: STATUSES.map((value) => ({ value, label: statusLabel(value) })),
+        },
+        {
+            id: 'department',
+            type: 'multi-select',
+            label: er.columns.department,
+            value: departments,
+            onChange: setDepartments,
+            options: [{ value: NONE, label: c.unassigned }, ...departmentOptions],
+        },
+        {
+            id: 'joined',
+            type: 'date-range',
+            label: er.columns.joined,
+            value: joinedRange,
+            onChange: setJoinedRange,
+            operators: true,
+        },
+        {
+            id: 'lastDay',
+            type: 'date-range',
+            label: er.columns.lastDay,
+            value: leftRange,
+            onChange: setLeftRange,
+            operators: true,
+            more: true,
+        },
+    ], [er, c, statuses, statusExclude, statusLabel, departments, departmentOptions, joinedRange, leftRange]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const left = filtered.filter((row) => !ON_STAFF.has(row.status)).length;
+        const items: ListStat[] = [
+            { id: 'total', icon: <Users aria-hidden />, label: er.kpi.total, value: n(filtered.length) },
+            { id: 'active', icon: <UserCheck aria-hidden />, label: er.kpi.active, value: n(filtered.filter((row) => row.status === 'ACTIVE').length) },
+            {
+                id: 'probation',
+                icon: <Clock aria-hidden />,
+                label: t.hr.listUi.employees.probation,
+                value: n(filtered.filter((row) => row.status === 'PROBATION').length),
+            },
+            { id: 'left', icon: <LogOut aria-hidden />, label: t.hr.listUi.employees.left, value: n(left) },
+        ];
+        return { items, loading, label: t.hr.listUi.reportStats };
+    }, [filtered, loading, locale, er, t]);
 
     return (
         <PageShell>
@@ -147,20 +236,22 @@ export default function EmployeeRegisterPage() {
                 )}
             />
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <ReportTile label={er.kpi.total} value={String(rows.length)} accent />
-                <ReportTile label={er.kpi.active} value={String(active)} />
-            </div>
-
             <ReportNotes notes={notes} />
 
             <DataTable
                 title={er.title}
                 tableId="hr-employee-register"
                 columns={columns as never}
-                data={rows}
+                data={filtered}
                 isLoading={loading}
                 emptyMessage={c.empty}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
             />
         </PageShell>
     );

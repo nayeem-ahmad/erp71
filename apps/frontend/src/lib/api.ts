@@ -36,6 +36,7 @@ import type {
     MessagingCreditSummary,
 } from './messaging-credits';
 import type { DailyReport } from '@/lib/daily-report';
+import type { Department, Designation, DesignationLevel, OrgImportResult } from '@/lib/org-structure';
 import { numberConditionParam, type NumberCondition } from '@/lib/number-condition';
 import { browserApiBase } from './api-base';
 import { getQueryClient, ME_QUERY_KEY, readMe } from './query-client';
@@ -49,6 +50,25 @@ import {
     isAccessTokenNearExpiry,
     updateCredentials,
 } from './session-store';
+
+export interface DepartmentInput {
+    name: string;
+    code?: string | null;
+    description?: string | null;
+    reports_to?: string | null;
+    is_active?: boolean;
+}
+
+export interface DesignationInput {
+    name: string;
+    code?: string | null;
+    department_id?: string | null;
+    level_id?: string | null;
+    reports_to_id?: string | null;
+    reports_to_note?: string | null;
+    remarks?: string | null;
+    is_active?: boolean;
+}
 
 /** Per-tenant feature state: platform defaults, this tenant's overrides, and the result. */
 export type AdminTenantFeatures = {
@@ -1501,6 +1521,127 @@ function setSalesListFilterParams(query: URLSearchParams, params: SalesListFilte
     setColumnFilterParam(query, params.filters);
 }
 
+/**
+ * What narrows a purchase-side list — purchases, purchase returns, purchase
+ * orders, purchase quotations — sent alike to the list and its stats strip.
+ */
+export interface PurchaseDocumentListFilterParams {
+    search?: string;
+    /** One status or a comma-separated set. */
+    status?: string;
+    /** Every status but those in `status`. */
+    statusExclude?: boolean;
+    /** Supplier ids; `none` is a document with no supplier. */
+    supplierIds?: readonly string[];
+    total?: NumberCondition | null;
+    createdFrom?: string;
+    createdTo?: string;
+    /** The document's own date — bill date, expected date or valid-until. */
+    dateFrom?: string;
+    dateTo?: string;
+    /** A branch or `'all'`, from the page's branch filter. */
+    storeId?: string;
+}
+
+export type PurchasePaymentStatus = 'PAID' | 'PARTIAL' | 'UNPAID';
+
+export interface PurchaseListFilterParams extends PurchaseDocumentListFilterParams {
+    paid?: NumberCondition | null;
+    paymentStatus?: readonly PurchasePaymentStatus[];
+}
+
+/** `GET /purchases/summary`: every matching bill counted, amounts over the ones not cancelled. */
+export interface PurchaseListSummary {
+    count: number;
+    cancelledCount: number;
+    total: number;
+    paid: number;
+    due: number;
+    average: number;
+    returns: { count: number; amount: number };
+}
+
+/** `GET /purchase-returns/summary`. */
+export interface PurchaseReturnListSummary {
+    count: number;
+    amount: number;
+    /** Paid back by the supplier in money. */
+    refunded: number;
+    /** The rest, taken off the payable. */
+    adjusted: number;
+    average: number;
+}
+
+/** `GET /purchase-orders/summary`. */
+export interface PurchaseOrderListSummary {
+    count: number;
+    cancelledCount: number;
+    value: number;
+    open: { count: number; amount: number };
+    received: { count: number; amount: number };
+    overdue: number;
+}
+
+/** `GET /purchase-quotations/summary`. */
+export interface PurchaseQuotationListSummary {
+    count: number;
+    value: number;
+    pending: number;
+    accepted: { count: number; amount: number };
+    converted: number;
+    expired: number;
+}
+
+/** One server page of a purchase-side list, for `useServerList`. */
+export type PurchaseDocumentPageParams = {
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortDir?: 'asc' | 'desc';
+};
+
+function setPurchaseDocumentListParams(query: URLSearchParams, params: PurchaseListFilterParams): void {
+    if (params.search) query.set('search', params.search);
+    if (params.status) query.set('status', params.status);
+    if (params.status && params.statusExclude) query.set('statusExclude', 'true');
+    if (params.supplierIds?.length) query.set('supplierId', params.supplierIds.join(','));
+    const total = numberConditionParam(params.total);
+    if (total) query.set('total', total);
+    const paid = numberConditionParam(params.paid);
+    if (paid) query.set('paid', paid);
+    if (params.paymentStatus?.length) query.set('paymentStatus', params.paymentStatus.join(','));
+    if (params.createdFrom) query.set('createdFrom', params.createdFrom);
+    if (params.createdTo) query.set('createdTo', params.createdTo);
+    if (params.dateFrom) query.set('dateFrom', params.dateFrom);
+    if (params.dateTo) query.set('dateTo', params.dateTo);
+    if (params.storeId) query.set('storeId', params.storeId);
+}
+
+/** The list page and summary callers for one purchase-side endpoint. */
+function purchaseDocumentList<P extends PurchaseDocumentListFilterParams, S>(path: string) {
+    return {
+        list: (params: P & PurchaseDocumentPageParams) => {
+            const query = new URLSearchParams();
+            if (params.page) query.set('page', String(params.page));
+            if (params.limit) query.set('limit', String(params.limit));
+            if (params.sortBy) query.set('sortBy', params.sortBy);
+            if (params.sortDir) query.set('sortDir', params.sortDir);
+            setPurchaseDocumentListParams(query, params);
+            return fetchPaginated(`${path}?${query.toString()}`);
+        },
+        summary: (params: P): Promise<S> => {
+            const query = new URLSearchParams();
+            setPurchaseDocumentListParams(query, params);
+            return fetchWithAuth(`${path}/summary?${query.toString()}`);
+        },
+    };
+}
+
+const purchasesList = purchaseDocumentList<PurchaseListFilterParams, PurchaseListSummary>('/purchases');
+const purchaseReturnsList = purchaseDocumentList<PurchaseDocumentListFilterParams, PurchaseReturnListSummary>('/purchase-returns');
+const purchaseOrdersList = purchaseDocumentList<PurchaseDocumentListFilterParams, PurchaseOrderListSummary>('/purchase-orders');
+const purchaseQuotationsList = purchaseDocumentList<PurchaseDocumentListFilterParams, PurchaseQuotationListSummary>('/purchase-quotations');
+
 /** A payment method as `/payment-methods` and its layout routes return it. */
 export interface PaymentMethodRow {
     id: string;
@@ -2590,6 +2731,8 @@ export const api = {
     /** Takes `mine` so the tiles cannot disagree with the list beneath them. */
     getCrmActivitySummary: (params?: { mine?: boolean }) =>
         fetchWithAuth(`/crm/activities/summary${params?.mine ? '?mine=true' : ''}`),
+    /** Overdue LinkedIn follow-up drafts, with grade (cf_4) and History. */
+    getApprovalsInbox: () => fetchWithAuth('/crm/activities/approvals-inbox'),
     createCrmActivity: (data: any) => fetchWithAuth('/crm/activities', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -3295,11 +3438,18 @@ export const api = {
     deleteSupplier: (id: string) => fetchWithAuth(`/suppliers/${id}`, { method: 'DELETE' }),
     getPurchaseInvoice: (id: string) => fetchWithAuth(`/purchases/${id}/invoice`),
     getPurchaseOrders: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/purchase-orders', params)),
+    /** One server page of the purchase-orders list, with its filter row applied. */
+    getPurchaseOrdersList: purchaseOrdersList.list,
+    /** The stats strip over the purchase-orders list: the same filters, counted and summed. */
+    getPurchaseOrdersListSummary: purchaseOrdersList.summary,
     getPurchaseOrder: (id: string) => fetchWithAuth(`/purchase-orders/${id}`),
     createPurchaseOrder: (data: any) => fetchWithAuth('/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
     updatePurchaseOrderStatus: (id: string, status: string) => fetchWithAuth(`/purchase-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
     getPurchaseOrderInvoice: (id: string) => fetchWithAuth(`/purchase-orders/${id}/invoice`),
     getPurchaseQuotations: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/purchase-quotations', params)),
+    /** One server page of the purchase-quotations list, with its filter row applied. */
+    getPurchaseQuotationsList: purchaseQuotationsList.list,
+    getPurchaseQuotationsListSummary: purchaseQuotationsList.summary,
     getPurchaseQuotation: (id: string) => fetchWithAuth(`/purchase-quotations/${id}`),
     createPurchaseQuotation: (data: any) => fetchWithAuth('/purchase-quotations', { method: 'POST', body: JSON.stringify(data) }),
     updatePurchaseQuotationStatus: (id: string, status: string) => fetchWithAuth(`/purchase-quotations/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
@@ -3314,6 +3464,13 @@ export const api = {
         if (params?.storeId) query.set('storeId', params.storeId);
         return fetchAllPages(`/purchases${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    /**
+     * One server page of the purchases list, with its filter row applied —
+     * the list itself; `getPurchases` stays for pickers that need every bill.
+     */
+    getPurchasesList: purchasesList.list,
+    /** The stats strip over the purchases list: the same filters, counted and summed. */
+    getPurchasesListSummary: purchasesList.summary,
     getPurchase: (id: string) => fetchWithAuth(`/purchases/${id}`),
     /** Cancel a posted purchase and reverse its impacts. Tenant-admin only. */
     cancelPurchase: (id: string, note: string) => fetchWithAuth(`/purchases/${id}/cancel`, {
@@ -3336,6 +3493,9 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getPurchaseReturns: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/purchase-returns', params)),
+    /** One server page of the purchase-returns list, with its filter row applied. */
+    getPurchaseReturnsList: purchaseReturnsList.list,
+    getPurchaseReturnsListSummary: purchaseReturnsList.summary,
     getPurchaseReturn: (id: string) => fetchWithAuth(`/purchase-returns/${id}`),
     createPurchaseReturn: (data: any) => fetchWithAuth('/purchase-returns', {
         method: 'POST',
@@ -4626,6 +4786,14 @@ export const api = {
         }),
     sendPlatformAdminUserResetEmail: (userId: string) =>
         fetchWithAuth(`/admin/users/${userId}/send-reset-email`, { method: 'POST' }),
+    getMeet71Directory: () => fetchWithAuth('/meet71/directory'),
+    getMeet71Presence: () => fetchWithAuth('/meet71/presence'),
+    startMeet71Call: (data: { to: string; mode?: 'voice' | 'video' }) =>
+        fetchWithAuth('/meet71/calls', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
     getMeet71Admin: () => fetchWithAuth('/admin/meet71'),
     addMeet71Allowlist: (pattern: string) =>
         fetchWithAuth('/admin/meet71/allowlist', {
@@ -5317,30 +5485,64 @@ export const api = {
             body: JSON.stringify({ rows, mode }),
             headers: { 'Content-Type': 'application/json' },
         }),
-    getDepartments: () => fetchWithAuth('/employees/departments'),
-    createDepartment: (data: { name: string }) => fetchWithAuth('/employees/departments', {
+    getDepartments: (params?: { status?: 'active' | 'inactive' }): Promise<Department[]> =>
+        fetchWithAuth(params?.status ? `/employees/departments?status=${params.status}` : '/employees/departments'),
+    createDepartment: (data: DepartmentInput) => fetchWithAuth('/employees/departments', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    updateDepartment: (id: string, data: { name: string }) => fetchWithAuth(`/employees/departments/${id}`, {
+    updateDepartment: (id: string, data: Partial<DepartmentInput>) => fetchWithAuth(`/employees/departments/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteDepartment: (id: string) => fetchWithAuth(`/employees/departments/${id}`, { method: 'DELETE' }),
-    getDesignations: () => fetchWithAuth('/employees/designations'),
-    createDesignation: (data: { name: string }) => fetchWithAuth('/employees/designations', {
+    getDesignations: (params?: { departmentId?: string; levelId?: string; status?: 'active' | 'inactive' }): Promise<Designation[]> => {
+        const query = new URLSearchParams();
+        if (params?.departmentId) query.set('departmentId', params.departmentId);
+        if (params?.levelId) query.set('levelId', params.levelId);
+        if (params?.status) query.set('status', params.status);
+        const qs = query.toString();
+        return fetchWithAuth(qs ? `/employees/designations?${qs}` : '/employees/designations');
+    },
+    createDesignation: (data: DesignationInput) => fetchWithAuth('/employees/designations', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    updateDesignation: (id: string, data: { name: string }) => fetchWithAuth(`/employees/designations/${id}`, {
+    updateDesignation: (id: string, data: Partial<DesignationInput>) => fetchWithAuth(`/employees/designations/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteDesignation: (id: string) => fetchWithAuth(`/employees/designations/${id}`, { method: 'DELETE' }),
+    getDesignationLevels: (params?: { status?: 'active' | 'inactive' }): Promise<DesignationLevel[]> =>
+        fetchWithAuth(params?.status ? `/employees/designation-levels?status=${params.status}` : '/employees/designation-levels'),
+    createDesignationLevel: (data: { level: number; name: string; is_active?: boolean }) => fetchWithAuth('/employees/designation-levels', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateDesignationLevel: (id: string, data: { level?: number; name?: string; is_active?: boolean }) =>
+        fetchWithAuth(`/employees/designation-levels/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteDesignationLevel: (id: string) => fetchWithAuth(`/employees/designation-levels/${id}`, { method: 'DELETE' }),
+    /** Levels, departments and designations from one workbook. `dry_run` previews without writing. */
+    importOrgStructure: (data: {
+        levels?: Record<string, string>[];
+        departments?: Record<string, string>[];
+        designations?: Record<string, string>[];
+        mode: 'skip' | 'upsert';
+        dry_run?: boolean;
+    }): Promise<OrgImportResult> => fetchWithAuth('/employees/org-structure/import', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     linkEmployeeUser: (id: string, user_id: string) => fetchWithAuth(`/employees/${id}/link-user`, {
         method: 'POST',
         body: JSON.stringify({ user_id }),

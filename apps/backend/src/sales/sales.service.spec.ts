@@ -1792,6 +1792,33 @@ describe('SalesService', () => {
       expect(result.pages).toBe(112);
     });
 
+    it('loads each sale\'s returns so the list can mark and open them', async () => {
+      db.sale.findMany.mockResolvedValue([{ id: 's1', returns: [{ id: 'r1' }] }]);
+      db.sale.count.mockResolvedValue(1);
+      db.voucher.findMany.mockResolvedValue([]);
+
+      await service.findAll('tenant-1');
+
+      expect(db.sale.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            returns: {
+              select: {
+                id: true,
+                return_number: true,
+                total_refund: true,
+                reason: true,
+                status: true,
+                created_at: true,
+                _count: { select: { items: true } },
+              },
+              orderBy: { created_at: 'desc' },
+            },
+          }),
+        }),
+      );
+    });
+
     it('should filter sales to the requesting user when createdBy is set', async () => {
       db.sale.findMany.mockResolvedValue([{ id: 's1' }]);
       db.sale.count.mockResolvedValue(1);

@@ -254,6 +254,9 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   // below, so a fresh tenant sees one Activities item instead of two.
   'crm.conversations': { id: 'crm.conversations', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.crmActivities', href: '/crm/activities', premiumOnly: true },
   'crm.follow-ups': { id: 'crm.follow-ups', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.crmActivities', href: '/crm/activities', premiumOnly: true },
+  // Overdue LinkedIn follow-up drafts. Its own item so a reviewer does not
+  // have to rebuild this queue from the activities filters.
+  'crm.approvals-inbox': { id: 'crm.approvals-inbox', kind: 'link', icon: 'Inbox', labelKey: 'sidebar.items.crmApprovalsInbox', href: '/crm/approvals-inbox', premiumOnly: true },
   'crm.campaigns': { id: 'crm.campaigns', kind: 'link', icon: 'Megaphone', labelKey: 'sidebar.items.crmCampaigns', href: '/crm/campaigns', premiumOnly: true },
   'crm.customers': { id: 'crm.customers', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.crmCustomers', href: '/crm/customers' },
   // Replaces the separate 'crm.lead-taxonomy' and 'crm.custom-fields' nodes — both
@@ -295,6 +298,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'hr.setup': { id: 'hr.setup', kind: 'subgroup', icon: 'Layers', labelKey: 'hr.hub.setup' },
   'hr.setup.departments': { id: 'hr.setup.departments', kind: 'link', icon: 'Layers', labelKey: 'sidebar.items.departments', href: '/hr/employees/departments' },
   'hr.setup.designations': { id: 'hr.setup.designations', kind: 'link', icon: 'BadgeCheck', labelKey: 'sidebar.items.designations', href: '/hr/employees/designations' },
+  'hr.setup.designationLevels': { id: 'hr.setup.designationLevels', kind: 'link', icon: 'LayoutList', labelKey: 'sidebar.items.designationLevels', href: '/hr/employees/designation-levels' },
   'hr.setup.schedules': { id: 'hr.setup.schedules', kind: 'link', icon: 'CalendarDays', labelKey: 'sidebar.items.schedules', href: '/hr/schedules' },
 
   'account-settings': { id: 'account-settings', kind: 'module', icon: 'Cog', labelKey: 'sidebar.modules.accountSettings', moduleKey: 'account-settings' },
@@ -324,6 +328,8 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   // Entitlement-gated rather than plan-gated: `teamChat` is off on every plan
   // and granted by the Team Chat add-on, which is how a workspace turns it on.
   chat: { id: 'chat', kind: 'module', icon: 'MessagesSquare', labelKey: 'sidebar.modules.chat', href: '/chat', moduleKey: 'chat', entitlement: 'teamChat' },
+  // Meet71 calling lives on Support (`SupportCallControl`), not as its own menu.
+  // `/call` remains as a full-directory page (admin Open dialer) without a nav node.
   support: { id: 'support', kind: 'module', icon: 'MessageSquare', labelKey: 'sidebar.items.support', href: '/support', moduleKey: 'support', platformFeature: 'support' },
   admin: { id: 'admin', kind: 'module', icon: 'ShieldCheck', labelKey: 'sidebar.modules.admin', moduleKey: 'admin' },
   'admin.overview': { id: 'admin.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/admin' },
@@ -708,6 +714,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.lead-generation', 'crm', 3),
   layoutNode('crm.contacts', 'crm', 2),
   layoutNode('crm.follow-ups', 'crm', 4),
+  layoutNode('crm.approvals-inbox', 'crm', 4),
   layoutNode('crm.campaigns', 'crm', 5),
   layoutNode('crm.customers', 'crm', 6),
   layoutNode('crm.setup', 'crm', 7),
@@ -754,7 +761,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('hr.setup', 'hr', 6),
   layoutNode('hr.setup.departments', 'hr.setup', 0),
   layoutNode('hr.setup.designations', 'hr.setup', 1),
-  layoutNode('hr.setup.schedules', 'hr.setup', 2),
+  layoutNode('hr.setup.designationLevels', 'hr.setup', 2),
+  layoutNode('hr.setup.schedules', 'hr.setup', 3),
 
   layoutNode('account-settings', null, 12),
   layoutNode('account-settings.overview', 'account-settings', 0),

@@ -54,6 +54,12 @@ const mockCustomers = [
         created_at: '2026-01-15T08:00:00.000Z',
         customerGroup: { name: 'Wholesale' },
         territory: { name: 'Dhaka North' },
+        last_sale: {
+            id: 'sale-42',
+            serial_number: 'INV-2627-00042',
+            sale_date: '2026-10-30T09:15:00.000Z',
+            total_amount: 1250.5,
+        },
     },
     {
         id: 'cust-2',
@@ -226,6 +232,18 @@ describe('CustomersPage — Customer Management', () => {
             );
             expect(link).toBeDefined();
         });
+    });
+
+    it('shows each customer\'s last sale amount, linked to that sale', async () => {
+        render(<CustomersPage />);
+        await screen.findByText('Alice Smith');
+
+        expect(screen.getByRole('columnheader', { name: /Last Sale/ })).toBeInTheDocument();
+        const link = screen.getByRole('link', { name: 'INV-2627-00042' });
+        expect(link).toHaveAttribute('href', '/sales/sale-42');
+        expect(screen.getByText(new RegExp(formatBDT(1250.5).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))).toBeInTheDocument();
+        // A customer with no sales says so rather than leaving a blank.
+        expect(screen.getByText('No sales yet')).toBeInTheDocument();
     });
 
     it('shows New Customer button', () => {

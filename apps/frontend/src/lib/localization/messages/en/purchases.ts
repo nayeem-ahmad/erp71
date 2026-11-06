@@ -1,5 +1,67 @@
 export const purchasesMessages = {
     purchaseShared: {
+        lists: {
+            purchases: {
+                statsLabel: 'Purchases summary',
+                stats: {
+                    bills: 'Purchases',
+                    cancelled: '{count} cancelled',
+                    total: 'Purchased',
+                    paid: 'Paid',
+                    due: 'Payable',
+                    average: 'Avg. bill',
+                    returns: 'Returns',
+                    returnsCount: '{count, plural, one {# return} other {# returns}}',
+                },
+                filters: {
+                    paid: 'Paid',
+                    paymentStatus: 'Payment status',
+                    paymentStatuses: {
+                        PAID: 'Paid in full',
+                        PARTIAL: 'Part paid',
+                        UNPAID: 'Unpaid',
+                    },
+                },
+            },
+            returns: {
+                statsLabel: 'Purchase returns summary',
+                stats: {
+                    returns: 'Returns',
+                    amount: 'Returned value',
+                    refunded: 'Refund received',
+                    adjusted: 'Adjusted to payable',
+                    average: 'Avg. return',
+                },
+                deleted: 'Purchase return deleted',
+            },
+            orders: {
+                statsLabel: 'Purchase orders summary',
+                stats: {
+                    orders: 'Orders',
+                    cancelled: '{count} cancelled',
+                    value: 'Order value',
+                    open: 'Open',
+                    openCount: '{count} open',
+                    received: 'Received',
+                    receivedCount: '{count} received',
+                    overdue: 'Overdue',
+                },
+                expectedDate: 'Expected date',
+            },
+            quotations: {
+                statsLabel: 'Purchase quotations summary',
+                stats: {
+                    rfqs: 'RFQs',
+                    value: 'Quoted value',
+                    pending: 'Awaiting',
+                    accepted: 'Accepted',
+                    acceptedCount: '{count} accepted',
+                    converted: 'Converted to PO',
+                    expired: 'Expired',
+                },
+                deleted: 'RFQ deleted',
+            },
+        },
         unlinked: 'Unlinked',
         unlinkedSupplier: 'Unlinked supplier',
         noSupplier: 'No supplier selected',
@@ -152,6 +214,13 @@ export const purchasesMessages = {
         statuses: {
             RECORDED: 'Recorded',
             CANCELLED: 'Cancelled',
+        },
+        returnsModal: {
+            viewReturns: 'View purchase returns ({count})',
+            title: 'Purchase returns for {number}',
+            empty: 'No purchase returns on this bill',
+            notes: 'Notes',
+            openReturn: 'Open return',
         },
         printInvoice: 'Print Invoice',
         printLoadFailed: 'Could not load the purchase to print.',

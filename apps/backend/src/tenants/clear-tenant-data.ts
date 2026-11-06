@@ -257,6 +257,7 @@ async function wipeTenantMasterData(tx: Tx, tenantId: string, groups: ReadonlySe
         // block the work schedules.
         await tx.employee.deleteMany({ where: { tenant_id: tenantId } });
         await tx.designation.deleteMany({ where: { tenant_id: tenantId } });
+        await tx.designationLevel.deleteMany({ where: { tenant_id: tenantId } });
         await tx.department.deleteMany({ where: { tenant_id: tenantId } });
         await tx.leaveType.deleteMany({ where: { tenant_id: tenantId } });
         await tx.workSchedule.deleteMany({ where: { tenant_id: tenantId } }); // cascades WorkScheduleDay

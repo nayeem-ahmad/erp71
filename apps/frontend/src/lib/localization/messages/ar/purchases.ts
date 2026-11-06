@@ -1,5 +1,67 @@
 export const purchasesMessages = {
     purchaseShared: {
+        lists: {
+            purchases: {
+                statsLabel: "ملخص المشتريات",
+                stats: {
+                    bills: "المشتريات",
+                    cancelled: "{count} ملغاة",
+                    total: "إجمالي المشتريات",
+                    paid: "المدفوع",
+                    due: "المستحق للدفع",
+                    average: "متوسط الفاتورة",
+                    returns: "المرتجعات",
+                    returnsCount: "{count} مرتجع",
+                },
+                filters: {
+                    paid: "المدفوع",
+                    paymentStatus: "حالة الدفع",
+                    paymentStatuses: {
+                        PAID: "مدفوعة بالكامل",
+                        PARTIAL: "مدفوعة جزئيًا",
+                        UNPAID: "غير مدفوعة",
+                    },
+                },
+            },
+            returns: {
+                statsLabel: "ملخص مرتجعات المشتريات",
+                stats: {
+                    returns: "المرتجعات",
+                    amount: "قيمة المرتجعات",
+                    refunded: "المبلغ المسترد",
+                    adjusted: "مخصوم من المستحق",
+                    average: "متوسط المرتجع",
+                },
+                deleted: "تم حذف مرتجع الشراء",
+            },
+            orders: {
+                statsLabel: "ملخص أوامر الشراء",
+                stats: {
+                    orders: "الأوامر",
+                    cancelled: "{count} ملغاة",
+                    value: "قيمة الأوامر",
+                    open: "مفتوحة",
+                    openCount: "{count} مفتوحة",
+                    received: "مستلمة",
+                    receivedCount: "{count} مستلمة",
+                    overdue: "متأخرة",
+                },
+                expectedDate: "التاريخ المتوقع",
+            },
+            quotations: {
+                statsLabel: "ملخص عروض أسعار الشراء",
+                stats: {
+                    rfqs: "طلبات العروض",
+                    value: "القيمة المعروضة",
+                    pending: "بانتظار الرد",
+                    accepted: "مقبولة",
+                    acceptedCount: "{count} مقبولة",
+                    converted: "محوّلة إلى أمر شراء",
+                    expired: "منتهية الصلاحية",
+                },
+                deleted: "تم حذف طلب العرض",
+            },
+        },
         unlinked: "غير مرتبط",
         unlinkedSupplier: "مورّد غير مرتبط",
         noSupplier: "لم يُختر مورّد",
@@ -152,6 +214,13 @@ export const purchasesMessages = {
         statuses: {
             RECORDED: 'مسجَّل',
             CANCELLED: 'ملغى',
+        },
+        returnsModal: {
+            viewReturns: 'عرض مرتجعات الشراء ({count})',
+            title: 'مرتجعات الشراء لـ {number}',
+            empty: 'لا توجد مرتجعات على هذه الفاتورة',
+            notes: 'ملاحظات',
+            openReturn: 'فتح المرتجع',
         },
         printInvoice: "طباعة الفاتورة",
         printLoadFailed: "تعذر تحميل المشترى للطباعة.",

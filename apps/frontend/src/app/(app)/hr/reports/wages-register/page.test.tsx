@@ -3,6 +3,12 @@ import WagesRegisterPage from './page';
 
 const getWagesRegister = jest.fn();
 
+// A wide screen, so the month chip sits in the toolbar rather than the phone's Filters sheet.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
+}));
+
 jest.mock('@/lib/api', () => ({
     api: { getWagesRegister: (...args: unknown[]) => getWagesRegister(...args) },
 }));
@@ -49,10 +55,14 @@ describe('Wages register', () => {
         render(<WagesRegisterPage />);
         await waitFor(() => expect(getWagesRegister).toHaveBeenCalledTimes(1));
 
-        fireEvent.change(screen.getByLabelText('Month'), { target: { value: '3' } });
+        // The month chip offers this month and the ones before it.
+        const now = new Date();
+        const back = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+        const value = `${back.getFullYear()}-${String(back.getMonth() + 1).padStart(2, '0')}`;
+        fireEvent.change(screen.getByLabelText('Month'), { target: { value } });
 
         await waitFor(() => expect(getWagesRegister).toHaveBeenCalledTimes(2));
-        expect(getWagesRegister.mock.calls[1][0].month).toBe(3);
+        expect(getWagesRegister.mock.calls[1][0]).toEqual({ year: back.getFullYear(), month: back.getMonth() + 1 });
     });
 
     it('says the month has no settled run rather than showing a generic empty table', async () => {

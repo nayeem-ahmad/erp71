@@ -1,6 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { paginatedFindMany } from '../common/list-pagination.util';
+import { idsOrNoneClause, searchClause, statusSetClause, type DocumentListFilters } from '../common/document-list-filters';
+import { numberConditionFilter } from '../common/number-condition.util';
+import { resolveOrderBy, type SortableMap } from '../common/sort.util';
+import { roundMoney } from '@erp71/shared-types';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
@@ -62,6 +66,29 @@ interface SettledReturn {
     total_amount: unknown;
     /** Already set when the return was saved, or last edited, with tenders. */
     tenders_recorded?: boolean;
+}
+
+const PURCHASE_RETURN_SORTABLE: SortableMap = {
+    return_number: (dir) => ({ return_number: dir }),
+    created_at: (dir) => ({ created_at: dir }),
+    total_amount: (dir) => ({ total_amount: dir }),
+    supplier: (dir) => ({ supplier: { name: dir } }),
+};
+
+/** What narrows the purchase-returns list — and, alike, its stats strip. */
+export interface PurchaseReturnListFilters extends Partial<Omit<DocumentListFilters, 'timezone'>> {
+    timezone: string;
+}
+
+/** `GET /purchase-returns/summary` — see `PurchaseReturnsService.summary`. */
+export interface PurchaseReturnListSummary {
+    count: number;
+    amount: number;
+    /** Paid back by the supplier in money. */
+    refunded: number;
+    /** The rest, taken off the payable. */
+    adjusted: number;
+    average: number;
 }
 
 @Injectable()
@@ -196,13 +223,39 @@ export class PurchaseReturnsService {
         });
     }
 
+    /**
+     * The `where` behind the purchase-returns list and its stats strip. A
+     * return's date is when it was recorded, so the date filter is `created_at`.
+     */
+    private listWhere(tenantId: string, opts?: PurchaseReturnListFilters): Prisma.PurchaseReturnWhereInput {
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
+        const where: Prisma.PurchaseReturnWhereInput = {
+            tenant_id: tenantId,
+            ...(opts?.storeId ? { store_id: opts.storeId } : {}),
+            ...(created ? { created_at: created } : {}),
+            ...(statusSetClause(opts?.statuses, opts?.statusExclude) as Prisma.PurchaseReturnWhereInput),
+            ...(opts?.total ? { total_amount: numberConditionFilter(opts.total) } : {}),
+        };
+        const and: Prisma.PurchaseReturnWhereInput[] = [];
+        const search = searchClause(opts?.search, [
+            'return_number',
+            'reference_number',
+            'supplier.name',
+            'purchase.purchase_number',
+        ]);
+        if (search) and.push(search as Prisma.PurchaseReturnWhereInput);
+        const supplier = idsOrNoneClause('supplier_id', opts?.supplierIds);
+        if (supplier) and.push(supplier as Prisma.PurchaseReturnWhereInput);
+        if (and.length) where.AND = and;
+        return where;
+    }
+
     async findAll(
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string; timezone: string; storeId?: string },
+        opts?: PurchaseReturnListFilters & { sortBy?: string; sortDir?: string },
     ): Promise<PaginatedResult<unknown>> {
-        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         const result = await paginatedFindMany({
             findMany: (args) =>
                 this.db.purchaseReturn.findMany({
@@ -210,8 +263,8 @@ export class PurchaseReturnsService {
                     include: this.returnInclude(),
                 }),
             count: (args) => this.db.purchaseReturn.count(args as any),
-            where: { tenant_id: tenantId, ...(opts?.storeId ? { store_id: opts.storeId } : {}), ...(created ? { created_at: created } : {}) },
-            orderBy: { created_at: 'desc' },
+            where: this.listWhere(tenantId, opts) as Record<string, unknown>,
+            orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, PURCHASE_RETURN_SORTABLE, { created_at: 'desc' }),
             page,
             limit,
         });
@@ -230,6 +283,29 @@ export class PurchaseReturnsService {
                 ...item,
                 ...(summaries.get(item.id) ?? NO_POSTING_EVENT),
             })),
+        };
+    }
+
+    /**
+     * The stats strip above the purchase-returns list, over exactly the rows
+     * the list shows: how many, their value, how much of it the supplier paid
+     * back in money, and the rest — taken off what is owed to them.
+     */
+    async summary(tenantId: string, opts: PurchaseReturnListFilters): Promise<PurchaseReturnListSummary> {
+        const where = this.listWhere(tenantId, opts);
+        const [returns, refunds] = await Promise.all([
+            this.db.purchaseReturn.aggregate({ where, _count: { _all: true }, _sum: { total_amount: true } }),
+            this.db.purchaseReturnPayment.aggregate({ where: { return: where }, _sum: { amount: true } }),
+        ]);
+        const count = returns._count._all;
+        const amount = roundMoney(Number(returns._sum.total_amount ?? 0));
+        const refunded = roundMoney(Math.min(Number(refunds._sum.amount ?? 0), amount));
+        return {
+            count,
+            amount,
+            refunded,
+            adjusted: roundMoney(Math.max(amount - refunded, 0)),
+            average: count ? roundMoney(amount / count) : 0,
         };
     }
 

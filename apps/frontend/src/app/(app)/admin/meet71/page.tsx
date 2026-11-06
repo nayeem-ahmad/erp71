@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { Phone, Trash2, Video } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import {
     Button,
@@ -12,9 +13,12 @@ import {
     PageShell,
     Switch,
 } from '@/components/ui';
+import { buttonClassName } from '@/components/ui/compact';
 import { api, ApiError } from '@/lib/api';
 import { formatMessage, useI18n } from '@/lib/i18n';
+import { placeMeet71Call } from '@/lib/meet71-dialer';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
 
 type AllowEntry = { id: string; pattern: string; kind: string };
@@ -52,6 +56,7 @@ export default function AdminMeet71Page() {
     const [roomOwner, setRoomOwner] = useState('');
     const [roomCoHosts, setRoomCoHosts] = useState('');
     const [deleting, setDeleting] = useState<Member | null>(null);
+    const [calling, setCalling] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -142,6 +147,17 @@ export default function AdminMeet71Page() {
         }
     }
 
+    async function handleCall(email: string, mode: 'voice' | 'video') {
+        setCalling(`${email}:${mode}`);
+        try {
+            await placeMeet71Call(email, mode);
+        } catch (error) {
+            toast.error((error as Error).message || m.dialer.callFailed);
+        } finally {
+            setCalling(null);
+        }
+    }
+
     async function handleTransferRoom(event: FormEvent) {
         event.preventDefault();
         const code = roomCode.trim();
@@ -184,6 +200,11 @@ export default function AdminMeet71Page() {
                         m.title,
                         'admin',
                     )}
+                    actions={
+                        <Link href={routes.call} className={buttonClassName({ variant: 'secondary', size: 'sm' })}>
+                            {m.dialer.openDialer}
+                        </Link>
+                    }
                 />
 
                 <CompactSection title={m.allowlist.title} titleStyle="heading">
@@ -316,15 +337,37 @@ export default function AdminMeet71Page() {
                                             </td>
                                             <td className="hidden py-2 pe-3 text-gray-600 md:table-cell">{member.invitesUsed}</td>
                                             <td className="py-2">
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    aria-label={m.members.delete}
-                                                    onClick={() => setDeleting(member)}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
+                                                <div className="flex items-center gap-1">
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        aria-label={m.dialer.voice}
+                                                        disabled={Boolean(calling)}
+                                                        onClick={() => void handleCall(member.email, 'voice')}
+                                                    >
+                                                        <Phone className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        aria-label={m.dialer.video}
+                                                        disabled={Boolean(calling)}
+                                                        onClick={() => void handleCall(member.email, 'video')}
+                                                    >
+                                                        <Video className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        aria-label={m.members.delete}
+                                                        onClick={() => setDeleting(member)}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}

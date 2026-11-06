@@ -281,6 +281,13 @@ export const salesMessages = {
                 salesRep: 'سیلز نمائندہ',
                 noSalesRep: 'کوئی نمائندہ نہیں',
             },
+            returnsModal: {
+                viewReturns: 'سیلز واپسی دیکھیں ({count})',
+                title: '{serial} کی سیلز واپسیاں',
+                empty: 'اس فروخت پر کوئی واپسی نہیں',
+                reason: 'وجہ',
+                openReturn: 'واپسی کھولیں',
+            },
         },
         hub: {
             moduleLabel: 'سیلز ماڈیول',

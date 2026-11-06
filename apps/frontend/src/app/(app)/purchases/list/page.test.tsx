@@ -9,7 +9,9 @@ jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branc
 
 jest.mock('@/lib/api', () => ({
     api: {
-        getPurchases: jest.fn(),
+        getPurchasesList: jest.fn(),
+        getPurchasesListSummary: jest.fn().mockResolvedValue(null),
+        getSuppliersPaged: jest.fn().mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 0 }),
         // The Cancel action is permission-gated, and `useTenantPlanFeatures`
         // resolves those through /auth/me on mount. No membership → no
         // CANCEL_ENTRY → the action is hidden, which is the default here.
@@ -54,13 +56,16 @@ jest.mock('next/navigation', () => ({
     useSearchParams: () => searchParams,
 }));
 
+/** One server page holding every row given. */
+const page = (items: unknown[]) => ({ items, total: items.length, page: 1, limit: 20, pages: 1 });
+
 describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         searchParams = new URLSearchParams();
         mockBranchScope();
         const { api } = require('@/lib/api');
-        api.getPurchases.mockResolvedValue([
+        api.getPurchasesList.mockResolvedValue(page([
             {
                 id: 'purchase-1',
                 purchase_number: 'PUR-00001',
@@ -71,7 +76,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
                     { id: 'item-1', quantity: 2, unit_cost: 10, product: { name: 'Coffee Beans' } },
                 ],
             },
-        ]);
+        ]));
     });
 
     it('renders purchases loaded from the API', async () => {
@@ -87,22 +92,22 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
         const { api } = require('@/lib/api');
         renderWithQueryClient(<PurchasesPage />);
         await waitFor(() =>
-            expect(api.getPurchases).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' })),
+            expect(api.getPurchasesList).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' })),
         );
-        expect(api.getPurchases).toHaveBeenCalledTimes(1);
+        expect(api.getPurchasesList).toHaveBeenCalledTimes(1);
 
         fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'all' } });
 
         await waitFor(() =>
-            expect(api.getPurchases).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'all' })),
+            expect(api.getPurchasesList).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'all' })),
         );
     });
 
     it('goes back to the header branch when the server refuses the chosen one', async () => {
         const { api } = require('@/lib/api');
-        const rows = await api.getPurchases();
-        api.getPurchases.mockClear();
-        api.getPurchases.mockImplementation(async ({ storeId }: { storeId?: string }) => {
+        const rows = await api.getPurchasesList();
+        api.getPurchasesList.mockClear();
+        api.getPurchasesList.mockImplementation(async ({ storeId }: { storeId?: string }) => {
             if (storeId === 'store-2') throw Object.assign(new Error('Forbidden'), { status: 403 });
             return rows;
         });
@@ -113,7 +118,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
 
         await waitFor(() => expect(resetToHeaderSpy).toHaveBeenCalled());
         await waitFor(() =>
-            expect(api.getPurchases).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-1' })),
+            expect(api.getPurchasesList).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-1' })),
         );
     });
 
@@ -137,6 +142,55 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
         expect(await screen.findByTitle('View purchase')).toHaveAttribute('href', '/purchases/purchase-1');
         expect(screen.getByTitle('Edit purchase')).toHaveAttribute('href', '/purchases/purchase-1?edit=true');
         expect(screen.getByRole('link', { name: 'PUR-00001' })).toHaveAttribute('href', '/purchases/purchase-1');
+    });
+
+    it('marks a row that has purchase returns and opens their details from the icon', async () => {
+        const { api } = require('@/lib/api');
+        api.getPurchasesList.mockResolvedValue(page([
+            {
+                id: 'purchase-1',
+                purchase_number: 'PUR-00001',
+                total_amount: 42,
+                created_at: '2026-03-20T10:00:00.000Z',
+                supplier: { name: 'Fresh Farms' },
+                items: [{ id: 'item-1', quantity: 2, unit_cost: 10, product: { name: 'Coffee Beans' } }],
+            },
+            {
+                id: 'purchase-2',
+                purchase_number: 'PUR-00002',
+                total_amount: 80,
+                created_at: '2026-03-21T11:00:00.000Z',
+                supplier: { name: 'Dairy Co' },
+                items: [{ id: 'item-2', quantity: 1, unit_cost: 80, product: { name: 'Milk' } }],
+                returns: [
+                    {
+                        id: 'ret-1',
+                        return_number: 'PR-00009',
+                        total_amount: '20.00',
+                        notes: 'Spoiled',
+                        status: 'RECORDED',
+                        created_at: '2026-03-22T09:00:00.000Z',
+                        _count: { items: 1 },
+                    },
+                ],
+            },
+        ]));
+
+        renderWithQueryClient(<PurchasesPage />);
+        await screen.findByText('PUR-00002');
+
+        expect(screen.queryByRole('button', { name: 'View purchase returns (0)' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'View purchase returns (1)' })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'View purchase returns (1)' }));
+
+        expect(await screen.findByRole('heading', { name: 'Purchase returns for PUR-00002' })).toBeInTheDocument();
+        expect(screen.getByText('PR-00009')).toBeInTheDocument();
+        expect(screen.getByText('Spoiled')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /Open return/i })).toHaveAttribute(
+            'href',
+            '/purchases/returns/ret-1',
+        );
     });
 
     it('prints from the row icon without opening an invoice page', async () => {
@@ -232,7 +286,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
         it('marks a cancelled purchase and offers no second cancellation', async () => {
             const { api } = require('@/lib/api');
             asTenantAdmin();
-            api.getPurchases.mockResolvedValue([
+            api.getPurchasesList.mockResolvedValue(page([
                 {
                     id: 'purchase-1',
                     purchase_number: 'PUR-00001',
@@ -243,7 +297,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
                     supplier: { name: 'Fresh Farms' },
                     items: [],
                 },
-            ]);
+            ]));
 
             renderWithQueryClient(<PurchasesPage />);
 

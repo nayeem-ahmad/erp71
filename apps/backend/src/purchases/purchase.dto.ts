@@ -10,7 +10,7 @@ import {
     ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { SortableBranchListQueryDto } from '../common/branch-list-query.dto';
+import { DocumentListQueryDto } from '../common/document-list-filters';
 import { PaymentInstrumentDto } from '../common/payment-instrument.dto';
 import { CreateSupplierDto } from '../suppliers/supplier.dto';
 
@@ -149,14 +149,20 @@ export class CreatePurchaseDto extends PurchaseBillDto {
 }
 
 /** The purchases list: the created window, plus the bill's own transaction date. */
-export class PurchaseListQueryDto extends SortableBranchListQueryDto {
+/**
+ * The purchases list and its stats strip: the shared document filters plus
+ * the bill's paid amount and payment state.
+ */
+export class PurchaseListQueryDto extends DocumentListQueryDto {
+    /** `gt:100`, `between:100,500` — the amount paid at the counter. */
     @IsOptional()
     @IsString()
-    dateFrom?: string;
+    paid?: string;
 
+    /** Comma-separated `PAID`, `PARTIAL`, `UNPAID`. */
     @IsOptional()
     @IsString()
-    dateTo?: string;
+    paymentStatus?: string;
 }
 
 /**

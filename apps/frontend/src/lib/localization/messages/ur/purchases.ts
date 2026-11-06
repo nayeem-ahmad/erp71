@@ -1,5 +1,67 @@
 export const purchasesMessages = {
     purchaseShared: {
+        lists: {
+            purchases: {
+                statsLabel: "خریداری کا خلاصہ",
+                stats: {
+                    bills: "خریداریاں",
+                    cancelled: "{count} منسوخ",
+                    total: "کل خریداری",
+                    paid: "ادا شدہ",
+                    due: "قابل ادائیگی",
+                    average: "اوسط بل",
+                    returns: "واپسیاں",
+                    returnsCount: "{count} واپسیاں",
+                },
+                filters: {
+                    paid: "ادا شدہ",
+                    paymentStatus: "ادائیگی کی حالت",
+                    paymentStatuses: {
+                        PAID: "مکمل ادا شدہ",
+                        PARTIAL: "جزوی ادا شدہ",
+                        UNPAID: "غیر ادا شدہ",
+                    },
+                },
+            },
+            returns: {
+                statsLabel: "خریداری واپسی کا خلاصہ",
+                stats: {
+                    returns: "واپسیاں",
+                    amount: "واپسی کی مالیت",
+                    refunded: "موصولہ رقم واپسی",
+                    adjusted: "قابل ادائیگی میں منہا",
+                    average: "اوسط واپسی",
+                },
+                deleted: "خریداری واپسی حذف کر دی گئی",
+            },
+            orders: {
+                statsLabel: "خریداری آرڈرز کا خلاصہ",
+                stats: {
+                    orders: "آرڈرز",
+                    cancelled: "{count} منسوخ",
+                    value: "آرڈر کی مالیت",
+                    open: "کھلے",
+                    openCount: "{count} کھلے",
+                    received: "موصول",
+                    receivedCount: "{count} موصول",
+                    overdue: "تاخیر شدہ",
+                },
+                expectedDate: "متوقع تاریخ",
+            },
+            quotations: {
+                statsLabel: "خریداری کوٹیشنز کا خلاصہ",
+                stats: {
+                    rfqs: "آر ایف کیو",
+                    value: "کوٹ شدہ مالیت",
+                    pending: "منتظر",
+                    accepted: "منظور شدہ",
+                    acceptedCount: "{count} منظور شدہ",
+                    converted: "پی او میں تبدیل",
+                    expired: "میعاد ختم",
+                },
+                deleted: "آر ایف کیو حذف کر دیا گیا",
+            },
+        },
         unlinked: "غیر منسلک",
         unlinkedSupplier: "غیر منسلک سپلائر",
         noSupplier: "کوئی سپلائر منتخب نہیں",
@@ -152,6 +214,13 @@ export const purchasesMessages = {
         statuses: {
             RECORDED: 'درج',
             CANCELLED: 'منسوخ',
+        },
+        returnsModal: {
+            viewReturns: 'خریداری واپسی دیکھیں ({count})',
+            title: '{number} کی خریداری واپسیاں',
+            empty: 'اس بل پر کوئی خریداری واپسی نہیں',
+            notes: 'نوٹس',
+            openReturn: 'واپسی کھولیں',
         },
         printInvoice: "انوائس چھاپیں",
         printLoadFailed: "خریداری پرنٹ کے لیے لوڈ نہیں ہو سکی۔",

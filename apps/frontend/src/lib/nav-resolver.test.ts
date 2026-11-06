@@ -193,6 +193,7 @@ describe('nav-resolver', () => {
         expect(hrefsUnder('HR Setup')).toEqual([
             '/hr/employees/departments',
             '/hr/employees/designations',
+            '/hr/employees/designation-levels',
             '/hr/schedules',
         ]);
     });

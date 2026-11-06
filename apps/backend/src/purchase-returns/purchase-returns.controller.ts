@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards, Us
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
-import { BranchListQueryDto } from '../common/branch-list-query.dto';
+import { DocumentListQueryDto, readDocumentListFilters } from '../common/document-list-filters';
 import { BranchScopeService } from '../database/branch-scope.service';
 import { CreatePurchaseReturnDto, UpdatePurchaseReturnDto } from './purchase-return.dto';
 import { PurchaseReturnsService } from './purchase-returns.service';
@@ -31,14 +31,31 @@ export class PurchaseReturnsController {
     @Get()
     async findAll(
         @Tenant() tenant: TenantContext,
-        @Query() query: BranchListQueryDto,
+        @Query() query: DocumentListQueryDto,
     ) {
         const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: PURCHASE_READ });
-        return this.purchaseReturnsService.findAll(tenant.tenantId, query.page, query.limit, { timezone: tenant.timezone,
-            createdFrom: query.createdFrom,
-            createdTo: query.createdTo,
-            storeId,
+        return this.purchaseReturnsService.findAll(tenant.tenantId, query.page, query.limit, {
+            ...readDocumentListFilters(query, { storeId, timezone: tenant.timezone }),
+            sortBy: query.sortBy,
+            sortDir: query.sortDir,
         });
+    }
+
+    /**
+     * The stats strip above the purchase-returns list, over the same filters
+     * as `GET /purchase-returns`. Declared before `:id`.
+     */
+    @RequireAnyStorePermission(...PURCHASE_READ)
+    @Get('summary')
+    async summary(
+        @Tenant() tenant: TenantContext,
+        @Query() query: DocumentListQueryDto,
+    ) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: PURCHASE_READ });
+        return this.purchaseReturnsService.summary(
+            tenant.tenantId,
+            readDocumentListFilters(query, { storeId, timezone: tenant.timezone }),
+        );
     }
 
     @RequireAnyStorePermission(...PURCHASE_READ)

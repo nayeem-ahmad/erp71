@@ -10,7 +10,9 @@ import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { usePlatformFeatures } from '@/contexts/PlatformFeaturesContext';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
+import SupportCallControl from '@/components/SupportCallControl';
 import SupportComposer from '@/components/SupportComposer';
+import SupportMessageBody from '@/components/SupportMessageBody';
 import { useSupportStream, type SupportStreamEvent } from '@/hooks/useSupportStream';
 import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { toast } from '@/lib/toast';
@@ -325,13 +327,16 @@ export default function SupportPage() {
                     'support',
                 )}
                 actions={(
-                    <button
-                        type="button"
-                        onClick={() => setShowNewForm(true)}
-                        className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-hover min-h-touch"
-                    >
-                        <Plus className="w-3 h-3" /> {page.new}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <SupportCallControl />
+                        <button
+                            type="button"
+                            onClick={() => setShowNewForm(true)}
+                            className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-hover min-h-touch"
+                        >
+                            <Plus className="w-3 h-3" /> {page.new}
+                        </button>
+                    </div>
                 )}
                 /* An open conversation owns the phone screen — the thread header
                    below carries the title and the way back, so the page header
@@ -521,7 +526,7 @@ export default function SupportPage() {
                                                     <p className={`text-[10px] font-bold mb-1 ${isOwner ? 'text-blue-100' : 'text-gray-500'}`}>
                                                         {isOwner ? page.you : page.admin}
                                                     </p>
-                                                    <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
+                                                    <SupportMessageBody body={msg.body} onPrimary={isOwner} />
                                                     <SupportAttachmentList attachments={msg.attachments} onPrimary={isOwner} />
                                                     <p className={`text-[10px] mt-1 ${isOwner ? 'text-blue-200' : 'text-gray-400'}`}>
                                                         {new Date(msg.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
@@ -572,7 +577,7 @@ export default function SupportPage() {
             </div>
 
             {showNewForm && (
-                <ModalShell size="sm" onBackdropClick={() => setShowNewForm(false)}>
+                <ModalShell size="md" onBackdropClick={() => setShowNewForm(false)} dismissOnBackdrop={false}>
                     <ModalHeader title={page.createTitle} onClose={() => setShowNewForm(false)} />
                     <div className="p-4">
                         <SupportComposer

@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { Users, Plus, Eye, Pencil, BookOpen, RefreshCw, Crown, AlertTriangle, UserCheck, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import CustomerFormModal from './CustomerFormModal';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
@@ -54,6 +55,13 @@ interface Customer {
     created_at: string;
     customerGroup?: { name: string } | null;
     territory?: { name: string } | null;
+    /** Newest completed sale to this customer; null when they have none. */
+    last_sale?: {
+        id: string;
+        serial_number: string;
+        sale_date: string;
+        total_amount: number | string;
+    } | null;
 }
 
 interface SegmentBreakdown {
@@ -256,6 +264,33 @@ export default function CustomersPage() {
                 sortingFn: (a, b) => Number(a.getValue('total_spent') || 0) - Number(b.getValue('total_spent') || 0),
                 size: 120,
                 meta: { align: 'end' },
+            }),
+            columnHelper.accessor((row) => row.last_sale?.sale_date ?? '', {
+                id: 'last_sale',
+                header: t.customers.columns.lastSale,
+                // Computed per page on the server, not a customer column, so
+                // it can be neither sorted nor filtered there.
+                enableSorting: false,
+                enableColumnFilter: false,
+                cell: (info) => {
+                    const sale = info.row.original.last_sale;
+                    if (!sale) return <span className="text-gray-400">{t.customers.columns.noSales}</span>;
+                    return (
+                        <>
+                            <span className="block">
+                                {formatDate(sale.sale_date, locale)} · {formatBDT(Number(sale.total_amount || 0), { locale })}
+                            </span>
+                            <Link
+                                href={routes.sales.detail(sale.id)}
+                                className="block text-blue-600 hover:underline"
+                            >
+                                {sale.serial_number}
+                            </Link>
+                        </>
+                    );
+                },
+                size: 170,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('due_balance', {
                 header: t.customers.columns.due,

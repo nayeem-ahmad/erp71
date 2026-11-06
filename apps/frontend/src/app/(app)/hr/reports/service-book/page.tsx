@@ -1,16 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { CalendarMinus, FileClock, Loader2, Wallet } from 'lucide-react';
 import { PageShell, PageHeader, CompactSection } from '@/components/ui';
 import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
-import DataTable from '@/components/data-table/DataTable';
+import { DataTable, ListStats } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import ReportTile from '@/components/hr/ReportTile';
 import ReportNotes from '@/components/hr/ReportNotes';
 
 interface Revision {
@@ -111,6 +110,7 @@ export default function ServiceBookPage() {
                 id: 'line_count',
                 header: sb.fields.lines,
                 accessorKey: 'line_count',
+                meta: { align: 'end' },
                 cell: ({ row }: { row: { original: Revision } }) => (
                     <span className="tabular-nums">{row.original.line_count}</span>
                 ),
@@ -121,7 +121,7 @@ export default function ServiceBookPage() {
                 accessorKey: 'note',
                 meta: { hideOnMobile: true },
                 cell: ({ row }: { row: { original: Revision } }) => (
-                    <span className="text-gray-600">{row.original.note ?? '—'}</span>
+                    <span>{row.original.note ?? '—'}</span>
                 ),
             },
         ],
@@ -135,7 +135,7 @@ export default function ServiceBookPage() {
                 header: sb.fields.leaveType,
                 accessorKey: 'leave_type',
                 cell: ({ row }: { row: { original: LeaveTaken } }) => (
-                    <span className="font-medium">{row.original.leave_type ?? '—'}</span>
+                    <span>{row.original.leave_type ?? '—'}</span>
                 ),
             },
             {
@@ -159,10 +159,9 @@ export default function ServiceBookPage() {
                 id: 'days',
                 header: sb.fields.days,
                 accessorKey: 'days',
+                meta: { align: 'end' },
                 cell: ({ row }: { row: { original: LeaveTaken } }) => (
-                    <span className="font-semibold tabular-nums text-blue-600">
-                        {row.original.days}
-                    </span>
+                    <span className="tabular-nums">{row.original.days}</span>
                 ),
             },
         ],
@@ -207,14 +206,14 @@ export default function ServiceBookPage() {
                 <p className="text-sm text-gray-500">{sb.notFound}</p>
             ) : (
                 <>
-                    <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                        <ReportTile label={sb.kpi.totalLeave} value={String(book.total_leave_days)} />
-                        <ReportTile label={sb.kpi.monthsPaid} value={String(book.months_paid)} />
-                        <ReportTile
-                            label={sb.kpi.revisions}
-                            value={String(book.salary_revisions.length)}
-                        />
-                    </div>
+                    <ListStats
+                        label={t.hr.listUi.reportStats}
+                        stats={[
+                            { id: 'leave', icon: <CalendarMinus aria-hidden />, label: sb.kpi.totalLeave, value: book.total_leave_days.toLocaleString(locale) },
+                            { id: 'paid', icon: <Wallet aria-hidden />, label: sb.kpi.monthsPaid, value: book.months_paid.toLocaleString(locale) },
+                            { id: 'revisions', icon: <FileClock aria-hidden />, label: sb.kpi.revisions, value: book.salary_revisions.length.toLocaleString(locale) },
+                        ]}
+                    />
 
                     <CompactSection title={sb.profile}>
                         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm md:grid-cols-4">
@@ -232,7 +231,10 @@ export default function ServiceBookPage() {
                                 label={sb.fields.joined}
                                 value={formatDate(employee.date_of_joining, locale)}
                             />
-                            <Detail label={sb.fields.status} value={employee.status} />
+                            <Detail
+                                label={sb.fields.status}
+                                value={(t.employees.statuses as Record<string, string>)[employee.status] ?? employee.status}
+                            />
                             <Detail
                                 label={sb.fields.lastDay}
                                 value={
@@ -251,6 +253,8 @@ export default function ServiceBookPage() {
                         columns={revisionColumns as never}
                         data={book.salary_revisions}
                         emptyMessage={sb.noRevisions}
+                        enableColumnFilters={false}
+                        viewOptions
                     />
 
                     <DataTable
@@ -259,6 +263,8 @@ export default function ServiceBookPage() {
                         columns={leaveColumns as never}
                         data={book.leave_taken}
                         emptyMessage={sb.noLeave}
+                        enableColumnFilters={false}
+                        viewOptions
                     />
 
                     <ReportNotes notes={book.notes} />

@@ -646,6 +646,7 @@ function AppShell({ children }: DashboardLayoutProps) {
             routes.crm.contacts,
             routes.crm.conversations,
             routes.crm.activities,
+            routes.crm.approvalsInbox,
             routes.crm.followUps,
         ];
         if (!hasPremiumCrm && premiumCrmPaths.some((p) => pathname.startsWith(p))) {

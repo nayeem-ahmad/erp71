@@ -195,6 +195,7 @@ export const routes = {
         contactNew: '/crm/contacts/new' as const,
         contactDetail: (id: string) => `/crm/contacts/${id}` as const,
         activities: '/crm/activities',
+        approvalsInbox: '/crm/approvals-inbox',
         // Both superseded by `activities` in R2; the pages redirect there and the
         // routes stay so old bookmarks and saved sidebar layouts keep resolving.
         conversations: '/crm/conversations',
@@ -251,6 +252,7 @@ export const routes = {
         employeeDetail: (id: string) => `/hr/employees/${id}` as const,
         departments: '/hr/employees/departments',
         designations: '/hr/employees/designations',
+        designationLevels: '/hr/employees/designation-levels',
         attendance: '/hr/attendance',
         attendancePunches: '/hr/attendance/punches',
         schedules: '/hr/schedules',
@@ -390,6 +392,7 @@ export const routes = {
     status: '/status',
     support: '/support',
     chat: '/chat',
+    call: '/call',
     smsCredits: '/sms-credits',
     aiCredits: '/ai-credits',
     /**

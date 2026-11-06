@@ -1,5 +1,67 @@
 export const purchasesMessages = {
     purchaseShared: {
+        lists: {
+            purchases: {
+                statsLabel: "Resumen de compras",
+                stats: {
+                    bills: "Compras",
+                    cancelled: "{count} canceladas",
+                    total: "Comprado",
+                    paid: "Pagado",
+                    due: "Por pagar",
+                    average: "Factura prom.",
+                    returns: "Devoluciones",
+                    returnsCount: "{count} devoluciones",
+                },
+                filters: {
+                    paid: "Pagado",
+                    paymentStatus: "Estado de pago",
+                    paymentStatuses: {
+                        PAID: "Pagada por completo",
+                        PARTIAL: "Pago parcial",
+                        UNPAID: "Sin pagar",
+                    },
+                },
+            },
+            returns: {
+                statsLabel: "Resumen de devoluciones de compra",
+                stats: {
+                    returns: "Devoluciones",
+                    amount: "Valor devuelto",
+                    refunded: "Reembolso recibido",
+                    adjusted: "Ajustado a cuentas por pagar",
+                    average: "Devolución prom.",
+                },
+                deleted: "Devolución de compra eliminada",
+            },
+            orders: {
+                statsLabel: "Resumen de órdenes de compra",
+                stats: {
+                    orders: "Órdenes",
+                    cancelled: "{count} canceladas",
+                    value: "Valor de órdenes",
+                    open: "Abiertas",
+                    openCount: "{count} abiertas",
+                    received: "Recibidas",
+                    receivedCount: "{count} recibidas",
+                    overdue: "Vencidas",
+                },
+                expectedDate: "Fecha prevista",
+            },
+            quotations: {
+                statsLabel: "Resumen de cotizaciones de compra",
+                stats: {
+                    rfqs: "Solicitudes",
+                    value: "Valor cotizado",
+                    pending: "Pendientes",
+                    accepted: "Aceptadas",
+                    acceptedCount: "{count} aceptadas",
+                    converted: "Convertidas en OC",
+                    expired: "Vencidas",
+                },
+                deleted: "Solicitud eliminada",
+            },
+        },
         unlinked: "Sin vincular",
         unlinkedSupplier: "Proveedor sin vincular",
         noSupplier: "No se ha seleccionado proveedor",
@@ -152,6 +214,13 @@ export const purchasesMessages = {
         statuses: {
             RECORDED: 'Registrada',
             CANCELLED: 'Anulada',
+        },
+        returnsModal: {
+            viewReturns: 'Ver devoluciones de compra ({count})',
+            title: 'Devoluciones de {number}',
+            empty: 'No hay devoluciones en esta factura',
+            notes: 'Notas',
+            openReturn: 'Abrir devolución',
         },
         printInvoice: "Imprimir factura",
         printLoadFailed: "No se pudo cargar la compra para imprimir.",
