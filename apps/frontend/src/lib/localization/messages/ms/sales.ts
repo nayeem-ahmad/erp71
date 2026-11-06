@@ -281,6 +281,13 @@ export const salesMessages = {
                     salesRep: 'Wakil jualan',
                     noSalesRep: 'Tiada wakil jualan',
                 },
+                returnsModal: {
+                    viewReturns: 'Lihat pulangan jualan ({count})',
+                    title: 'Pulangan jualan untuk {serial}',
+                    empty: 'Tiada pulangan pada jualan ini',
+                    reason: 'Sebab',
+                    openReturn: 'Buka pulangan',
+                },
             },
             hub: {
                 moduleLabel: "Modul Jualan",

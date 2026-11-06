@@ -281,6 +281,13 @@ export const salesMessages = {
                 salesRep: 'Commercial',
                 noSalesRep: 'Sans commercial',
             },
+            returnsModal: {
+                viewReturns: 'Voir les retours de vente ({count})',
+                title: 'Retours de vente pour {serial}',
+                empty: 'Aucun retour sur cette vente',
+                reason: 'Motif',
+                openReturn: 'Ouvrir le retour',
+            },
         },
         hub: {
             moduleLabel: "Module Ventes",
