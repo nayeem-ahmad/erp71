@@ -1,5 +1,5 @@
 import { Controller, Post, Get, Patch, Body, Param, Query, UseGuards, UseInterceptors, Delete } from '@nestjs/common';
-import { SalesQuotationsService } from './sales-quotations.service';
+import { SalesQuotationsService, type QuotationListFilters } from './sales-quotations.service';
 import {
     CreateQuotationDto,
     UpdateQuotationDto,
@@ -11,6 +11,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { BranchScopeService } from '../database/branch-scope.service';
+import { readSalesDocumentListFilters } from '../common/sales-document-list-filters';
 
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
@@ -30,23 +31,44 @@ export class SalesQuotationsController {
         return this.quotationsService.create(tenant.tenantId, dto);
     }
 
+    /** The list's filters, read once for the rows and the stats strip alike. */
+    private async listFilters(tenant: TenantContext, query: ListQuotationsQueryDto): Promise<QuotationListFilters> {
+        // Allow-listed rather than passed straight through: `doc_kind` reaches a
+        // Prisma `where`, and an unchecked query param there is a filter the
+        // caller gets to write.
+        const docKind = query.docKind;
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: SALES_READ });
+        return {
+            ...readSalesDocumentListFilters(query, { storeId, timezone: tenant.timezone }),
+            docKind: QUOTATION_DOC_KINDS.includes(docKind as never) ? docKind : undefined,
+        };
+    }
+
     @RequireAnyStorePermission(...SALES_READ)
     @Get()
     async findAll(
         @Tenant() tenant: TenantContext,
         @Query() query: ListQuotationsQueryDto,
     ) {
-        // Allow-listed rather than passed straight through: `doc_kind` reaches a
-        // Prisma `where`, and an unchecked query param there is a filter the
-        // caller gets to write.
-        const docKind = query.docKind;
-        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: SALES_READ });
-        return this.quotationsService.findAll(tenant.tenantId, query.page, query.limit, { timezone: tenant.timezone,
-            createdFrom: query.createdFrom,
-            createdTo: query.createdTo,
-            storeId,
-            docKind: QUOTATION_DOC_KINDS.includes(docKind as never) ? docKind : undefined,
+        return this.quotationsService.findAll(tenant.tenantId, query.page, query.limit, {
+            ...(await this.listFilters(tenant, query)),
+            sortBy: query.sortBy,
+            sortDir: query.sortDir,
         });
+    }
+
+    /**
+     * The stats strip above the list, over the same filters as
+     * `GET /sales-quotations`. Declared before `:id`, which would take
+     * "summary" for an id.
+     */
+    @RequireAnyStorePermission(...SALES_READ)
+    @Get('summary')
+    async summary(
+        @Tenant() tenant: TenantContext,
+        @Query() query: ListQuotationsQueryDto,
+    ) {
+        return this.quotationsService.summary(tenant.tenantId, await this.listFilters(tenant, query));
     }
 
     @RequireAnyStorePermission(...SALES_READ)

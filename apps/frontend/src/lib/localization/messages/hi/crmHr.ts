@@ -1795,6 +1795,39 @@ export const crmHrMessages = {
         }
     },
     "delivery": {
+        "listUi": {
+            "searchPlaceholder": "ग्राहक, फ़ोन, पता, ड्राइवर या इनवॉइस खोजें…",
+            "statsLabel": "डिलीवरी सारांश",
+            "unassigned": "असाइन नहीं",
+            "sale": "बिक्री",
+            "overdueHint": "निर्धारित समय निकल चुका है",
+            "markDelivered": "डिलीवर हुआ चिह्नित करें",
+            "markedDelivered": "{customer} को डिलीवर हुआ",
+            "cancelDelivery": "डिलीवरी रद्द करें",
+            "cancelled": "डिलीवरी रद्द हुई",
+            "saved": "डिलीवरी सहेजी गई",
+            "saveFailed": "डिलीवरी सहेजी नहीं जा सकी",
+            "form": {
+                "saleId": "बिक्री ID (वैकल्पिक)",
+                "customerName": "ग्राहक का नाम",
+                "customerPhone": "ग्राहक का फ़ोन",
+                "deliveryAddress": "डिलीवरी पता",
+                "driverName": "ड्राइवर का नाम",
+                "driverPhone": "ड्राइवर का फ़ोन",
+                "scheduledAt": "निर्धारित तिथि और समय",
+                "required": "ग्राहक का नाम और डिलीवरी पता आवश्यक हैं।"
+            },
+            "stats": {
+                "deliveries": "डिलीवरी",
+                "pending": "लंबित",
+                "inTransit": "रास्ते में",
+                "delivered": "डिलीवर हुई",
+                "overdue": "विलंबित",
+                "failed": "विफल / रद्द",
+                "unassigned": "{count} असाइन नहीं",
+                "cancelledHint": "{count} रद्द"
+            }
+        },
         "title": "डिलीवरी ऑर्डर",
         "subtitle": "ग्राहक डिलीवरी शेड्यूल करें और ट्रैक करें",
         "newDelivery": "नई डिलीवरी",

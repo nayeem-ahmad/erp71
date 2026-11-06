@@ -1447,6 +1447,7 @@ export const coreMessages = {
         onlineBadge: "Online",
     },
     partyPayments: {
+        listUi: { statsLabel: "Payments summary", payments: "Payments", topMethod: "Top method" },
         directionAll: "All",
         directionIn: "In",
         directionOut: "Out",
@@ -1572,6 +1573,7 @@ export const coreMessages = {
     },
     customerLedger: {
         title: 'Customer Ledger',
+        statsLabel: "Ledger summary",
         ledgerTitle: 'Ledger entries',
         subtitle: 'View due balances and credit transaction history.',
         currentDue: 'Current due',

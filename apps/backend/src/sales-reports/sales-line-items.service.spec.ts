@@ -19,8 +19,8 @@ function mockDb() {
             aggregate: jest.fn().mockResolvedValue({ _sum: { quantity: null, refund_amount: null } }),
         },
         store: { findFirst: jest.fn().mockResolvedValue(null) },
-        customer: { findFirst: jest.fn().mockResolvedValue(null) },
-        product: { findFirst: jest.fn().mockResolvedValue(null) },
+        customer: { findMany: jest.fn().mockResolvedValue([]) },
+        product: { findMany: jest.fn().mockResolvedValue([]) },
     };
 }
 
@@ -51,8 +51,41 @@ describe('salesLineFilter', () => {
             TZ,
         );
 
-        expect(sale).toMatchObject({ store_id: 'store-1', customer_id: 'cust-1' });
+        expect(sale).toMatchObject({ store_id: 'store-1', customer_id: { in: ['cust-1'] } });
         expect(line).toEqual({ product_id: 'prod-1' });
+    });
+
+    it('takes a set of customers, where none is a walk-in sale, and a set of products', () => {
+        const { sale, line } = salesLineFilter(
+            TENANT,
+            { customerId: 'cust-1,none,cust-2', productId: 'prod-1,prod-2' },
+            TZ,
+        );
+
+        expect(sale).toMatchObject({
+            OR: [{ customer_id: { in: ['cust-1', 'cust-2'] } }, { customer_id: null }],
+        });
+        expect(salesLineFilter(TENANT, { customerId: 'none' }, TZ).sale).toMatchObject({ customer_id: null });
+        expect(line).toEqual({ product_id: { in: ['prod-1', 'prod-2'] } });
+    });
+
+    it('narrows the lines by unit price, quantity and whether anything came back', () => {
+        const { line } = salesLineFilter(
+            TENANT,
+            { unitPrice: 'between:100,500', quantity: 'gt:2', returned: 'yes' },
+            TZ,
+        );
+
+        expect(line).toEqual({
+            price_at_sale: { gte: 100, lte: 500 },
+            quantity: { gt: 2 },
+            returns: { some: {} },
+        });
+        expect(salesLineFilter(TENANT, { returned: 'no' }, TZ).line).toEqual({ returns: { none: {} } });
+    });
+
+    it('refuses a malformed amount rather than quietly showing every line', () => {
+        expect(() => salesLineFilter(TENANT, { unitPrice: 'more than 5' }, TZ)).toThrow(/unitPrice/);
     });
 
     it('searches product, invoice, reference and customer, case-insensitively, and ignores blank text', () => {
@@ -214,28 +247,39 @@ describe('SalesLineItemsService', () => {
     });
 
     it('names the filters it was given, looked up inside the tenant only', async () => {
-        db.customer.findFirst.mockResolvedValue({ id: 'cust-1', name: 'Rahim', phone: null, customer_code: 'C-1' });
+        const rahim = { id: 'cust-1', name: 'Rahim', phone: null, customer_code: 'C-1' };
+        db.customer.findMany.mockResolvedValue([rahim]);
 
         const report = await service.getSalesLineItems(
             TENANT,
-            { customerId: 'cust-1', productId: 'prod-x', from: '2026-03-01' },
+            { customerId: 'cust-1,none', productId: 'prod-x', from: '2026-03-01' },
             TZ,
         );
 
-        expect(db.customer.findFirst).toHaveBeenCalledWith(
-            expect.objectContaining({ where: { id: 'cust-1', tenant_id: TENANT } }),
+        // `none` is a walk-in, not a customer to look up.
+        expect(db.customer.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { id: { in: ['cust-1'] }, tenant_id: TENANT } }),
         );
-        expect(db.product.findFirst).toHaveBeenCalledWith(
-            expect.objectContaining({ where: { id: 'prod-x', tenant_id: TENANT } }),
+        expect(db.product.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { id: { in: ['prod-x'] }, tenant_id: TENANT } }),
         );
         expect(db.store.findFirst).not.toHaveBeenCalled();
         expect(report.filters).toEqual({
             from: '2026-03-01',
             to: null,
             store: null,
-            customer: { id: 'cust-1', name: 'Rahim', phone: null, customer_code: 'C-1' },
+            customer: rahim,
             product: null,
+            customers: [rahim],
+            products: [],
         });
+    });
+
+    it('looks nothing up when nothing was narrowed', async () => {
+        await service.getSalesLineItems(TENANT, {}, TZ);
+
+        expect(db.customer.findMany).not.toHaveBeenCalled();
+        expect(db.product.findMany).not.toHaveBeenCalled();
     });
 });
 
@@ -267,6 +311,22 @@ describe('GetSalesLineItemsDto', () => {
     it('rejects a page larger than any list returns, and a sort it cannot do', async () => {
         const errors = await check({ limit: '500', sortBy: 'amount' });
         expect(errors.map((error) => error.property).sort()).toEqual(['limit', 'sortBy']);
+    });
+
+    it('accepts sets of customers and products, walk-in included, and the line filters', async () => {
+        const errors = await check({
+            customerId: '1c1d6a0e-7f4a-4d4e-8b7a-3b2a9f6c5d11,none',
+            productId: '2d2e7b1f-8a5b-4e5f-9c8b-4c3b0a7d6e12,3e3f8c2a-9b6c-4f6a-8d9c-5d4c1b8e7f13',
+            unitPrice: 'gt:100',
+            quantity: 'between:1,5',
+            returned: 'yes',
+        });
+        expect(errors).toHaveLength(0);
+    });
+
+    it('rejects ids that are not ids, and a returns filter it does not know', async () => {
+        const errors = await check({ customerId: 'cust-1', productId: 'none', returned: 'maybe' });
+        expect(errors.map((error) => error.property).sort()).toEqual(['customerId', 'productId', 'returned']);
     });
 
     it('rejects the purchase side’s supplier filter', async () => {

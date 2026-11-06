@@ -16,6 +16,8 @@ import {
     type FilterableMap,
     numberEquals,
 } from '../common/column-filter.util';
+import { numberConditionFilter, readIdListQuery, readNumberConditionQuery } from '../common/number-condition.util';
+import { idsOrNoneClause } from '../common/sales-document-list-filters';
 
 /**
  * How each sortable column orders the lines. `lineOrder` appends the line id to
@@ -64,10 +66,20 @@ function lineOrder(query: GetSalesLineItemsDto): Prisma.SaleItemOrderByWithRelat
  * to be. Kept apart because the invoice count asks the question the other way
  * round — sales that have a matching line — and has to lead with the sale's own
  * tenant scope to use its indexes.
+ *
+ * One filter for the page of rows and every total beside it, so the figures
+ * above the table always describe the same lines as the rows under them.
  */
 export function salesLineFilter(tenantId: string, query: GetSalesLineItemsDto, timezone: string) {
     const saleDate = zonedDayRange(query.from, query.to, timezone);
     const search = searchTerm(query.search);
+    // `none` asks for walk-in sales, which carry no customer at all.
+    const customers = idsOrNoneClause('customer_id', readIdListQuery(query.customerId)) as
+        | Prisma.SaleWhereInput
+        | undefined;
+    const productIds = readIdListQuery(query.productId);
+    const unitPrice = readNumberConditionQuery(query.unitPrice, 'unitPrice');
+    const quantity = readNumberConditionQuery(query.quantity, 'quantity');
 
     // Completed sales only — a draft is not a sale yet and a cancelled one has
     // been reversed. The same line every other sales report draws.
@@ -75,12 +87,18 @@ export function salesLineFilter(tenantId: string, query: GetSalesLineItemsDto, t
         tenant_id: tenantId,
         status: 'COMPLETED',
         ...(query.storeId ? { store_id: query.storeId } : {}),
-        ...(query.customerId ? { customer_id: query.customerId } : {}),
+        ...(customers ?? {}),
         ...(saleDate ? { sale_date: saleDate } : {}),
     };
 
     const searchLine: Prisma.SaleItemWhereInput = {
-        ...(query.productId ? { product_id: query.productId } : {}),
+        ...(productIds ? { product_id: productIds.length === 1 ? productIds[0] : { in: productIds } } : {}),
+        ...(unitPrice ? { price_at_sale: numberConditionFilter(unitPrice) } : {}),
+        ...(quantity ? { quantity: numberConditionFilter(quantity) } : {}),
+        // Anything ever returned against the line, whenever it came back — the
+        // same returns the row's Returned column adds up.
+        ...(query.returned === 'yes' ? { returns: { some: {} } } : {}),
+        ...(query.returned === 'no' ? { returns: { none: {} } } : {}),
         ...(search
             ? {
                   OR: [
@@ -202,32 +220,45 @@ export class SalesLineItemsService {
 
     /**
      * Names for the ids the search was narrowed by, so a page opened from a
-     * link can label its pickers. Tenant-scoped: an id from another workspace
-     * resolves to nothing, exactly as it matches nothing.
+     * link can label its filter chips. Tenant-scoped: an id from another
+     * workspace resolves to nothing, exactly as it matches nothing.
+     *
+     * `customer` and `product` name the first one asked for, as before a set
+     * could be asked for; `customers` and `products` name them all.
      */
     private async resolveFilters(tenantId: string, query: GetSalesLineItemsDto) {
-        const [store, customer, product] = await Promise.all([
+        const customerIds = (readIdListQuery(query.customerId) ?? []).filter((id) => id !== 'none');
+        const productIds = readIdListQuery(query.productId) ?? [];
+        const [store, customers, products] = await Promise.all([
             query.storeId
                 ? this.db.store.findFirst({
                       where: { id: query.storeId, tenant_id: tenantId },
                       select: { id: true, name: true },
                   })
                 : null,
-            query.customerId
-                ? this.db.customer.findFirst({
-                      where: { id: query.customerId, tenant_id: tenantId },
+            customerIds.length
+                ? this.db.customer.findMany({
+                      where: { id: { in: customerIds }, tenant_id: tenantId },
                       select: { id: true, name: true, phone: true, customer_code: true },
                   })
-                : null,
+                : [],
             // Deliberately not filtered on `deleted_at`: a product taken off the
             // catalogue still has lines, and they are what someone is looking for.
-            query.productId
-                ? this.db.product.findFirst({
-                      where: { id: query.productId, tenant_id: tenantId },
+            productIds.length
+                ? this.db.product.findMany({
+                      where: { id: { in: productIds }, tenant_id: tenantId },
                       select: { id: true, name: true, sku: true },
                   })
-                : null,
+                : [],
         ]);
-        return { store, customer, product };
+        const first = <T extends { id: string }>(rows: T[], ids: string[]) =>
+            ids.length ? rows.find((row) => row.id === ids[0]) ?? null : null;
+        return {
+            store,
+            customer: first(customers, customerIds),
+            product: first(products, productIds),
+            customers,
+            products,
+        };
     }
 }

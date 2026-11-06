@@ -1447,6 +1447,7 @@ export const coreMessages = {
         onlineBadge: "En línea",
     },
     partyPayments: {
+        listUi: { statsLabel: "Resumen de pagos", payments: "Pagos", topMethod: "Método principal" },
         directionAll: "Todos",
         directionIn: "Entradas",
         directionOut: "Salidas",
@@ -1572,6 +1573,7 @@ export const coreMessages = {
     },
     customerLedger: {
         title: "Mayor de clientes",
+        statsLabel: "Resumen del mayor",
         ledgerTitle: "Apuntes del mayor",
         subtitle: "Consulta los saldos pendientes y el historial de operaciones a crédito.",
         currentDue: "Pendiente actual",

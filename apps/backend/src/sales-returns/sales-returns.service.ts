@@ -3,6 +3,10 @@ import { Prisma } from '@prisma/client';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
+import { searchClause, statusSetClause, type SalesDocumentListFilters } from '../common/sales-document-list-filters';
+import { numberConditionFilter } from '../common/number-condition.util';
+import { resolveOrderBy, type SortableMap } from '../common/sort.util';
+import { roundMoney } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { CreateSalesReturnDto, UpdateSalesReturnDto } from './sales-returns.dto';
@@ -67,6 +71,43 @@ interface SettledReturn {
     total_refund: unknown;
     /** Already set when the return was saved, or last edited, with tenders. */
     tenders_recorded?: boolean;
+}
+
+const SALES_RETURN_SORTABLE: SortableMap = {
+    return_number: (dir) => ({ return_number: dir }),
+    created_at: (dir) => ({ created_at: dir }),
+    total_refund: (dir) => ({ total_refund: dir }),
+    receipt: (dir) => ({ sale: { serial_number: dir } }),
+    customer: (dir) => ({ sale: { customer: { name: dir } } }),
+};
+
+/** What narrows the sales-returns list — and, alike, its stats strip. */
+export interface SalesReturnListFilters extends Partial<Omit<SalesDocumentListFilters, 'timezone'>> {
+    timezone: string;
+}
+
+/** `GET /sales-returns/summary` — see `SalesReturnsService.summary`. */
+export interface SalesReturnListSummary {
+    count: number;
+    amount: number;
+    /** Handed back to the customer in money — cash, bKash, bank. */
+    refunded: number;
+    /** The rest, taken off what the customer owes. */
+    adjusted: number;
+    average: number;
+}
+
+/**
+ * A return's customer is its sale's. `none` is a walk-in return: one recorded
+ * without a sale, or against a sale that had no customer.
+ */
+function returnCustomerClause(ids: readonly string[] | undefined): Prisma.SalesReturnWhereInput | undefined {
+    if (!ids?.length) return undefined;
+    const named = ids.filter((id) => id !== 'none');
+    const clauses: Prisma.SalesReturnWhereInput[] = [];
+    if (named.length) clauses.push({ sale: { customer_id: { in: named } } });
+    if (named.length !== ids.length) clauses.push({ sale_id: null }, { sale: { customer_id: null } });
+    return clauses.length === 1 ? clauses[0] : { OR: clauses };
 }
 
 @Injectable()
@@ -277,22 +318,54 @@ export class SalesReturnsService {
         });
     }
 
+    /**
+     * The `where` behind the sales-returns list and its stats strip. A return
+     * is dated when it is recorded, so the date filter is `created_at`.
+     */
+    private listWhere(tenantId: string, opts?: SalesReturnListFilters): Prisma.SalesReturnWhereInput {
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
+        const where: Prisma.SalesReturnWhereInput = {
+            tenant_id: tenantId,
+            ...(opts?.storeId ? { store_id: opts.storeId } : {}),
+            ...(created ? { created_at: created } : {}),
+            ...(statusSetClause(opts?.statuses, opts?.statusExclude) as Prisma.SalesReturnWhereInput),
+            ...(opts?.total ? { total_refund: numberConditionFilter(opts.total) } : {}),
+        };
+        const and: Prisma.SalesReturnWhereInput[] = [];
+        const search = searchClause(opts?.search, [
+            'return_number',
+            'reference_number',
+            'reason',
+            'sale.serial_number',
+            'sale.customer.name',
+            'sale.customer.phone',
+        ]);
+        if (search) and.push(search as Prisma.SalesReturnWhereInput);
+        const customer = returnCustomerClause(opts?.customerIds);
+        if (customer) and.push(customer);
+        if (and.length) where.AND = and;
+        return where;
+    }
+
     async findAll(
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string; timezone: string; storeId?: string },
+        opts?: SalesReturnListFilters & { sortBy?: string; sortDir?: string },
     ): Promise<PaginatedResult<unknown>> {
-        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         const result = await paginatedFindMany({
             findMany: (args) =>
                 this.db.salesReturn.findMany({
                     ...(args as object),
-                    include: { sale: true, items: { include: { product: true } }, payments: PAYMENTS_IN_ORDER },
+                    include: {
+                        sale: { include: { customer: { select: { id: true, name: true } } } },
+                        items: { include: { product: true } },
+                        payments: PAYMENTS_IN_ORDER,
+                    },
                 }),
             count: (args) => this.db.salesReturn.count(args as any),
-            where: { tenant_id: tenantId, ...(opts?.storeId ? { store_id: opts.storeId } : {}), ...(created ? { created_at: created } : {}) },
-            orderBy: { created_at: 'desc' },
+            where: this.listWhere(tenantId, opts) as Record<string, unknown>,
+            orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, SALES_RETURN_SORTABLE, { created_at: 'desc' }),
             page,
             limit,
         });
@@ -311,6 +384,41 @@ export class SalesReturnsService {
                 ...item,
                 ...(summaries.get(item.id) ?? NO_POSTING_EVENT),
             })),
+        };
+    }
+
+    /**
+     * The stats strip above the sales-returns list, over exactly the rows the
+     * list shows: how many, their value, how much went back to customers in
+     * money, and the rest — taken off what they owe.
+     *
+     * A return saved with tenders refunded what its tenders say. One saved
+     * before tenders existed counts whole as refunded, as the cashier drawer
+     * counts it (`returnCashOut`).
+     */
+    async summary(tenantId: string, opts: SalesReturnListFilters): Promise<SalesReturnListSummary> {
+        const where = this.listWhere(tenantId, opts);
+        const [returns, tendered, legacy] = await Promise.all([
+            this.db.salesReturn.aggregate({ where, _count: { _all: true }, _sum: { total_refund: true } }),
+            this.db.salesReturnPayment.aggregate({
+                where: { return: { AND: [where, { tenders_recorded: true }] } },
+                _sum: { amount: true },
+            }),
+            this.db.salesReturn.aggregate({
+                where: { AND: [where, { tenders_recorded: false }] },
+                _sum: { total_refund: true },
+            }),
+        ]);
+        const count = returns._count._all;
+        const amount = roundMoney(Number(returns._sum.total_refund ?? 0));
+        const paidBack = Number(tendered._sum.amount ?? 0) + Number(legacy._sum.total_refund ?? 0);
+        const refunded = roundMoney(Math.min(paidBack, amount));
+        return {
+            count,
+            amount,
+            refunded,
+            adjusted: roundMoney(Math.max(amount - refunded, 0)),
+            average: count ? roundMoney(amount / count) : 0,
         };
     }
 

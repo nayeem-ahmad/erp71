@@ -3,18 +3,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { HandCoins } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { HandCoins, PiggyBank, UserCheck, Users, Wallet } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { api, type CustomerDuesRow, type CustomerDuesSummary } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
-import { BranchFilter, Checkbox, CompactStat, PageHeader, PageShell, Select } from '@/components/ui';
+import { BranchFilter, PageHeader, PageShell } from '@/components/ui';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
+import type { NumberCondition } from '@/lib/number-condition';
 
 /** Sales-rep filter values that are not an employee id. */
-const ALL_REPS = '';
 const MY_CUSTOMERS = 'me';
 const NO_REP = 'none';
 
@@ -24,9 +25,9 @@ const columnHelper = createColumnHelper<CustomerDuesRow>();
  * Sales › Reports › Customer Dues Summary: every customer of the chosen branch
  * with what they owe now.
  *
- * The branch is the server's filter; the sales rep and "only who owe" are the
- * page's own, over the rows already loaded, so the tiles always total exactly
- * the rows on screen. A viewer who is the sales rep of any customer listed
+ * The branch is the server's filter; the sales rep, due amount, "only who owe"
+ * and search chips are the page's own, over the rows already loaded, so the
+ * strip always totals exactly the rows on screen. A viewer who is the sales rep of any customer listed
  * opens on their own customers.
  */
 export default function CustomerDuesSummaryPage() {
@@ -35,8 +36,10 @@ export default function CustomerDuesSummaryPage() {
     const branch = useBranchScope({ startOnAll: true });
     const [data, setData] = useState<CustomerDuesSummary>({ me: null, rows: [] });
     const [loading, setLoading] = useState(true);
-    const [rep, setRep] = useState(ALL_REPS);
+    const [reps, setReps] = useState<string[]>([]);
+    const [dueFilter, setDueFilter] = useState<NumberCondition | null>(null);
     const [onlyWithDue, setOnlyWithDue] = useState(false);
+    const [search, setSearch] = useState('');
     // The "my customers" default is applied once, on the first load: after
     // that the filter is the viewer's, and a branch change keeps it.
     const repDefaulted = useRef(false);
@@ -52,7 +55,7 @@ export default function CustomerDuesSummaryPage() {
                 if (!repDefaulted.current) {
                     repDefaulted.current = true;
                     const me = result.me;
-                    if (me && result.rows.some((row) => row.sales_rep?.id === me.id)) setRep(MY_CUSTOMERS);
+                    if (me && result.rows.some((row) => row.sales_rep?.id === me.id)) setReps([MY_CUSTOMERS]);
                 }
             })
             .catch((err) => {
@@ -75,18 +78,19 @@ export default function CustomerDuesSummaryPage() {
         for (const row of data.rows) {
             if (row.sales_rep) byId.set(row.sales_rep.id, row.sales_rep.name);
         }
-        return [...byId].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+        return [...byId].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
     }, [data.rows]);
 
     const rows = useMemo(() => {
-        const repId = rep === MY_CUSTOMERS ? data.me?.id : rep;
+        // "My customers" is the viewer's own employee id; "No sales rep" the empty one.
+        const repIds = reps.map((value) => (value === MY_CUSTOMERS ? data.me?.id ?? MY_CUSTOMERS : value));
         return data.rows.filter((row) => {
             if (onlyWithDue && row.due_balance <= 0) return false;
-            if (rep === ALL_REPS) return true;
-            if (rep === NO_REP) return !row.sales_rep;
-            return row.sales_rep?.id === repId;
+            if (!matchesAnyOf(repIds, row.sales_rep?.id ?? NO_REP)) return false;
+            if (!matchesNumberCondition(row.due_balance, dueFilter)) return false;
+            return matchesSearch(search, row.name, row.customer_code, row.phone, row.sales_rep?.name, row.store?.name);
         });
-    }, [data, rep, onlyWithDue]);
+    }, [data, reps, onlyWithDue, dueFilter, search]);
 
     const totals = useMemo(() => rows.reduce(
         (acc, row) => {
@@ -105,7 +109,7 @@ export default function CustomerDuesSummaryPage() {
         columnHelper.accessor('name', {
             header: t.salesReports.common.customer,
             cell: (info) => (
-                <Link href={routes.sales.customerDetail(info.row.original.id)} className="font-medium text-gray-900 hover:text-blue-600">
+                <Link href={routes.sales.customerDetail(info.row.original.id)} className="hover:text-blue-600">
                     {info.getValue()}
                 </Link>
             ),
@@ -115,7 +119,7 @@ export default function CustomerDuesSummaryPage() {
             id: 'code', header: t.salesReports.common.code, size: 110, meta: { hideOnMobile: true },
         }),
         columnHelper.accessor((row) => row.phone ?? t.shared.dash, {
-            id: 'phone', header: t.salesReports.common.phone, size: 130,
+            id: 'phone', header: t.salesReports.common.phone, size: 130, meta: { hideOnMobile: true },
         }),
         columnHelper.accessor((row) => row.store?.name ?? t.shared.dash, {
             id: 'branch', header: copy.branch, size: 140, meta: { hideOnMobile: true },
@@ -127,15 +131,59 @@ export default function CustomerDuesSummaryPage() {
             header: copy.due,
             cell: (info) => {
                 const due = Number(info.getValue() || 0);
-                return (
-                    <span className={due > 0 ? 'font-semibold text-amber-700' : 'text-gray-500'}>
-                        {formatBDT(due, { locale })}
-                    </span>
-                );
+                return <span className={due > 0 ? 'text-amber-700' : 'text-gray-500'}>{formatBDT(due, { locale })}</span>;
             },
             size: 130,
+            meta: { align: 'end' },
         }),
     ], [t, copy, locale]);
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'salesRep',
+            type: 'multi-select',
+            label: copy.salesRep,
+            value: reps,
+            onChange: setReps,
+            options: [
+                ...(data.me ? [{ value: MY_CUSTOMERS, label: copy.myCustomers }] : []),
+                ...salesReps,
+                { value: NO_REP, label: copy.noSalesRep },
+            ],
+        },
+        {
+            id: 'due',
+            type: 'number',
+            label: copy.due,
+            value: dueFilter,
+            onChange: setDueFilter,
+            money: true,
+        },
+        {
+            id: 'onlyWithDue',
+            type: 'toggle',
+            label: copy.onlyWithDue,
+            pressed: onlyWithDue,
+            onChange: setOnlyWithDue,
+            control: 'button',
+        },
+    ], [copy, data.me, salesReps, reps, dueFilter, onlyWithDue]);
+
+    const stats = useMemo(() => {
+        const items: ListStat[] = [
+            { id: 'customers', icon: <Users aria-hidden />, label: copy.customers, value: rows.length.toLocaleString() },
+            { id: 'withDue', icon: <UserCheck aria-hidden />, label: copy.withDue, value: totals.withDue.toLocaleString() },
+            {
+                id: 'due',
+                icon: <Wallet aria-hidden />,
+                label: copy.totalDue,
+                value: formatBDT(totals.due, { locale }),
+                tone: totals.due > 0 ? 'warning' : 'default',
+            },
+            { id: 'advance', icon: <PiggyBank aria-hidden />, label: copy.advance, value: formatBDT(totals.advance, { locale }) },
+        ];
+        return { items, loading: loading && data.rows.length === 0, label: copy.statsLabel };
+    }, [rows.length, totals, loading, data.rows.length, locale, copy]);
 
     return (
         <PageShell>
@@ -148,36 +196,8 @@ export default function CustomerDuesSummaryPage() {
                     copy.title,
                     'sales',
                 )}
-                actions={(
-                    <>
-                        <BranchFilter scope={branch} />
-                        <Select
-                            value={rep}
-                            onChange={(event) => setRep(event.target.value)}
-                            aria-label={copy.salesRep}
-                            className="w-auto max-w-[14rem]"
-                        >
-                            <option value={ALL_REPS}>{copy.allSalesReps}</option>
-                            {data.me ? <option value={MY_CUSTOMERS}>{copy.myCustomers}</option> : null}
-                            {salesReps.map((salesRep) => (
-                                <option key={salesRep.id} value={salesRep.id}>{salesRep.name}</option>
-                            ))}
-                            <option value={NO_REP}>{copy.noSalesRep}</option>
-                        </Select>
-                        <label className="inline-flex min-h-touch items-center gap-2 text-sm text-gray-700 md:min-h-0">
-                            <Checkbox checked={onlyWithDue} onChange={(event) => setOnlyWithDue(event.target.checked)} />
-                            {copy.onlyWithDue}
-                        </label>
-                    </>
-                )}
+                actions={<BranchFilter scope={branch} />}
             />
-
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <CompactStat label={copy.customers} value={rows.length} />
-                <CompactStat label={copy.withDue} value={totals.withDue} />
-                <CompactStat label={copy.totalDue} value={formatBDT(totals.due, { locale })} tone="warning" />
-                <CompactStat label={copy.advance} value={formatBDT(totals.advance, { locale })} />
-            </div>
 
             <DataTable<CustomerDuesRow>
                 tableId="customer-dues-summary"
@@ -189,6 +209,13 @@ export default function CustomerDuesSummaryPage() {
                 emptyIcon={<HandCoins className="h-16 w-16 text-gray-200" />}
                 searchPlaceholder={copy.searchPlaceholder}
                 getRowId={(row) => row.id}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
             />
         </PageShell>
     );

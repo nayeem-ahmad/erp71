@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { RotateCcw, Plus, Eye, Edit2, Printer, Trash2 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { ArrowDownToLine, Calculator, Eye, Pencil, Plus, Printer, RotateCcw, Scale, Trash2, Undo2 } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
+import { api, type SalesDocumentListFilterParams, type SalesReturnListSummary } from '@/lib/api';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
-import { compactDensity } from '@/lib/ui/compact-density';
 import { routes } from '@/lib/routes';
 import { PostingBadge } from '@/components/PostingBadge';
 import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
@@ -16,10 +15,16 @@ import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { useSalePrintPrefs } from '@/lib/hooks/useSalePrintPrefs';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import type { NumberCondition } from '@/lib/number-condition';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { BranchFilter, PageShell } from '@/components/ui';
-import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { BranchFilter, ConfirmDialog, PageShell, StatusBadge, buttonClassName, type StatusBadgeTone } from '@/components/ui';
+import { RowActions, RowActionButton } from '@/components/table';
+import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
+import { toast } from '@/lib/toast';
+import { useServerList } from '@/hooks/useServerList';
+import { useListSummary } from '@/hooks/useListSummary';
+import { customerListFilter } from '../components/customer-list-filter';
 
 interface SalesReturn {
     id: string;
@@ -29,16 +34,16 @@ interface SalesReturn {
     reason?: string;
     status?: string;
     items: any[];
-    sale?: { serial_number: string };
+    sale?: { serial_number: string; customer?: { id: string; name: string } | null } | null;
     posting_status?: string | null;
     voucher_number?: string | null;
     store_id?: string;
 }
 
-const statusColors: Record<string, string> = {
-    COMPLETED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
-    CANCELLED: 'bg-red-50 text-red-700 border-red-200',
+const statusTones: Record<string, StatusBadgeTone> = {
+    COMPLETED: 'success',
+    PENDING: 'warning',
+    CANCELLED: 'neutral',
 };
 
 const columnHelper = createColumnHelper<SalesReturn>();
@@ -49,35 +54,61 @@ export default function ReturnsPage() {
     const printHeader = usePrintHeader('SALES_RETURN');
     // This browser's paper, as invoices print on; A4 for a till roll.
     const paper = sheetPaper(useSalePrintPrefs().paperSize);
-    const [returns, setReturns] = useState<SalesReturn[]>([]);
-    const [loading, setLoading] = useState(true);
+    const copy = t.returns.list;
+    const [pendingDelete, setPendingDelete] = useState<SalesReturn | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
+    const [customerIds, setCustomerIds] = useState<string[]>([]);
+    const [totalFilter, setTotalFilter] = useState<NumberCondition | null>(null);
 
     useEffect(() => {
-        if (!branch.ready) return;
-        loadReturns();
-    }, [createdRange, branch.ready, branch.apiStoreId]);
+        const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
 
-    const loadReturns = async () => {
-        setLoading(true);
-        try {
-            const data = await api.getReturns({ ...applyCreatedRangeQuery(createdRange), storeId: branch.apiStoreId });
-            setReturns(data);
-        } catch (error) {
-            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
-            console.error('Failed to load returns', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    // A return is dated when it is recorded, so its one date is `created_at`.
+    const filterParams = useMemo<SalesDocumentListFilterParams>(
+        () => ({
+            search: debouncedSearch || undefined,
+            ...applyCreatedRangeQuery(createdRange),
+            storeId: branch.apiStoreId,
+            customerIds,
+            total: totalFilter,
+        }),
+        [debouncedSearch, createdRange, branch.apiStoreId, customerIds, totalFilter],
+    );
 
-    const handleDelete = async (id: string) => {
-        if (!window.confirm(t.shared.confirm.deleteReturn)) return;
+    const { items: returns, loading, error: listError, serverPagination, reload } = useServerList<SalesReturn>({
+        tableId: 'sales-returns',
+        initialSort: { id: 'created_at', desc: true },
+        deps: [filterParams],
+        enabled: branch.ready,
+        fetch: (params) => api.getReturnsList({ ...params, ...filterParams }),
+    });
+    useBranchForbiddenReset(listError, branch, t.dashboardLayout.branchFilterForbidden);
+
+    const { summary, loading: summaryLoading, reload: reloadSummary } = useListSummary<
+        SalesDocumentListFilterParams,
+        SalesReturnListSummary
+    >({ fetch: api.getReturnsListSummary, params: filterParams, enabled: branch.ready });
+
+    const confirmDelete = async () => {
+        if (!pendingDelete) return;
+        setDeleting(true);
         try {
-            await api.deleteReturn(id);
-            setReturns((prev) => prev.filter((r) => r.id !== id));
-        } catch (error) {
+            await api.deleteReturn(pendingDelete.id);
+            setPendingDelete(null);
+            void reload();
+            reloadSummary();
+            toast.success(copy.deleted);
+        } catch (error: any) {
             console.error('Failed to delete return', error);
+            toast.error(error?.message || copy.deleteFailed);
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -123,56 +154,57 @@ export default function ReturnsPage() {
             columnHelper.accessor('return_number', {
                 header: t.returns.columns.returnNumber,
                 cell: (info) => (
-                    <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
+                    <Link
+                        href={routes.sales.returnDetail(info.row.original.id)}
+                        className="font-medium text-gray-900 hover:text-blue-600 hover:underline"
+                    >
+                        {info.getValue()}
+                    </Link>
                 ),
                 size: 140,
             }),
+            createdAtColumn(columnHelper, { header: t.common.date, locale, enableColumnFilter: false }),
             columnHelper.accessor((row) => row.sale?.serial_number ?? '', {
                 id: 'receipt',
                 header: t.returns.columns.originalReceipt,
-                cell: (info) => (
-                    <span className="text-sm font-mono text-gray-500">{info.getValue() || t.shared.dash}</span>
-                ),
+                cell: (info) => info.getValue() || <span className="text-gray-400">{t.shared.dash}</span>,
                 size: 150,
             }),
-            columnHelper.accessor('total_refund', {
-                header: t.returns.columns.refundAmount,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-danger">
-                        {formatBDT(parseFloat(info.getValue()), { locale })}
-                    </span>
-                ),
-                sortingFn: (a, b) =>
-                    parseFloat(a.getValue('total_refund')) - parseFloat(b.getValue('total_refund')),
-                size: 130,
+            columnHelper.accessor((row) => row.sale?.customer?.name ?? '', {
+                id: 'customer',
+                header: t.returns.columns.customer,
+                cell: (info) => info.getValue() || <span className="text-gray-400">{t.shared.walkIn}</span>,
+                size: 170,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor((row) => row.items?.length ?? 0, {
                 id: 'item_count',
                 header: t.returns.columns.items,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-gray-700">
-                        {formatMessage(t.shared.itemsReturned, { count: info.getValue() })}
-                    </span>
-                ),
-                size: 90,
+                enableSorting: false,
+                cell: (info) => formatMessage(t.shared.itemsReturned, { count: info.getValue() }),
+                size: 100,
+                meta: { align: 'end', hideOnMobile: true },
             }),
-            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
+            columnHelper.accessor('total_refund', {
+                header: t.returns.columns.refundAmount,
+                cell: (info) => formatBDT(Number(info.getValue() || 0), { locale }),
+                size: 130,
+                meta: { align: 'end' },
+            }),
             columnHelper.accessor((row) => row.status ?? 'COMPLETED', {
                 id: 'status',
                 header: t.returns.columns.status,
+                enableSorting: false,
                 cell: (info) => {
                     const status = info.getValue();
                     return (
-                        <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${
-                                statusColors[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'
-                            }`}
-                        >
+                        <StatusBadge tone={statusTones[status] ?? 'neutral'}>
                             {t.shared.statuses.return[status as keyof typeof t.shared.statuses.return] ?? status}
-                        </span>
+                        </StatusBadge>
                     );
                 },
                 size: 120,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.display({
                 id: 'posting',
@@ -184,6 +216,7 @@ export default function ReturnsPage() {
                     />
                 ),
                 size: 120,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.display({
                 id: 'actions',
@@ -191,36 +224,21 @@ export default function ReturnsPage() {
                 cell: (info) => {
                     const row = info.row.original;
                     return (
-                        <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
-                            <Link
-                                href={`/sales/returns/${row.id}`}
-                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                                title={t.common.view}
-                            >
-                                <Eye className="w-4 h-4" />
-                            </Link>
-                            <Link
-                                href={`/sales/returns/${row.id}?edit=true`}
-                                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-                                title={t.common.edit}
-                            >
-                                <Edit2 className="w-4 h-4" />
-                            </Link>
-                            <button
-                                onClick={() => void handlePrint(row)}
-                                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-                                title={t.common.print}
-                            >
-                                <Printer className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={() => handleDelete(row.id)}
-                                className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
-                                title={t.common.delete}
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        </div>
+                        <RowActions>
+                            <RowActionButton icon={<Eye />} label={t.common.view} href={routes.sales.returnDetail(row.id)} />
+                            <RowActionButton
+                                icon={<Pencil />}
+                                label={t.common.edit}
+                                href={`${routes.sales.returnDetail(row.id)}?edit=true`}
+                            />
+                            <RowActionButton icon={<Printer />} label={t.common.print} onClick={() => void handlePrint(row)} />
+                            <RowActionButton
+                                icon={<Trash2 />}
+                                label={t.common.delete}
+                                intent="danger"
+                                onClick={() => setPendingDelete(row)}
+                            />
+                        </RowActions>
                     );
                 },
                 enableSorting: false,
@@ -229,56 +247,122 @@ export default function ReturnsPage() {
                 size: 160,
             }),
         ],
-        [t, locale],
+        // Rebuilt with the print paper, which the Print action reads.
+        [t, locale, paper],
     );
 
-    const filterPresets = useMemo(
+    const filters = useMemo<ListFilter[]>(
         () => [
-            { label: t.returns.filterPresets.completed, filters: [{ id: 'status', value: 'COMPLETED' }] },
-            { label: t.returns.filterPresets.pending, filters: [{ id: 'status', value: 'PENDING' }] },
+            {
+                id: 'created',
+                type: 'date-range',
+                label: t.common.date,
+                value: createdRange,
+                onChange: setCreatedRange,
+                operators: true,
+            },
+            customerListFilter({
+                label: t.returns.columns.customer,
+                walkInLabel: t.shared.walkIn,
+                value: customerIds,
+                onChange: setCustomerIds,
+                storeId: branch.apiStoreId,
+            }),
+            {
+                id: 'total',
+                type: 'number',
+                label: t.returns.columns.refundAmount,
+                value: totalFilter,
+                onChange: setTotalFilter,
+                money: true,
+            },
         ],
-        [t],
+        [t, createdRange, customerIds, totalFilter, branch.apiStoreId],
     );
+
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const dash = '—';
+        const items: ListStat[] = [
+            {
+                id: 'count',
+                icon: <RotateCcw aria-hidden />,
+                label: copy.stats.returns,
+                value: summary ? summary.count.toLocaleString(locale) : dash,
+            },
+            {
+                id: 'amount',
+                icon: <Undo2 aria-hidden />,
+                label: copy.stats.amount,
+                value: summary ? money(summary.amount) : dash,
+                tone: summary && summary.amount > 0 ? 'danger' : 'default',
+            },
+            {
+                id: 'refunded',
+                icon: <ArrowDownToLine aria-hidden />,
+                label: copy.stats.refunded,
+                value: summary ? money(summary.refunded) : dash,
+                hint: summary && summary.amount > 0
+                    ? new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(summary.refunded / summary.amount)
+                    : undefined,
+            },
+            { id: 'adjusted', icon: <Scale aria-hidden />, label: copy.stats.adjusted, value: summary ? money(summary.adjusted) : dash },
+            { id: 'average', icon: <Calculator aria-hidden />, label: copy.stats.average, value: summary ? money(summary.average) : dash },
+        ];
+        return { items, loading: summaryLoading && !summary, label: copy.statsLabel };
+    }, [summary, summaryLoading, locale, copy]);
 
     return (
         <PageShell>
-                <PageHeader
-                    title={t.returns.title}
-                    subtitle={t.returns.subtitle}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.sales,
-                        t.returns.title,
-                        'sales',
-                    )}
-                    actions={
-                        <>
-                            <BranchFilter scope={branch} />
-                            <Link href={routes.sales.returnNew} className={`${compactDensity.btnPrimary} bg-danger hover:bg-red-700 text-white`}>
-                                <Plus className="w-4 h-4" />
-                                {t.returns.processReturn}
-                            </Link>
-                        </>
-                    }
-                />
+            <PageHeader
+                title={t.returns.title}
+                subtitle={t.returns.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.sales,
+                    t.returns.title,
+                    'sales',
+                )}
+                actions={
+                    <>
+                        <BranchFilter scope={branch} />
+                        <Link href={routes.sales.returnNew} className={buttonClassName()}>
+                            <Plus className="w-4 h-4" />
+                            {t.returns.processReturn}
+                        </Link>
+                    </>
+                }
+            />
 
+            <DataTable<SalesReturn>
+                tableId="sales-returns"
+                columns={columns}
+                data={returns}
+                title={t.returns.dataTable.title}
+                isLoading={loading}
+                emptyMessage={t.returns.dataTable.emptyMessage}
+                emptyIcon={<RotateCcw className="w-16 h-16 text-gray-200" />}
+                searchPlaceholder={copy.searchPlaceholder}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+                serverPagination={serverPagination}
+            />
 
-                <div className="flex flex-wrap items-center gap-2">
-                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
-                </div>
-
-                <DataTable<SalesReturn>
-                    tableId="sales-returns"
-                    columns={columns}
-                    data={returns}
-                    title={t.returns.dataTable.title}
-                    isLoading={loading}
-                    emptyMessage={t.returns.dataTable.emptyMessage}
-                    emptyIcon={<RotateCcw className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.returns.dataTable.searchPlaceholder}
-                    filterPresets={filterPresets}
-                />
-            
+            <ConfirmDialog
+                open={pendingDelete !== null}
+                title={t.common.delete}
+                prompt={t.shared.confirm.deleteReturn}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                loading={deleting}
+                danger
+                onConfirm={() => void confirmDelete()}
+                onCancel={() => { if (!deleting) setPendingDelete(null); }}
+            />
         </PageShell>
     );
 }

@@ -6,6 +6,11 @@ jest.mock('@/lib/i18n', () => {
     useI18n: () => ({
       t: enMessages,
       locale: 'en',
+      fmt: (template, values = {}) =>
+        Object.entries(values).reduce(
+          (result, [key, value]) => result.replaceAll(`{${key}}`, String(value)),
+          template,
+        ),
     }),
     formatMessage: (template, values = {}) =>
       Object.entries(values).reduce(
@@ -38,7 +43,9 @@ jest.mock('next/link', () => ({
 
 jest.mock('@/lib/api', () => ({
     api: {
-        getQuotations: jest.fn(),
+        getQuotationsList: jest.fn(),
+        getQuotationsListSummary: jest.fn(),
+        searchCustomers: jest.fn(),
         deleteQuotation: jest.fn(),
         createQuotation: jest.fn(),
         shareQuotation: jest.fn(),
@@ -49,18 +56,30 @@ jest.mock('@/lib/api', () => ({
 
 jest.mock('@/lib/format', () => ({
     formatBDT: (v: number) => `BDT ${v}`,
+    formatCurrency: (v: number, { currency }: { currency: string }) => `${currency} ${v}`,
     formatDate: (v: string) => `DATE:${v}`,
 }));
 
 jest.mock('@/components/data-table', () => ({
     createdAtColumn: () => ({ id: 'created_at', header: 'Created' }),
-    CreatedRangeFilter: () => <div data-testid="created-range-filter" />,
-    DataTable: ({ data, columns, isLoading, emptyMessage, toolbarActions, enableRowSelection, bulkActions }: any) => {
+    DataTable: ({ data, columns, isLoading, emptyMessage, toolbarActions, enableRowSelection, bulkActions, filters, stats }: any) => {
         // The row actions are a column definition, so render that cell too —
         // otherwise the per-row buttons are invisible to every assertion.
         const actions = columns?.find((column: any) => column.id === 'actions');
+        const total = columns?.find((column: any) => column.accessorKey === 'total_amount');
         return (
-            <div data-testid="data-table" data-selectable={String(!!enableRowSelection)}>
+            <div
+                data-testid="data-table"
+                data-selectable={String(!!enableRowSelection)}
+                data-filters={(filters ?? []).map((f: any) => `${f.id}${f.more ? '*' : ''}`).join(',')}
+            >
+                {/* The strip as its tiles read. */}
+                <ul aria-label={stats?.label}>
+                    {(stats?.items ?? []).map((item: any) => (
+                        <li key={item.id}>{`${item.label}: ${item.value}${item.hint ? ` · ${item.hint}` : ''}`}</li>
+                    ))}
+                </ul>
+
                 {/* Each bulk action as if every loaded row were selected. */}
                 {bulkActions?.map((action: any) => (
                     <button key={action.label} type="button" onClick={() => action.onClick(data)}>
@@ -74,6 +93,9 @@ jest.mock('@/components/data-table', () => ({
                         <span>{row.quote_number}</span>
                         <span>{row.status}</span>
                         {row.customer && <span>{row.customer.name}</span>}
+                        <span data-testid={`total-${row.id}`}>
+                            {total?.cell({ getValue: () => row.total_amount, row: { original: row } })}
+                        </span>
                         {actions?.cell({ row: { original: row } })}
                     </div>
                 ))}
@@ -82,6 +104,8 @@ jest.mock('@/components/data-table', () => ({
         );
     },
 }));
+
+const page = (items: unknown[]) => ({ items, total: items.length, page: 1, limit: 25, pages: 1 });
 
 const mockQuotes = [
     {
@@ -120,7 +144,15 @@ describe('QuotesPage', () => {
         })) as any;
 
         const { api } = require('@/lib/api');
-        api.getQuotations.mockResolvedValue(mockQuotes);
+        api.getQuotationsList.mockResolvedValue(page(mockQuotes));
+        api.getQuotationsListSummary.mockResolvedValue({
+            count: 9,
+            value: 19000,
+            awaiting: 4,
+            accepted: { count: 1, amount: 1500 },
+            converted: 2,
+            expired: 3,
+        });
         api.deleteQuotation.mockResolvedValue({ deleted: true });
         api.shareQuotation.mockResolvedValue({ code: 'aB3xK9m', path: '/s/aB3xK9m' });
         api.revokeQuotationShare.mockResolvedValue({ success: true });
@@ -132,7 +164,7 @@ describe('QuotesPage', () => {
 
     it('shows loading state initially', () => {
         const { api } = require('@/lib/api');
-        api.getQuotations.mockReturnValue(new Promise(() => {}));
+        api.getQuotationsList.mockReturnValue(new Promise(() => {}));
         render(<QuotesPage />);
         expect(screen.getByText('Loading...')).toBeInTheDocument();
     });
@@ -153,6 +185,11 @@ describe('QuotesPage', () => {
         });
     });
 
+    it('shows a taka quotation in taka', async () => {
+        render(<QuotesPage />);
+        expect(await screen.findByTestId('total-q-1')).toHaveTextContent('BDT 1500');
+    });
+
     it('renders customer name for quotes with customer', async () => {
         render(<QuotesPage />);
         await waitFor(() => {
@@ -169,7 +206,7 @@ describe('QuotesPage', () => {
 
     it('shows empty state when no quotes', async () => {
         const { api } = require('@/lib/api');
-        api.getQuotations.mockResolvedValue([]);
+        api.getQuotationsList.mockResolvedValue(page([]));
         render(<QuotesPage />);
         await waitFor(() => {
             expect(screen.getByTestId('data-table')).toBeInTheDocument();
@@ -185,15 +222,63 @@ describe('QuotesPage', () => {
 
 
 
-    it('calls deleteQuotation after confirmation', async () => {
+    it('asks before deleting in a dialog, not the browser confirm, then refreshes rows and strip', async () => {
         const { api } = require('@/lib/api');
-        // Render with a delete action accessible via test
-        // We expose delete by attaching a direct call since DataTable mock doesn't expose action buttons
-        // Test via directly invoking the page's handleDelete-like behavior through re-render
+        const { toast } = require('@/lib/toast');
+        const success = jest.spyOn(toast, 'success');
         render(<QuotesPage />);
-        await waitFor(() => screen.getByText('QUO-00001'));
-        // Verify API was called to load quotes
-        expect(api.getQuotations).toHaveBeenCalled();
+        const row = await screen.findByTestId('row-q-1');
+        await waitFor(() => expect(api.getQuotationsListSummary).toHaveBeenCalled());
+        const listCalls = api.getQuotationsList.mock.calls.length;
+        const summaryCalls = api.getQuotationsListSummary.mock.calls.length;
+
+        fireEvent.click(within(row).getByRole('button', { name: 'Delete' }));
+        expect(window.confirm).not.toHaveBeenCalled();
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+        await waitFor(() => expect(api.deleteQuotation).toHaveBeenCalledWith('q-1'));
+        await waitFor(() => expect(success).toHaveBeenCalledWith('Quotation deleted'));
+        await waitFor(() => expect(api.getQuotationsList.mock.calls.length).toBeGreaterThan(listCalls));
+        expect(api.getQuotationsListSummary.mock.calls.length).toBeGreaterThan(summaryCalls);
+        expect(window.alert).not.toHaveBeenCalled();
+        success.mockRestore();
+    });
+
+    it('shows a foreign-currency proforma in its own currency', async () => {
+        const { api } = require('@/lib/api');
+        api.getQuotationsList.mockResolvedValue(
+            page([{ ...mockQuotes[0], id: 'q-9', doc_kind: 'PROFORMA', currency: 'USD', exchange_rate: '120', total_amount: '100' }]),
+        );
+        render(<QuotesPage />);
+        // Dollars stay dollars: a ৳ in front of them would misstate what the buyer owes.
+        expect(await screen.findByTestId('total-q-9')).toHaveTextContent('USD 100');
+    });
+
+    describe('the filter row and the stats strip', () => {
+        it('keeps the created date behind More and the rest in the row', async () => {
+            render(<QuotesPage />);
+            const table = await screen.findByTestId('data-table');
+            expect(table).toHaveAttribute('data-filters', 'validUntil,status,customer,total,docKind,created*');
+        });
+
+        it('reads the strip from the summary of the same filters', async () => {
+            render(<QuotesPage />);
+            const strip = await screen.findByRole('list', { name: 'Quotations summary' });
+            await within(strip).findByText('Quotations: 9');
+            expect(within(strip).getByText('Accepted: BDT 1500 · 1 accepted')).toBeInTheDocument();
+            expect(within(strip).getByText('Expired: 3')).toBeInTheDocument();
+        });
+
+        it('sends the branch and an empty filter set to both the list and the strip', async () => {
+            const { api } = require('@/lib/api');
+            render(<QuotesPage />);
+            await screen.findByTestId('row-q-1');
+            expect(api.getQuotationsList).toHaveBeenLastCalledWith(
+                expect.objectContaining({ page: 1, sortBy: 'created_at', sortDir: 'desc', storeId: 'store-1', customerIds: [] }),
+            );
+            expect(api.getQuotationsListSummary).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-1' }));
+        });
     });
 
     it('shows page heading', async () => {
@@ -205,7 +290,7 @@ describe('QuotesPage', () => {
 
     it('handles API error gracefully', async () => {
         const { api } = require('@/lib/api');
-        api.getQuotations.mockRejectedValue(new Error('Network error'));
+        api.getQuotationsList.mockRejectedValue(new Error('Network error'));
         render(<QuotesPage />);
         // Should not throw, should show empty/loading state
         await waitFor(() => {
@@ -246,7 +331,7 @@ describe('QuotesPage', () => {
             fireEvent.click(screen.getByRole('button', { name: 'Convert to sales' }));
             fireEvent.click(screen.getByRole('button', { name: /Convert 1/ }));
 
-            await waitFor(() => expect(api.getQuotations).toHaveBeenCalledTimes(2));
+            await waitFor(() => expect(api.getQuotationsList).toHaveBeenCalledTimes(2));
             expect(api.createSalesFromQuotations).toHaveBeenCalledWith(['q-1', 'q-2']);
             expect(screen.getByRole('link', { name: 'INV-1' })).toHaveAttribute('href', '/sales/s-1');
         });

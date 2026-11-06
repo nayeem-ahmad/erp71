@@ -11,18 +11,33 @@ import {
     UseInterceptors,
     HttpCode,
     HttpStatus,
-    ParseIntPipe,
-    DefaultValuePipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { DeliveryService } from './delivery.service';
-import { CreateDeliveryDto, UpdateDeliveryDto } from './delivery.dto';
+import { CreateDeliveryDto, DeliveryListQueryDto, UpdateDeliveryDto } from './delivery.dto';
+import { readIdListQuery } from '../common/number-condition.util';
+import type { DeliveryListFilters } from './delivery.service';
 
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
 import { DELIVERY_WRITE, SALES_READ } from '../auth/permission-sets';
+/** Reads the list's filter keys off the query. */
+export function readDeliveryListFilters(query: DeliveryListQueryDto, timezone: string): DeliveryListFilters {
+    return {
+        search: query.search?.trim() || undefined,
+        statuses: readIdListQuery(query.status) ?? [],
+        statusExclude: query.statusExclude === 'true' || query.statusExclude === '1',
+        drivers: readIdListQuery(query.driver),
+        scheduledFrom: query.dateFrom || undefined,
+        scheduledTo: query.dateTo || undefined,
+        createdFrom: query.createdFrom || undefined,
+        createdTo: query.createdTo || undefined,
+        timezone,
+    };
+}
+
 @Controller('delivery')
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
@@ -31,19 +46,29 @@ export class DeliveryController {
 
     @RequireAnyStorePermission(...SALES_READ)
     @Get()
-    listDeliveries(
-        @Tenant() tenant: TenantContext,
-        @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-        @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
-        @Query('status') status?: string,
-        @Query('createdFrom') createdFrom?: string,
-        @Query('createdTo') createdTo?: string,
-    ) {
-        return this.deliveryService.listDeliveries(tenant.tenantId, page, Math.min(limit, 100), {
-            status,
-            createdFrom,
-            createdTo,
+    listDeliveries(@Tenant() tenant: TenantContext, @Query() query: DeliveryListQueryDto) {
+        return this.deliveryService.listDeliveries(tenant.tenantId, query.page, query.limit, {
+            ...readDeliveryListFilters(query, tenant.timezone),
+            sortBy: query.sortBy,
+            sortDir: query.sortDir,
         });
+    }
+
+    /**
+     * The stats strip above the delivery list, over the same filters as
+     * `GET /delivery`. Declared before `:id`.
+     */
+    @RequireAnyStorePermission(...SALES_READ)
+    @Get('summary')
+    summary(@Tenant() tenant: TenantContext, @Query() query: DeliveryListQueryDto) {
+        return this.deliveryService.summary(tenant.tenantId, readDeliveryListFilters(query, tenant.timezone));
+    }
+
+    /** The driver names used so far, for the list's Driver chip. Declared before `:id`. */
+    @RequireAnyStorePermission(...SALES_READ)
+    @Get('drivers')
+    listDrivers(@Tenant() tenant: TenantContext) {
+        return this.deliveryService.listDrivers(tenant.tenantId);
     }
 
     @RequireAnyStorePermission(...SALES_READ)

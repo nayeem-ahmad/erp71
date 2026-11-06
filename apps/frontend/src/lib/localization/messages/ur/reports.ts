@@ -1,6 +1,9 @@
 export const reportsMessages = {
     consolidated: {
         title: "مجموعی رپورٹ",
+        period: "مدت",
+        statsLabel: "مجموعی خلاصہ",
+        branches: "شاخیں",
         description: "تمام شاخوں کی آمدنی اور لین دین کا جائزہ",
         fromLabel: "از",
         toLabel: "تا",
@@ -31,6 +34,10 @@ export const reportsMessages = {
     },
     branch: {
         title: "شاخ کی رپورٹ",
+        period: "مدت",
+        statsLabel: "شاخ کا خلاصہ",
+        groupBy: "گروپ بندی",
+        groups: { day: "دن", week: "ہفتہ", month: "مہینہ" },
         description: "ایک شاخ کی تفصیلی فروخت کارکردگی",
         storeLabel: "دکان",
         fromLabel: "از",

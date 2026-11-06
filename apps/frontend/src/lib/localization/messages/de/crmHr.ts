@@ -1795,6 +1795,39 @@ export const crmHrMessages = {
         }
     },
     "delivery": {
+        "listUi": {
+            "searchPlaceholder": "Kunde, Telefon, Adresse, Fahrer oder Rechnung suchen…",
+            "statsLabel": "Übersicht Lieferungen",
+            "unassigned": "Nicht zugewiesen",
+            "sale": "Verkauf",
+            "overdueHint": "Der geplante Zeitpunkt ist überschritten",
+            "markDelivered": "Als geliefert markieren",
+            "markedDelivered": "An {customer} geliefert",
+            "cancelDelivery": "Lieferung stornieren",
+            "cancelled": "Lieferung storniert",
+            "saved": "Lieferung gespeichert",
+            "saveFailed": "Lieferung konnte nicht gespeichert werden",
+            "form": {
+                "saleId": "Verkaufs-ID (optional)",
+                "customerName": "Kundenname",
+                "customerPhone": "Telefon des Kunden",
+                "deliveryAddress": "Lieferadresse",
+                "driverName": "Name des Fahrers",
+                "driverPhone": "Telefon des Fahrers",
+                "scheduledAt": "Geplantes Datum und Uhrzeit",
+                "required": "Kundenname und Lieferadresse sind erforderlich."
+            },
+            "stats": {
+                "deliveries": "Lieferungen",
+                "pending": "Ausstehend",
+                "inTransit": "Unterwegs",
+                "delivered": "Geliefert",
+                "overdue": "Überfällig",
+                "failed": "Fehlgeschlagen / storniert",
+                "unassigned": "{count} nicht zugewiesen",
+                "cancelledHint": "{count} storniert"
+            }
+        },
         "title": "Lieferaufträge",
         "subtitle": "Kundenlieferungen planen und verfolgen",
         "newDelivery": "Neue Lieferung",

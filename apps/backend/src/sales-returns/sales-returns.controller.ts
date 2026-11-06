@@ -4,7 +4,7 @@ import { CreateSalesReturnDto, UpdateSalesReturnDto } from './sales-returns.dto'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
-import { BranchListQueryDto } from '../common/branch-list-query.dto';
+import { SalesDocumentListQueryDto, readSalesDocumentListFilters } from '../common/sales-document-list-filters';
 import { BranchScopeService } from '../database/branch-scope.service';
 
 import { StorePermissionGuard } from '../auth/store-permission.guard';
@@ -31,14 +31,31 @@ export class SalesReturnsController {
     @Get()
     async findAll(
         @Tenant() tenant: TenantContext,
-        @Query() query: BranchListQueryDto,
+        @Query() query: SalesDocumentListQueryDto,
     ) {
         const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: SALES_READ });
-        return this.returnsService.findAll(tenant.tenantId, query.page, query.limit, { timezone: tenant.timezone,
-            createdFrom: query.createdFrom,
-            createdTo: query.createdTo,
-            storeId,
+        return this.returnsService.findAll(tenant.tenantId, query.page, query.limit, {
+            ...readSalesDocumentListFilters(query, { storeId, timezone: tenant.timezone }),
+            sortBy: query.sortBy,
+            sortDir: query.sortDir,
         });
+    }
+
+    /**
+     * The stats strip above the sales-returns list, over the same filters as
+     * `GET /sales-returns`. Declared before `:id`.
+     */
+    @RequireAnyStorePermission(...SALES_READ)
+    @Get('summary')
+    async summary(
+        @Tenant() tenant: TenantContext,
+        @Query() query: SalesDocumentListQueryDto,
+    ) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: SALES_READ });
+        return this.returnsService.summary(
+            tenant.tenantId,
+            readSalesDocumentListFilters(query, { storeId, timezone: tenant.timezone }),
+        );
     }
 
     @RequireAnyStorePermission(...SALES_READ)

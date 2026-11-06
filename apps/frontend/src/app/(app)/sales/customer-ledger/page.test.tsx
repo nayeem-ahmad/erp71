@@ -41,6 +41,16 @@ jest.mock('@/components/data-table', () => ({
     },
 }));
 
+/** The strip's current-due tile names whose ledger is open. */
+function currentDueHint() {
+    return mockTableProps?.stats?.items.find((item: any) => item.id === 'current')?.hint;
+}
+
+/** A strip figure by its id. */
+function statValue(id: string) {
+    return mockTableProps?.stats?.items.find((item: any) => item.id === id)?.value;
+}
+
 const ALICE = { id: 'cust-alice', name: 'Alice Corp', phone: '01700000001', due_balance: 100 };
 const BOB = { id: 'cust-bob', name: 'Bob Traders', phone: '01700000002', due_balance: 50 };
 const KARIM = { id: 'cust-karim', name: 'Karim Electronics', phone: '01700000003', due_balance: 0 };
@@ -114,7 +124,7 @@ describe('CustomerLedgerPage branch', () => {
 
         await waitFor(() => expect(api.getCustomers).toHaveBeenLastCalledWith({ storeId: 'store-2' }));
         await waitFor(() => expect(api.getCustomerGlLedger).toHaveBeenLastCalledWith('cust-karim', expect.any(Object)));
-        expect(screen.getByText('Karim Electronics')).toBeInTheDocument();
+        await waitFor(() => expect(currentDueHint()).toBe('Karim Electronics'));
     });
 
     it('keeps a linked customer of another branch open, named from its ledger', async () => {
@@ -127,7 +137,7 @@ describe('CustomerLedgerPage branch', () => {
         render(<CustomerLedgerPage />);
 
         await waitFor(() => expect(api.getCustomers).toHaveBeenCalledWith({ storeId: 'store-1' }));
-        expect(await screen.findByText('Karim Electronics')).toBeInTheDocument();
+        await waitFor(() => expect(currentDueHint()).toBe('Karim Electronics'));
         expect(api.getCustomerGlLedger).not.toHaveBeenCalledWith('cust-alice', expect.any(Object));
     });
 });
@@ -156,9 +166,15 @@ describe('CustomerLedgerPage list UI', () => {
         await screen.findByTestId('ledger-table');
 
         expect(mockTableProps.viewOptions).toBe(true);
+        expect(mockTableProps.filterLayout).toBe('row');
         expect(mockTableProps.filters).toEqual([
-            expect.objectContaining({ id: 'date', type: 'date-range', label: 'Date' }),
+            expect.objectContaining({ id: 'date', type: 'date-range', label: 'Date', operators: true }),
+            expect.objectContaining({ id: 'direction', type: 'multi-select', label: 'Direction' }),
         ]);
+        // The balances sit in the table's strip rather than in cards above it.
+        expect(mockTableProps.stats.items.map((item: any) => item.id)).toEqual(
+            ['opening', 'sales', 'due', 'payment', 'closing', 'current'],
+        );
         // No date boxes of its own above the table any more.
         expect(screen.queryByText('Date (from)')).not.toBeInTheDocument();
     });
@@ -223,5 +239,60 @@ describe('CustomerLedgerPage list UI', () => {
         });
         expect(mockTableProps.columns.find((column: any) => column.id === 'due')?.footer).toEqual(expect.any(Function));
         expect(mockTableProps.columns.find((column: any) => column.id === 'payment')?.footer).toEqual(expect.any(Function));
+    });
+
+    describe('chips and strip', () => {
+        const LEDGER = {
+            due_balance: 1500,
+            opening_balance: 500,
+            closing_balance: 1500,
+            transactions: [
+                {
+                    id: 'tx-1', type: 'CREDIT_SALE', debit: 3000, credit: 0, sale_total: 3000, amount_paid: 0,
+                    payment_number: 'INV-001', balance_after: 3500, notes: null, created_at: '2026-05-02T00:00:00.000Z',
+                },
+                {
+                    id: 'tx-2', type: 'PAYMENT', debit: 0, credit: 2000, sale_total: null, amount_paid: null,
+                    payment_number: 'CPR-001', balance_after: 1500, notes: 'bKash', created_at: '2026-05-04T00:00:00.000Z',
+                },
+            ],
+        };
+
+        beforeEach(() => {
+            (api.getCustomerGlLedger as jest.Mock).mockResolvedValue(LEDGER);
+        });
+
+        it('reads opening and closing from the ledger and sums the entries', async () => {
+            render(<CustomerLedgerPage />);
+            await waitFor(() => expect(mockTableProps?.data).toHaveLength(3));
+
+            expect(statValue('opening')).toContain('500');
+            expect(statValue('closing')).toContain('1,500');
+            expect(statValue('due')).toContain('3,000');
+            expect(statValue('payment')).toContain('2,000');
+            expect(mockTableProps.stats.items.find((item: any) => item.id === 'closing').tone).toBe('warning');
+        });
+
+        it('narrows by direction and keeps the opening balance row', async () => {
+            render(<CustomerLedgerPage />);
+            await waitFor(() => expect(mockTableProps?.data).toHaveLength(3));
+
+            act(() => mockTableProps.filters.find((filter: any) => filter.id === 'direction').onChange(['receive']));
+
+            await waitFor(() => expect(mockTableProps.data.map((row: any) => row.id)).toEqual(['__opening__', 'tx-2']));
+            expect(statValue('due')).toContain('0');
+            expect(statValue('payment')).toContain('2,000');
+        });
+
+        it('searches the entries, and the strip follows', async () => {
+            render(<CustomerLedgerPage />);
+            await waitFor(() => expect(mockTableProps?.data).toHaveLength(3));
+
+            act(() => mockTableProps.onSearchChange('INV-001'));
+
+            await waitFor(() => expect(mockTableProps.data.map((row: any) => row.id)).toEqual(['__opening__', 'tx-1']));
+            expect(statValue('payment')).toContain('0');
+            expect(statValue('due')).toContain('3,000');
+        });
     });
 });

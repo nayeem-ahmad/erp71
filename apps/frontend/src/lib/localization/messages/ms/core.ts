@@ -1448,6 +1448,7 @@ export const coreMessages = {
             onlineBadge: "Dalam talian",
         },
         partyPayments: {
+            listUi: { statsLabel: "Ringkasan bayaran", payments: "Bayaran", topMethod: "Kaedah utama" },
             directionAll: "Semua",
             directionIn: "Masuk",
             directionOut: "Keluar",
@@ -1573,6 +1574,7 @@ export const coreMessages = {
         },
         customerLedger: {
             title: "Lejar Pelanggan",
+            statsLabel: "Ringkasan lejar",
             ledgerTitle: "Entri lejar",
             subtitle: "Lihat baki tertunggak dan sejarah transaksi kredit.",
             currentDue: "Baki tertunggak semasa",

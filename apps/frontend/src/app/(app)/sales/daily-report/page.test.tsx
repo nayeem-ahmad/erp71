@@ -14,12 +14,18 @@ jest.mock('@/lib/i18n', () => {
     };
 }, { virtual: true });
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import DailyReportPage from './page';
 import type { DailyReport } from '@/lib/daily-report';
 import { mockBranchScope } from '@/test-utils/branch-scope';
 
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+
+// A wide screen, so the Date chip sits in the toolbar rather than the phone's Filters sheet.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
+}));
 
 const quietPayload: DailyReport = {
     tenantName: 'Karim Electronics',
@@ -143,7 +149,7 @@ describe('DailyReportPage', () => {
         await waitFor(() => expect(screen.getByRole('button', { name: /print/i })).toBeInTheDocument());
         expect(screen.getByRole('heading', { name: /Daily Report/i })).toBeInTheDocument();
         expect(screen.getByText('Net sales')).toBeInTheDocument();
-        expect(screen.getByText('vs yesterday')).toBeInTheDocument();
+        expect(screen.getByText('· +8.5% vs yesterday')).toBeInTheDocument();
         expect(screen.queryByText(/Stock/i)).not.toBeInTheDocument();
         expect(screen.queryByText('Expected cash')).not.toBeInTheDocument();
         expect(screen.queryByRole('heading', { name: 'Till' })).not.toBeInTheDocument();
@@ -165,6 +171,35 @@ describe('DailyReportPage', () => {
         await waitFor(() => expect(screen.getByRole('button', { name: /share/i })).toBeInTheDocument());
         fireEvent.click(screen.getByRole('button', { name: /share/i }));
         expect(screen.getByRole('textbox')).toHaveValue(quietPayload.whatsappText);
+    });
+
+    it('puts the day\'s figures in the strip, returns and new dues toned', async () => {
+        render(<DailyReportPage />);
+        const strip = await screen.findByRole('region', { name: 'Report figures' });
+        const figure = (label: string) => within(strip).getByText(label).nextElementSibling;
+
+        expect(figure('Net sales')).toHaveTextContent('৳ 38,000');
+        expect(figure('Bills')).toHaveTextContent('12');
+        expect(figure('Returns')).toHaveTextContent('৳ 2,000');
+        expect(figure('Returns')).toHaveClass('text-red-600');
+        expect(figure('New dues')).toHaveClass('text-amber-700');
+    });
+
+    it('picks the day from the Date chip, as the workspace counts days', async () => {
+        const { api } = require('@/lib/api');
+        const { addCalendarDays, tenantDateOnly } = require('@/lib/created-range');
+        render(<DailyReportPage />);
+        await waitFor(() => expect(api.getDailyReport).toHaveBeenCalledWith(expect.objectContaining({ date: tenantDateOnly() })));
+        expect(screen.queryByDisplayValue(/\d{4}-\d{2}-\d{2}/)).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getAllByRole('button', { name: /^Date/ }).find((b) => b.getAttribute('aria-haspopup') === 'dialog')!);
+        fireEvent.click(screen.getByRole('button', { name: 'Yesterday' }));
+
+        await waitFor(() =>
+            expect(api.getDailyReport).toHaveBeenLastCalledWith(
+                expect.objectContaining({ date: addCalendarDays(tenantDateOnly(), -1) }),
+            ),
+        );
     });
 
     it('reads the header branch, never all branches, and follows the filter', async () => {

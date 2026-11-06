@@ -1,6 +1,9 @@
 export const reportsMessages = {
     consolidated: {
         title: "Konsolidierter Bericht",
+        period: "Zeitraum",
+        statsLabel: "Konsolidierte Übersicht",
+        branches: "Filialen",
         description: "Filialübergreifende Umsatz- und Transaktionsübersicht",
         fromLabel: "Von",
         toLabel: "Bis",
@@ -31,6 +34,10 @@ export const reportsMessages = {
     },
     branch: {
         title: "Filialbericht",
+        period: "Zeitraum",
+        statsLabel: "Filialübersicht",
+        groupBy: "Gruppieren nach",
+        groups: { day: "Tag", week: "Woche", month: "Monat" },
         description: "Detaillierte Verkaufsleistung einer einzelnen Filiale",
         storeLabel: "Filiale",
         fromLabel: "Von",

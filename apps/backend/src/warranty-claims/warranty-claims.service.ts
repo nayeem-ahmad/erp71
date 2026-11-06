@@ -1,13 +1,53 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
-import { formatZonedDate } from '../common/tenant-time.util';
+import { formatZonedDate, zonedDayRange } from '../common/tenant-time.util';
+import {
+    idsOrNoneClause,
+    searchClause,
+    statusSetClause,
+    type SalesDocumentListFilters,
+} from '../common/sales-document-list-filters';
+import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { DatabaseService } from '../database/database.service';
 import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { CreateWarrantyClaimDto, UpdateWarrantyClaimStatusDto } from './warranty-claim.dto';
 
 const VALID_STATUSES = ['SUBMITTED', 'APPROVED', 'REJECTED', 'REPAIRED', 'REPLACED', 'COMPLETED'];
+
+const WARRANTY_CLAIM_SORTABLE: SortableMap = {
+    claim_number: (dir) => ({ claim_number: dir }),
+    serial_number: (dir) => ({ serial_number: dir }),
+    status: (dir) => ({ status: dir }),
+    created_at: (dir) => ({ created_at: dir }),
+    resolved_at: (dir) => ({ resolved_at: dir }),
+    product: (dir) => ({ product: { name: dir } }),
+    customer: (dir) => ({ customer: { name: dir } }),
+};
+
+/**
+ * What narrows the warranty-claims list — and, alike, its stats strip. The
+ * claim's own date (`dateFrom`/`dateTo`) is when it was resolved; `created*`
+ * is when it was lodged.
+ */
+export interface WarrantyClaimListFilters extends Partial<Omit<SalesDocumentListFilters, 'timezone' | 'total'>> {
+    timezone: string;
+}
+
+/** `GET /warranty-claims/summary` — see `WarrantyClaimsService.summary`. */
+export interface WarrantyClaimListSummary {
+    count: number;
+    /** Lodged and not yet approved or rejected. */
+    awaiting: number;
+    /** Approved, with the repair or replacement still to happen. */
+    inProgress: number;
+    repaired: number;
+    replaced: number;
+    completed: number;
+    rejected: number;
+}
 
 @Injectable()
 export class WarrantyClaimsService {
@@ -130,13 +170,43 @@ export class WarrantyClaimsService {
         });
     }
 
+    /**
+     * The `where` behind the warranty-claims list and its stats strip, so the
+     * strip always counts the rows the list shows.
+     */
+    private listWhere(tenantId: string, opts?: WarrantyClaimListFilters): Prisma.WarrantyClaimWhereInput {
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
+        const resolved = zonedDayRange(opts?.dateFrom, opts?.dateTo, opts?.timezone);
+        const where: Prisma.WarrantyClaimWhereInput = {
+            tenant_id: tenantId,
+            ...(opts?.storeId ? { store_id: opts.storeId } : {}),
+            ...(created ? { created_at: created } : {}),
+            ...(resolved ? { resolved_at: resolved } : {}),
+            ...(statusSetClause(opts?.statuses, opts?.statusExclude) as Prisma.WarrantyClaimWhereInput),
+        };
+        const and: Prisma.WarrantyClaimWhereInput[] = [];
+        const search = searchClause(opts?.search, [
+            'claim_number',
+            'serial_number',
+            'replacement_serial_number',
+            'reason',
+            'product.name',
+            'customer.name',
+            'customer.phone',
+        ]);
+        if (search) and.push(search as Prisma.WarrantyClaimWhereInput);
+        const customer = idsOrNoneClause('customer_id', opts?.customerIds);
+        if (customer) and.push(customer as Prisma.WarrantyClaimWhereInput);
+        if (and.length) where.AND = and;
+        return where;
+    }
+
     async findAll(
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string; timezone: string; storeId?: string },
+        opts?: WarrantyClaimListFilters & { sortBy?: string; sortDir?: string },
     ): Promise<PaginatedResult<unknown>> {
-        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         return paginatedFindMany({
             findMany: (args) =>
                 this.db.warrantyClaim.findMany({
@@ -144,11 +214,35 @@ export class WarrantyClaimsService {
                     include: { product: true, sale: true, customer: true, store: true },
                 }),
             count: (args) => this.db.warrantyClaim.count(args as any),
-            where: { tenant_id: tenantId, ...(opts?.storeId ? { store_id: opts.storeId } : {}), ...(created ? { created_at: created } : {}) },
-            orderBy: { created_at: 'desc' },
+            where: this.listWhere(tenantId, opts) as Record<string, unknown>,
+            orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, WARRANTY_CLAIM_SORTABLE, { created_at: 'desc' }),
             page,
             limit,
         });
+    }
+
+    /**
+     * The stats strip above the warranty-claims list, over exactly the rows the
+     * list shows: how many, and where they stand — waiting on a decision, being
+     * repaired or replaced, closed, or turned down.
+     */
+    async summary(tenantId: string, opts: WarrantyClaimListFilters): Promise<WarrantyClaimListSummary> {
+        const rows = await this.db.warrantyClaim.groupBy({
+            by: ['status'],
+            where: this.listWhere(tenantId, opts),
+            _count: { _all: true },
+        });
+        const byStatus = new Map(rows.map((row) => [row.status, row._count._all]));
+        const of = (status: string) => byStatus.get(status) ?? 0;
+        return {
+            count: rows.reduce((sum, row) => sum + row._count._all, 0),
+            awaiting: of('SUBMITTED'),
+            inProgress: of('APPROVED'),
+            repaired: of('REPAIRED'),
+            replaced: of('REPLACED'),
+            completed: of('COMPLETED'),
+            rejected: of('REJECTED'),
+        };
     }
 
     async findOne(tenantId: string, id: string) {
