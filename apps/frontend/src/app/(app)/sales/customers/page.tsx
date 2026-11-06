@@ -2,20 +2,22 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { Users, Plus, Eye, Pencil, BookOpen, RefreshCw, Crown, AlertTriangle, UserCheck, Upload } from 'lucide-react';
-import { api } from '@/lib/api';
+import { Users, Plus, Eye, Pencil, BookOpen, RefreshCw, Crown, AlertTriangle, Upload, UserPlus, HandCoins, Wallet } from 'lucide-react';
+import { api, type CustomerListFilterParams, type CustomerListSummary } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
-import { useI18n, formatMessage } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import CustomerFormModal from './CustomerFormModal';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, createdAtColumn, type ListFilter } from '@/components/data-table';
+import { DataTable, createdAtColumn, type ListFilter, type ListFilterOption, type ListStat } from '@/components/data-table';
 import { RowActions, RowActionButton } from '@/components/table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
+import type { NumberCondition } from '@/lib/number-condition';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import { BranchFilter, PageShell, Button, Field, Select, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { useServerList } from '@/hooks/useServerList';
+import { useListSummary } from '@/hooks/useListSummary';
 import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 import { routes } from '@/lib/routes';
 
@@ -64,24 +66,23 @@ interface Customer {
     } | null;
 }
 
-interface SegmentBreakdown {
-    segment: string;
-    count: number;
-    percentage: number;
-}
-
-interface SegmentStats {
-    total: number;
-    breakdown: SegmentBreakdown[];
-}
+/** The segments the nightly segmentation writes, as `segment_category` holds them. */
+const SEGMENTS = ['New', 'Regular', 'VIP', 'At-Risk'] as const;
+const SEGMENT_KEYS: Record<string, 'new' | 'regular' | 'vip' | 'atRisk'> = {
+    New: 'new',
+    Regular: 'regular',
+    VIP: 'vip',
+    'At-Risk': 'atRisk',
+};
 
 const segmentTones: Record<string, StatusBadgeTone> = {
     VIP: 'success',
-    'AT-RISK': 'danger',
     'At-Risk': 'danger',
-    NEW: 'info',
-    LOYAL: 'warning',
+    New: 'info',
 };
+
+/** The group and territory chips' value for a customer in none. */
+const NONE = 'none';
 
 const columnHelper = createColumnHelper<Customer>();
 
@@ -91,7 +92,6 @@ export default function CustomersPage() {
     const [editTarget, setEditTarget] = useState<Customer | null>(null);
     const [importOpen, setImportOpen] = useState(false);
     const [importBranch, setImportBranch] = useState('');
-    const [segmentStats, setSegmentStats] = useState<SegmentStats | null>(null);
     const [runningSegmentation, setRunningSegmentation] = useState(false);
     // The tenant admin's Sales Settings switch: adds each customer's credit
     // limit under their due. Off until it reads true, so the limit never
@@ -117,22 +117,54 @@ export default function CustomersPage() {
         };
     }, []);
 
-    const segmentCardStyle: Record<string, { bg: string; text: string; bar: string; icon: React.ReactNode }> = useMemo(() => ({
-        VIP: { bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', bar: 'bg-emerald-500', icon: <Crown className="w-4 h-4 text-emerald-500" /> },
-        'At-Risk': { bg: 'bg-danger-light border-red-200', text: 'text-danger-text', bar: 'bg-danger', icon: <AlertTriangle className="w-4 h-4 text-danger" /> },
-        Regular: { bg: 'bg-gray-50 border-gray-200', text: 'text-gray-700', bar: 'bg-gray-400', icon: <UserCheck className="w-4 h-4 text-gray-400" /> },
-    }), []);
-
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    const [segment, setSegment] = useState<string | null>(null);
-    const [customerType, setCustomerType] = useState<string | null>(null);
+    const [groupIds, setGroupIds] = useState<string[]>([]);
+    const [territoryIds, setTerritoryIds] = useState<string[]>([]);
+    const [segments, setSegments] = useState<string[]>([]);
+    const [segmentExclude, setSegmentExclude] = useState(false);
+    const [dueFilter, setDueFilter] = useState<NumberCondition | null>(null);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
+    const [customerTypes, setCustomerTypes] = useState<string[]>([]);
+    const [spentFilter, setSpentFilter] = useState<NumberCondition | null>(null);
+    const [pointsFilter, setPointsFilter] = useState<NumberCondition | null>(null);
+    const [groupOptions, setGroupOptions] = useState<ListFilterOption[]>([]);
+    const [territoryOptions, setTerritoryOptions] = useState<ListFilterOption[]>([]);
 
     useEffect(() => {
-        const timer = setTimeout(() => setDebouncedSearch(search), 300);
+        const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
         return () => clearTimeout(timer);
     }, [search]);
+
+    // The group and territory chips offer the tenant's own; both lists are short.
+    useEffect(() => {
+        const named = (rows: unknown) =>
+            (Array.isArray(rows) ? rows : []).map((row: { id: string; name: string; parent?: { name: string } | null }) => ({
+                value: row.id,
+                label: row.parent ? `${row.parent.name} › ${row.name}` : row.name,
+            }));
+        api.getCustomerGroups().then((rows: unknown) => setGroupOptions(named(rows))).catch(() => { /* chip offers "No group" alone */ });
+        api.getTerritories().then((rows: unknown) => setTerritoryOptions(named(rows))).catch(() => { /* chip offers "No territory" alone */ });
+    }, []);
+
+    // Sent alike to the list and to the strip, so the figures describe the
+    // customers listed rather than the page on screen.
+    const filterParams = useMemo<CustomerListFilterParams>(
+        () => ({
+            search: debouncedSearch || undefined,
+            groupIds,
+            territoryIds,
+            segments,
+            segmentExclude,
+            due: dueFilter,
+            customerTypes,
+            totalSpent: spentFilter,
+            points: pointsFilter,
+            ...applyCreatedRangeQuery(createdRange),
+            storeId: branch.apiStoreId,
+        }),
+        [debouncedSearch, groupIds, territoryIds, segments, segmentExclude, dueFilter, customerTypes, spentFilter, pointsFilter, createdRange, branch.apiStoreId],
+    );
 
     const {
         items: customers,
@@ -142,39 +174,27 @@ export default function CustomersPage() {
         reload: loadCustomers,
     } = useServerList<Customer>({
         tableId: 'customers',
-        fetch: (p) => api.getCustomersPaged({
-            search: debouncedSearch || undefined,
-            segment: segment || undefined,
-            customerType: customerType || undefined,
-            ...applyCreatedRangeQuery(createdRange),
-            storeId: branch.apiStoreId,
-            ...p,
-        }),
-        deps: [debouncedSearch, segment, customerType, createdRange, branch.apiStoreId],
+        fetch: (p) => api.getCustomersPaged({ ...filterParams, ...p }),
+        deps: [filterParams],
         enabled: branch.ready,
-        columnFilters: true,
     });
     useBranchForbiddenReset(listError, branch, t.dashboardLayout.branchFilterForbidden);
 
-    useEffect(() => {
-        if (branch.ready) loadSegmentStats();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [branch.ready, branch.apiStoreId]);
+    const { summary, loading: summaryLoading, reload: reloadSummary } = useListSummary<
+        CustomerListFilterParams,
+        CustomerListSummary
+    >({ fetch: api.getCustomersListSummary, params: filterParams, enabled: branch.ready });
 
-    const loadSegmentStats = async () => {
-        try {
-            const stats = await api.getCustomerSegmentStats(branch.apiStoreId);
-            setSegmentStats(stats);
-        } catch (error) {
-            console.error('Failed to load segment stats', error);
-        }
+    const refresh = async () => {
+        reloadSummary();
+        await loadCustomers();
     };
 
     const handleRunSegmentation = async () => {
         setRunningSegmentation(true);
         try {
             await api.runCustomerSegmentation();
-            await Promise.all([loadCustomers(), loadSegmentStats()]);
+            await refresh();
         } catch (error) {
             console.error('Failed to run segmentation', error);
         } finally {
@@ -203,7 +223,7 @@ export default function CustomersPage() {
         } else {
             await api.createCustomer(data);
         }
-        await loadCustomers();
+        await refresh();
     };
 
     const columns: ColumnDef<Customer, any>[] = useMemo(
@@ -235,11 +255,13 @@ export default function CustomersPage() {
             }),
             columnHelper.accessor('customer_type', {
                 header: t.customers.columns.type,
-                // The toolbar select sends an exact type.
-                enableColumnFilter: false,
                 cell: (info) => {
-                    const type = info.getValue() || 'INDIVIDUAL';
-                    return <StatusBadge tone={type === 'ORGANIZATION' ? 'info' : 'neutral'}>{type}</StatusBadge>;
+                    const organization = info.getValue() === 'ORGANIZATION';
+                    return (
+                        <StatusBadge tone={organization ? 'info' : 'neutral'}>
+                            {organization ? t.customers.modal.organization : t.customers.modal.individual}
+                        </StatusBadge>
+                    );
                 },
                 size: 120,
                 meta: { hideOnMobile: true },
@@ -269,9 +291,8 @@ export default function CustomersPage() {
                 id: 'last_sale',
                 header: t.customers.columns.lastSale,
                 // Computed per page on the server, not a customer column, so
-                // it can be neither sorted nor filtered there.
+                // it cannot be sorted there.
                 enableSorting: false,
-                enableColumnFilter: false,
                 cell: (info) => {
                     const sale = info.row.original.last_sale;
                     if (!sale) return <span className="text-gray-400">{t.customers.columns.noSales}</span>;
@@ -324,13 +345,19 @@ export default function CustomersPage() {
             columnHelper.accessor('segment_category', {
                 header: t.customers.columns.segment,
                 cell: (info) => {
-                    const segment = info.getValue() || 'GENERAL';
-                    return <StatusBadge tone={segmentTones[segment] ?? 'neutral'}>{segment}</StatusBadge>;
+                    // A customer the segmentation has not reached yet reads as Regular, its default.
+                    const segment = info.getValue() || 'Regular';
+                    const key = SEGMENT_KEYS[segment];
+                    return (
+                        <StatusBadge tone={segmentTones[segment] ?? 'neutral'}>
+                            {key ? t.salesMasterLists.customers.segments[key] : segment}
+                        </StatusBadge>
+                    );
                 },
                 size: 130,
                 meta: { hideOnMobile: true },
             }),
-            createdAtColumn(columnHelper, { header: t.common.createdAt, locale, enableColumnFilter: false }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.display({
                 id: 'actions',
                 header: t.common.actions,
@@ -354,36 +381,115 @@ export default function CustomersPage() {
         [t, locale, showCredit],
     );
 
-    // Page-owned: each goes to the server with the page query. Filtering the
-    // loaded rows would only ever narrow the current page.
-    const filters = useMemo<ListFilter[]>(
-        () => [
+    // Each goes to the server with the page query and the strip's; filtering
+    // the loaded rows would only ever narrow the current page.
+    const filters = useMemo<ListFilter[]>(() => {
+        const copy = t.salesMasterLists.customers;
+        return [
             {
-                id: 'segment',
-                type: 'select',
-                label: t.customers.columns.segment,
-                value: segment,
-                onChange: setSegment,
-                options: [
-                    { value: 'VIP', label: t.customers.filters.vip },
-                    { value: 'At-Risk', label: t.customers.filters.atRisk },
-                ],
+                id: 'group',
+                type: 'multi-select',
+                label: t.customers.columns.group,
+                value: groupIds,
+                onChange: setGroupIds,
+                options: [{ value: NONE, label: copy.noGroup }, ...groupOptions],
             },
             {
+                id: 'territory',
+                type: 'multi-select',
+                label: t.customers.columns.territory,
+                value: territoryIds,
+                onChange: setTerritoryIds,
+                options: [{ value: NONE, label: copy.noTerritory }, ...territoryOptions],
+            },
+            {
+                id: 'segment',
+                type: 'multi-select',
+                label: t.customers.columns.segment,
+                value: segments,
+                onChange: setSegments,
+                exclude: { value: segmentExclude, onChange: setSegmentExclude },
+                options: SEGMENTS.map((segment) => ({ value: segment, label: copy.segments[SEGMENT_KEYS[segment]] })),
+            },
+            {
+                id: 'due',
+                type: 'number',
+                label: t.customers.columns.due,
+                value: dueFilter,
+                onChange: setDueFilter,
+                money: true,
+            },
+            { id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange, operators: true },
+            {
                 id: 'customerType',
-                type: 'select',
+                type: 'multi-select',
                 label: t.customers.columns.type,
-                value: customerType,
-                onChange: setCustomerType,
+                value: customerTypes,
+                onChange: setCustomerTypes,
                 options: [
                     { value: 'INDIVIDUAL', label: t.customers.modal.individual },
                     { value: 'ORGANIZATION', label: t.customers.modal.organization },
                 ],
+                more: true,
             },
-            { id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange },
-        ],
-        [t, segment, customerType, createdRange],
-    );
+            {
+                id: 'totalSpent',
+                type: 'number',
+                label: t.customers.columns.totalSpent,
+                value: spentFilter,
+                onChange: setSpentFilter,
+                money: true,
+                more: true,
+            },
+            {
+                id: 'points',
+                type: 'number',
+                label: t.customers.columns.points,
+                value: pointsFilter,
+                onChange: setPointsFilter,
+                more: true,
+            },
+        ];
+    }, [t, groupIds, groupOptions, territoryIds, territoryOptions, segments, segmentExclude, dueFilter, createdRange, customerTypes, spentFilter, pointsFilter]);
+
+    const stats = useMemo(() => {
+        const copy = t.salesMasterLists.customers;
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const count = (value: number) => value.toLocaleString(locale);
+        const dash = '—';
+        const items: ListStat[] = [
+            { id: 'count', icon: <Users aria-hidden />, label: copy.stats.customers, value: summary ? count(summary.count) : dash },
+            {
+                id: 'new',
+                icon: <UserPlus aria-hidden />,
+                label: copy.stats.newThisMonth,
+                value: summary ? count(summary.newThisMonth) : dash,
+            },
+            {
+                id: 'withDue',
+                icon: <HandCoins aria-hidden />,
+                label: copy.stats.withDue,
+                value: summary ? count(summary.withDue) : dash,
+                tone: summary?.withDue ? 'warning' : 'default',
+            },
+            {
+                id: 'receivable',
+                icon: <Wallet aria-hidden />,
+                label: copy.stats.receivable,
+                value: summary ? money(summary.receivable) : dash,
+                tone: summary?.receivable ? 'warning' : 'default',
+            },
+            { id: 'vip', icon: <Crown aria-hidden />, label: copy.stats.vip, value: summary ? count(summary.vip) : dash },
+            {
+                id: 'atRisk',
+                icon: <AlertTriangle aria-hidden />,
+                label: copy.stats.atRisk,
+                value: summary ? count(summary.atRisk) : dash,
+                tone: summary?.atRisk ? 'danger' : 'default',
+            },
+        ];
+        return { items, loading: summaryLoading && !summary, label: copy.statsLabel };
+    }, [summary, summaryLoading, locale, t]);
 
     return (
         <PageShell>
@@ -424,35 +530,6 @@ export default function CustomersPage() {
                     }
                 />
 
-                {segmentStats && segmentStats.total > 0 && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
-                        <div className="bg-white border border-gray-100 rounded-lg px-3 py-2.5 shadow-sm">
-                            <p className="text-xs font-medium text-gray-500 truncate">{t.customers.totalCustomers}</p>
-                            <p className="text-xl font-bold text-gray-900 mt-0.5">{segmentStats.total}</p>
-                        </div>
-                        {segmentStats.breakdown.map((seg) => {
-                            const style = segmentCardStyle[seg.segment] ?? segmentCardStyle['Regular'];
-                            return (
-                                <div key={seg.segment} className={`border rounded-lg px-3 py-2.5 shadow-sm ${style.bg}`}>
-                                    <div className="flex items-center justify-between gap-2">
-                                        <p className={`text-xs font-semibold truncate ${style.text}`}>{seg.segment}</p>
-                                        {style.icon}
-                                    </div>
-                                    <div className="flex flex-wrap items-baseline gap-x-2 mt-0.5">
-                                        <p className={`text-xl font-bold ${style.text}`}>{seg.count}</p>
-                                        <p className={`text-xs font-semibold ${style.text} opacity-70`}>
-                                            {formatMessage(t.customers.percentOfTotal, { percent: String(seg.percentage) })}
-                                        </p>
-                                    </div>
-                                    <div className="mt-1.5 bg-white/60 rounded-full h-1 overflow-hidden">
-                                        <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${seg.percentage}%` }} />
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-
                 <CustomerFormModal
                     isOpen={isModalOpen}
                     onClose={closeModal}
@@ -476,7 +553,7 @@ export default function CustomersPage() {
                             </Select>
                         </Field>
                     )}
-                    onSuccess={() => void loadCustomers()}
+                    onSuccess={() => void refresh()}
                 />
                 <DataTable<Customer>
                     tableId="customers"
@@ -489,6 +566,9 @@ export default function CustomersPage() {
                     searchPlaceholder={t.customers.searchPlaceholder}
                     onSearchChange={setSearch}
                     filters={filters}
+                    filterLayout="row"
+                    stats={stats}
+                    enableColumnFilters={false}
                     viewOptions
                     serverPagination={serverPagination}
                 />

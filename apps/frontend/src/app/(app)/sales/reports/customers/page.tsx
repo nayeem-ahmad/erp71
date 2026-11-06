@@ -1,16 +1,22 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Users } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { Calculator, Receipt, Repeat, Users, Wallet } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
+import type { NumberCondition } from '@/lib/number-condition';
+import { toast } from '@/lib/toast';
+import type { CreatedRange } from '@/lib/created-range';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { BranchFilter, PageShell } from '@/components/ui';
+import { NO_CUSTOMER } from '../../components/customer-list-filter';
+import { defaultReportPeriod, reportPeriodFilter, reportPeriodQuery } from '../report-period';
 
 interface CustomerRow {
     customer: {
@@ -24,139 +30,212 @@ interface CustomerRow {
     avgOrderValue: number;
 }
 
-interface Summary {
-    totalRevenue: number;
-    totalOrders: number;
-    customerCount: number;
-    avgOrderValue: number;
-}
-
 const columnHelper = createColumnHelper<CustomerRow>();
-
-function defaultFrom() {
-    const d = new Date();
-    d.setDate(d.getDate() - 29);
-    return d.toISOString().slice(0, 10);
-}
-
-function defaultTo() {
-    return new Date().toISOString().slice(0, 10);
-}
 
 export default function SalesByCustomerPage() {
     const { t, locale } = useI18n();
+    const c = t.salesReports.common;
+    const ui = t.salesReports.listUi;
     const branch = useBranchScope();
     const [rows, setRows] = useState<CustomerRow[]>([]);
-    const [summary, setSummary] = useState<Summary | null>(null);
-    const [fromDate, setFromDate] = useState(defaultFrom());
-    const [toDate, setToDate] = useState(defaultTo());
+    const [period, setPeriod] = useState<CreatedRange>(defaultReportPeriod);
+    const [search, setSearch] = useState('');
+    const [customerIds, setCustomerIds] = useState<string[]>([]);
+    const [customerExclude, setCustomerExclude] = useState(false);
+    const [revenueFilter, setRevenueFilter] = useState<NumberCondition | null>(null);
+    const [ordersFilter, setOrdersFilter] = useState<NumberCondition | null>(null);
+    const [averageFilter, setAverageFilter] = useState<NumberCondition | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (!branch.ready) return;
         void load();
-    }, [branch.ready, branch.apiStoreId, fromDate, toDate]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch.ready, branch.apiStoreId, period]);
 
     const load = async () => {
         setLoading(true);
         try {
-            const data = await api.getSalesByCustomer({
-                storeId: branch.apiStoreId,
-                from: fromDate || undefined,
-                to: toDate || undefined,
-            });
-            setSummary(data.summary);
-            setRows(data.rows);
+            const data = await api.getSalesByCustomer({ storeId: branch.apiStoreId, ...reportPeriodQuery(period) });
+            setRows(Array.isArray(data?.rows) ? data.rows : []);
         } catch (err) {
+            setRows([]);
             if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
-            console.error('Failed to load customer sales', err);
+            toast.error(err instanceof Error ? err.message : t.common.loadFailed);
         } finally {
             setLoading(false);
         }
     };
 
+    // Walk-in sales come back as one row with no customer id.
+    const walkIn = t.shared.walkIn;
+    const nameOf = useCallback((row: CustomerRow) => (row.customer.id ? row.customer.name : walkIn), [walkIn]);
+
+    // Every customer who bought in the period is in hand, so the chips other
+    // than the period narrow the rows here and the strip adds up the rest.
+    const visible = useMemo(
+        () =>
+            rows.filter((row) => {
+                if (!matchesAnyOf(customerIds, row.customer.id ?? NO_CUSTOMER, customerExclude)) return false;
+                if (!matchesNumberCondition(row.revenue, revenueFilter)) return false;
+                if (!matchesNumberCondition(row.orderCount, ordersFilter)) return false;
+                if (!matchesNumberCondition(row.avgOrderValue, averageFilter)) return false;
+                return matchesSearch(search, nameOf(row), row.customer.phone, row.customer.customer_code);
+            }),
+        [rows, customerIds, customerExclude, revenueFilter, ordersFilter, averageFilter, search, nameOf],
+    );
+
+    const totals = useMemo(() => {
+        const revenue = visible.reduce((sum, row) => sum + row.revenue, 0);
+        const orders = visible.reduce((sum, row) => sum + row.orderCount, 0);
+        const named = visible.filter((row) => row.customer.id);
+        return {
+            revenue,
+            orders,
+            average: orders > 0 ? revenue / orders : 0,
+            customers: named.length,
+            repeat: named.filter((row) => row.orderCount > 1).length,
+        };
+    }, [visible]);
+
     const columns: ColumnDef<CustomerRow, any>[] = useMemo(() => [
-        columnHelper.accessor((row) => row.customer.name, {
-            id: 'customer', header: t.salesReports.common.customer, size: 220,
+        columnHelper.accessor((row) => nameOf(row), {
+            id: 'customer',
+            header: c.customer,
+            footer: () => c.total,
+            size: 220,
         }),
         columnHelper.accessor((row) => row.customer.phone ?? t.shared.dash, {
-            id: 'phone', header: t.salesReports.common.phone, size: 140,
+            id: 'phone',
+            header: c.phone,
+            size: 140,
+            meta: { hideOnMobile: true },
         }),
         columnHelper.accessor((row) => row.customer.customer_code ?? t.shared.dash, {
-            id: 'code', header: t.salesReports.common.code, size: 100,
+            id: 'code',
+            header: c.code,
+            size: 100,
+            meta: { hideOnMobile: true },
         }),
         columnHelper.accessor('orderCount', {
-            header: t.salesReports.common.orders, size: 90,
+            header: c.orders,
+            cell: (info) => Number(info.getValue()).toLocaleString(locale),
+            footer: () => totals.orders.toLocaleString(locale),
+            size: 90,
+            meta: { align: 'end' },
         }),
         columnHelper.accessor('revenue', {
-            header: t.salesReports.common.revenue,
-            cell: (info) => <span className="font-bold text-blue-700">{formatBDT(Number(info.getValue()), { locale })}</span>,
+            header: c.revenue,
+            cell: (info) => formatBDT(Number(info.getValue()), { locale }),
+            footer: () => formatBDT(totals.revenue, { locale }),
             size: 140,
+            meta: { align: 'end' },
         }),
         columnHelper.accessor('avgOrderValue', {
-            header: t.salesReports.common.avgOrder,
+            header: c.avgOrder,
             cell: (info) => formatBDT(Number(info.getValue()), { locale }),
+            footer: () => formatBDT(totals.average, { locale }),
             size: 130,
+            meta: { align: 'end', hideOnMobile: true },
         }),
-    ], [t, locale]);
+    ], [c, t.shared.dash, nameOf, locale, totals]);
+
+    const filters = useMemo<ListFilter[]>(() => [
+        reportPeriodFilter({ label: ui.period, value: period, onChange: setPeriod }),
+        {
+            id: 'customer',
+            type: 'multi-select',
+            label: c.customer,
+            value: customerIds,
+            onChange: setCustomerIds,
+            exclude: { value: customerExclude, onChange: setCustomerExclude },
+            // Walk-in first, then the period's customers A–Z.
+            options: [
+                { value: NO_CUSTOMER, label: walkIn },
+                ...rows
+                    .filter((row) => row.customer.id)
+                    .map((row) => ({ value: row.customer.id as string, label: row.customer.name }))
+                    .sort((a, b) => a.label.localeCompare(b.label)),
+            ],
+        },
+        {
+            id: 'revenue',
+            type: 'number',
+            label: c.revenue,
+            value: revenueFilter,
+            onChange: setRevenueFilter,
+            money: true,
+        },
+        {
+            id: 'orders',
+            type: 'number',
+            label: c.orders,
+            value: ordersFilter,
+            onChange: setOrdersFilter,
+        },
+        {
+            id: 'average',
+            type: 'number',
+            label: c.avgOrder,
+            value: averageFilter,
+            onChange: setAverageFilter,
+            money: true,
+            more: true,
+        },
+    ], [c, ui, walkIn, period, rows, customerIds, customerExclude, revenueFilter, ordersFilter, averageFilter]);
+
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const items: ListStat[] = [
+            { id: 'revenue', icon: <Wallet aria-hidden />, label: c.totalRevenue, value: money(totals.revenue) },
+            { id: 'orders', icon: <Receipt aria-hidden />, label: c.totalOrders, value: totals.orders.toLocaleString(locale) },
+            { id: 'customers', icon: <Users aria-hidden />, label: c.customers, value: totals.customers.toLocaleString(locale) },
+            {
+                id: 'repeat',
+                icon: <Repeat aria-hidden />,
+                label: ui.repeatCustomers,
+                value: totals.repeat.toLocaleString(locale),
+                hint: totals.customers > 0
+                    ? new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(totals.repeat / totals.customers)
+                    : undefined,
+            },
+            { id: 'average', icon: <Calculator aria-hidden />, label: c.avgOrderValue, value: money(totals.average) },
+        ];
+        return { items, loading, label: ui.statsLabel };
+    }, [totals, loading, locale, c, ui]);
 
     return (
         <PageShell>
-                <PageHeader
-                    title={t.salesReports.customers.title}
-                    subtitle={t.salesReports.customers.subtitle}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.sales,
-                        t.salesReports.customers.title,
-                        'sales',
-                    )}
-                    actions={<BranchFilter scope={branch} />}
-                />
+            <PageHeader
+                title={t.salesReports.customers.title}
+                subtitle={t.salesReports.customers.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.sales,
+                    t.salesReports.customers.title,
+                    'sales',
+                )}
+                actions={<BranchFilter scope={branch} />}
+            />
 
-                <div className="grid md:grid-cols-4 gap-4">
-                    <div className="bg-white border border-gray-100 rounded-lg p-5">
-                        <div className="text-xs font-medium text-gray-500">{t.salesReports.common.totalRevenue}</div>
-                        <div className="text-2xl font-bold text-blue-700 mt-2">{formatBDT(Number(summary?.totalRevenue ?? 0), { locale })}</div>
-                    </div>
-                    <div className="bg-white border border-gray-100 rounded-lg p-5">
-                        <div className="text-xs font-medium text-gray-500">{t.salesReports.common.totalOrders}</div>
-                        <div className="text-2xl font-bold text-gray-900 mt-2">{summary?.totalOrders ?? 0}</div>
-                    </div>
-                    <div className="bg-white border border-gray-100 rounded-lg p-5">
-                        <div className="text-xs font-medium text-gray-500">{t.salesReports.common.customers}</div>
-                        <div className="text-2xl font-bold text-gray-900 mt-2">{summary?.customerCount ?? 0}</div>
-                    </div>
-                    <div className="bg-white border border-gray-100 rounded-lg p-5">
-                        <div className="text-xs font-medium text-gray-500">{t.salesReports.common.avgOrderValue}</div>
-                        <div className="text-2xl font-bold text-gray-900 mt-2">{formatBDT(Number(summary?.avgOrderValue ?? 0), { locale })}</div>
-                    </div>
-                </div>
-
-                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
-                    <div className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-gray-500">{t.salesReports.common.from}</span>
-                        <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
-                            className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-gray-500">{t.salesReports.common.to}</span>
-                        <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
-                            className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
-                    </div>
-                </div>
-
-                <DataTable<CustomerRow>
-                    tableId="sales-by-customer"
-                    columns={columns}
-                    data={rows}
-                    title={t.salesReports.customers.customerPerformance}
-                    isLoading={loading}
-                    emptyMessage={t.salesReports.common.noSalesInPeriod}
-                    emptyIcon={<Users className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.salesReports.customers.searchPlaceholder}
-                />
-            
+            <DataTable<CustomerRow>
+                tableId="sales-by-customer"
+                columns={columns}
+                data={visible}
+                title={t.salesReports.customers.customerPerformance}
+                isLoading={loading}
+                emptyMessage={c.noSalesInPeriod}
+                emptyIcon={<Users className="w-16 h-16 text-gray-200" />}
+                searchPlaceholder={t.salesReports.customers.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+                getRowId={(row) => row.customer.id ?? NO_CUSTOMER}
+            />
         </PageShell>
     );
 }

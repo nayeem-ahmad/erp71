@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Alert, BranchFilter, Button, CompactSection, CompactStat, Input, PageHeader, PageShell } from '@/components/ui';
+import { Banknote, Receipt, TrendingUp, Undo2, UserRoundPlus, Wallet } from 'lucide-react';
+import { Alert, BranchFilter, Button, CompactSection, CompactStat, PageHeader, PageShell } from '@/components/ui';
+import { ListStats, ListToolbar, type ListFilter, type ListStat, type ResolvedListFilter } from '@/components/data-table';
 import MessageShareModal from '@/components/share/MessageShareModal';
 import { ApiError, api } from '@/lib/api';
 import type { DailyReport } from '@/lib/daily-report';
@@ -14,17 +16,13 @@ import {
     isTillVisible,
 } from '@/lib/daily-report-print';
 import { formatBDT } from '@/lib/format';
-import { useI18n } from '@/lib/i18n';
+import { formatMessage, useI18n } from '@/lib/i18n';
+import { tenantDateOnly } from '@/lib/created-range';
 import { useSalePrintPrefs } from '@/lib/hooks/useSalePrintPrefs';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { openPrintWindow, renderHeaderHtml, SIMPLE_DOC_STYLES } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
-
-function todayLocal(): string {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 function checklistHrefLabel(
     code: DailyReport['checklist'][number]['code'],
@@ -40,7 +38,8 @@ export default function DailyReportPage() {
     const m = t.sales.dailyReport;
     const printHeader = usePrintHeader('DAILY_REPORT');
     const { paperSize, skipPreview } = useSalePrintPrefs();
-    const [date, setDate] = useState(todayLocal);
+    // The workspace's today, as the server reads `date` in the workspace's zone.
+    const [date, setDate] = useState(() => tenantDateOnly());
     const [report, setReport] = useState<DailyReport | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -109,13 +108,62 @@ export default function DailyReportPage() {
 
     const vs =
         report?.headlines.vsPreviousPct == null
-            ? '—'
+            ? null
             : `${report.headlines.vsPreviousPct > 0 ? '+' : ''}${report.headlines.vsPreviousPct}%`;
+
+    // One day's report: the chip picks the day, and always holds one —
+    // cleared, it goes back to today. A span picked by hand reads as its last day.
+    const filters = useMemo(() => {
+        const list: ListFilter[] = [
+            {
+                id: 'date',
+                type: 'date-range',
+                label: t.common.date,
+                value: { from: date, to: date },
+                onChange: (next) => setDate((next?.to ?? next?.from ?? tenantDateOnly()).slice(0, 10)),
+                presets: ['today', 'yesterday'],
+                operators: true,
+            },
+        ];
+        return list as ResolvedListFilter[];
+    }, [t.common.date, date]);
+
+    const stats = useMemo<ListStat[]>(() => {
+        if (!report) return [];
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        return [
+            {
+                id: 'net',
+                icon: <Wallet aria-hidden />,
+                label: m.netSales,
+                value: money(report.headlines.netSales),
+                hint: vs ? formatMessage(t.salesReports.listUi.vsYesterdayValue, { value: vs }) : undefined,
+            },
+            { id: 'bills', icon: <Receipt aria-hidden />, label: m.bills, value: report.sales.bills.toLocaleString(locale) },
+            { id: 'gross', icon: <TrendingUp aria-hidden />, label: m.gross, value: money(report.sales.gross) },
+            {
+                id: 'returns',
+                icon: <Undo2 aria-hidden />,
+                label: m.returns,
+                value: money(report.sales.returnsAmount),
+                tone: report.sales.returnsAmount > 0 ? 'danger' : 'default',
+            },
+            { id: 'cash', icon: <Banknote aria-hidden />, label: m.cashMovement, value: money(report.headlines.cashMovement) },
+            {
+                id: 'dues',
+                icon: <UserRoundPlus aria-hidden />,
+                label: m.newDues,
+                value: money(report.headlines.newDues),
+                tone: report.headlines.newDues > 0 ? 'warning' : 'default',
+            },
+        ];
+    }, [report, vs, locale, m, t.salesReports.listUi.vsYesterdayValue]);
 
     return (
         <PageShell maxWidth="wide" className="space-y-4">
             <PageHeader
                 title={m.title}
+                subtitle={report?.storeName}
                 breadcrumbs={modulePageBreadcrumbs(
                     t.dashboardHome.breadcrumbHome,
                     t.sidebar.modules.sales,
@@ -137,42 +185,20 @@ export default function DailyReportPage() {
                 }
             />
 
-            <div className="flex flex-wrap items-end gap-3">
-                <label className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-gray-500">{t.common.date}</span>
-                    <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                </label>
-                {report ? <p className="text-xs text-gray-500">{report.storeName}</p> : null}
-            </div>
+            {stats.length > 0 ? (
+                <ListStats stats={stats} loading={loading} label={t.salesReports.listUi.statsLabel} />
+            ) : null}
+
+            <ListToolbar tableId="sales-daily-report" filters={filters} />
 
             {error ? <Alert tone="danger">{error}</Alert> : null}
             {loading ? <p className="text-sm text-gray-400">{t.common.loading}</p> : null}
 
             {report && !loading ? (
                 <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                        <CompactStat label={m.netSales} value={formatBDT(report.headlines.netSales, { locale })} />
-                        <CompactStat label={m.cashMovement} value={formatBDT(report.headlines.cashMovement, { locale })} />
-                        <CompactStat label={m.newDues} value={formatBDT(report.headlines.newDues, { locale })} />
-                        <CompactStat label={m.vsYesterday} value={vs} />
-                    </div>
-
-                    <CompactSection title={m.sales} titleStyle="heading">
-                        {report.sales.bills === 0 && report.sales.gross === 0 ? (
-                            <p className="text-sm text-gray-600">{m.noSales}</p>
-                        ) : (
-                            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                                <CompactStat label={m.bills} value={String(report.sales.bills)} />
-                                <CompactStat label={m.gross} value={formatBDT(report.sales.gross, { locale })} />
-                                <CompactStat
-                                    label={m.returns}
-                                    value={formatBDT(report.sales.returnsAmount, { locale })}
-                                    tone="negative"
-                                />
-                                <CompactStat label={m.net} value={formatBDT(report.sales.net, { locale })} />
-                            </div>
-                        )}
-                    </CompactSection>
+                    {report.sales.bills === 0 && report.sales.gross === 0 ? (
+                        <p className="text-sm text-gray-600">{m.noSales}</p>
+                    ) : null}
 
                     {report.tenders.length > 0 ? (
                         <CompactSection title={m.tenders} titleStyle="heading">

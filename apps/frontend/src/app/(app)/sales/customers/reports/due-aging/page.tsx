@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Clock } from 'lucide-react';
-import { DataTable, type ListFilter } from '@/components/data-table';
+import { AlertTriangle, Clock, Hourglass, Timer, Users, Wallet } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { api, type CustomerDueAging, type CustomerDueAgingRow } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
@@ -12,7 +12,9 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { todayInTenantZone } from '@/lib/dashboard-range';
 import { ALL_BRANCHES, handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
-import { BranchFilter, CompactStat, Input, PageHeader, PageShell } from '@/components/ui';
+import { BranchFilter, Input, PageHeader, PageShell } from '@/components/ui';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
+import type { NumberCondition } from '@/lib/number-condition';
 
 /** Sales-rep filter values that are not an employee id. */
 const MY_CUSTOMERS = 'me';
@@ -44,9 +46,10 @@ const columnHelper = createColumnHelper<CustomerDueAgingRow>();
  * has been owed.
  *
  * The branch and the "as of" day are the server's; the sales rep, overdue age,
- * group and territory are the page's own, over the rows already loaded, so the
- * tiles always total exactly the customers on screen. As on the Dues Summary, a
- * viewer who is the sales rep of any customer listed opens on their own.
+ * group, territory, amount and search chips are the page's own, over the rows
+ * already loaded, so the strip and the total row always add up exactly the
+ * customers on screen. As on the Dues Summary, a viewer who is the sales rep of
+ * any customer listed opens on their own.
  */
 export default function DueAgingReportPage() {
     const { t, locale } = useI18n();
@@ -56,10 +59,12 @@ export default function DueAgingReportPage() {
     const [asOf, setAsOf] = useState(today);
     const [data, setData] = useState<CustomerDueAging>({ me: null, rows: [] });
     const [loading, setLoading] = useState(true);
-    const [rep, setRep] = useState<string | null>(null);
+    const [reps, setReps] = useState<string[]>([]);
     const [overdue, setOverdue] = useState<string | null>(null);
-    const [group, setGroup] = useState<string | null>(null);
-    const [territory, setTerritory] = useState<string | null>(null);
+    const [groups, setGroups] = useState<string[]>([]);
+    const [territories, setTerritories] = useState<string[]>([]);
+    const [totalFilter, setTotalFilter] = useState<NumberCondition | null>(null);
+    const [search, setSearch] = useState('');
     // The "my customers" default is applied once, on the first load: after
     // that the filter is the viewer's, and a reload keeps it.
     const repDefaulted = useRef(false);
@@ -78,7 +83,7 @@ export default function DueAgingReportPage() {
                 if (!repDefaulted.current) {
                     repDefaulted.current = true;
                     const me = result.me;
-                    if (me && result.rows.some((row) => row.sales_rep?.id === me.id)) setRep(MY_CUSTOMERS);
+                    if (me && result.rows.some((row) => row.sales_rep?.id === me.id)) setReps([MY_CUSTOMERS]);
                 }
             })
             .catch((err) => {
@@ -103,17 +108,26 @@ export default function DueAgingReportPage() {
     }), [data.rows]);
 
     const rows = useMemo(() => {
-        const repId = rep === MY_CUSTOMERS ? data.me?.id : rep;
+        // "My customers" is the viewer's own employee id; "No sales rep" the empty one.
+        const repIds = reps.map((value) => (value === MY_CUSTOMERS ? data.me?.id ?? MY_CUSTOMERS : value));
         const overdueAmount = overdue ? OVERDUE_FROM[overdue] : null;
         return data.rows.filter((row) => {
             if (overdueAmount && overdueAmount(row) <= 0) return false;
-            if (group && row.customer_group?.id !== group) return false;
-            if (territory && row.territory?.id !== territory) return false;
-            if (!rep) return true;
-            if (rep === NO_REP) return !row.sales_rep;
-            return row.sales_rep?.id === repId;
+            if (!matchesAnyOf(groups, row.customer_group?.id)) return false;
+            if (!matchesAnyOf(territories, row.territory?.id)) return false;
+            if (!matchesAnyOf(repIds, row.sales_rep?.id ?? NO_REP)) return false;
+            if (!matchesNumberCondition(row.total, totalFilter)) return false;
+            return matchesSearch(
+                search,
+                row.customer.name,
+                row.customer.phone,
+                row.sales_rep?.name,
+                row.customer_group?.name,
+                row.territory?.name,
+                row.store?.name,
+            );
         });
-    }, [data, rep, overdue, group, territory]);
+    }, [data, reps, overdue, groups, territories, totalFilter, search]);
 
     const totals = useMemo(() => rows.reduce(
         (acc, row) => ({
@@ -129,10 +143,10 @@ export default function DueAgingReportPage() {
     const filters = useMemo<ListFilter[]>(() => [
         {
             id: 'salesRep',
-            type: 'select',
+            type: 'multi-select',
             label: copy.salesRep,
-            value: rep,
-            onChange: setRep,
+            value: reps,
+            onChange: setReps,
             options: [
                 ...(data.me ? [{ value: MY_CUSTOMERS, label: copy.myCustomers }] : []),
                 ...options.reps,
@@ -151,26 +165,67 @@ export default function DueAgingReportPage() {
                 { value: '91', label: copy.overdue90 },
             ],
         },
+        {
+            id: 'total',
+            type: 'number',
+            label: copy.totalDue,
+            value: totalFilter,
+            onChange: setTotalFilter,
+            money: true,
+        },
         // Offered only where the tenant uses them, so a shop without groups or
         // territories is not handed two filters that can only empty the list.
         ...(options.groups.length > 0 ? [{
-            id: 'group', type: 'select' as const, label: copy.group, value: group, onChange: setGroup, options: options.groups,
+            id: 'group', type: 'multi-select' as const, label: copy.group, value: groups, onChange: setGroups, options: options.groups,
         }] : []),
         ...(options.territories.length > 0 ? [{
-            id: 'territory', type: 'select' as const, label: copy.territory, value: territory, onChange: setTerritory, options: options.territories,
+            id: 'territory', type: 'multi-select' as const, label: copy.territory, value: territories, onChange: setTerritories, options: options.territories, more: true,
         }] : []),
-    ], [copy, data.me, options, rep, overdue, group, territory]);
+    ], [copy, data.me, options, reps, overdue, totalFilter, groups, territories]);
+
+    // A bracket is tinted only while it holds money: an amber ৳0.00 reads as a problem.
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale });
+        const items: ListStat[] = [
+            { id: 'customers', icon: <Users aria-hidden />, label: t.salesReports.common.customers, value: rows.length.toLocaleString() },
+            { id: 'b0_30', icon: <Clock aria-hidden />, label: copy.bucket0to30, value: money(totals.b0_30) },
+            {
+                id: 'b31_60',
+                icon: <Hourglass aria-hidden />,
+                label: copy.bucket31to60,
+                value: money(totals.b31_60),
+                tone: totals.b31_60 > 0 ? 'warning' : 'default',
+            },
+            {
+                id: 'b61_90',
+                icon: <Timer aria-hidden />,
+                label: copy.bucket61to90,
+                value: money(totals.b61_90),
+                tone: totals.b61_90 > 0 ? 'warning' : 'default',
+            },
+            {
+                id: 'b90plus',
+                icon: <AlertTriangle aria-hidden />,
+                label: copy.bucket90plus,
+                value: money(totals.b90plus),
+                tone: totals.b90plus > 0 ? 'danger' : 'default',
+            },
+            { id: 'total', icon: <Wallet aria-hidden />, label: copy.totalDue, value: money(totals.total) },
+        ];
+        return { items, loading: loading && data.rows.length === 0, label: copy.statsLabel };
+    }, [rows.length, totals, loading, data.rows.length, locale, copy, t]);
 
     const showBranch = branch.value === ALL_BRANCHES;
 
     const columns = useMemo(() => {
-        const money = (value: number, className = 'text-gray-900') =>
+        const money = (value: number, className?: string) =>
             value > 0 ? <span className={className}>{formatBDT(value, { locale })}</span> : <span className="text-gray-300">{t.shared.dash}</span>;
-        const bucket = (id: keyof CustomerDueAgingRow, header: string, className?: string) =>
+        const bucket = (id: keyof CustomerDueAgingRow, total: number, header: string, className?: string) =>
             columnHelper.accessor((row) => row[id] as number, {
                 id,
                 header,
                 cell: (info) => money(info.getValue(), className),
+                footer: () => formatBDT(total, { locale }),
                 size: 105,
                 meta: { align: 'end', hideOnMobile: true },
             });
@@ -187,21 +242,25 @@ export default function DueAgingReportPage() {
                 cell: (info) => {
                     const { customer } = info.row.original;
                     return (
-                        <Link href={routes.sales.customerDetail(customer.id)} className="hover:text-blue-600">
-                            <div className="font-medium text-gray-900">{customer.name}</div>
-                            {customer.phone ? <div className="text-xs text-gray-400">{customer.phone}</div> : null}
-                        </Link>
+                        <div className="min-w-0">
+                            <Link href={routes.sales.customerDetail(customer.id)} className="hover:text-blue-600">
+                                {customer.name}
+                            </Link>
+                            {customer.phone ? <span className="block truncate text-gray-500">{customer.phone}</span> : null}
+                        </div>
                     );
                 },
+                footer: () => t.salesReports.common.total,
                 size: 180,
             }),
-            bucket('bucket_0_30', copy.bucket0to30),
-            bucket('bucket_31_60', copy.bucket31to60, 'text-amber-700'),
-            bucket('bucket_61_90', copy.bucket61to90, 'text-amber-700'),
-            bucket('bucket_90_plus', copy.bucket90plus, 'font-semibold text-red-600'),
+            bucket('bucket_0_30', totals.b0_30, copy.bucket0to30),
+            bucket('bucket_31_60', totals.b31_60, copy.bucket31to60, 'text-amber-700'),
+            bucket('bucket_61_90', totals.b61_90, copy.bucket61to90, 'text-amber-700'),
+            bucket('bucket_90_plus', totals.b90plus, copy.bucket90plus, 'text-red-600'),
             columnHelper.accessor('total', {
                 header: copy.totalDue,
-                cell: (info) => <span className="font-semibold text-gray-900">{formatBDT(info.getValue(), { locale })}</span>,
+                cell: (info) => formatBDT(info.getValue(), { locale }),
+                footer: () => formatBDT(totals.total, { locale }),
                 size: 120,
                 meta: { align: 'end' },
             }),
@@ -210,13 +269,13 @@ export default function DueAgingReportPage() {
                 header: copy.lastPayment,
                 cell: (info) => {
                     const payment = info.row.original.last_payment;
-                    if (!payment) return <span className="text-xs text-gray-400">{copy.neverPaid}</span>;
+                    if (!payment) return <span className="text-gray-500">{copy.neverPaid}</span>;
                     return (
-                        <div>
-                            <div className="text-gray-900">{formatDate(payment.date, locale)}</div>
-                            <div className="whitespace-nowrap text-xs text-gray-400">
+                        <div className="min-w-0">
+                            <span>{formatDate(payment.date, locale)}</span>
+                            <span className="block truncate text-gray-500">
                                 {formatBDT(payment.amount, { locale })} · {paidAgo(payment.days_ago)}
-                            </div>
+                            </span>
                         </div>
                     );
                 },
@@ -237,7 +296,7 @@ export default function DueAgingReportPage() {
                 id: 'territory', header: copy.territory, size: 120, meta: { hideOnMobile: true },
             })] : []),
         ] as ColumnDef<CustomerDueAgingRow, any>[];
-    }, [t, copy, locale, showBranch, options.groups.length, options.territories.length]);
+    }, [t, copy, locale, totals, showBranch, options.groups.length, options.territories.length]);
 
     return (
         <PageShell>
@@ -267,15 +326,6 @@ export default function DueAgingReportPage() {
                 )}
             />
 
-            {/* A bracket is tinted only while it holds money: an amber ৳0.00 reads as a problem. */}
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-                <CompactStat label={copy.bucket0to30} value={formatBDT(totals.b0_30, { locale })} />
-                <CompactStat label={copy.bucket31to60} value={formatBDT(totals.b31_60, { locale })} tone={totals.b31_60 > 0 ? 'warning' : 'default'} />
-                <CompactStat label={copy.bucket61to90} value={formatBDT(totals.b61_90, { locale })} tone={totals.b61_90 > 0 ? 'warning' : 'default'} />
-                <CompactStat label={copy.bucket90plus} value={formatBDT(totals.b90plus, { locale })} tone={totals.b90plus > 0 ? 'negative' : 'default'} />
-                <CompactStat label={copy.totalDue} value={formatBDT(totals.total, { locale })} className="col-span-2 md:col-span-1" />
-            </div>
-
             <DataTable<CustomerDueAgingRow>
                 tableId="customer-due-aging"
                 columns={columns}
@@ -286,7 +336,12 @@ export default function DueAgingReportPage() {
                 emptyIcon={<Clock className="h-16 w-16 text-gray-200" />}
                 searchPlaceholder={copy.searchPlaceholder}
                 getRowId={(row) => row.customer.id}
+                searchValue={search}
+                onSearchChange={setSearch}
                 filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
                 viewOptions
             />
         </PageShell>

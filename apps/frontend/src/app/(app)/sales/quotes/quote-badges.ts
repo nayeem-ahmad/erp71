@@ -1,4 +1,4 @@
-/** Badge colours for a quotation's status, shared by the list and the detail view. */
+/** Badge colours for a quotation's status on the detail view (the list uses `StatusBadge` tones). */
 export const quoteStatusColors: Record<string, string> = {
     DRAFT: 'bg-gray-50 text-gray-600 border-gray-200',
     SENT: 'bg-blue-50 text-blue-700 border-blue-200',

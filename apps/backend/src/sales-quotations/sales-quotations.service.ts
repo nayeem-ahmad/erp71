@@ -3,6 +3,17 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
+import {
+    idsOrNoneClause,
+    searchClause,
+    statusSetClause,
+    type SalesDocumentListFilters,
+} from '../common/sales-document-list-filters';
+import { numberConditionFilter } from '../common/number-condition.util';
+import { resolveOrderBy, type SortableMap } from '../common/sort.util';
+import { startOfZonedToday, zonedDayRange } from '../common/tenant-time.util';
+import { roundMoney } from '@erp71/shared-types';
+import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import {
     CreateQuotationDto,
@@ -30,6 +41,47 @@ const SHARE_ENTITY_TYPES = ['QUOTATION', 'PROFORMA_INVOICE'] as const;
 
 const shareEntityTypeFor = (docKind: string) =>
     docKind === 'PROFORMA' ? ('PROFORMA_INVOICE' as const) : ('QUOTATION' as const);
+
+const QUOTATION_SORTABLE: SortableMap = {
+    quote_number: (dir) => ({ quote_number: dir }),
+    doc_kind: (dir) => ({ doc_kind: dir }),
+    status: (dir) => ({ status: dir }),
+    total_amount: (dir) => ({ total_amount: dir }),
+    valid_until: (dir) => ({ valid_until: dir }),
+    created_at: (dir) => ({ created_at: dir }),
+    customer: (dir) => ({ customer: { name: dir } }),
+};
+
+/** Still with us or the customer: drafted, or sent and not yet answered. */
+const AWAITING_QUOTE_STATUSES = ['DRAFT', 'SENT'];
+/** A quotation whose valid-until date still matters. */
+const LIVE_QUOTE_STATUSES = ['DRAFT', 'SENT', 'ACCEPTED'];
+/**
+ * Quotations that carry no value: turned down, lapsed, or superseded by a
+ * newer version — counting a revised quote beside its revision would count
+ * the one offer twice.
+ */
+const DEAD_QUOTE_STATUSES = ['REJECTED', 'EXPIRED', 'REVISED'];
+
+/** What narrows the quotations list — and, alike, its stats strip. */
+export interface QuotationListFilters extends Partial<Omit<SalesDocumentListFilters, 'timezone'>> {
+    timezone: string;
+    /** `QUOTE` or `PROFORMA`, already allow-listed; absent, both kinds. */
+    docKind?: string;
+}
+
+/** `GET /sales-quotations/summary` — see `SalesQuotationsService.summary`. */
+export interface QuotationListSummary {
+    count: number;
+    /** Quoted totals in taka, rejected, expired and revised quotations left out. */
+    value: number;
+    /** Drafted or sent, not yet answered. */
+    awaiting: number;
+    accepted: { count: number; amount: number };
+    converted: number;
+    /** Marked expired, or still live past their valid-until date. */
+    expired: number;
+}
 
 @Injectable()
 export class SalesQuotationsService {
@@ -364,13 +416,42 @@ export class SalesQuotationsService {
         });
     }
 
+    /**
+     * The `where` behind the list and its stats strip, so the two always
+     * describe the same documents. The date filter is the quotation's own
+     * `valid_until`; the created date has a filter of its own. The amount
+     * condition reads `total_amount` as written — a proforma's in its own
+     * currency.
+     */
+    private listWhere(tenantId: string, opts?: QuotationListFilters): Prisma.QuotationWhereInput {
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
+        const validUntil = zonedDayRange(opts?.dateFrom, opts?.dateTo, opts?.timezone);
+        const where: Prisma.QuotationWhereInput = {
+            tenant_id: tenantId,
+            ...(opts?.storeId ? { store_id: opts.storeId } : {}),
+            ...(created ? { created_at: created } : {}),
+            ...(validUntil ? { valid_until: validUntil } : {}),
+            // Absent means both kinds, which is what an unfiltered list has
+            // always shown. The two are only ever separated on request.
+            ...(opts?.docKind ? { doc_kind: opts.docKind } : {}),
+            ...(statusSetClause(opts?.statuses, opts?.statusExclude) as Prisma.QuotationWhereInput),
+            ...(opts?.total ? { total_amount: numberConditionFilter(opts.total) } : {}),
+        };
+        const and: Prisma.QuotationWhereInput[] = [];
+        const search = searchClause(opts?.search, ['quote_number', 'notes', 'customer.name', 'customer.phone']);
+        if (search) and.push(search as Prisma.QuotationWhereInput);
+        const customer = idsOrNoneClause('customer_id', opts?.customerIds);
+        if (customer) and.push(customer as Prisma.QuotationWhereInput);
+        if (and.length) where.AND = and;
+        return where;
+    }
+
     async findAll(
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string; timezone: string; storeId?: string; docKind?: string },
+        opts?: QuotationListFilters & { sortBy?: string; sortDir?: string },
     ): Promise<PaginatedResult<unknown>> {
-        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         return paginatedFindMany({
             findMany: (args) =>
                 this.db.quotation.findMany({
@@ -378,18 +459,69 @@ export class SalesQuotationsService {
                     include: { customer: true, items: { include: { product: true } } },
                 }),
             count: (args) => this.db.quotation.count(args as any),
-            where: {
-                tenant_id: tenantId,
-                ...(opts?.storeId ? { store_id: opts.storeId } : {}),
-                ...(created ? { created_at: created } : {}),
-                // Absent means both kinds, which is what an unfiltered list has
-                // always shown. The two are only ever separated on request.
-                ...(opts?.docKind ? { doc_kind: opts.docKind } : {}),
-            },
-            orderBy: { created_at: 'desc' },
+            where: this.listWhere(tenantId, opts) as Record<string, unknown>,
+            orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, QUOTATION_SORTABLE, { created_at: 'desc' }),
             page,
             limit,
         });
+    }
+
+    /**
+     * The quotations matching `where`, and their totals in taka. A proforma
+     * written in a foreign currency is translated at its own fixed rate — the
+     * one `convertToOrder` uses — so a USD figure is never added to taka.
+     * Foreign-currency documents are few, so they are read rather than summed
+     * in the database.
+     */
+    private async takaTotal(where: Prisma.QuotationWhereInput): Promise<{ count: number; amount: number }> {
+        const [inTaka, foreign] = await Promise.all([
+            this.db.quotation.aggregate({
+                where: { AND: [where, { currency: 'BDT' }] },
+                _count: { _all: true },
+                _sum: { total_amount: true },
+            }),
+            this.db.quotation.findMany({
+                where: { AND: [where, { currency: { not: 'BDT' } }] },
+                select: { total_amount: true, exchange_rate: true },
+            }),
+        ]);
+        const foreignAmount = foreign.reduce(
+            (sum, row) => sum + Number(row.total_amount ?? 0) * Number(row.exchange_rate ?? 0),
+            0,
+        );
+        return {
+            count: inTaka._count._all + foreign.length,
+            amount: roundMoney(Number(inTaka._sum.total_amount ?? 0) + foreignAmount),
+        };
+    }
+
+    /**
+     * The stats strip above the quotations list, over exactly the rows it
+     * shows: how much is quoted, what still waits on an answer, what was
+     * accepted and turned into orders, and what has run past its validity.
+     */
+    async summary(tenantId: string, opts: QuotationListFilters): Promise<QuotationListSummary> {
+        const where = this.listWhere(tenantId, opts);
+        const within = (extra: Prisma.QuotationWhereInput): Prisma.QuotationWhereInput => ({ AND: [where, extra] });
+        const [count, live, awaiting, accepted, converted, expired] = await Promise.all([
+            this.db.quotation.count({ where }),
+            this.takaTotal(within({ status: { notIn: DEAD_QUOTE_STATUSES } })),
+            this.db.quotation.count({ where: within({ status: { in: AWAITING_QUOTE_STATUSES } }) }),
+            this.takaTotal(within({ status: 'ACCEPTED' })),
+            this.db.quotation.count({ where: within({ status: 'CONVERTED' }) }),
+            this.db.quotation.count({
+                where: within({
+                    OR: [
+                        { status: 'EXPIRED' },
+                        {
+                            status: { in: LIVE_QUOTE_STATUSES },
+                            valid_until: { lt: startOfZonedToday(opts.timezone) },
+                        },
+                    ],
+                }),
+            }),
+        ]);
+        return { count, value: live.amount, awaiting, accepted, converted, expired };
     }
 
     async findOne(tenantId: string, id: string) {

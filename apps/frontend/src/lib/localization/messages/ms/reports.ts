@@ -1,6 +1,9 @@
 export const reportsMessages = {
         consolidated: {
             title: "Laporan Disatukan",
+            period: "Tempoh",
+            statsLabel: "Ringkasan disatukan",
+            branches: "Cawangan",
             description: "Gambaran hasil dan transaksi merentas cawangan",
             fromLabel: "Dari",
             toLabel: "Hingga",
@@ -31,6 +34,10 @@ export const reportsMessages = {
         },
         branch: {
             title: "Laporan Cawangan",
+            period: "Tempoh",
+            statsLabel: "Ringkasan cawangan",
+            groupBy: "Kumpulkan mengikut",
+            groups: { day: "Hari", week: "Minggu", month: "Bulan" },
             description: "Prestasi jualan terperinci untuk satu cawangan",
             storeLabel: "Kedai",
             fromLabel: "Dari",

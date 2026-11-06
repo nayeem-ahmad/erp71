@@ -1,24 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { TrendingUp, ShoppingCart, BarChart3, RotateCcw, Package } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { BarChart3, Calculator, Package, PieChart, RotateCcw, ShoppingCart, TrendingUp, Wallet } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
-import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { BranchFilter, PageShell } from '@/components/ui';
+import { Alert, BranchFilter, PageHeader, PageShell } from '@/components/ui';
+import GroupByChip from '@/components/hr/GroupByChip';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
-
-function defaultFrom() {
-    const d = new Date();
-    d.setDate(d.getDate() - 29);
-    return d.toISOString().slice(0, 10);
-}
-
-function defaultTo() {
-    return new Date().toISOString().slice(0, 10);
-}
+import { createdRangeFromPreset, type CreatedRange, type CreatedRangePreset } from '@/lib/created-range';
 
 interface BranchSummary {
     revenue: number;
@@ -57,312 +49,264 @@ interface BranchReport {
     daily: DailyRow[];
 }
 
-function KpiCard({
-    icon: Icon,
-    label,
-    value,
-    accent,
-    sub,
-}: {
-    icon: React.ComponentType<{ className?: string }>;
-    label: string;
-    value: string;
-    accent: string;
-    sub?: string;
-}) {
-    return (
-        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-5 flex items-start gap-4">
-            <div className={`rounded-xl p-2.5 ${accent}`}>
-                <Icon className="w-5 h-5 text-white" />
-            </div>
-            <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label}</p>
-                <p className="mt-1 text-xl font-bold text-gray-900 truncate">{value}</p>
-                {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
-            </div>
-        </div>
-    );
+type GroupBy = 'day' | 'week' | 'month';
+
+const GROUPS: GroupBy[] = ['day', 'week', 'month'];
+const PERIOD_PRESETS: readonly CreatedRangePreset[] = [
+    'today', 'yesterday', 'last7', 'last30', 'thisMonth', 'last3Months', 'last6Months', 'thisYear',
+];
+// Cleared, the period goes back to the last 30 days.
+const defaultPeriod = () => createdRangeFromPreset('last30');
+
+/**
+ * The day a row rolls up into: itself, the Monday of its week (ISO, as every
+ * other chart in the app buckets weeks), or the first of its month.
+ */
+function bucketOf(date: string, groupBy: GroupBy): string {
+    if (groupBy === 'month') return `${date.slice(0, 7)}-01`;
+    if (groupBy === 'day') return date;
+    const [year, month, day] = date.split('-').map(Number);
+    const at = Date.UTC(year, month - 1, day);
+    const sinceMonday = (new Date(at).getUTCDay() + 6) % 7;
+    return new Date(at - sinceMonday * 86_400_000).toISOString().slice(0, 10);
 }
 
-function Skeleton({ className }: { className?: string }) {
-    return <div className={`animate-pulse bg-gray-200 rounded ${className ?? ''}`} />;
+function rollUp(rows: DailyRow[], groupBy: GroupBy): DailyRow[] {
+    if (groupBy === 'day') return rows;
+    const buckets = new Map<string, DailyRow>();
+    for (const row of rows) {
+        const key = bucketOf(row.date, groupBy);
+        const bucket = buckets.get(key) ?? { date: key, transactions: 0, gross_revenue: 0, returns: 0, net_revenue: 0 };
+        bucket.transactions += row.transactions;
+        bucket.gross_revenue += row.gross_revenue;
+        bucket.returns += row.returns;
+        bucket.net_revenue += row.net_revenue;
+        buckets.set(key, bucket);
+    }
+    return [...buckets.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+const sum = (rows: DailyRow[], pick: (row: DailyRow) => number) => rows.reduce((total, row) => total + pick(row), 0);
+
+/**
+ * Sales › Reports › Branch Report: one branch over a period, against the
+ * company. The period and branch go to the server; the Group by chip rolls
+ * the day rows up into weeks or months here, so the totals never move.
+ */
 export default function BranchReportPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const m = t.reports.branch;
     // One branch at a time: this report compares a branch against the company,
     // so "All branches" has nothing to compare. It opens on the header branch.
     const branch = useBranchScope({ allowAll: false });
     const selectedStore = branch.apiStoreId ?? '';
-    const [fromDate, setFromDate] = useState(defaultFrom());
-    const [toDate, setToDate] = useState(defaultTo());
-    const [inputFrom, setInputFrom] = useState(defaultFrom());
-    const [inputTo, setInputTo] = useState(defaultTo());
+    const [period, setPeriod] = useState<CreatedRange>(defaultPeriod);
+    const [groupBy, setGroupBy] = useState<GroupBy>('day');
     const [report, setReport] = useState<BranchReport | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (selectedStore) {
-            void fetchReport(selectedStore, fromDate, toDate);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedStore]);
-
-    const fetchReport = async (storeId: string, from: string, to: string) => {
+    const load = useCallback(async () => {
+        if (!selectedStore) return;
         setLoading(true);
         setError(null);
         try {
-            const data = await api.getBranchReport({ storeId, from, to });
+            const data = await api.getBranchReport({ storeId: selectedStore, from: period.from, to: period.to });
             setReport(data as BranchReport);
         } catch (err: any) {
             if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
             setError(err?.message ?? m.loadFailed);
+            setReport(null);
         } finally {
             setLoading(false);
         }
-    };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedStore, period, m.loadFailed]);
 
-    const handleGenerate = () => {
-        setFromDate(inputFrom);
-        setToDate(inputTo);
-        if (selectedStore) {
-            void fetchReport(selectedStore, inputFrom, inputTo);
-        }
-    };
+    useEffect(() => {
+        void load();
+    }, [load]);
 
-    const r = report;
+    const rows = useMemo(() => rollUp(report?.daily ?? [], groupBy), [report, groupBy]);
+
+    const columns = useMemo(() => {
+        const money = (value: number) => <span className="tabular-nums">{formatBDT(value, { locale })}</span>;
+        return [
+            {
+                id: 'date',
+                header: m.groups[groupBy],
+                accessorKey: 'date',
+                cell: ({ row }: { row: { original: DailyRow } }) => (groupBy === 'month' ? row.original.date.slice(0, 7) : row.original.date),
+                footer: () => t.common.total,
+            },
+            {
+                id: 'transactions',
+                header: m.dailyBreakdown.transactions,
+                accessorKey: 'transactions',
+                meta: { align: 'end' },
+                cell: ({ row }: { row: { original: DailyRow } }) => <span className="tabular-nums">{row.original.transactions}</span>,
+                footer: () => <span className="tabular-nums">{sum(rows, (row) => row.transactions)}</span>,
+            },
+            {
+                id: 'gross_revenue',
+                header: m.dailyBreakdown.grossRevenue,
+                accessorKey: 'gross_revenue',
+                meta: { align: 'end', hideOnMobile: true },
+                cell: ({ row }: { row: { original: DailyRow } }) => money(row.original.gross_revenue),
+                footer: () => money(sum(rows, (row) => row.gross_revenue)),
+            },
+            {
+                id: 'returns',
+                header: m.dailyBreakdown.returns,
+                accessorKey: 'returns',
+                meta: { align: 'end', hideOnMobile: true },
+                cell: ({ row }: { row: { original: DailyRow } }) => money(row.original.returns),
+                footer: () => money(sum(rows, (row) => row.returns)),
+            },
+            {
+                id: 'net_revenue',
+                header: m.dailyBreakdown.netRevenue,
+                accessorKey: 'net_revenue',
+                meta: { align: 'end' },
+                cell: ({ row }: { row: { original: DailyRow } }) => money(row.original.net_revenue),
+                footer: () => money(sum(rows, (row) => row.net_revenue)),
+            },
+        ];
+    }, [m, t, groupBy, rows, locale]);
+
+    const productColumns = useMemo(() => [
+        {
+            id: 'name',
+            header: m.topProducts.product,
+            accessorKey: 'name',
+        },
+        {
+            id: 'unitsSold',
+            header: m.topProducts.units,
+            accessorKey: 'unitsSold',
+            meta: { align: 'end' },
+            cell: ({ row }: { row: { original: TopProduct } }) => <span className="tabular-nums">{row.original.unitsSold}</span>,
+        },
+        {
+            id: 'revenue',
+            header: m.topProducts.revenue,
+            accessorKey: 'revenue',
+            meta: { align: 'end' },
+            cell: ({ row }: { row: { original: TopProduct } }) => (
+                <span className="tabular-nums">{formatBDT(row.original.revenue, { locale })}</span>
+            ),
+        },
+    ], [m, locale]);
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'period',
+            type: 'date-range',
+            label: m.period,
+            value: period,
+            onChange: (next) => setPeriod(next ?? defaultPeriod()),
+            presets: PERIOD_PRESETS,
+            operators: true,
+        },
+    ], [m, period]);
+
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale });
+        const summary = report?.summary;
+        const company = report?.company_comparison;
+        const items: ListStat[] = [
+            {
+                id: 'revenue',
+                icon: <TrendingUp aria-hidden />,
+                label: m.summary.branchRevenue,
+                value: money(summary?.revenue ?? 0),
+                hint: company ? formatMessage(m.summary.percentOfCompany, { percent: company.revenue_share.toFixed(1) }) : undefined,
+            },
+            {
+                id: 'transactions',
+                icon: <ShoppingCart aria-hidden />,
+                label: m.summary.transactions,
+                value: (summary?.transactions ?? 0).toLocaleString(),
+                hint: company
+                    ? formatMessage(m.summary.transactionsSub, { total: company.company_transactions.toLocaleString() })
+                    : undefined,
+            },
+            { id: 'average', icon: <Calculator aria-hidden />, label: m.summary.avgOrder, value: money(summary?.avg_order ?? 0) },
+            {
+                id: 'returns',
+                icon: <RotateCcw aria-hidden />,
+                label: m.summary.returns,
+                value: money(summary?.returns ?? 0),
+                tone: (summary?.returns ?? 0) > 0 ? 'danger' : 'default',
+            },
+            { id: 'net', icon: <Wallet aria-hidden />, label: m.summary.netRevenue, value: money(summary?.net_revenue ?? 0) },
+            {
+                id: 'share',
+                icon: <PieChart aria-hidden />,
+                label: m.companyComparison.revenueShare,
+                value: company ? `${company.revenue_share.toFixed(1)}%` : '—',
+                hint: company
+                    ? formatMessage(m.summary.transactionsSub, { total: money(company.company_revenue) })
+                    : undefined,
+            },
+        ];
+        return { items, loading: loading && !report, label: m.statsLabel };
+    }, [report, loading, locale, m]);
 
     return (
         <PageShell>
-            <div className="w-full px-4 sm:px-6 py-8 space-y-6">
+            <PageHeader
+                title={m.title}
+                subtitle={m.description}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.sales,
+                    m.title,
+                    'sales',
+                )}
+                actions={<BranchFilter scope={branch} />}
+            />
 
-                <PageHeader
-                    title={m.title}
-                    subtitle={m.description}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.sales,
-                        m.title,
-                        'sales',
-                    )}
-                    actions={<BranchFilter scope={branch} />}
+            {branch.ready && !selectedStore ? <Alert tone="info">{m.noStores}</Alert> : null}
+            {error ? <Alert tone="danger">{error}</Alert> : null}
+
+            <DataTable
+                title={report ? `${m.title} — ${report.store.name}` : m.title}
+                tableId="sales-branch-report"
+                columns={columns as never}
+                data={rows}
+                isLoading={loading}
+                emptyMessage={m.dailyBreakdown.empty}
+                emptyIcon={<BarChart3 className="h-16 w-16 text-gray-200" />}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+                toolbarActions={(
+                    <GroupByChip<GroupBy>
+                        label={m.groupBy}
+                        value={groupBy}
+                        onChange={setGroupBy}
+                        options={GROUPS.map((group) => ({ value: group, label: m.groups[group] }))}
+                    />
+                )}
+            />
+
+            <section aria-labelledby="branch-top-products" className="space-y-2">
+                <h2 id="branch-top-products" className="text-sm font-semibold text-gray-900">{m.topProducts.title}</h2>
+                <DataTable
+                    title={m.topProducts.title}
+                    tableId="sales-branch-top-products"
+                    columns={productColumns as never}
+                    data={report?.top_products ?? []}
+                    isLoading={loading}
+                    emptyMessage={m.topProducts.empty}
+                    emptyIcon={<Package className="h-16 w-16 text-gray-200" />}
+                    showSearch={false}
+                    enableColumnFilters={false}
                 />
-
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                        {branch.ready && !selectedStore && (
-                            <span className="text-sm text-gray-500">{m.noStores}</span>
-                        )}
-
-                        <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
-                            <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest shrink-0">{m.fromLabel}</label>
-                            <input
-                                type="date"
-                                value={inputFrom}
-                                max={inputTo}
-                                onChange={(e) => setInputFrom(e.target.value)}
-                                className="text-sm text-gray-700 bg-transparent border-none outline-none"
-                            />
-                        </div>
-                        <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
-                            <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest shrink-0">{m.toLabel}</label>
-                            <input
-                                type="date"
-                                value={inputTo}
-                                min={inputFrom}
-                                onChange={(e) => setInputTo(e.target.value)}
-                                className="text-sm text-gray-700 bg-transparent border-none outline-none"
-                            />
-                        </div>
-                        <button
-                            onClick={handleGenerate}
-                            disabled={loading || !selectedStore}
-                            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl shadow-sm transition-colors"
-                        >
-                            {loading ? m.loading : m.generate}
-                        </button>
-                </div>
-
-                {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
-                        {error}
-                    </div>
-                )}
-
-                {/* Loading skeleton */}
-                {loading && (
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                            {[...Array(4)].map((_, i) => (
-                                <div key={i} className="bg-white rounded-lg border border-gray-100 shadow-sm p-5 space-y-3">
-                                    <Skeleton className="h-4 w-28" />
-                                    <Skeleton className="h-7 w-36" />
-                                </div>
-                            ))}
-                        </div>
-                        <Skeleton className="h-48 w-full" />
-                    </div>
-                )}
-
-                {/* Report content */}
-                {!loading && r && (
-                    <>
-                        {/* Branch + period label */}
-                        <div className="flex items-center gap-3">
-                            <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest">
-                                {r.store.name}
-                            </span>
-                            <span className="text-xs text-gray-400">
-                                {r.period.from} — {r.period.to}
-                            </span>
-                        </div>
-
-                        {/* KPI Cards */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                            <KpiCard
-                                icon={TrendingUp}
-                                label={m.summary.branchRevenue}
-                                value={formatBDT(r.summary.revenue)}
-                                accent="bg-blue-500"
-                                sub={formatMessage(m.summary.percentOfCompany, { percent: r.company_comparison.revenue_share.toFixed(1) })}
-                            />
-                            <KpiCard
-                                icon={ShoppingCart}
-                                label={m.summary.transactions}
-                                value={r.summary.transactions.toLocaleString()}
-                                accent="bg-emerald-500"
-                                sub={formatMessage(m.summary.transactionsSub, { total: r.company_comparison.company_transactions.toLocaleString() })}
-                            />
-                            <KpiCard
-                                icon={BarChart3}
-                                label={m.summary.avgOrder}
-                                value={formatBDT(r.summary.avg_order)}
-                                accent="bg-primary"
-                            />
-                            <KpiCard
-                                icon={RotateCcw}
-                                label={m.summary.returns}
-                                value={formatBDT(r.summary.returns)}
-                                accent="bg-danger"
-                                sub={formatMessage(m.summary.netSub, { amount: formatBDT(r.summary.net_revenue) })}
-                            />
-                        </div>
-
-                        {/* Company comparison bar */}
-                        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-6">
-                            <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4">
-                                {m.companyComparison.title}
-                            </h3>
-                            <div className="space-y-3">
-                                <div className="flex items-center gap-3">
-                                    <span className="w-28 shrink-0 text-sm text-gray-600 text-end">{r.store.name}</span>
-                                    <div className="flex-1 h-7 bg-gray-100 rounded-lg overflow-hidden">
-                                        <div
-                                            className="h-full bg-blue-500 rounded-lg transition-all duration-500"
-                                            style={{ width: `${Math.min(r.company_comparison.revenue_share, 100)}%` }}
-                                        />
-                                    </div>
-                                    <span className="w-32 shrink-0 text-sm font-semibold text-gray-700">
-                                        {formatBDT(r.summary.revenue)} ({r.company_comparison.revenue_share.toFixed(1)}%)
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <span className="w-28 shrink-0 text-sm text-gray-500 text-end">{m.companyComparison.allBranches}</span>
-                                    <div className="flex-1 h-7 bg-gray-100 rounded-lg overflow-hidden">
-                                        <div className="h-full bg-gray-300 rounded-lg w-full" />
-                                    </div>
-                                    <span className="w-32 shrink-0 text-sm font-semibold text-gray-500">
-                                        {formatBDT(r.company_comparison.company_revenue)}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="grid md:grid-cols-2 gap-6">
-                            {/* Top Products */}
-                            <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
-                                <div className="px-6 py-4 border-b border-gray-100">
-                                    <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">
-                                        {m.topProducts.title}
-                                    </h3>
-                                </div>
-                                {r.top_products.length === 0 ? (
-                                    <div className="px-6 py-8 text-center text-gray-400 text-sm">
-                                        <Package className="w-8 h-8 mx-auto mb-2 text-gray-200" />
-                                        {m.topProducts.empty}
-                                    </div>
-                                ) : (
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                            <tr className="bg-gray-50">
-                                                <th className="text-start px-6 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.topProducts.product}</th>
-                                                <th className="text-end px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.topProducts.units}</th>
-                                                <th className="text-end px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.topProducts.revenue}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {r.top_products.map((p, i) => (
-                                                <tr key={i} className="hover:bg-gray-50 transition-colors">
-                                                    <td className="px-6 py-3 font-medium text-gray-800 truncate max-w-[160px]">{p.name}</td>
-                                                    <td className="px-4 py-3 text-end text-gray-600">{p.unitsSold}</td>
-                                                    <td className="px-4 py-3 text-end font-semibold text-gray-900">{formatBDT(p.revenue)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                )}
-                            </div>
-
-                            {/* Daily Breakdown */}
-                            <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
-                                <div className="px-6 py-4 border-b border-gray-100">
-                                    <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">
-                                        {m.dailyBreakdown.title}
-                                    </h3>
-                                </div>
-                                {r.daily.length === 0 ? (
-                                    <div className="px-6 py-8 text-center text-gray-400 text-sm">
-                                        <BarChart3 className="w-8 h-8 mx-auto mb-2 text-gray-200" />
-                                        {m.dailyBreakdown.empty}
-                                    </div>
-                                ) : (
-                                    <div className="overflow-y-auto max-h-72">
-                                        <table className="w-full text-sm">
-                                            <thead className="sticky top-0 bg-gray-50">
-                                                <tr>
-                                                    <th className="text-start px-6 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.dailyBreakdown.date}</th>
-                                                    <th className="text-end px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.dailyBreakdown.txns}</th>
-                                                    <th className="text-end px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">{m.dailyBreakdown.netRevenue}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-50">
-                                                {r.daily.map((row) => (
-                                                    <tr key={row.date} className="hover:bg-gray-50 transition-colors">
-                                                        <td className="px-6 py-2 text-gray-600">{row.date}</td>
-                                                        <td className="px-4 py-2 text-end text-gray-600">{row.transactions}</td>
-                                                        <td className="px-4 py-2 text-end font-semibold text-gray-900">{formatBDT(row.net_revenue)}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </>
-                )}
-
-                {!loading && !r && !error && selectedStore && (
-                    <div className="flex flex-col items-center justify-center py-20 text-center">
-                        <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mb-4">
-                            <BarChart3 className="w-8 h-8 text-gray-300" />
-                        </div>
-                        <p className="text-base font-semibold text-gray-500">{m.empty.title}</p>
-                        <p className="text-sm text-gray-400 mt-1">{m.empty.description}</p>
-                    </div>
-                )}
-            </div>
+            </section>
         </PageShell>
     );
 }

@@ -17,7 +17,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission, RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
-import { readColumnFiltersQuery } from '../common/column-filter.util';
+import { type CustomerListQuery, readCustomerListFilters } from './customer-list-filters';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { ImportRowsDto } from '../common/import.dto';
 
@@ -71,32 +71,30 @@ export class CustomersController {
 
     @RequireAnyStorePermission(...CUSTOMER_READ)
     @Get()
-    async findAll(
-        @Tenant() tenant: TenantContext,
-        @Query('page') page?: string,
-        @Query('limit') limit?: string,
-        @Query('search') search?: string,
-        @Query('segment') segment?: string,
-        @Query('customerType') customerType?: string,
-        @Query('sortBy') sortBy?: string,
-        @Query('sortDir') sortDir?: string,
-        @Query('createdFrom') createdFrom?: string,
-        @Query('createdTo') createdTo?: string,
-        @Query('storeId') storeId?: string,
-        @Query('filters') filters?: string,
-    ) {
-        return this.customersService.findAll(tenant.tenantId, { timezone: tenant.timezone,
-            scope: await this.scope(tenant, storeId),
-            page: page ? parseInt(page, 10) : undefined,
-            limit: limit ? parseInt(limit, 10) : undefined,
-            search,
-            segment,
-            customerType,
-            sortBy,
-            sortDir,
-            createdFrom,
-            createdTo,
-            filters: readColumnFiltersQuery(filters),
+    async findAll(@Tenant() tenant: TenantContext, @Query() query: CustomerListQuery) {
+        return this.customersService.findAll(tenant.tenantId, {
+            ...(await this.listFilters(tenant, query)),
+            page: query.page ? parseInt(query.page, 10) : undefined,
+            limit: query.limit ? parseInt(query.limit, 10) : undefined,
+            sortBy: query.sortBy,
+            sortDir: query.sortDir,
+        });
+    }
+
+    /**
+     * The stats strip above the customers list, over the same filters as
+     * `GET /customers`. Declared before `:id`.
+     */
+    @RequireAnyStorePermission(...CUSTOMER_READ)
+    @Get('summary')
+    async listSummary(@Tenant() tenant: TenantContext, @Query() query: CustomerListQuery) {
+        return this.customersService.listSummary(tenant.tenantId, await this.listFilters(tenant, query));
+    }
+
+    private async listFilters(tenant: TenantContext, query: CustomerListQuery) {
+        return readCustomerListFilters(query, {
+            timezone: tenant.timezone,
+            scope: await this.scope(tenant, query.storeId),
         });
     }
 

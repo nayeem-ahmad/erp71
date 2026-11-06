@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { defaultLineItemWindow } from '@/components/reports/useLineItemFilters';
 import SalesLineItemsPage from './page';
 import { mockBranchScope } from '@/test-utils/branch-scope';
@@ -84,6 +84,15 @@ function lastQuery() {
     return calls[calls.length - 1][0];
 }
 
+/** A filter chip's button, not the column header of the same name. */
+function chip(name: RegExp) {
+    return screen.getAllByRole('button', { name }).find((button) => button.getAttribute('aria-haspopup') === 'dialog')!;
+}
+
+function tile(label: string) {
+    return within(screen.getByRole('region', { name: 'Report figures' })).getByText(label).nextElementSibling?.textContent;
+}
+
 describe('SalesLineItemsPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -94,19 +103,7 @@ describe('SalesLineItemsPage', () => {
         api().searchProductsByQuantity.mockResolvedValue([{ id: 'prod-1', name: 'Miniket Rice 5kg', sku: 'RICE-5' }]);
     });
 
-    // The table's advanced filters go to the server, so their matches are paged
-    // together rather than left wherever they fell in the unfiltered list.
-    it('filters on the server, from page 1, so the totals cover the same lines', async () => {
-        render(<SalesLineItemsPage />);
-        await screen.findByText('Soybean Oil 1L');
-
-        fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
-        fireEvent.change(screen.getByPlaceholderText(/^Filter Product/), { target: { value: 'rice' } });
-
-        await waitFor(() => expect(lastQuery()).toEqual(expect.objectContaining({ page: 1, filters: { product: 'rice' } })));
-    });
-
-    it('opens on the last 30 days, newest first', async () => {
+    it('opens on the last 30 days, newest first, with nothing else narrowed', async () => {
         render(<SalesLineItemsPage />);
 
         await waitFor(() => expect(api().getSalesLineItems).toHaveBeenCalled());
@@ -114,6 +111,7 @@ describe('SalesLineItemsPage', () => {
             expect.objectContaining({ ...defaultLineItemWindow(), page: 1, sortBy: 'date', sortDir: 'desc' }),
         );
         expect(lastQuery().customerId).toBeUndefined();
+        expect(lastQuery().productId).toBeUndefined();
         expect(screen.getByRole('heading', { level: 1, name: 'Sales Line Items' })).toBeInTheDocument();
     });
 
@@ -125,50 +123,79 @@ describe('SalesLineItemsPage', () => {
         expect(screen.getByText('INV-77')).toBeInTheDocument();
         expect(screen.getByText('Karim Ahmed')).toBeInTheDocument();
         // A sale with no customer on it was a walk-in.
-        expect(screen.getByText('Walk-in')).toBeInTheDocument();
+        expect(screen.getByRole('cell', { name: 'Walk-in' })).toBeInTheDocument();
         expect(screen.getByText('Soybean Oil 1L')).toBeInTheDocument();
     });
 
-    it('states totals over every matching line, returns included', async () => {
+    it('states totals over every matching line in the strip, returns included', async () => {
         render(<SalesLineItemsPage />);
 
         await screen.findByRole('link', { name: 'S-1002' });
-        expect(screen.getByText('Invoices').nextElementSibling).toHaveTextContent('2');
-        expect(screen.getByText('Quantity').nextElementSibling).toHaveTextContent('6');
-        expect(screen.getByText('Returned: 1')).toBeInTheDocument();
-        expect(screen.getByText(/Returned: ৳\s?180\.00/)).toBeInTheDocument();
+        expect(tile('Lines')).toBe('3');
+        expect(tile('Invoices')).toBe('2');
+        expect(tile('Quantity')).toBe('6');
+        expect(tile('Amount')).toBe('৳ 2,060');
+        expect(tile('Returned')).toContain('৳ 180');
+        expect(tile('Returned')).toContain('1 units');
     });
 
-    it('narrows by a customer picked from the search', async () => {
+    it('narrows by customers picked from the chip search, on the server, from page 1', async () => {
         render(<SalesLineItemsPage />);
-        await waitFor(() => expect(api().getSalesLineItems).toHaveBeenCalled());
+        await screen.findByRole('link', { name: 'S-1002' });
 
-        fireEvent.focus(screen.getByLabelText('Filter by customer'));
-        fireEvent.click(await screen.findByText('Rahim Uddin'));
+        fireEvent.click(chip(/^Customer/));
+        fireEvent.change(screen.getByRole('searchbox', { name: 'Search Customer…' }), { target: { value: 'rah' } });
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'Rahim Uddin' }));
 
         await waitFor(() => expect(lastQuery()).toEqual(expect.objectContaining({ customerId: 'cust-1', page: 1 })));
+        expect(api().searchCustomers).toHaveBeenCalledWith('rah', 20, 'store-1');
     });
 
-    it('narrows by a product picked from the search', async () => {
+    it('asks for walk-in sales as none', async () => {
         render(<SalesLineItemsPage />);
-        await waitFor(() => expect(api().getSalesLineItems).toHaveBeenCalled());
+        await screen.findByRole('link', { name: 'S-1002' });
 
-        fireEvent.focus(screen.getByLabelText('Filter by product'));
-        fireEvent.click(await screen.findByRole('option', { name: /Miniket Rice 5kg/ }));
+        fireEvent.click(chip(/^Customer/));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Walk-in' }));
+
+        await waitFor(() => expect(lastQuery()).toEqual(expect.objectContaining({ customerId: 'none' })));
+    });
+
+    it('narrows by products picked from the chip search', async () => {
+        render(<SalesLineItemsPage />);
+        await screen.findByRole('link', { name: 'S-1002' });
+
+        fireEvent.click(chip(/^Product/));
+        fireEvent.change(screen.getByRole('searchbox', { name: 'Search Product…' }), { target: { value: 'rice' } });
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'Miniket Rice 5kg (RICE-5)' }));
 
         await waitFor(() => expect(lastQuery()).toEqual(expect.objectContaining({ productId: 'prod-1' })));
+    });
+
+    it('sends a unit price condition to the server', async () => {
+        render(<SalesLineItemsPage />);
+        await screen.findByRole('link', { name: 'S-1002' });
+
+        fireEvent.click(chip(/^Unit Price/));
+        const panel = screen.getByRole('dialog', { name: 'Unit Price' });
+        fireEvent.change(within(panel).getByRole('combobox', { name: 'Unit Price' }), { target: { value: 'gt' } });
+        const amount = within(panel).getByRole('textbox', { name: /^Unit Price \(/ });
+        fireEvent.change(amount, { target: { value: '100' } });
+        fireEvent.keyDown(amount, { key: 'Enter' });
+
+        await waitFor(() => expect(lastQuery()).toEqual(expect.objectContaining({ unitPrice: 'gt:100', page: 1 })));
     });
 
     it('searches free text once typing pauses', async () => {
         render(<SalesLineItemsPage />);
         await waitFor(() => expect(api().getSalesLineItems).toHaveBeenCalled());
 
-        fireEvent.change(screen.getByLabelText('Search'), { target: { value: '  inv-77 ' } });
+        fireEvent.change(screen.getByPlaceholderText('Invoice #, reference, product or customer…'), { target: { value: '  inv-77 ' } });
 
         await waitFor(() => expect(lastQuery()).toEqual(expect.objectContaining({ search: 'inv-77' })));
     });
 
-    it('opens on a customer and product linked from elsewhere, and names them', async () => {
+    it('opens on a customer and product linked from elsewhere, and names them on the chips', async () => {
         searchParams.set('customerId', 'cust-9');
         searchParams.set('productId', 'prod-1');
         api().getSalesLineItems.mockResolvedValue({
@@ -188,7 +215,7 @@ describe('SalesLineItemsPage', () => {
             ),
         );
         expect(await screen.findByText('Linked Customer')).toBeInTheDocument();
-        expect(screen.getByText('01700000009')).toBeInTheDocument();
+        expect(chip(/^Product/)).toHaveTextContent('Miniket Rice 5kg');
     });
 
     it('hides the branch filter in a one-branch shop', async () => {
@@ -211,7 +238,8 @@ describe('SalesLineItemsPage', () => {
         render(<SalesLineItemsPage />);
         await screen.findByRole('link', { name: 'S-1002' });
 
-        fireEvent.click(screen.getByRole('button', { name: 'Unit Price' }));
+        const header = screen.getAllByRole('button', { name: 'Unit Price' }).find((button) => !button.getAttribute('aria-haspopup'))!;
+        fireEvent.click(header);
 
         await waitFor(() => expect(lastQuery()).toEqual(expect.objectContaining({ sortBy: 'unitPrice', page: 1 })));
     });
@@ -222,21 +250,5 @@ describe('SalesLineItemsPage', () => {
         render(<SalesLineItemsPage />);
 
         expect(await screen.findByText('Sale lines could not be loaded: offline')).toBeInTheDocument();
-    });
-
-    it('clears back to the opening window', async () => {
-        render(<SalesLineItemsPage />);
-        await waitFor(() => expect(api().getSalesLineItems).toHaveBeenCalled());
-
-        fireEvent.change(screen.getByLabelText('From'), { target: { value: '2025-01-01' } });
-        fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'rice' } });
-        await waitFor(() =>
-            expect(lastQuery()).toEqual(expect.objectContaining({ from: '2025-01-01', search: 'rice' })),
-        );
-
-        fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
-
-        await waitFor(() => expect(lastQuery()).toEqual(expect.objectContaining(defaultLineItemWindow())));
-        expect(lastQuery().search).toBeUndefined();
     });
 });

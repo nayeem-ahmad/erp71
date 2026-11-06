@@ -1444,6 +1444,7 @@ export const coreMessages = {
         onlineBadge: "En ligne",
     },
     partyPayments: {
+        listUi: { statsLabel: "Synthèse des paiements", payments: "Paiements", topMethod: "Moyen principal" },
         directionAll: "Tous",
         directionIn: "Entrées",
         directionOut: "Sorties",
@@ -1569,6 +1570,7 @@ export const coreMessages = {
     },
     customerLedger: {
         title: "Grand livre clients",
+        statsLabel: "Synthèse du compte",
         ledgerTitle: "Écritures du grand livre",
         subtitle: "Consultez les soldes dus et l'historique des transactions à crédit.",
         currentDue: "Dû actuellement",

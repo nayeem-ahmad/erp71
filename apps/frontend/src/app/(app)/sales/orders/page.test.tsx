@@ -6,6 +6,11 @@ jest.mock('@/lib/i18n', () => {
     useI18n: () => ({
       t: enMessages,
       locale: 'en',
+      fmt: (template, values = {}) =>
+        Object.entries(values).reduce(
+          (result, [key, value]) => result.replaceAll(`{${key}}`, String(value)),
+          template,
+        ),
     }),
     formatMessage: (template, values = {}) =>
       Object.entries(values).reduce(
@@ -45,7 +50,9 @@ jest.mock('next/link', () => ({
 
 jest.mock('@/lib/api', () => ({
     api: {
-        getOrders: jest.fn(),
+        getOrdersList: jest.fn(),
+        getOrdersListSummary: jest.fn(),
+        searchCustomers: jest.fn(),
         deleteOrder: jest.fn(),
         updateOrderStatus: jest.fn(),
         createOrder: jest.fn(),
@@ -60,13 +67,21 @@ jest.mock('@/lib/format', () => ({
 
 jest.mock('@/components/data-table', () => ({
     createdAtColumn: () => ({ id: 'created_at', header: 'Created' }),
-    CreatedRangeFilter: () => <div data-testid="created-range-filter" />,
-    DataTable: ({ data, columns, isLoading, emptyMessage, toolbarActions, onRowSelectionChange, bulkActions }: any) => {
+    DataTable: ({ data, columns, isLoading, emptyMessage, toolbarActions, onRowSelectionChange, bulkActions, filters, stats }: any) => {
         // The row actions are a column definition, so render that cell too —
         // otherwise the per-row buttons are invisible to every assertion.
         const actions = columns?.find((column: any) => column.id === 'actions');
         return (
-            <div data-testid="data-table">
+            <div
+                data-testid="data-table"
+                data-filters={(filters ?? []).map((f: any) => `${f.id}${f.more ? '*' : ''}`).join(',')}
+            >
+                {/* The strip as its tiles read. */}
+                <ul aria-label={stats?.label}>
+                    {(stats?.items ?? []).map((item: any) => (
+                        <li key={item.id}>{`${item.label}: ${item.value}${item.hint ? ` · ${item.hint}` : ''}`}</li>
+                    ))}
+                </ul>
                 {isLoading && <span>Loading...</span>}
                 {!isLoading && data.length === 0 && <span>{emptyMessage || 'No data'}</span>}
                 {!isLoading && data.map((row: any) => (
@@ -92,6 +107,8 @@ jest.mock('@/components/data-table', () => ({
         );
     },
 }));
+
+const page = (items: unknown[]) => ({ items, total: items.length, page: 1, limit: 25, pages: 1 });
 
 const ordersInEveryStatus = [
     { id: 'o-draft', order_number: 'SO-D', status: 'DRAFT' },
@@ -139,7 +156,16 @@ describe('OrdersPage', () => {
         window.confirm = jest.fn(() => true);
 
         const { api } = require('@/lib/api');
-        api.getOrders.mockResolvedValue(mockOrders);
+        api.getOrdersList.mockResolvedValue(page(mockOrders));
+        api.getOrdersListSummary.mockResolvedValue({
+            count: 6,
+            cancelledCount: 1,
+            value: 10000,
+            advance: 2500,
+            open: { count: 3, amount: 4000 },
+            delivered: { count: 2, amount: 6000 },
+            overdue: 2,
+        });
         api.deleteOrder.mockResolvedValue({ deleted: true });
     });
 
@@ -149,7 +175,7 @@ describe('OrdersPage', () => {
 
     it('shows loading state initially', () => {
         const { api } = require('@/lib/api');
-        api.getOrders.mockReturnValue(new Promise(() => {}));
+        api.getOrdersList.mockReturnValue(new Promise(() => {}));
         render(<OrdersPage />);
         expect(screen.getByText('Loading...')).toBeInTheDocument();
     });
@@ -194,7 +220,7 @@ describe('OrdersPage', () => {
 
     it('shows empty state when no orders', async () => {
         const { api } = require('@/lib/api');
-        api.getOrders.mockResolvedValue([]);
+        api.getOrdersList.mockResolvedValue(page([]));
         render(<OrdersPage />);
         await waitFor(() => {
             expect(screen.getByTestId('data-table')).toBeInTheDocument();
@@ -210,17 +236,50 @@ describe('OrdersPage', () => {
 
 
 
-    it('calls getOrders on mount', async () => {
+    it('asks the server for the first page, newest first, in the page\'s branch', async () => {
         const { api } = require('@/lib/api');
         render(<OrdersPage />);
         await waitFor(() => {
-            expect(api.getOrders).toHaveBeenCalledTimes(1);
+            expect(api.getOrdersList).toHaveBeenCalledTimes(1);
         });
+        expect(api.getOrdersList).toHaveBeenCalledWith(
+            expect.objectContaining({ page: 1, sortBy: 'created_at', sortDir: 'desc', storeId: 'store-1' }),
+        );
+        expect(api.getOrdersListSummary).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' }));
+    });
+
+    it('keeps the created date behind More and the rest in the row', async () => {
+        render(<OrdersPage />);
+        expect(await screen.findByTestId('data-table')).toHaveAttribute(
+            'data-filters',
+            'deliveryDate,status,customer,payment,total,created*',
+        );
+    });
+
+    it('reads the strip from the summary of the same filters', async () => {
+        render(<OrdersPage />);
+        const strip = await screen.findByRole('list', { name: 'Sales orders summary' });
+        await within(strip).findByText('Orders: 6 · 1 cancelled');
+        expect(within(strip).getByText('Advance received: BDT 2500 · 25%')).toBeInTheDocument();
+        expect(within(strip).getByText('Open: BDT 4000 · 3 open')).toBeInTheDocument();
+        expect(within(strip).getByText('Delivered: BDT 6000 · 2 delivered')).toBeInTheDocument();
+        expect(within(strip).getByText('Overdue: 2')).toBeInTheDocument();
+    });
+
+    it('loads nothing behind the online orders tab', async () => {
+        const { api } = require('@/lib/api');
+        const navigation = require('next/navigation');
+        const spy = jest.spyOn(navigation, 'useSearchParams').mockReturnValue(new URLSearchParams('tab=online'));
+        render(<OrdersPage />);
+        expect(await screen.findByTestId('storefront-orders-panel')).toBeInTheDocument();
+        expect(api.getOrdersList).not.toHaveBeenCalled();
+        expect(api.getOrdersListSummary).not.toHaveBeenCalled();
+        spy.mockRestore();
     });
 
     it('handles API error gracefully', async () => {
         const { api } = require('@/lib/api');
-        api.getOrders.mockRejectedValue(new Error('Server error'));
+        api.getOrdersList.mockRejectedValue(new Error('Server error'));
         render(<OrdersPage />);
         await waitFor(() => {
             expect(screen.getByTestId('data-table')).toBeInTheDocument();
@@ -250,13 +309,15 @@ describe('OrdersPage', () => {
         const dialog = await screen.findByRole('dialog');
         fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
         await waitFor(() => expect(api.deleteOrder).toHaveBeenCalledWith('ord-1'));
-        await waitFor(() => expect(screen.queryByTestId('row-ord-1')).not.toBeInTheDocument());
+        // Rows and strip are asked again, so the deleted order leaves both.
+        await waitFor(() => expect(api.getOrdersList).toHaveBeenCalledTimes(2));
+        expect(api.getOrdersListSummary).toHaveBeenCalledTimes(2);
     });
 
     describe('bulk actions on ticked orders', () => {
         beforeEach(() => {
             const { api } = require('@/lib/api');
-            api.getOrders.mockResolvedValue(ordersInEveryStatus);
+            api.getOrdersList.mockResolvedValue(page(ordersInEveryStatus));
             api.updateOrderStatus.mockResolvedValue({});
         });
 
@@ -323,10 +384,10 @@ describe('OrdersPage', () => {
 
         it('offers no combined print when the ticked orders are from different branches', async () => {
             const { api } = require('@/lib/api');
-            api.getOrders.mockResolvedValue([
+            api.getOrdersList.mockResolvedValue(page([
                 ...ordersInEveryStatus.slice(0, 3),
                 { ...ordersInEveryStatus[3], store_id: 'branch-b' },
-            ]);
+            ]));
             const bar = await tickAll();
             expect(bar.queryByRole('button', { name: /Print selected/ })).not.toBeInTheDocument();
             expect(bar.getByRole('button', { name: 'Confirm (1)' })).toBeInTheDocument();

@@ -3,9 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Plus, Printer } from 'lucide-react';
-import { DataTable, createdAtColumn } from '@/components/data-table';
-import { applyCreatedRangeQuery } from '@/lib/created-range';
+import { ArrowDownLeft, ArrowUpRight, BadgePercent, Hash, Plus, Printer, Scale, Wallet } from 'lucide-react';
+import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
+import type { NumberCondition } from '@/lib/number-condition';
 import { useBranding } from '@/lib/branding';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { useSalePrintPrefs } from '@/lib/hooks/useSalePrintPrefs';
@@ -19,12 +22,13 @@ import { BranchFilter, Button, ConfirmDialog, PageShell, StatusBadge } from '@/c
 import { AllocateAdvance } from './AllocateAdvance';
 import { PaymentDetails } from './PaymentDetails';
 import { PaymentEntryForm, type PartiesStatus } from './PaymentEntryForm';
-import { NO_METHOD_FILTER, PaymentFilters, type PaymentFilterState } from './PaymentFilters';
-import { PaymentKpiStrip } from './PaymentKpiStrip';
 import { PaymentPanel } from './PaymentPanel';
 import { computePaymentKpis } from './payment-kpis';
 import { usePaymentMethods } from './usePaymentMethods';
-import type { PartyOption, PartyPayment, PartyPaymentsAdapter } from './types';
+import type { MoneyFlow, PartyOption, PartyPayment, PartyPaymentsAdapter } from './types';
+
+/** The Method chip's value for a payment saved without a method. */
+export const NO_METHOD_FILTER = '__none__';
 
 /** What the side panel is doing. Payments are held whole so a row filtered out of view can still be shown. */
 type PanelState =
@@ -68,7 +72,15 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
     // "failed" as "this shop has no customers".
     const [parties, setParties] = useState<PartyOption[]>([]);
     const [partiesStatus, setPartiesStatus] = useState<PartiesStatus>('loading');
-    const [filters, setFilters] = useState<PaymentFilterState>({ range: null, partyId: presetPartyId, flow: 'all', method: '' });
+    // The date and a single party go to the server; the rest narrow the
+    // loaded period here, so rows and strip always describe the same payments.
+    const [range, setRange] = useState<CreatedRange | null>(null);
+    const [partyIds, setPartyIds] = useState<string[]>(presetPartyId ? [presetPartyId] : []);
+    const [flows, setFlows] = useState<string[]>([]);
+    const [methodNames, setMethodNames] = useState<string[]>([]);
+    const [amountFilter, setAmountFilter] = useState<NumberCondition | null>(null);
+    const [recorders, setRecorders] = useState<string[]>([]);
+    const [search, setSearch] = useState('');
     const [panel, setPanel] = useState<PanelState>({ kind: 'closed' });
     // Bumped to give the entry form a fresh mount: a new payment after a save,
     // or a different duplicate.
@@ -79,15 +91,17 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
 
     const branchReady = branch.ready;
     const branchStoreId = branch.apiStoreId;
+    // One party is narrowed by the server; several are narrowed here.
+    const serverPartyId = partyIds.length === 1 && partyIds[0] ? partyIds[0] : undefined;
     const loadPayments = useCallback(async () => {
         if (!branchReady) return;
         setLoading(true);
         try {
-            const range = applyCreatedRangeQuery(filters.range);
+            const period = applyCreatedRangeQuery(range);
             setPayments(await adapter.listPayments({
-                from: range.createdFrom,
-                to: range.createdTo,
-                partyId: filters.partyId || undefined,
+                from: period.createdFrom,
+                to: period.createdTo,
+                partyId: serverPartyId,
                 storeId: branchStoreId,
             }));
         } catch (error) {
@@ -100,7 +114,7 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
         }
         // `branch` is read for its reset only; its fields that matter are deps.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [adapter, filters.range, filters.partyId, labels.loadFailed, branchReady, branchStoreId, t]);
+    }, [adapter, range, serverPartyId, labels.loadFailed, branchReady, branchStoreId, t]);
 
     // The party list does not depend on the filters, so it loads on its own —
     // a failed payments fetch can never empty the picker.
@@ -119,7 +133,7 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
     useEffect(() => { void loadParties(); }, [loadParties]);
 
     useEffect(() => {
-        if (presetPartyId) setFilters((prev) => ({ ...prev, partyId: presetPartyId }));
+        if (presetPartyId) setPartyIds([presetPartyId]);
     }, [presetPartyId]);
 
     useEffect(() => {
@@ -190,16 +204,157 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
     };
 
     const visible = useMemo(() => payments.filter((payment) => {
-        if (filters.flow !== 'all' && adapter.directionOf(payment) !== filters.flow) return false;
-        if (!filters.method) return true;
-        if (filters.method === NO_METHOD_FILTER) return !payment.payment_method_name;
-        return payment.payment_method_name === filters.method;
-    }), [payments, filters.flow, filters.method, adapter]);
+        const party = adapter.partyOf(payment);
+        if (!matchesAnyOf(partyIds, party?.id)) return false;
+        if (!matchesAnyOf(flows, adapter.directionOf(payment))) return false;
+        if (!matchesAnyOf(methodNames, payment.payment_method_name || NO_METHOD_FILTER)) return false;
+        if (!matchesAnyOf(recorders, payment.creator?.id)) return false;
+        if (!matchesNumberCondition(Number(payment.amount || 0), amountFilter)) return false;
+        return matchesSearch(
+            search,
+            payment.payment_number,
+            party?.name,
+            party?.phone,
+            party?.customer_code,
+            payment.payment_method_name,
+            payment.notes,
+            payment.creator?.name,
+        );
+    }), [payments, partyIds, flows, methodNames, recorders, amountFilter, search, adapter]);
 
+    // The strip follows the chips and the search box, as the rows do.
     const kpis = useMemo(
-        () => computePaymentKpis(payments, adapter.directionOf, adapter.primary),
-        [payments, adapter],
+        () => computePaymentKpis(visible, adapter.directionOf, adapter.primary),
+        [visible, adapter],
     );
+
+    const listUi = ui.listUi;
+
+    // Everyone who recorded a payment in the loaded period.
+    const recorderOptions = useMemo(() => {
+        const seen = new Map<string, string>();
+        for (const payment of payments) {
+            if (payment.creator && !seen.has(payment.creator.id)) seen.set(payment.creator.id, payment.creator.name);
+        }
+        return [...seen].map(([value, label]) => ({ value, label }));
+    }, [payments]);
+
+    // The branch's methods, plus any an older payment carries that the branch no longer offers.
+    const methodOptions = useMemo(() => {
+        const names = new Set(methods.map((method) => method.name));
+        for (const payment of payments) if (payment.payment_method_name) names.add(payment.payment_method_name);
+        return [
+            ...[...names].map((name) => ({ value: name, label: name })),
+            { value: NO_METHOD_FILTER, label: ui.methodNotRecorded },
+        ];
+    }, [methods, payments, ui.methodNotRecorded]);
+
+    const listFilters = useMemo<ListFilter[]>(() => {
+        const flowOptions: { value: MoneyFlow; label: string }[] = [
+            { value: 'receive', label: labels.receive },
+            { value: 'pay', label: labels.pay },
+        ];
+        return [
+            {
+                id: 'date',
+                type: 'date-range',
+                label: labels.columns.dateTime,
+                value: range,
+                onChange: setRange,
+                operators: true,
+            },
+            {
+                id: 'party',
+                type: 'multi-select',
+                label: labels.party,
+                value: partyIds,
+                onChange: setPartyIds,
+                options: parties.map((party) => ({ value: party.id, label: party.name })),
+                searchable: true,
+            },
+            {
+                id: 'direction',
+                type: 'multi-select',
+                label: labels.direction,
+                value: flows,
+                onChange: setFlows,
+                options: adapter.primary === 'receive' ? flowOptions : [...flowOptions].reverse(),
+            },
+            {
+                id: 'method',
+                type: 'multi-select',
+                label: ui.method,
+                value: methodNames,
+                onChange: setMethodNames,
+                options: methodOptions,
+            },
+            {
+                id: 'amount',
+                type: 'number',
+                label: labels.columns.amount,
+                value: amountFilter,
+                onChange: setAmountFilter,
+                money: true,
+            },
+            {
+                id: 'recordedBy',
+                type: 'multi-select',
+                label: labels.columns.recordedBy,
+                value: recorders,
+                onChange: setRecorders,
+                options: recorderOptions,
+                more: true,
+            },
+        ];
+    }, [adapter.primary, labels, ui, range, partyIds, parties, flows, methodNames, methodOptions, amountFilter, recorders, recorderOptions]);
+
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const entries = (count: number) => formatMessage(ui.entries, { count });
+        const percent = (part: number, whole: number) => (whole > 0
+            ? new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(part / whole)
+            : undefined);
+        const receivePrimary = adapter.primary === 'receive';
+        const primaryTotal = receivePrimary ? kpis.inTotal : kpis.outTotal;
+        const top = kpis.byMethod[0];
+        const inTile: ListStat = {
+            id: 'in',
+            icon: <ArrowDownLeft aria-hidden />,
+            label: labels.kpiIn,
+            value: money(kpis.inTotal),
+            hint: entries(kpis.inCount),
+        };
+        // Money given back to a customer is the one figure here to watch;
+        // paying a supplier is that page's ordinary business.
+        const outTile: ListStat = {
+            id: 'out',
+            icon: <ArrowUpRight aria-hidden />,
+            label: labels.kpiOut,
+            value: money(kpis.outTotal),
+            hint: entries(kpis.outCount),
+            tone: receivePrimary && kpis.outTotal > 0 ? 'danger' : 'default',
+        };
+        const items: ListStat[] = [
+            { id: 'count', icon: <Hash aria-hidden />, label: listUi.payments, value: visible.length.toLocaleString(locale) },
+            ...(receivePrimary ? [inTile, outTile] : [outTile, inTile]),
+            {
+                id: 'discount',
+                icon: <BadgePercent aria-hidden />,
+                label: labels.discount.label,
+                value: money(kpis.discountTotal),
+                hint: kpis.discountCount ? entries(kpis.discountCount) : undefined,
+            },
+            { id: 'net', icon: <Scale aria-hidden />, label: labels.kpiNet, value: money(kpis.net) },
+            {
+                id: 'topMethod',
+                icon: <Wallet aria-hidden />,
+                label: listUi.topMethod,
+                value: top ? top.name ?? ui.methodNotRecorded : '—',
+                hint: top ? percent(top.amount, primaryTotal) : undefined,
+            },
+        ];
+        return { items, loading: loading && payments.length === 0, label: listUi.statsLabel };
+    }, [kpis, visible.length, loading, payments.length, adapter.primary, labels, ui, listUi, locale]);
 
     const panelPayment = 'payment' in panel ? panel.payment : null;
     // The list is refetched after every write; show the panel the fresh copy.
@@ -211,7 +366,7 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
         const list: ColumnDef<PartyPayment, unknown>[] = [
             columnHelper.accessor('payment_number', {
                 header: labels.columns.serial,
-                cell: (info) => <span className="font-mono text-xs font-semibold text-gray-700">{info.getValue() || '—'}</span>,
+                cell: (info) => <span className="font-mono text-xs">{info.getValue() || '—'}</span>,
                 size: 110,
             }),
             // A payment can be backdated, so this is when the money changed
@@ -224,7 +379,7 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
                     const party = adapter.partyOf(info.row.original);
                     return (
                         <div className="min-w-0">
-                            <span className="block truncate text-sm font-semibold text-gray-900">{party?.name ?? '—'}</span>
+                            <span className="block truncate font-medium text-gray-900">{party?.name ?? '—'}</span>
                             {party?.phone ? <span className="block text-xs text-gray-400">{party.phone}</span> : null}
                         </div>
                     );
@@ -248,15 +403,16 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
                     const discount = Number(payment.discount_amount ?? 0);
                     return (
                         <div>
-                            <span className={`text-sm font-bold tabular-nums ${isIn ? 'text-emerald-600' : 'text-danger'}`}>
-                                {isIn ? '+' : '−'}{formatBDT(Number(payment.amount))}
+                            <span className={isIn ? 'text-emerald-700' : 'text-red-600'}>
+                                {isIn ? '+' : '−'}{formatBDT(Number(payment.amount), { locale })}
                             </span>
                             {discount > 0 ? (
-                                <span className="block text-xs text-gray-500">{labels.discount.label}: {formatBDT(discount)}</span>
+                                <span className="block text-xs text-gray-500">{labels.discount.label}: {formatBDT(discount, { locale })}</span>
                             ) : null}
                         </div>
                     );
                 },
+                meta: { align: 'end' },
                 size: 130,
             }),
         ];
@@ -268,16 +424,16 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
                     cell: (info) => {
                         const value = Number(info.row.original.balance_after ?? 0);
                         return value < -0.005
-                            ? <span className="text-sm tabular-nums text-emerald-700">{ui.advance} {formatBDT(-value)}</span>
-                            : <span className="text-sm tabular-nums text-gray-700">{formatBDT(value)}</span>;
+                            ? <span className="text-emerald-700">{ui.advance} {formatBDT(-value, { locale })}</span>
+                            : formatBDT(value, { locale });
                     },
-                    meta: { hideOnMobile: true },
+                    meta: { align: 'end', hideOnMobile: true },
                     size: 120,
                 }),
                 columnHelper.accessor((row) => row.creator?.name ?? '—', {
                     id: 'recordedBy',
                     header: labels.columns.recordedBy,
-                    cell: (info) => <span className="text-sm text-gray-600">{info.getValue()}</span>,
+                    cell: (info) => info.getValue(),
                     meta: { hideOnMobile: true },
                     size: 130,
                 }),
@@ -287,18 +443,22 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
             id: 'actions',
             header: '',
             cell: ({ row }) => (
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => void print(row.original)}
-                    aria-label={printLabel(row.original)}
-                    title={printLabel(row.original)}
-                >
-                    <Printer className="h-4 w-4" />
-                </Button>
+                <RowActions>
+                    <RowActionButton
+                        icon={<Printer />}
+                        label={printLabel(row.original)}
+                        onClick={(event) => {
+                            // The row opens the payment; the button only prints it.
+                            event.stopPropagation();
+                            void print(row.original);
+                        }}
+                    />
+                </RowActions>
             ),
             enableSorting: false,
-            size: 48,
+            enableColumnFilter: false,
+            enableResizing: false,
+            size: 56,
         }));
         return list;
     }, [adapter, labels, ui, locale, narrowTable, print, printLabel]);
@@ -334,19 +494,8 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
                 )}
             />
 
-            <PaymentKpiStrip kpis={kpis} primary={adapter.primary} labels={labels} ui={ui} />
-
             <div className="flex items-start gap-3">
-                <div className="min-w-0 flex-1 space-y-3">
-                    <PaymentFilters
-                        value={filters}
-                        onChange={setFilters}
-                        parties={parties}
-                        partiesLoading={partiesStatus === 'loading'}
-                        methods={methods}
-                        labels={labels}
-                        ui={ui}
-                    />
+                <div className="min-w-0 flex-1">
                     <DataTable
                         tableId={adapter.tableId}
                         title={labels.listTitle}
@@ -355,6 +504,13 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
                         isLoading={loading}
                         getRowId={(row) => row.id}
                         searchPlaceholder={labels.searchPayments}
+                        searchValue={search}
+                        onSearchChange={setSearch}
+                        filters={listFilters}
+                        filterLayout="row"
+                        stats={stats}
+                        enableColumnFilters={false}
+                        viewOptions
                         emptyMessage={labels.noPayments}
                         onRowClick={(row) => setPanel({ kind: 'view', payment: row })}
                         rowClassName={(row) => (row.id === current?.id
