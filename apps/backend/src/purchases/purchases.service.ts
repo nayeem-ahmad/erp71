@@ -19,14 +19,42 @@ import { allocateTenders, paymentDisplayName, resolveTenders, sameTenders, store
 import { paymentInstrumentData } from '../common/payment-instrument.util';
 import { purchasePaymentStatus } from './purchase-status';
 import { loadPreparerNames, preparerOf } from '../sales/sale-preparer.util';
+import { idsOrNoneClause, searchClause, statusSetClause, type DocumentListFilters } from '../common/document-list-filters';
+import { numberConditionFilter, type NumberCondition } from '../common/number-condition.util';
+import { roundMoney } from '@erp71/shared-types';
 
 const PURCHASE_SORTABLE: SortableMap = {
     purchase_number: (dir) => ({ purchase_number: dir }),
     created_at: (dir) => ({ created_at: dir }),
     purchase_date: (dir) => ({ purchase_date: dir }),
     total_amount: (dir) => ({ total_amount: dir }),
+    paid_amount: (dir) => ({ paid_amount: dir }),
+    status: (dir) => ({ status: dir }),
+    supplier: (dir) => ({ supplier: { name: dir } }),
 };
 const PURCHASE_DEFAULT_ORDER = { created_at: 'desc' as const };
+
+export const PURCHASE_PAYMENT_STATUSES = ['PAID', 'PARTIAL', 'UNPAID'] as const;
+export type PurchasePaymentStatus = (typeof PURCHASE_PAYMENT_STATUSES)[number];
+
+/** What narrows the purchases list — and, alike, the stats strip above it. */
+export interface PurchaseListFilters extends Partial<Omit<DocumentListFilters, 'timezone'>> {
+    timezone: string;
+    paid?: NumberCondition;
+    paymentStatus?: PurchasePaymentStatus[];
+}
+
+/** `GET /purchases/summary` — see `PurchasesService.summary`. */
+export interface PurchaseListSummary {
+    count: number;
+    cancelledCount: number;
+    /** Bill totals, cancelled bills left out. */
+    total: number;
+    paid: number;
+    due: number;
+    average: number;
+    returns: { count: number; amount: number };
+}
 
 const EPSILON = 0.005;
 
@@ -576,23 +604,55 @@ export class PurchasesService {
         });
     }
 
+    /**
+     * The `where` behind the purchases list and its stats strip, so the two
+     * always describe the same bills. Clauses carrying their own OR (search,
+     * "no supplier") go into `AND`, so none overwrites another.
+     */
+    private listWhere(tenantId: string, opts?: PurchaseListFilters): Prisma.PurchaseWhereInput {
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
+        const transaction = zonedDayRange(opts?.dateFrom, opts?.dateTo, opts?.timezone);
+        const where: Prisma.PurchaseWhereInput = {
+            tenant_id: tenantId,
+            ...(opts?.storeId ? { store_id: opts.storeId } : {}),
+            ...(created ? { created_at: created } : {}),
+            ...(transaction ? { purchase_date: transaction } : {}),
+            ...(statusSetClause(opts?.statuses, opts?.statusExclude) as Prisma.PurchaseWhereInput),
+            ...(opts?.total ? { total_amount: numberConditionFilter(opts.total) } : {}),
+            ...(opts?.paid ? { paid_amount: numberConditionFilter(opts.paid) } : {}),
+            ...(opts?.paymentStatus?.length ? { payment_status: { in: opts.paymentStatus } } : {}),
+        };
+        const and: Prisma.PurchaseWhereInput[] = [];
+        // The placeholder promises purchase #, supplier and product; the
+        // supplier's own reference is what a bill is often asked for by.
+        const search = searchClause(opts?.search, [
+            'purchase_number',
+            'reference_number',
+            'supplier.name',
+        ]);
+        if (search) {
+            and.push({
+                OR: [
+                    ...(search.OR as Prisma.PurchaseWhereInput[]),
+                    { items: { some: { product: { name: { contains: opts!.search!, mode: 'insensitive' } } } } },
+                ],
+            });
+        }
+        const supplier = idsOrNoneClause('supplier_id', opts?.supplierIds);
+        if (supplier) and.push(supplier as Prisma.PurchaseWhereInput);
+        if (and.length) where.AND = and;
+        return where;
+    }
+
     async findAll(
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: {
-            createdFrom?: string;
-            createdTo?: string;
-            dateFrom?: string;
-            dateTo?: string;
-            timezone: string;
-            storeId?: string;
+        opts?: PurchaseListFilters & {
             sortBy?: string;
             sortDir?: string;
         },
     ): Promise<PaginatedResult<unknown>> {
-        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
-        const transaction = zonedDayRange(opts?.dateFrom, opts?.dateTo, opts?.timezone);
         const result = await paginatedFindMany({
             findMany: (args) =>
                 this.db.purchase.findMany({
@@ -619,12 +679,7 @@ export class PurchasesService {
                     },
                 }),
             count: (args) => this.db.purchase.count(args as any),
-            where: {
-                tenant_id: tenantId,
-                ...(opts?.storeId ? { store_id: opts.storeId } : {}),
-                ...(created ? { created_at: created } : {}),
-                ...(transaction ? { purchase_date: transaction } : {}),
-            },
+            where: this.listWhere(tenantId, opts) as Record<string, unknown>,
             orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, PURCHASE_SORTABLE, PURCHASE_DEFAULT_ORDER),
             page,
             limit,
@@ -644,6 +699,43 @@ export class PurchasesService {
                 ...purchase,
                 ...(summaries.get(purchase.id) ?? NO_POSTING_EVENT),
             })),
+        };
+    }
+
+    /**
+     * The stats strip above the purchases list, over exactly the bills the
+     * list shows. The count is every matching bill; the amounts leave out
+     * cancelled ones, which have been reversed. Returns are those raised
+     * against the counted bills.
+     */
+    async summary(tenantId: string, opts: PurchaseListFilters): Promise<PurchaseListSummary> {
+        const where = this.listWhere(tenantId, opts);
+        const live: Prisma.PurchaseWhereInput = { AND: [where, { status: { not: 'CANCELLED' } }] };
+        const [count, cancelledCount, bills, returns] = await Promise.all([
+            this.db.purchase.count({ where }),
+            this.db.purchase.count({ where: { AND: [where, { status: 'CANCELLED' }] } }),
+            this.db.purchase.aggregate({
+                where: live,
+                _count: { _all: true },
+                _sum: { total_amount: true, paid_amount: true },
+            }),
+            this.db.purchaseReturn.aggregate({
+                where: { tenant_id: tenantId, status: { not: 'CANCELLED' }, purchase: live },
+                _count: { _all: true },
+                _sum: { total_amount: true },
+            }),
+        ]);
+        const liveCount = bills._count._all;
+        const total = roundMoney(Number(bills._sum.total_amount ?? 0));
+        const paid = roundMoney(Number(bills._sum.paid_amount ?? 0));
+        return {
+            count,
+            cancelledCount,
+            total,
+            paid,
+            due: roundMoney(Math.max(total - paid, 0)),
+            average: liveCount ? roundMoney(total / liveCount) : 0,
+            returns: { count: returns._count._all, amount: roundMoney(Number(returns._sum.total_amount ?? 0)) },
         };
     }
 
