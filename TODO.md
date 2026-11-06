@@ -2140,6 +2140,7 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Customers list: Last Sale column (date, amount, link to the sale)** — done 2026-11-06. `GET /customers` attaches each row's `last_sale` (id, serial, date, total) from one `DISTINCT ON (customer_id)` query per page — newest by `sale_date`, drafts and cancelled excluded, a limited member's branches only. Sales → Customers shows date · amount with the invoice number linking to `/sales/:id`, or "No sales yet"; hidden on mobile, not sortable/filterable (not a stored column). Strings in all 9 locales; backend + page tests added.
 - [x] **Purchase list: icon on rows that have purchase returns, click opens return details** — done 2026-11-06. `GET /purchases` includes each purchase's returns (number, total, notes, status, item count). An amber return icon sits beside the purchase number; clicking it opens a modal with those details and links to each return.
 - [x] **Approvals Inbox for overdue LinkedIn follow-up drafts** — done 2026-11-05. CRM → Approvals Inbox (`/crm/approvals-inbox`) lists overdue planned activities titled like "LinkedIn follow-up DRAFT", Grade A (`cf_4`) first, tagged Ready to send / Already DMd / Lapsed invite / Needs rewrite / Hold from the planned title and the lead's History. Approve uses the existing planned-activity flag; Skip/Complete uses the existing complete API with channel `LINKEDIN` and no next activity. Nothing on the page sends or scrapes LinkedIn.
 

@@ -25,7 +25,9 @@ export const customersMessages = {
             "points": "النقاط",
             "pointsSuffix": "نقطة",
             "segment": "الشريحة",
-            "registered": "تاريخ التسجيل"
+            "registered": "تاريخ التسجيل",
+            "lastSale": "آخر عملية بيع",
+            "noSales": "لا توجد مبيعات بعد"
         },
         "filters": {
             "vip": 'VIP',
