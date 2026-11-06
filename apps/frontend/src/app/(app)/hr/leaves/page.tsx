@@ -1,17 +1,23 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { CalendarOff, Plus, Check, X, Trash2 } from 'lucide-react';
+import { CalendarOff, Plus, Check, X, Trash2, Inbox, Hourglass, CheckCircle2, CalendarDays, XCircle, Tags } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
 import { useI18n } from '@/lib/i18n';
+import { toast } from '@/lib/toast';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell, Button, Field, Input, Select, FormFooter, Alert } from '@/components/ui';
+import { PageShell, Button, Field, Input, Select, FormFooter, Alert, ConfirmDialog, StatusBadge, type StatusBadgeTone } from '@/components/ui';
+import { Tabs } from '@/components/ui/compact/Tabs';
 import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
+import type { CreatedRange } from '@/lib/created-range';
+import type { NumberCondition } from '@/lib/number-condition';
+import { calendarDayOf, inDateRange, matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
 
 interface Employee { id: string; name: string; employee_code: string; }
 interface LeaveType { id: string; name: string; days_per_year: number; }
@@ -31,14 +37,30 @@ interface LeaveRequest {
     approver?: { id: string; name?: string | null; email: string } | null;
 }
 
-const REQUEST_STATUS_COLORS: Record<string, string> = {
-    PENDING: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-    APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    REJECTED: 'bg-red-50 text-red-700 border-red-200',
-    CANCELLED: 'bg-gray-100 text-gray-500 border-gray-200',
+const REQUEST_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'] as const;
+
+const statusTones: Record<string, StatusBadgeTone> = {
+    PENDING: 'warning',
+    APPROVED: 'success',
+    REJECTED: 'danger',
+    CANCELLED: 'neutral',
 };
 
+/** A leave overlaps the date chip's range if any of its days fall inside it. */
+function overlapsRange(req: LeaveRequest, range: CreatedRange | null): boolean {
+    if (!range?.from && !range?.to) return true;
+    const start = calendarDayOf(req.start_date);
+    const end = calendarDayOf(req.end_date) ?? start;
+    if (!start || !end) return false;
+    const from = range.from?.slice(0, 10);
+    const to = range.to?.slice(0, 10);
+    if (from && end < from) return false;
+    if (to && start > to) return false;
+    return true;
+}
+
 const columnHelper = createColumnHelper<LeaveRequest>();
+const typeColumnHelper = createColumnHelper<LeaveType>();
 
 const EMPTY_REQUEST_FORM = {
     employee_id: '',
@@ -52,14 +74,22 @@ const EMPTY_REQUEST_FORM = {
 const EMPTY_TYPE_FORM = { name: '', days_per_year: '' };
 
 export default function LeavesPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const [tab, setTab] = useState<'requests' | 'types'>('requests');
 
     // Requests state
     const [requests, setRequests] = useState<LeaveRequest[]>([]);
     const [loadingReqs, setLoadingReqs] = useState(true);
-    const [statusFilter, setStatusFilter] = useState('');
-    const [employeeFilter, setEmployeeFilter] = useState('');
+    const [statusFilter, setStatusFilter] = useState<string[]>([]);
+    const [employeeIds, setEmployeeIds] = useState<string[]>([]);
+    const [leaveTypeIds, setLeaveTypeIds] = useState<string[]>([]);
+    const [periodRange, setPeriodRange] = useState<CreatedRange | null>(null);
+    const [daysFilter, setDaysFilter] = useState<NumberCondition | null>(null);
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
+    const [search, setSearch] = useState('');
+    const [cancelTarget, setCancelTarget] = useState<LeaveRequest | null>(null);
+    const [deleteTypeTarget, setDeleteTypeTarget] = useState<LeaveType | null>(null);
+    const [typeSearch, setTypeSearch] = useState('');
     const [showRequestModal, setShowRequestModal] = useState(false);
     const [requestForm, setRequestForm] = useState(EMPTY_REQUEST_FORM);
     const [submittingReq, setSubmittingReq] = useState(false);
@@ -79,9 +109,11 @@ export default function LeavesPage() {
     const loadRequests = useCallback(async () => {
         setLoadingReqs(true);
         try {
+            // The server narrows by one status and one employee; more than one
+            // of either is narrowed here, from the same rows.
             const data = await api.getLeaveRequests({
-                status: statusFilter || undefined,
-                employeeId: employeeFilter || undefined,
+                status: statusFilter.length === 1 ? statusFilter[0] : undefined,
+                employeeId: employeeIds.length === 1 ? employeeIds[0] : undefined,
             });
             setRequests(data ?? []);
         } catch (err) {
@@ -89,7 +121,7 @@ export default function LeavesPage() {
         } finally {
             setLoadingReqs(false);
         }
-    }, [statusFilter, employeeFilter]);
+    }, [statusFilter, employeeIds]);
 
     const loadLeaveTypes = useCallback(async () => {
         setLoadingTypes(true);
@@ -139,19 +171,20 @@ export default function LeavesPage() {
             await api.reviewLeaveRequest(id, { status });
             loadRequests();
         } catch (err: any) {
-            alert(err.message || t.leaves.updateRequestFailed);
+            toast.error(err?.message || t.leaves.updateRequestFailed);
         } finally {
             setReviewingId(null);
         }
     };
 
-    const handleCancel = async (id: string) => {
-        if (!confirm(t.leaves.cancelRequestConfirm)) return;
+    const handleCancel = async () => {
+        if (!cancelTarget) return;
         try {
-            await api.cancelLeaveRequest(id);
+            await api.cancelLeaveRequest(cancelTarget.id);
+            setCancelTarget(null);
             loadRequests();
         } catch (err: any) {
-            alert(err.message || t.leaves.cancelRequestFailed);
+            toast.error(err?.message || t.leaves.cancelRequestFailed);
         }
     };
 
@@ -173,15 +206,21 @@ export default function LeavesPage() {
         }
     };
 
-    const handleDeleteType = async (id: string) => {
-        if (!confirm(t.leaves.deleteTypeConfirm)) return;
+    const handleDeleteType = async () => {
+        if (!deleteTypeTarget) return;
         try {
-            await api.deleteLeaveType(id);
+            await api.deleteLeaveType(deleteTypeTarget.id);
+            setDeleteTypeTarget(null);
             loadLeaveTypes();
         } catch (err: any) {
-            alert(err.message || t.leaves.deleteTypeFailed);
+            toast.error(err?.message || t.leaves.deleteTypeFailed);
         }
     };
+
+    const statusLabel = useCallback(
+        (status: string) => t.leaves.statuses[status.toLowerCase() as keyof typeof t.leaves.statuses] ?? status,
+        [t],
+    );
 
     const requestColumns: ColumnDef<LeaveRequest, any>[] = useMemo(
         () => [
@@ -192,8 +231,8 @@ export default function LeavesPage() {
                     const req = info.row.original;
                     return (
                         <div>
-                            <span className="block text-sm font-bold text-gray-900">{req.employee?.name ?? '—'}</span>
-                            <span className="block text-xs text-gray-400 font-mono">{req.employee?.employee_code ?? ''}</span>
+                            <span className="block">{req.employee?.name ?? '—'}</span>
+                            <span className="block text-gray-500">{req.employee?.employee_code ?? ''}</span>
                         </div>
                     );
                 },
@@ -202,48 +241,46 @@ export default function LeavesPage() {
             columnHelper.accessor((row) => row.leave_type?.name ?? '', {
                 id: 'leave_type',
                 header: t.leaves.columns.leaveType,
-                cell: (info) => <span className="text-sm text-gray-700">{info.getValue() || '—'}</span>,
+                cell: (info) => info.getValue() || '—',
                 size: 120,
             }),
-            columnHelper.display({
+            columnHelper.accessor('start_date', {
                 id: 'dates',
                 header: t.leaves.columns.period,
                 cell: (info) => {
                     const req = info.row.original;
                     return (
-                        <div className="text-sm text-gray-700">
-                            <span>{formatDate(req.start_date)}</span>
+                        <span>
+                            {formatDate(req.start_date, locale)}
                             {req.start_date !== req.end_date && (
-                                <span className="text-gray-400"> → {formatDate(req.end_date)}</span>
+                                <span className="text-gray-500"> → {formatDate(req.end_date, locale)}</span>
                             )}
-                        </div>
+                        </span>
                     );
                 },
                 size: 180,
             }),
             columnHelper.accessor('days', {
                 header: t.leaves.columns.days,
-                cell: (info) => <span className="text-sm font-bold text-gray-700">{info.getValue()}</span>,
+                cell: (info) => info.getValue(),
                 size: 70,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('status', {
                 header: t.leaves.columns.status,
                 cell: (info) => {
                     const status = info.getValue();
-                    const cls = REQUEST_STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-500 border-gray-200';
-                    return (
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${cls}`}>
-                            {status}
-                        </span>
-                    );
+                    return <StatusBadge tone={statusTones[status] ?? 'neutral'}>{statusLabel(status)}</StatusBadge>;
                 },
-                size: 100,
+                size: 110,
             }),
             columnHelper.accessor('reason', {
                 header: t.leaves.columns.reason,
-                cell: (info) => <span className="text-sm text-gray-500">{info.getValue() || '—'}</span>,
+                cell: (info) => info.getValue() || '—',
                 size: 160,
+                meta: { hideOnMobile: true },
             }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale, enableColumnFilter: false }),
             columnHelper.display({
                 id: 'actions',
                 header: t.leaves.columns.actions,
@@ -252,50 +289,178 @@ export default function LeavesPage() {
                     const isReviewing = reviewingId === req.id;
                     if (req.status !== 'PENDING') {
                         return (
-                            <button
-                                onClick={() => handleCancel(req.id)}
-                                disabled={req.status === 'CANCELLED'}
-                                className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-50 disabled:opacity-30 transition-colors"
-                                title={t.leaves.cancel}
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
+                            <RowActions>
+                                <RowActionButton
+                                    icon={<X />}
+                                    label={t.leaves.cancel}
+                                    intent="danger"
+                                    disabled={req.status === 'CANCELLED'}
+                                    onClick={() => setCancelTarget(req)}
+                                />
+                            </RowActions>
                         );
                     }
                     return (
-                        <div className="flex items-center gap-1">
-                            <button
+                        <RowActions>
+                            <RowActionButton
+                                icon={<Check />}
+                                label={t.leaves.approve}
+                                intent="success"
+                                disabled={isReviewing}
                                 onClick={() => handleReview(req.id, 'APPROVED')}
+                            />
+                            <RowActionButton
+                                icon={<X />}
+                                label={t.leaves.reject}
+                                intent="danger"
                                 disabled={isReviewing}
-                                className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 transition-colors"
-                                title={t.leaves.approve}
-                            >
-                                <Check className="w-4 h-4" />
-                            </button>
-                            <button
                                 onClick={() => handleReview(req.id, 'REJECTED')}
-                                disabled={isReviewing}
-                                className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
-                                title={t.leaves.reject}
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
+                            />
+                        </RowActions>
                     );
                 },
                 enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
                 size: 90,
             }),
         ],
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [reviewingId],
+        [reviewingId, t, locale, statusLabel],
     );
 
-    const filterPresets = useMemo(() => [
-        { label: t.leaves.filterPresets.pending, filters: [{ id: 'status', value: 'PENDING' }] },
-        { label: t.leaves.filterPresets.approved, filters: [{ id: 'status', value: 'APPROVED' }] },
-        { label: t.leaves.filterPresets.rejected, filters: [{ id: 'status', value: 'REJECTED' }] },
-    ], [t]);
+    const filteredRequests = useMemo(
+        () => requests.filter((req) => {
+            if (!matchesAnyOf(statusFilter, req.status)) return false;
+            if (!matchesAnyOf(employeeIds, req.employee_id)) return false;
+            if (!matchesAnyOf(leaveTypeIds, req.leave_type_id)) return false;
+            if (!overlapsRange(req, periodRange)) return false;
+            if (!matchesNumberCondition(Number(req.days) || 0, daysFilter)) return false;
+            if (!inDateRange(req.created_at, createdRange)) return false;
+            return matchesSearch(search, req.employee?.name, req.employee?.employee_code, req.leave_type?.name, req.reason);
+        }),
+        [requests, statusFilter, employeeIds, leaveTypeIds, periodRange, daysFilter, createdRange, search],
+    );
+
+    const requestFilters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'period',
+            type: 'date-range',
+            label: t.leaves.columns.period,
+            value: periodRange,
+            onChange: setPeriodRange,
+            operators: true,
+        },
+        {
+            id: 'status',
+            type: 'multi-select',
+            label: t.leaves.columns.status,
+            value: statusFilter,
+            onChange: setStatusFilter,
+            options: REQUEST_STATUSES.map((value) => ({ value, label: statusLabel(value) })),
+        },
+        {
+            id: 'employee',
+            type: 'multi-select',
+            label: t.leaves.columns.employee,
+            value: employeeIds,
+            onChange: setEmployeeIds,
+            options: employees.map((emp) => ({ value: emp.id, label: `${emp.name} · ${emp.employee_code}` })),
+        },
+        {
+            id: 'leaveType',
+            type: 'multi-select',
+            label: t.leaves.columns.leaveType,
+            value: leaveTypeIds,
+            onChange: setLeaveTypeIds,
+            options: leaveTypes.map((lt) => ({ value: lt.id, label: lt.name })),
+        },
+        {
+            id: 'days',
+            type: 'number',
+            label: t.leaves.columns.days,
+            value: daysFilter,
+            onChange: setDaysFilter,
+            more: true,
+        },
+        { id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange, operators: true, more: true },
+    ], [t, periodRange, statusFilter, statusLabel, employeeIds, employees, leaveTypeIds, leaveTypes, daysFilter, createdRange]);
+
+    const requestStats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const count = (status: string) => filteredRequests.filter((req) => req.status === status).length;
+        const pending = count('PENDING');
+        const approvedDays = filteredRequests
+            .filter((req) => req.status === 'APPROVED')
+            .reduce((sum, req) => sum + (Number(req.days) || 0), 0);
+        const items: ListStat[] = [
+            { id: 'count', icon: <Inbox aria-hidden />, label: t.hr.listUi.leaves.requests, value: n(filteredRequests.length) },
+            {
+                id: 'pending',
+                icon: <Hourglass aria-hidden />,
+                label: statusLabel('PENDING'),
+                value: n(pending),
+                tone: pending > 0 ? 'warning' : 'default',
+            },
+            { id: 'approved', icon: <CheckCircle2 aria-hidden />, label: statusLabel('APPROVED'), value: n(count('APPROVED')) },
+            { id: 'approvedDays', icon: <CalendarDays aria-hidden />, label: t.hr.listUi.leaves.approvedDays, value: n(approvedDays) },
+            { id: 'rejected', icon: <XCircle aria-hidden />, label: statusLabel('REJECTED'), value: n(count('REJECTED')) },
+        ];
+        return { items, loading: loadingReqs, label: t.hr.listUi.leaves.statsLabel };
+    }, [filteredRequests, loadingReqs, locale, t, statusLabel]);
+
+    const typeColumns: ColumnDef<LeaveType, any>[] = useMemo(
+        () => [
+            typeColumnHelper.accessor('name', {
+                header: t.leaves.name,
+                cell: (info) => info.getValue(),
+                size: 240,
+            }),
+            typeColumnHelper.accessor('days_per_year', {
+                header: t.leaves.columns.daysPerYear,
+                cell: (info) => info.getValue(),
+                size: 120,
+                meta: { align: 'end' },
+            }),
+            typeColumnHelper.display({
+                id: 'actions',
+                header: t.leaves.columns.actions,
+                cell: (info) => (
+                    <RowActions>
+                        <RowActionButton
+                            icon={<Trash2 />}
+                            label={t.common.delete}
+                            intent="danger"
+                            onClick={() => setDeleteTypeTarget(info.row.original)}
+                        />
+                    </RowActions>
+                ),
+                enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
+                size: 80,
+            }),
+        ],
+        [t],
+    );
+
+    const filteredTypes = useMemo(
+        () => leaveTypes.filter((lt) => matchesSearch(typeSearch, lt.name, lt.days_per_year)),
+        [leaveTypes, typeSearch],
+    );
+
+    const typeStats = useMemo(() => {
+        const items: ListStat[] = [
+            { id: 'count', icon: <Tags aria-hidden />, label: t.leaves.tabs.types, value: filteredTypes.length.toLocaleString(locale) },
+            {
+                id: 'days',
+                icon: <CalendarDays aria-hidden />,
+                label: t.hr.listUi.leaves.daysPerYearTotal,
+                value: filteredTypes.reduce((sum, lt) => sum + (Number(lt.days_per_year) || 0), 0).toLocaleString(locale),
+            },
+        ];
+        return { items, loading: loadingTypes, label: t.hr.listUi.leaves.typesStatsLabel };
+    }, [filteredTypes, loadingTypes, locale, t]);
 
     return (
         <PageShell>
@@ -315,75 +480,43 @@ export default function LeavesPage() {
                     ) : undefined}
                 />
 
-                {/* Tabs */}
-                <div className="flex gap-2 border-b border-gray-200">
-                    {(['requests', 'types'] as const).map((tabKey) => (
-                        <button
-                            key={tabKey}
-                            onClick={() => setTab(tabKey)}
-                            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
-                                tab === tabKey
-                                    ? 'border-primary text-primary'
-                                    : 'border-transparent text-gray-400 hover:text-gray-700'
-                            }`}
-                        >
-                            {tabKey === 'requests' ? t.leaves.tabs.requests : t.leaves.tabs.types}
-                        </button>
-                    ))}
-                </div>
+                <Tabs
+                    tabs={[
+                        { key: 'requests', label: t.leaves.tabs.requests },
+                        { key: 'types', label: t.leaves.tabs.types },
+                    ]}
+                    value={tab}
+                    onChange={(next) => { if (next) setTab(next); }}
+                    idPrefix="leaves"
+                    label={t.leaves.title}
+                />
 
                 {/* Leave Requests Tab */}
                 {tab === 'requests' && (
                     <>
-                        {/* Filters */}
-                        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4">
-                            <div className="flex flex-wrap gap-3 items-end">
-                                <div className="space-y-1">
-                                    <label className="text-xs font-medium text-gray-500 block">{t.leaves.columns.status}</label>
-                                    <select
-                                        value={statusFilter}
-                                        onChange={(e) => setStatusFilter(e.target.value)}
-                                        className="bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-3 text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all appearance-none min-w-[150px]"
-                                    >
-                                        <option value="">{t.leaves.allStatuses}</option>
-                                        <option value="PENDING">{t.leaves.filterPresets.pending}</option>
-                                        <option value="APPROVED">{t.leaves.filterPresets.approved}</option>
-                                        <option value="REJECTED">{t.leaves.filterPresets.rejected}</option>
-                                        <option value="CANCELLED">{t.leaves.cancel}</option>
-                                    </select>
-                                </div>
-                                <div className="min-w-[180px]">
-                                    <IdSearchSelect
-                                        items={employees}
-                                        value={employeeFilter}
-                                        onChange={setEmployeeFilter}
-                                        label={t.leaves.columns.employee}
-                                        placeholder={t.leaves.allEmployees}
-                                        emptyLabel={t.leaves.allEmployees}
-                                        noMatchLabel={t.common.noData}
-                                        subtitle={(emp) => emp.employee_code ?? ''}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
                         <DataTable<LeaveRequest>
                             tableId="leave-requests"
                             columns={requestColumns}
-                            data={requests}
+                            data={filteredRequests}
                             title={t.leaves.tabs.requests}
                             isLoading={loadingReqs}
                             emptyMessage={t.leaves.emptyRequests}
                             emptyIcon={<CalendarOff className="w-16 h-16 text-gray-200" />}
                             searchPlaceholder={t.leaves.searchRequestsPlaceholder}
-                            filterPresets={filterPresets}
+                            searchValue={search}
+                            onSearchChange={setSearch}
+                            filters={requestFilters}
+                            filterLayout="row"
+                            stats={requestStats}
+                            enableColumnFilters={false}
+                            viewOptions
                         />
                     </>
                 )}
 
                 {/* Leave Types Tab */}
                 {tab === 'types' && (
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                         {/* Add leave type form */}
                         <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4">
                             <h2 className="text-sm font-semibold text-gray-900 mb-4">{t.leaves.addLeaveType}</h2>
@@ -419,46 +552,45 @@ export default function LeavesPage() {
                             </form>
                         </div>
 
-                        {/* Leave types list */}
-                        <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
-                            {loadingTypes ? (
-                                <div className="p-8 text-center text-gray-400 font-bold text-sm">{t.common.loading}</div>
-                            ) : leaveTypes.length === 0 ? (
-                                <div className="p-8 text-center">
-                                    <CalendarOff className="w-12 h-12 text-gray-200 mx-auto mb-2" />
-                                    <p className="text-sm text-gray-400 font-bold">{t.leaves.noLeaveTypesDefined}</p>
-                                </div>
-                            ) : (
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="border-b border-gray-100">
-                                            <th className="text-start text-xs font-medium text-gray-500 px-6 py-3">{t.leaves.name}</th>
-                                            <th className="text-start text-xs font-medium text-gray-500 px-6 py-3">{t.leaves.columns.daysPerYear}</th>
-                                            <th className="text-end px-6 py-3"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {leaveTypes.map((lt) => (
-                                            <tr key={lt.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50 transition-colors">
-                                                <td className="px-6 py-3.5 text-sm font-bold text-gray-900">{lt.name}</td>
-                                                <td className="px-6 py-3.5 text-sm text-gray-600">{lt.days_per_year}</td>
-                                                <td className="px-6 py-3.5 text-end">
-                                                    <button
-                                                        onClick={() => handleDeleteType(lt.id)}
-                                                        className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors"
-                                                        title={t.common.delete}
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            )}
-                        </div>
+                        <DataTable<LeaveType>
+                            tableId="leave-types"
+                            columns={typeColumns}
+                            data={filteredTypes}
+                            title={t.leaves.tabs.types}
+                            isLoading={loadingTypes}
+                            emptyMessage={t.leaves.noLeaveTypesDefined}
+                            emptyIcon={<CalendarOff className="w-16 h-16 text-gray-200" />}
+                            searchValue={typeSearch}
+                            onSearchChange={setTypeSearch}
+                            filterLayout="row"
+                            stats={typeStats}
+                            enableColumnFilters={false}
+                            viewOptions
+                        />
                     </div>
                 )}
+
+            <ConfirmDialog
+                open={cancelTarget !== null}
+                title={t.leaves.cancel}
+                prompt={t.leaves.cancelRequestConfirm}
+                confirmLabel={t.leaves.cancel}
+                cancelLabel={t.common.close}
+                danger
+                onConfirm={() => void handleCancel()}
+                onCancel={() => setCancelTarget(null)}
+            />
+
+            <ConfirmDialog
+                open={deleteTypeTarget !== null}
+                title={t.common.delete}
+                prompt={t.leaves.deleteTypeConfirm}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                danger
+                onConfirm={() => void handleDeleteType()}
+                onCancel={() => setDeleteTypeTarget(null)}
+            />
 
             {/* New Leave Request Modal */}
             {showRequestModal && (

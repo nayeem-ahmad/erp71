@@ -1,6 +1,6 @@
 'use client';
 
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import AttendancePunchesPage from './page';
 
 jest.mock('@/lib/api', () => ({
@@ -56,6 +56,15 @@ const mockPunches = [
 ];
 
 const loadApi = () => require('@/lib/api').api;
+
+/** A toolbar chip: a button that opens its own panel. */
+function chip(name: string | RegExp): HTMLElement {
+    const found = screen
+        .getAllByRole('button', { name })
+        .find((button) => button.getAttribute('aria-haspopup') === 'dialog');
+    if (!found) throw new Error(`No filter chip named ${String(name)}`);
+    return found;
+}
 
 /**
  * The global setup reports every media query as unmatched, i.e. a phone, and
@@ -126,7 +135,7 @@ describe('AttendancePunchesPage', () => {
 
         await waitFor(() => {
             expect(screen.getByText('Staff')).toBeInTheDocument();
-            expect(screen.getByText('Recorded by')).toBeInTheDocument();
+            expect(screen.getByRole('columnheader', { name: /Recorded by/ })).toBeInTheDocument();
         });
     });
 
@@ -190,18 +199,43 @@ describe('AttendancePunchesPage', () => {
         await waitFor(() => expect(api.deleteAttendancePunch).toHaveBeenCalledWith('p-1'));
     });
 
-    it('reloads when the direction filter changes', async () => {
+    it('asks the server for one direction, from the toolbar chip', async () => {
         const api = loadApi();
         render(<AttendancePunchesPage />);
 
         await waitFor(() => expect(api.getAttendancePunches).toHaveBeenCalledTimes(1));
 
-        fireEvent.change(document.getElementById('punch-filter-direction')!, { target: { value: 'OUT' } });
+        fireEvent.click(chip('In / Out'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Out' }));
 
         await waitFor(() => {
             expect(api.getAttendancePunches).toHaveBeenLastCalledWith(
                 expect.objectContaining({ direction: 'OUT' }),
             );
         });
+    });
+
+    it('opens on this month and lists the whole log once the date is cleared', async () => {
+        const api = loadApi();
+        render(<AttendancePunchesPage />);
+
+        await waitFor(() => expect(api.getAttendancePunches).toHaveBeenCalledTimes(1));
+        const first = api.getAttendancePunches.mock.calls[0][0];
+        expect(first.startDate).toMatch(/^\d{4}-\d{2}-01$/);
+        expect(first.endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('narrows the rows and the summary by recorder without asking the server again', async () => {
+        const api = loadApi();
+        render(<AttendancePunchesPage />);
+        await screen.findByText('Forgot to tap out');
+        const strip = screen.getByRole('region', { name: 'In/out summary' });
+        expect(within(strip).getByText('Records').parentElement).toHaveTextContent('2');
+
+        fireEvent.click(chip('Recorded by'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Staff' }));
+
+        await waitFor(() => expect(within(strip).getByText('Records').parentElement).toHaveTextContent('1'));
+        expect(api.getAttendancePunches).toHaveBeenCalledTimes(1);
     });
 });

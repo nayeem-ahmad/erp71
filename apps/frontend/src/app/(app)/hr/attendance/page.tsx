@@ -2,7 +2,11 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeftRight, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, CalendarCheck, CalendarX, Clock, Plus, Trash2, Users } from 'lucide-react';
+import { ListStats, ListToolbar, type ListFilter, type ListStat, type ResolvedListFilter } from '@/components/data-table';
+import { RowActionButton } from '@/components/table';
+import { createdRangeFromPreset, type CreatedRange } from '@/lib/created-range';
+import { matchesAnyOf, matchesSearch } from '@/lib/list-filter';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
 import { useI18n } from '@/lib/i18n';
@@ -19,6 +23,8 @@ import {
     FormFooter,
     Alert,
     ConfirmDialog,
+    StatusBadge,
+    type StatusBadgeTone,
 } from '@/components/ui';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
 import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
@@ -53,11 +59,13 @@ interface AttendanceRecord {
     employee?: { id: string; name: string; employee_code: string } | null;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-    PRESENT: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    ABSENT: 'bg-red-50 text-red-700 border-red-200',
-    HALF_DAY: 'bg-amber-50 text-amber-700 border-amber-200',
-    HOLIDAY: 'bg-blue-50 text-blue-700 border-blue-200',
+const STATUSES = ['PRESENT', 'ABSENT', 'HALF_DAY', 'HOLIDAY'] as const;
+
+const statusTones: Record<string, StatusBadgeTone> = {
+    PRESENT: 'success',
+    ABSENT: 'danger',
+    HALF_DAY: 'warning',
+    HOLIDAY: 'info',
 };
 
 function formatTime(val?: string | null): string {
@@ -66,16 +74,6 @@ function formatTime(val?: string | null): string {
     return t || '—';
 }
 
-function getMonthRange() {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
-    return {
-        start: `${y}-${m}-01`,
-        end: `${y}-${m}-${String(lastDay).padStart(2, '0')}`,
-    };
-}
 
 const EMPTY_FORM = {
     employee_id: '',
@@ -96,15 +94,15 @@ const EMPTY_FORM = {
  * `lib/day-ledger` so a day heading reads the same in both.
  */
 export default function AttendancePage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const a = t.attendance;
-    const range = getMonthRange();
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
-    const [startDate, setStartDate] = useState(range.start);
-    const [endDate, setEndDate] = useState(range.end);
-    const [filterEmployee, setFilterEmployee] = useState('');
+    // Opens on this month, on the workspace's calendar; cleared, the whole log.
+    const [dateRange, setDateRange] = useState<CreatedRange | null>(() => createdRangeFromPreset('thisMonth'));
+    const [employeeIds, setEmployeeIds] = useState<string[]>([]);
+    const [statuses, setStatuses] = useState<string[]>([]);
     const [search, setSearch] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [form, setForm] = useState(EMPTY_FORM);
@@ -116,10 +114,11 @@ export default function AttendancePage() {
         setLoading(true);
         try {
             const [recs, emps] = await Promise.all([
+                // The server narrows by one employee; more are narrowed here.
                 api.getAttendance({
-                    startDate: startDate || undefined,
-                    endDate: endDate || undefined,
-                    employeeId: filterEmployee || undefined,
+                    startDate: dateRange?.from?.slice(0, 10) || undefined,
+                    endDate: dateRange?.to?.slice(0, 10) || undefined,
+                    employeeId: employeeIds.length === 1 ? employeeIds[0] : undefined,
                 }),
                 api.getEmployees(),
             ]);
@@ -130,7 +129,7 @@ export default function AttendancePage() {
         } finally {
             setLoading(false);
         }
-    }, [startDate, endDate, filterEmployee, a.emptyMessage]);
+    }, [dateRange, employeeIds, a.emptyMessage]);
 
     useEffect(() => {
         loadData();
@@ -147,16 +146,68 @@ export default function AttendancePage() {
     );
 
     // Searched here rather than server-side, because the list is already
-    // bounded by the date range above it and the endpoint takes no name filter.
-    const visible = useMemo(() => {
-        const term = search.trim().toLowerCase();
-        if (!term) return records;
-        return records.filter(
-            (record) =>
-                record.employee?.name?.toLowerCase().includes(term)
-                || record.employee?.employee_code?.toLowerCase().includes(term),
-        );
-    }, [records, search]);
+    // bounded by the date range and the endpoint takes no name filter.
+    const visible = useMemo(
+        () => records.filter((record) => matchesAnyOf(employeeIds, record.employee_id)
+            && matchesAnyOf(statuses, record.status)
+            && matchesSearch(search, record.employee?.name, record.employee?.employee_code, record.notes)),
+        [records, employeeIds, statuses, search],
+    );
+
+    const filters = useMemo<ResolvedListFilter[]>(() => {
+        const list: ListFilter[] = [
+            {
+                id: 'date',
+                type: 'date-range',
+                label: a.columns.date,
+                value: dateRange,
+                onChange: setDateRange,
+                operators: true,
+            },
+            {
+                id: 'employee',
+                type: 'multi-select',
+                label: a.columns.employee,
+                value: employeeIds,
+                onChange: setEmployeeIds,
+                options: employees.map((emp) => ({ value: emp.id, label: `${emp.name} · ${emp.employee_code}` })),
+            },
+            {
+                id: 'status',
+                type: 'multi-select',
+                label: a.columns.status,
+                value: statuses,
+                onChange: setStatuses,
+                options: STATUSES.map((value) => ({ value, label: statusLabels[value] })),
+            },
+        ];
+        return list as ResolvedListFilter[];
+    }, [a, dateRange, employeeIds, employees, statuses, statusLabels]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const count = (status: string) => visible.filter((record) => record.status === status).length;
+        const absent = count('ABSENT');
+        const items: ListStat[] = [
+            { id: 'records', icon: <Users aria-hidden />, label: t.hr.listUi.punches.records, value: n(visible.length) },
+            { id: 'present', icon: <CalendarCheck aria-hidden />, label: a.statuses.present, value: n(count('PRESENT')) },
+            {
+                id: 'absent',
+                icon: <CalendarX aria-hidden />,
+                label: a.statuses.absent,
+                value: n(absent),
+                tone: absent > 0 ? 'warning' : 'default',
+            },
+            { id: 'halfDay', icon: <CalendarCheck aria-hidden />, label: a.statuses.halfDay, value: n(count('HALF_DAY')) },
+            {
+                id: 'worked',
+                icon: <Clock aria-hidden />,
+                label: a.worked,
+                value: formatMinutes(visible.reduce((sum, record) => sum + (record.worked_minutes ?? 0), 0)),
+            },
+        ];
+        return items;
+    }, [visible, locale, a, t]);
 
     const days = useMemo(
         () =>
@@ -241,40 +292,13 @@ export default function AttendancePage() {
                 )}
             />
 
-            <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
-                <Input
-                    type="date"
-                    value={startDate}
-                    aria-label={a.filters.from}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="md:w-40"
-                />
-                <Input
-                    type="date"
-                    value={endDate}
-                    aria-label={a.filters.to}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="md:w-40"
-                />
-                <Input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder={a.searchPlaceholder}
-                    className="md:max-w-xs"
-                />
-                <div className="md:w-56">
-                    <IdSearchSelect
-                        items={employees}
-                        value={filterEmployee}
-                        onChange={setFilterEmployee}
-                        placeholder={a.allEmployees}
-                        emptyLabel={a.allEmployees}
-                        noMatchLabel={t.common.noData}
-                        ariaLabel={a.columns.employee}
-                        subtitle={(emp) => emp.employee_code ?? ''}
-                    />
-                </div>
-            </div>
+            <ListStats stats={stats} loading={loading} label={t.hr.listUi.attendanceStats} />
+
+            <ListToolbar
+                tableId="attendance-days"
+                filters={filters}
+                search={{ value: search, onChange: setSearch, placeholder: a.searchPlaceholder }}
+            />
 
             <p className="text-xs text-gray-500">{a.workedHint}</p>
 
@@ -305,14 +329,10 @@ export default function AttendancePage() {
                                     </h2>
                                     <ul className="flex flex-wrap items-center gap-1">
                                         {day.counts.map(([status, count]) => (
-                                            <li
-                                                key={status}
-                                                className={`rounded-full border px-2 py-0.5 text-xs font-medium ${
-                                                    STATUS_COLORS[status]
-                                                    ?? 'border-gray-200 bg-gray-100 text-gray-600'
-                                                }`}
-                                            >
-                                                {count} {statusLabels[status] ?? status.replace('_', ' ')}
+                                            <li key={status}>
+                                                <StatusBadge tone={statusTones[status] ?? 'neutral'}>
+                                                    {count} {statusLabels[status] ?? status.replace('_', ' ')}
+                                                </StatusBadge>
                                             </li>
                                         ))}
                                     </ul>
@@ -342,14 +362,10 @@ export default function AttendancePage() {
                                             </p>
                                         </div>
 
-                                        <span
-                                            className={`self-start rounded-full border px-2 py-0.5 text-xs font-medium md:self-auto ${
-                                                STATUS_COLORS[record.status]
-                                                ?? 'border-gray-200 bg-gray-100 text-gray-600'
-                                            }`}
-                                        >
-                                            {statusLabels[record.status]
-                                                ?? record.status.replace('_', ' ')}
+                                        <span className="self-start md:self-auto">
+                                            <StatusBadge tone={statusTones[record.status] ?? 'neutral'}>
+                                                {statusLabels[record.status] ?? record.status.replace('_', ' ')}
+                                            </StatusBadge>
                                         </span>
 
                                         <span className="w-28 text-xs tabular-nums text-gray-500">
@@ -364,15 +380,14 @@ export default function AttendancePage() {
                                             {record.notes || ''}
                                         </p>
 
-                                        <button
-                                            type="button"
-                                            onClick={() => setPendingDelete(record)}
-                                            aria-label={a.deleteTitle}
-                                            title={a.deleteTitle}
-                                            className="min-h-touch min-w-touch self-end rounded-md p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 md:self-auto"
-                                        >
-                                            <Trash2 className="mx-auto h-4 w-4" aria-hidden="true" />
-                                        </button>
+                                        <span className="self-end md:self-auto">
+                                            <RowActionButton
+                                                icon={<Trash2 />}
+                                                label={a.deleteTitle}
+                                                intent="danger"
+                                                onClick={() => setPendingDelete(record)}
+                                            />
+                                        </span>
                                     </li>
                                 ))}
                             </ul>

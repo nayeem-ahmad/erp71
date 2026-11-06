@@ -1,14 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { PageShell, PageHeader, Select } from '@/components/ui';
-import DataTable from '@/components/data-table/DataTable';
+import { Banknote, CalendarRange, Landmark, Users } from 'lucide-react';
+import { PageShell, PageHeader } from '@/components/ui';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import type { NumberCondition } from '@/lib/number-condition';
+import { matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import ReportTile from '@/components/hr/ReportTile';
 import ReportNotes from '@/components/hr/ReportNotes';
 
 interface Row {
@@ -38,14 +40,15 @@ function fiscalLabel(startYear: number): string {
 }
 
 export default function TaxDeductionPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const r = t.hr.reports;
     const c = r.common;
     const td = r.taxDeduction;
 
     const [startYear, setStartYear] = useState(currentStartYear);
     const [rows, setRows] = useState<Row[]>([]);
-    const [totals, setTotals] = useState<{ gross_earnings: number; tax_deducted: number } | null>(null);
+    const [search, setSearch] = useState('');
+    const [taxFilter, setTaxFilter] = useState<NumberCondition | null>(null);
     const [notes, setNotes] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -54,12 +57,10 @@ export default function TaxDeductionPage() {
         try {
             const data = await api.getTaxDeductionStatement({ startYear });
             setRows((data?.rows ?? []) as Row[]);
-            setTotals((data?.totals ?? null) as { gross_earnings: number; tax_deducted: number } | null);
             setNotes((data?.notes ?? []) as string[]);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : c.loadFailed);
             setRows([]);
-            setTotals(null);
             setNotes([]);
         } finally {
             setLoading(false);
@@ -78,8 +79,8 @@ export default function TaxDeductionPage() {
                 accessorKey: 'employee',
                 cell: ({ row }: { row: { original: Row } }) => (
                     <div className="min-w-0">
-                        <span className="font-medium">{row.original.employee?.name}</span>
-                        <span className="block truncate text-xs text-gray-500">
+                        <span>{row.original.employee?.name}</span>
+                        <span className="block truncate text-gray-500">
                             {row.original.employee?.employee_code}
                             {row.original.employee?.designation?.name
                                 ? ` · ${row.original.employee.designation.name}`
@@ -92,7 +93,7 @@ export default function TaxDeductionPage() {
                 id: 'months',
                 header: td.columns.months,
                 accessorKey: 'months',
-                meta: { hideOnMobile: true },
+                meta: { hideOnMobile: true, align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
                     <span className="tabular-nums">{row.original.months}</span>
                 ),
@@ -101,23 +102,60 @@ export default function TaxDeductionPage() {
                 id: 'gross_earnings',
                 header: td.columns.gross,
                 accessorKey: 'gross_earnings',
+                meta: { align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
-                    <span className="tabular-nums">{formatBDT(row.original.gross_earnings)}</span>
+                    <span className="tabular-nums">{formatBDT(row.original.gross_earnings, { locale })}</span>
                 ),
             },
             {
                 id: 'tax_deducted',
                 header: td.columns.tax,
                 accessorKey: 'tax_deducted',
+                meta: { align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
-                    <span className="font-semibold tabular-nums text-blue-600">
-                        {formatBDT(row.original.tax_deducted)}
-                    </span>
+                    <span className="tabular-nums">{formatBDT(row.original.tax_deducted, { locale })}</span>
                 ),
             },
         ],
-        [td],
+        [td, locale],
     );
+
+    const filtered = useMemo(
+        () => rows.filter((row) => matchesNumberCondition(row.tax_deducted, taxFilter)
+            && matchesSearch(search, row.employee?.name, row.employee?.employee_code, row.employee?.designation?.name)),
+        [rows, taxFilter, search],
+    );
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'incomeYear',
+            type: 'select',
+            label: td.incomeYear,
+            value: String(startYear),
+            // A statement is always for some income year: All goes back to the current one.
+            onChange: (next) => setStartYear(next ? Number(next) : currentStartYear()),
+            options: startYearOptions().map((year) => ({ value: String(year), label: fiscalLabel(year) })),
+        },
+        {
+            id: 'tax',
+            type: 'number',
+            label: td.columns.tax,
+            value: taxFilter,
+            onChange: setTaxFilter,
+            money: true,
+        },
+    ], [td, startYear, taxFilter]);
+
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const items: ListStat[] = [
+            { id: 'year', icon: <CalendarRange aria-hidden />, label: td.incomeYear, value: fiscalLabel(startYear) },
+            { id: 'employees', icon: <Users aria-hidden />, label: t.hr.listUi.employees.employees, value: filtered.length.toLocaleString(locale) },
+            { id: 'gross', icon: <Banknote aria-hidden />, label: td.columns.gross, value: money(filtered.reduce((sum, row) => sum + row.gross_earnings, 0)) },
+            { id: 'tax', icon: <Landmark aria-hidden />, label: td.columns.tax, value: money(filtered.reduce((sum, row) => sum + row.tax_deducted, 0)) },
+        ];
+        return { items, loading, label: t.hr.listUi.reportStats };
+    }, [filtered, startYear, loading, locale, td, t]);
 
     return (
         <PageShell>
@@ -132,30 +170,7 @@ export default function TaxDeductionPage() {
                 )}
             />
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <ReportTile label={td.incomeYear} value={fiscalLabel(startYear)} />
-                <ReportTile label={td.columns.name} value={String(rows.length)} />
-                <ReportTile label={td.columns.gross} value={formatBDT(totals?.gross_earnings ?? 0)} />
-                <ReportTile
-                    label={td.columns.tax}
-                    value={formatBDT(totals?.tax_deducted ?? 0)}
-                    accent
-                />
-            </div>
-
-            <div className="flex flex-col gap-2 md:flex-row md:items-center">
-                <Select
-                    value={startYear}
-                    onChange={(event) => setStartYear(Number(event.target.value))}
-                    className="md:w-44"
-                    aria-label={td.incomeYear}
-                >
-                    {startYearOptions().map((year) => (
-                        <option key={year} value={year}>{fiscalLabel(year)}</option>
-                    ))}
-                </Select>
-                <span className="text-xs text-gray-500">{td.incomeYearHint}</span>
-            </div>
+            <p className="text-xs text-gray-500">{td.incomeYearHint}</p>
 
             <ReportNotes notes={notes} />
 
@@ -163,9 +178,16 @@ export default function TaxDeductionPage() {
                 title={td.title}
                 tableId="hr-tax-deduction"
                 columns={columns as never}
-                data={rows}
+                data={filtered}
                 isLoading={loading}
                 emptyMessage={c.empty}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
             />
         </PageShell>
     );

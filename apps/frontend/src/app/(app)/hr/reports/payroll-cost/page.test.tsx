@@ -3,6 +3,12 @@ import HrPayrollCostReportPage from './page';
 
 const getHrPayrollCost = jest.fn();
 
+// A wide screen, so the period chip sits in the toolbar rather than the phone's Filters sheet.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
+}));
+
 jest.mock('@/lib/api', () => ({
     api: {
         getDepartments: jest.fn(),
@@ -44,7 +50,8 @@ describe('HR payroll cost report', () => {
     it('shows net pay in taka, not a bare number', async () => {
         render(<HrPayrollCostReportPage />);
 
-        expect(await screen.findByText('৳ 1,08,000.00')).toBeInTheDocument();
+        // The summary strip rounds to whole taka; the rows keep the paisa.
+        expect(await screen.findByText('৳ 1,08,000')).toBeInTheDocument();
         expect(screen.getByText('৳ 81,000.00')).toBeInTheDocument();
     });
 
@@ -52,7 +59,7 @@ describe('HR payroll cost report', () => {
         render(<HrPayrollCostReportPage />);
 
         expect(await screen.findByText('+25.0%')).toBeInTheDocument();
-        expect(screen.getByText('Against 2026-03.')).toBeInTheDocument();
+        expect(screen.getByText(/Against 2026-03\./)).toBeInTheDocument();
     });
 
     it('shows a dash rather than a fake zero when there is no month to compare', async () => {
@@ -74,7 +81,8 @@ describe('HR payroll cost report', () => {
         render(<HrPayrollCostReportPage />);
         await waitFor(() => expect(getHrPayrollCost).toHaveBeenCalledTimes(1));
 
-        fireEvent.change(screen.getByLabelText('Custom range'), { target: { value: '12' } });
+        fireEvent.click(screen.getAllByRole('button', { name: /^Period/ }).find((b) => b.getAttribute('aria-haspopup') === 'dialog')!);
+        fireEvent.click(screen.getByRole('button', { name: 'Last 12 months' }));
 
         await waitFor(() => expect(getHrPayrollCost).toHaveBeenCalledTimes(2));
         const first = getHrPayrollCost.mock.calls[0][0];

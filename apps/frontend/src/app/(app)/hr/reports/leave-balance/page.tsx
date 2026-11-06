@@ -1,14 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { PageShell, PageHeader, Select, Alert } from '@/components/ui';
-import DataTable from '@/components/data-table/DataTable';
+import { Banknote, CalendarCheck, CalendarClock, CalendarMinus, Coins, Users } from 'lucide-react';
+import { PageShell, PageHeader, Alert } from '@/components/ui';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import ReportTile from '@/components/hr/ReportTile';
 
 interface Row {
     key: string;
@@ -43,14 +43,14 @@ function yearOptions(): number[] {
 }
 
 export default function HrLeaveBalanceReportPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const r = t.hr.reports;
     const c = r.common;
     const lb = r.leaveBalance;
 
     const [year, setYear] = useState(() => new Date().getFullYear());
-    const [departmentId, setDepartmentId] = useState('');
-    const [leaveTypeId, setLeaveTypeId] = useState('');
+    const [departmentId, setDepartmentId] = useState<string | null>(null);
+    const [leaveTypeId, setLeaveTypeId] = useState<string | null>(null);
     const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
     const [leaveTypes, setLeaveTypes] = useState<{ id: string; name: string }[]>([]);
     const [rows, setRows] = useState<Row[]>([]);
@@ -108,8 +108,8 @@ export default function HrLeaveBalanceReportPage() {
                 accessorKey: 'employeeName',
                 cell: ({ row }: { row: { original: Row } }) => (
                     <div className="min-w-0">
-                        <span className="font-medium">{row.original.employeeName}</span>
-                        <span className="block truncate text-xs text-gray-500">
+                        <span>{row.original.employeeName}</span>
+                        <span className="block truncate text-gray-500">
                             {row.original.employeeCode}
                             {row.original.departmentName ? ` · ${row.original.departmentName}` : ''}
                         </span>
@@ -128,7 +128,7 @@ export default function HrLeaveBalanceReportPage() {
                 id: 'entitledDays',
                 header: lb.columns.entitled,
                 accessorKey: 'entitledDays',
-                meta: { hideOnMobile: true },
+                meta: { hideOnMobile: true, align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
                     <span className="tabular-nums">{row.original.entitledDays}</span>
                 ),
@@ -137,7 +137,7 @@ export default function HrLeaveBalanceReportPage() {
                 id: 'usedDays',
                 header: lb.columns.used,
                 accessorKey: 'usedDays',
-                meta: { hideOnMobile: true },
+                meta: { hideOnMobile: true, align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
                     <span className="tabular-nums">{row.original.usedDays}</span>
                 ),
@@ -146,12 +146,9 @@ export default function HrLeaveBalanceReportPage() {
                 id: 'remainingDays',
                 header: lb.columns.remaining,
                 accessorKey: 'remainingDays',
+                meta: { align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
-                    <span
-                        className={`font-semibold tabular-nums ${
-                            row.original.remainingDays < 0 ? 'text-red-600' : 'text-blue-600'
-                        }`}
-                    >
+                    <span className={`tabular-nums ${row.original.remainingDays < 0 ? 'text-red-600' : ''}`}>
                         {row.original.remainingDays}
                     </span>
                 ),
@@ -160,9 +157,9 @@ export default function HrLeaveBalanceReportPage() {
                 id: 'carryForward',
                 header: lb.columns.carryForward,
                 accessorKey: 'carryForwardMaxDays',
-                meta: { hideOnMobile: true },
+                meta: { hideOnMobile: true, align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
-                    <span className="tabular-nums text-gray-600">
+                    <span className="tabular-nums">
                         {row.original.carryForwardMaxDays ?? lb.noCarryForward}
                     </span>
                 ),
@@ -180,14 +177,14 @@ export default function HrLeaveBalanceReportPage() {
                 id: 'dailyRate',
                 header: lb.columns.rate,
                 accessorKey: 'dailyRate',
-                meta: { hideOnMobile: true },
+                meta: { hideOnMobile: true, align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
                     <div className="min-w-0">
                         <span className="tabular-nums">
-                            {row.original.dailyRate == null ? '—' : formatBDT(row.original.dailyRate)}
+                            {row.original.dailyRate == null ? '—' : formatBDT(row.original.dailyRate, { locale })}
                         </span>
                         {row.original.dailyRateSource ? (
-                            <span className="block truncate text-xs text-gray-400">
+                            <span className="block truncate text-gray-500">
                                 {rateSourceLabel(row.original.dailyRateSource)}
                             </span>
                         ) : null}
@@ -198,14 +195,64 @@ export default function HrLeaveBalanceReportPage() {
                 id: 'liability',
                 header: lb.columns.liability,
                 accessorKey: 'liability',
+                meta: { align: 'end' },
                 cell: ({ row }: { row: { original: Row } }) => (
-                    <span className="font-semibold tabular-nums">
-                        {row.original.liability == null ? '—' : formatBDT(row.original.liability)}
+                    <span className="tabular-nums">
+                        {row.original.liability == null ? '—' : formatBDT(row.original.liability, { locale })}
                     </span>
                 ),
             },
         ];
-    }, [lb, canViewPayroll]);
+    }, [lb, canViewPayroll, locale]);
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'year',
+            type: 'select',
+            label: c.year,
+            value: String(year),
+            // A balance is always for some year: All goes back to this one.
+            onChange: (next) => setYear(next ? Number(next) : new Date().getFullYear()),
+            options: yearOptions().map((option) => ({ value: String(option), label: String(option) })),
+        },
+        {
+            id: 'department',
+            type: 'select',
+            label: c.department,
+            value: departmentId,
+            onChange: setDepartmentId,
+            options: departments.map((department) => ({ value: department.id, label: department.name })),
+        },
+        {
+            id: 'leaveType',
+            type: 'select',
+            label: c.leaveType,
+            value: leaveTypeId,
+            onChange: setLeaveTypeId,
+            options: leaveTypes.map((leaveType) => ({ value: leaveType.id, label: leaveType.name })),
+        },
+    ], [c, year, departmentId, departments, leaveTypeId, leaveTypes]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const items: ListStat[] = [
+            { id: 'employees', icon: <Users aria-hidden />, label: lb.kpi.employees, value: n(summary?.employees ?? 0) },
+            { id: 'entitled', icon: <CalendarCheck aria-hidden />, label: lb.kpi.entitled, value: n(summary?.entitledDays ?? 0) },
+            { id: 'used', icon: <CalendarMinus aria-hidden />, label: lb.kpi.used, value: n(summary?.usedDays ?? 0) },
+            { id: 'remaining', icon: <CalendarClock aria-hidden />, label: lb.kpi.remaining, value: n(summary?.remainingDays ?? 0) },
+            { id: 'encashable', icon: <Coins aria-hidden />, label: lb.kpi.encashable, value: n(summary?.encashableDays ?? 0) },
+        ];
+        if (canViewPayroll) {
+            items.push({
+                id: 'liability',
+                icon: <Banknote aria-hidden />,
+                label: lb.kpi.liability,
+                value: formatBDT(summary?.liability ?? 0, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 }),
+                tone: (summary?.liability ?? 0) > 0 ? 'warning' : 'default',
+            });
+        }
+        return { items, loading: loading && !summary, label: t.hr.listUi.reportStats };
+    }, [summary, canViewPayroll, loading, locale, lb, t]);
 
     return (
         <PageShell>
@@ -219,56 +266,6 @@ export default function HrLeaveBalanceReportPage() {
                     'hr',
                 )}
             />
-
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-                <ReportTile label={lb.kpi.employees} value={String(summary?.employees ?? 0)} />
-                <ReportTile label={lb.kpi.entitled} value={String(summary?.entitledDays ?? 0)} />
-                <ReportTile label={lb.kpi.used} value={String(summary?.usedDays ?? 0)} />
-                <ReportTile label={lb.kpi.remaining} value={String(summary?.remainingDays ?? 0)} />
-                <ReportTile label={lb.kpi.encashable} value={String(summary?.encashableDays ?? 0)} />
-                {canViewPayroll ? (
-                    <ReportTile
-                        label={lb.kpi.liability}
-                        value={formatBDT(summary?.liability ?? 0)}
-                        accent
-                    />
-                ) : null}
-            </div>
-
-            <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
-                <Select
-                    value={year}
-                    onChange={(event) => setYear(Number(event.target.value))}
-                    className="md:w-32"
-                    aria-label={c.year}
-                >
-                    {yearOptions().map((option) => (
-                        <option key={option} value={option}>{option}</option>
-                    ))}
-                </Select>
-                <Select
-                    value={departmentId}
-                    onChange={(event) => setDepartmentId(event.target.value)}
-                    className="md:w-48"
-                    aria-label={c.department}
-                >
-                    <option value="">{c.allDepartments}</option>
-                    {departments.map((department) => (
-                        <option key={department.id} value={department.id}>{department.name}</option>
-                    ))}
-                </Select>
-                <Select
-                    value={leaveTypeId}
-                    onChange={(event) => setLeaveTypeId(event.target.value)}
-                    className="md:w-48"
-                    aria-label={c.leaveType}
-                >
-                    <option value="">{c.allLeaveTypes}</option>
-                    {leaveTypes.map((leaveType) => (
-                        <option key={leaveType.id} value={leaveType.id}>{leaveType.name}</option>
-                    ))}
-                </Select>
-            </div>
 
             {!canViewPayroll ? <Alert tone="info">{lb.noMoney}</Alert> : null}
             {canViewPayroll && (summary?.unpricedRows ?? 0) > 0 ? (
@@ -286,6 +283,11 @@ export default function HrLeaveBalanceReportPage() {
                 data={rows}
                 isLoading={loading}
                 emptyMessage={c.empty}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
             />
         </PageShell>
     );

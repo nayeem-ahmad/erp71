@@ -1,8 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Briefcase, DoorOpen, Pencil, Plus, Trash2, UserCheck, Users } from 'lucide-react';
+import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
+import type { CreatedRange } from '@/lib/created-range';
+import type { NumberCondition } from '@/lib/number-condition';
+import { inDateRange, matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -10,7 +16,7 @@ import { useToastStore } from '@/lib/toast';
 import { routes } from '@/lib/routes';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import {
-    Alert, Button, Checkbox, CompactStat, Field, FormFooter, FormGrid, Input, PageHeader, PageShell,
+    Alert, Button, Checkbox, ConfirmDialog, Field, FormFooter, FormGrid, Input, PageHeader, PageShell,
     Select, StatusBadge, Textarea,
 } from '@/components/ui';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
@@ -21,6 +27,10 @@ import {
 } from '../types';
 
 interface NamedRecord { id: string; name: string; code?: string | null; is_active?: boolean }
+
+const columnHelper = createColumnHelper<JobPost>();
+/** The department chip's value for a post without one. */
+const NONE = '__none__';
 
 const blankForm = () => ({
     title: '',
@@ -47,7 +57,7 @@ const blankForm = () => ({
  * post that has stalled, and the total alone hides that.
  */
 export default function JobPostsPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const copy = t.recruitment.jobPosts;
     const toast = useToastStore((state) => state.show);
 
@@ -57,7 +67,14 @@ export default function JobPostsPage() {
     const [designations, setDesignations] = useState<NamedRecord[]>([]);
     const [employees, setEmployees] = useState<NamedRecord[]>([]);
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
+    const [statusFilter, setStatusFilter] = useState<string[]>([]);
+    const [statusExclude, setStatusExclude] = useState(false);
+    const [departmentIds, setDepartmentIds] = useState<string[]>([]);
+    const [employmentTypes, setEmploymentTypes] = useState<string[]>([]);
+    const [closingRange, setClosingRange] = useState<CreatedRange | null>(null);
+    const [openingsFilter, setOpeningsFilter] = useState<NumberCondition | null>(null);
+    const [onBoard, setOnBoard] = useState(false);
+    const [pendingDelete, setPendingDelete] = useState<JobPost | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
@@ -71,7 +88,9 @@ export default function JobPostsPage() {
         setError('');
         try {
             const [postList, summaryData] = await Promise.all([
-                api.getJobPosts({ search: search || undefined, status: statusFilter || undefined }),
+                // A shop's vacancies are a short list: every post loads once and
+                // the toolbar narrows it here, so the strip counts the same rows.
+                api.getJobPosts(),
                 api.getRecruitmentSummary(),
             ]);
             setPosts(postList ?? []);
@@ -81,7 +100,7 @@ export default function JobPostsPage() {
         } finally {
             setLoading(false);
         }
-    }, [search, statusFilter, copy.loadFailed]);
+    }, [copy.loadFailed]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -165,11 +184,13 @@ export default function JobPostsPage() {
         }
     };
 
-    const remove = async (post: JobPost) => {
-        if (!window.confirm(copy.deleteConfirm)) return;
+    const remove = async () => {
+        const post = pendingDelete;
+        if (!post) return;
         try {
             await api.deleteJobPost(post.id);
             toast('success', copy.deleted);
+            setPendingDelete(null);
             await load();
         } catch (err: any) {
             toast('error', err?.message || copy.deleteFailed);
@@ -179,10 +200,203 @@ export default function JobPostsPage() {
     const salaryBand = (post: JobPost) => {
         if (post.salary_min == null && post.salary_max == null) return '—';
         if (post.salary_min != null && post.salary_max != null) {
-            return `${formatBDT(Number(post.salary_min))} – ${formatBDT(Number(post.salary_max))}`;
+            return `${formatBDT(Number(post.salary_min), { locale })} – ${formatBDT(Number(post.salary_max), { locale })}`;
         }
-        return formatBDT(Number(post.salary_min ?? post.salary_max));
+        return formatBDT(Number(post.salary_min ?? post.salary_max), { locale });
     };
+
+    const filtered = useMemo(
+        () => posts.filter((post) => {
+            if (!matchesAnyOf(statusFilter, post.status, statusExclude)) return false;
+            if (!matchesAnyOf(departmentIds, post.department_id ?? post.department?.id ?? NONE)) return false;
+            if (!matchesAnyOf(employmentTypes, post.employment_type)) return false;
+            if (!inDateRange(post.closing_date, closingRange)) return false;
+            if (!matchesNumberCondition(post.openings ?? 0, openingsFilter)) return false;
+            if (onBoard && !post.publish_to_board) return false;
+            return matchesSearch(search, post.title, post.code, post.location, post.department?.name);
+        }),
+        [posts, statusFilter, statusExclude, departmentIds, employmentTypes, closingRange, openingsFilter, onBoard, search],
+    );
+
+    const departmentOptions = useMemo(() => {
+        const seen = new Map<string, string>();
+        for (const dept of departments) seen.set(dept.id, dept.name);
+        for (const post of posts) if (post.department) seen.set(post.department.id, post.department.name);
+        return [...seen].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+    }, [departments, posts]);
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'status',
+            type: 'multi-select',
+            label: copy.columns.status,
+            value: statusFilter,
+            onChange: setStatusFilter,
+            exclude: { value: statusExclude, onChange: setStatusExclude },
+            options: JOB_POST_STATUSES.map((value) => ({ value, label: copy.status[value] })),
+        },
+        {
+            id: 'department',
+            type: 'multi-select',
+            label: copy.columns.department,
+            value: departmentIds,
+            onChange: setDepartmentIds,
+            options: [{ value: NONE, label: t.hr.reports.common.unassigned }, ...departmentOptions],
+        },
+        {
+            id: 'employmentType',
+            type: 'multi-select',
+            label: copy.columns.employmentType,
+            value: employmentTypes,
+            onChange: setEmploymentTypes,
+            options: EMPLOYMENT_TYPES.map((value) => ({ value, label: copy.employmentType[value] })),
+        },
+        {
+            id: 'closing',
+            type: 'date-range',
+            label: copy.columns.closingDate,
+            value: closingRange,
+            onChange: setClosingRange,
+            operators: true,
+        },
+        {
+            id: 'openings',
+            type: 'number',
+            label: copy.columns.openings,
+            value: openingsFilter,
+            onChange: setOpeningsFilter,
+            more: true,
+        },
+        {
+            id: 'board',
+            type: 'toggle',
+            label: copy.form.publishToBoard,
+            pressed: onBoard,
+            onChange: setOnBoard,
+            control: 'button',
+            more: true,
+        },
+    ], [t, copy, statusFilter, statusExclude, departmentIds, departmentOptions, employmentTypes, closingRange, openingsFilter, onBoard]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const open = filtered.filter((post) => post.status === 'OPEN');
+        const items: ListStat[] = [
+            { id: 'count', icon: <Briefcase aria-hidden />, label: copy.title, value: n(filtered.length) },
+            { id: 'open', icon: <DoorOpen aria-hidden />, label: t.recruitment.summary.openPosts, value: n(open.length) },
+            {
+                id: 'openings',
+                icon: <Users aria-hidden />,
+                label: t.recruitment.summary.openings,
+                value: n(open.reduce((sum, post) => sum + (post.openings ?? 0), 0)),
+            },
+            {
+                id: 'pipeline',
+                icon: <Users aria-hidden />,
+                label: t.recruitment.summary.inPipeline,
+                value: n(filtered.reduce((sum, post) => sum + (post.open_application_count ?? 0), 0)),
+            },
+            // Workspace-wide, from the summary: hires are dated, posts are not.
+            {
+                id: 'hired',
+                icon: <UserCheck aria-hidden />,
+                label: t.recruitment.summary.hiredThisMonth,
+                value: summary ? n(summary.hired_this_month) : '—',
+            },
+        ];
+        return { items, loading, label: t.hr.listUi.jobPostsStats };
+    }, [filtered, summary, loading, locale, copy, t]);
+
+    const columns: ColumnDef<JobPost, any>[] = useMemo(() => [
+        columnHelper.accessor('title', {
+            header: copy.columns.title,
+            cell: (info) => {
+                const post = info.row.original;
+                return (
+                    <div>
+                        <Link href={routes.hr.jobPostDetail(post.id)} className="text-blue-600 hover:underline">
+                            {post.title}
+                        </Link>
+                        <span className="block text-gray-500">
+                            {post.code}
+                            {post.location ? ` · ${post.location}` : ''}
+                        </span>
+                    </div>
+                );
+            },
+            size: 240,
+        }),
+        columnHelper.accessor((row) => row.department?.name ?? '', {
+            id: 'department',
+            header: copy.columns.department,
+            cell: (info) => info.getValue() || '—',
+            size: 150,
+            meta: { hideOnMobile: true },
+        }),
+        columnHelper.accessor('employment_type', {
+            header: copy.columns.employmentType,
+            cell: (info) => copy.employmentType[info.getValue() as EmploymentType] ?? info.getValue(),
+            size: 120,
+            meta: { hideOnMobile: true },
+        }),
+        columnHelper.accessor((row) => Number(row.salary_max ?? row.salary_min ?? 0), {
+            id: 'salary',
+            header: t.recruitment.jobPosts.detail.salaryBand,
+            cell: (info) => salaryBand(info.row.original),
+            size: 180,
+            meta: { hideOnMobile: true, align: 'end' },
+        }),
+        columnHelper.accessor('openings', {
+            header: copy.columns.openings,
+            cell: (info) => info.getValue(),
+            size: 90,
+            meta: { align: 'end' },
+        }),
+        columnHelper.accessor((row) => row.application_count ?? 0, {
+            id: 'applications',
+            header: copy.columns.applications,
+            cell: (info) => (
+                <div>
+                    <span className="block">{info.getValue()}</span>
+                    <span className="block text-gray-500">
+                        {formatMessage(copy.inPipeline, { count: info.row.original.open_application_count ?? 0 })}
+                    </span>
+                </div>
+            ),
+            size: 130,
+        }),
+        columnHelper.accessor('status', {
+            header: copy.columns.status,
+            cell: (info) => <StatusBadge tone={jobPostTone(info.getValue())}>{copy.status[info.getValue() as JobPostStatus]}</StatusBadge>,
+            size: 110,
+        }),
+        columnHelper.accessor('closing_date', {
+            header: copy.columns.closingDate,
+            cell: (info) => (info.getValue() ? formatDate(info.getValue()!, locale) : '—'),
+            size: 120,
+            meta: { hideOnMobile: true },
+        }),
+        columnHelper.display({
+            id: 'actions',
+            header: t.common.actions,
+            cell: (info) => (
+                <RowActions>
+                    <RowActionButton icon={<Pencil />} label={copy.editTitle} onClick={() => openModal(info.row.original)} />
+                    <RowActionButton
+                        icon={<Trash2 />}
+                        label={t.common.delete}
+                        intent="danger"
+                        onClick={() => setPendingDelete(info.row.original)}
+                    />
+                </RowActions>
+            ),
+            enableSorting: false,
+            enableColumnFilter: false,
+            enableResizing: false,
+            size: 90,
+        }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    ], [t, copy, locale]);
 
     return (
         <PageShell>
@@ -205,106 +419,34 @@ export default function JobPostsPage() {
 
             {error && <Alert tone="danger">{error}</Alert>}
 
-            {summary && (
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                    <CompactStat label={t.recruitment.summary.openPosts} value={summary.open_posts} />
-                    <CompactStat label={t.recruitment.summary.openings} value={summary.open_openings} />
-                    <CompactStat label={t.recruitment.summary.inPipeline} value={summary.in_pipeline} />
-                    <CompactStat label={t.recruitment.summary.hiredThisMonth} value={summary.hired_this_month} tone="positive" />
-                </div>
-            )}
+            <DataTable<JobPost>
+                tableId="job-posts"
+                columns={columns}
+                data={filtered}
+                title={copy.title}
+                isLoading={loading}
+                emptyMessage={posts.length === 0 ? copy.empty : copy.emptyFiltered}
+                emptyIcon={<Briefcase className="w-16 h-16 text-gray-200" />}
+                searchPlaceholder={copy.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+            />
 
-            <div className="flex flex-wrap items-center gap-2">
-                <Input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder={copy.searchPlaceholder}
-                    className="w-full sm:w-72"
-                    aria-label={copy.searchPlaceholder}
-                />
-                <Select
-                    value={statusFilter}
-                    onChange={(event) => setStatusFilter(event.target.value)}
-                    className="w-40"
-                    aria-label={copy.columns.status}
-                >
-                    <option value="">{copy.allStatuses}</option>
-                    {JOB_POST_STATUSES.map((status) => (
-                        <option key={status} value={status}>{copy.status[status]}</option>
-                    ))}
-                </Select>
-            </div>
-
-            {loading ? (
-                <p className="py-8 text-center text-sm text-gray-500">…</p>
-            ) : posts.length === 0 ? (
-                <p className="rounded-lg border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
-                    {search || statusFilter ? copy.emptyFiltered : copy.empty}
-                </p>
-            ) : (
-                <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-                    <table className="w-full text-sm">
-                        <thead className="border-b border-gray-200 bg-gray-50 text-xs text-gray-500">
-                            <tr>
-                                <th className="p-2 text-start font-medium">{copy.columns.title}</th>
-                                <th className="hidden p-2 text-start font-medium md:table-cell">{copy.columns.department}</th>
-                                <th className="hidden p-2 text-start font-medium md:table-cell">{copy.columns.employmentType}</th>
-                                <th className="p-2 text-end font-medium">{copy.columns.openings}</th>
-                                <th className="p-2 text-start font-medium">{copy.columns.applications}</th>
-                                <th className="p-2 text-start font-medium">{copy.columns.status}</th>
-                                <th className="hidden p-2 text-start font-medium lg:table-cell">{copy.columns.closingDate}</th>
-                                <th className="p-2" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {posts.map((post) => (
-                                <tr key={post.id} className="border-b border-gray-100 last:border-0">
-                                    <td className="p-2">
-                                        <Link
-                                            href={routes.hr.jobPostDetail(post.id)}
-                                            className="font-medium text-blue-600 hover:underline"
-                                        >
-                                            {post.title}
-                                        </Link>
-                                        <p className="text-xs text-gray-500">
-                                            {post.code}
-                                            {post.location ? ` · ${post.location}` : ''}
-                                        </p>
-                                        <p className="text-xs text-gray-400 md:hidden">{salaryBand(post)}</p>
-                                    </td>
-                                    <td className="hidden p-2 text-gray-600 md:table-cell">{post.department?.name ?? '—'}</td>
-                                    <td className="hidden p-2 text-gray-600 md:table-cell">
-                                        {copy.employmentType[post.employment_type]}
-                                    </td>
-                                    <td className="p-2 text-end text-gray-600">{post.openings}</td>
-                                    <td className="p-2">
-                                        <span className="text-gray-900">{post.application_count ?? 0}</span>
-                                        <p className="text-xs text-gray-500">
-                                            {formatMessage(copy.inPipeline, { count: post.open_application_count ?? 0 })}
-                                        </p>
-                                    </td>
-                                    <td className="p-2">
-                                        <StatusBadge tone={jobPostTone(post.status)}>{copy.status[post.status]}</StatusBadge>
-                                    </td>
-                                    <td className="hidden p-2 text-gray-600 lg:table-cell">
-                                        {post.closing_date ? formatDate(post.closing_date) : '—'}
-                                    </td>
-                                    <td className="p-2 text-end">
-                                        <div className="flex justify-end gap-1">
-                                            <Button variant="ghost" onClick={() => openModal(post)} aria-label={copy.editTitle}>
-                                                <Pencil className="h-4 w-4" />
-                                            </Button>
-                                            <Button variant="ghost" onClick={() => remove(post)} aria-label={copy.deleteConfirm}>
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+            <ConfirmDialog
+                open={pendingDelete !== null}
+                title={t.common.delete}
+                prompt={copy.deleteConfirm}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                danger
+                onConfirm={() => void remove()}
+                onCancel={() => setPendingDelete(null)}
+            />
 
             {modal.open && (
                 <ModalShell size="lg" onBackdropClick={() => setModal({ open: false, editing: null })}>

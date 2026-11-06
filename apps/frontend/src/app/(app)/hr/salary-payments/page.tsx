@@ -2,14 +2,18 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Banknote, Loader2, Plus, Trash2 } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { Banknote, Calculator, Plus, Receipt, Trash2, Users, Wallet } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
+import { tenantDateOnly, type CreatedRange } from '@/lib/created-range';
+import type { NumberCondition } from '@/lib/number-condition';
+import { inDateRange, matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { formatBDT, formatDate } from '@/lib/format';
-import { PageShell, Button, Field, Input, Select } from '@/components/ui';
+import { PageShell, Button, ConfirmDialog, Field, Input, Select, Textarea } from '@/components/ui';
 import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { toast } from '@/lib/toast';
@@ -39,25 +43,28 @@ function currentMonth() {
     return new Date().toISOString().slice(0, 7);
 }
 
-function defaultFrom() {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 5);
-    d.setDate(1);
-    return d.toISOString().slice(0, 10);
-}
-
-function defaultTo() {
-    return new Date().toISOString().slice(0, 10);
+/** The last six months, from the first of the month five months back, on the workspace's calendar. */
+function defaultRange(): CreatedRange {
+    const today = tenantDateOnly();
+    const [year, month] = today.split('-').map(Number);
+    const start = new Date(Date.UTC(year, month - 1 - 5, 1)).toISOString().slice(0, 10);
+    return { from: start, to: today };
 }
 
 export default function SalaryPaymentsPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
+    const copy = t.hr.listUi.salaryPayments;
     const [payments, setPayments] = useState<SalaryPayment[]>([]);
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
-    const [fromDate, setFromDate] = useState(defaultFrom());
-    const [toDate, setToDate] = useState(defaultTo());
-    const [employeeFilter, setEmployeeFilter] = useState('');
+    const [dateRange, setDateRange] = useState<CreatedRange | null>(defaultRange);
+    const [employeeIds, setEmployeeIds] = useState<string[]>([]);
+    const [payPeriods, setPayPeriods] = useState<string[]>([]);
+    const [methods, setMethods] = useState<string[]>([]);
+    const [amountFilter, setAmountFilter] = useState<NumberCondition | null>(null);
+    const [search, setSearch] = useState('');
+    const [pendingDelete, setPendingDelete] = useState<SalaryPayment | null>(null);
+    const [deleting, setDeleting] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [saving, setSaving] = useState(false);
 
@@ -72,10 +79,11 @@ export default function SalaryPaymentsPage() {
         setLoading(true);
         try {
             const [paymentsData, employeesData] = await Promise.all([
+                // The server narrows by one employee; more are narrowed here.
                 api.getSalaryPayments({
-                    from: fromDate || undefined,
-                    to: toDate || undefined,
-                    employeeId: employeeFilter || undefined,
+                    from: dateRange?.from?.slice(0, 10) || undefined,
+                    to: dateRange?.to?.slice(0, 10) || undefined,
+                    employeeId: employeeIds.length === 1 ? employeeIds[0] : undefined,
                 }),
                 api.getEmployees({ status: 'ACTIVE' }),
             ]);
@@ -91,7 +99,7 @@ export default function SalaryPaymentsPage() {
     useEffect(() => {
         void loadData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fromDate, toDate, employeeFilter]);
+    }, [dateRange, employeeIds]);
 
     const resetForm = () => {
         setFormEmployeeId(employees[0]?.id ?? '');
@@ -114,7 +122,7 @@ export default function SalaryPaymentsPage() {
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formEmployeeId || !formAmount || !formPayPeriod) {
-            toast.error('Employee, amount and pay period are required.');
+            toast.error(copy.required);
             return;
         }
         setSaving(true);
@@ -127,7 +135,7 @@ export default function SalaryPaymentsPage() {
                 paymentMethod: formPaymentMethod,
                 notes: formNotes.trim() || undefined,
             });
-            toast.success('Salary payment recorded.');
+            toast.success(copy.recorded);
             setShowForm(false);
             resetForm();
             await loadData();
@@ -138,95 +146,189 @@ export default function SalaryPaymentsPage() {
         }
     };
 
-    const handleDelete = async (payment: SalaryPayment) => {
-        if (!globalThis.confirm('Delete this salary payment?')) return;
+    const handleDelete = async () => {
+        if (!pendingDelete) return;
+        setDeleting(true);
         try {
-            await api.deleteSalaryPayment(payment.id);
-            toast.success('Salary payment deleted.');
+            await api.deleteSalaryPayment(pendingDelete.id);
+            toast.success(copy.deleted);
+            setPendingDelete(null);
             await loadData();
         } catch (error: any) {
             toast.error(error?.message || t.common.error);
+        } finally {
+            setDeleting(false);
         }
     };
+
+    const methodLabel = (method: string) => copy.methods[method as keyof typeof copy.methods] ?? method;
 
     const columns: ColumnDef<SalaryPayment, any>[] = useMemo(
         () => [
             columnHelper.accessor('payment_date', {
                 header: t.common.date,
-                cell: (info) => <span className="text-sm text-gray-700">{formatDate(info.getValue())}</span>,
+                cell: (info) => formatDate(info.getValue(), locale),
                 sortingFn: 'datetime',
                 size: 120,
             }),
             columnHelper.accessor((row) => row.employee?.name ?? '—', {
                 id: 'employee',
-                header: 'Employee',
+                header: copy.employee,
                 cell: (info) => {
                     const emp = info.row.original.employee;
                     return (
                         <div>
-                            <span className="block text-sm font-bold text-gray-800">{emp?.name ?? '—'}</span>
-                            <span className="block text-xs font-mono text-gray-400">{emp?.employee_code ?? ''}</span>
+                            <span className="block">{emp?.name ?? '—'}</span>
+                            <span className="block text-gray-500">{emp?.employee_code ?? ''}</span>
                         </div>
                     );
                 },
                 size: 200,
             }),
             columnHelper.accessor('pay_period', {
-                header: 'Pay Period',
-                cell: (info) => <span className="text-sm font-semibold text-gray-700">{info.getValue()}</span>,
+                header: copy.payPeriod,
+                cell: (info) => info.getValue(),
                 size: 110,
             }),
             columnHelper.accessor('payment_method', {
-                header: 'Method',
-                cell: (info) => (
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{info.getValue()}</span>
-                ),
+                header: copy.method,
+                cell: (info) => methodLabel(info.getValue()),
                 size: 100,
             }),
             columnHelper.accessor('notes', {
-                header: 'Notes',
-                cell: (info) => <span className="text-sm text-gray-500 line-clamp-2">{info.getValue() || '—'}</span>,
+                header: copy.notes,
+                cell: (info) => <span className="line-clamp-2">{info.getValue() || '—'}</span>,
                 size: 200,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('amount', {
                 header: t.common.amount,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-emerald-600">{formatBDT(Number(info.getValue()))}</span>
-                ),
+                cell: (info) => formatBDT(Number(info.getValue()), { locale }),
                 sortingFn: (a, b) => Number(a.getValue('amount')) - Number(b.getValue('amount')),
                 size: 120,
+                meta: { align: 'end' },
             }),
             columnHelper.display({
                 id: 'actions',
                 header: t.common.actions,
                 cell: ({ row }) => (
-                    <button
-                        type="button"
-                        onClick={() => handleDelete(row.original)}
-                        className="p-2 rounded-lg text-gray-400 hover:text-danger hover:bg-red-50"
-                        title={t.common.delete}
-                    >
-                        <Trash2 className="w-4 h-4" />
-                    </button>
+                    <RowActions>
+                        <RowActionButton
+                            icon={<Trash2 />}
+                            label={t.common.delete}
+                            intent="danger"
+                            onClick={() => setPendingDelete(row.original)}
+                        />
+                    </RowActions>
                 ),
+                enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
                 size: 70,
             }),
         ],
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [t],
+        [t, locale],
     );
 
-    const totalAmount = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    const filtered = useMemo(
+        () => payments.filter((p) => {
+            if (!matchesAnyOf(employeeIds, p.employee?.id)) return false;
+            if (!matchesAnyOf(payPeriods, p.pay_period)) return false;
+            if (!matchesAnyOf(methods, p.payment_method)) return false;
+            if (!matchesNumberCondition(Number(p.amount || 0), amountFilter)) return false;
+            if (!inDateRange(p.payment_date, dateRange)) return false;
+            return matchesSearch(
+                search,
+                p.employee?.name, p.employee?.employee_code, p.pay_period, p.notes, methodLabel(p.payment_method),
+            );
+        }),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [payments, employeeIds, payPeriods, methods, amountFilter, dateRange, search, copy],
+    );
+
+    // Active staff plus anyone already paid in the window, so a leaver's
+    // payments can still be picked out.
+    const employeeOptions = useMemo(() => {
+        const seen = new Map<string, string>();
+        for (const emp of employees) seen.set(emp.id, `${emp.name} · ${emp.employee_code}`);
+        for (const p of payments) {
+            if (p.employee && !seen.has(p.employee.id)) seen.set(p.employee.id, `${p.employee.name} · ${p.employee.employee_code}`);
+        }
+        return [...seen].map(([value, label]) => ({ value, label }));
+    }, [employees, payments]);
+
+    const periodOptions = useMemo(
+        () => [...new Set(payments.map((p) => p.pay_period))].sort().reverse().map((value) => ({ value, label: value })),
+        [payments],
+    );
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'date',
+            type: 'date-range',
+            label: copy.paymentDate,
+            value: dateRange,
+            onChange: setDateRange,
+            operators: true,
+        },
+        {
+            id: 'employee',
+            type: 'multi-select',
+            label: copy.employee,
+            value: employeeIds,
+            onChange: setEmployeeIds,
+            options: employeeOptions,
+        },
+        {
+            id: 'payPeriod',
+            type: 'multi-select',
+            label: copy.payPeriod,
+            value: payPeriods,
+            onChange: setPayPeriods,
+            options: periodOptions,
+        },
+        {
+            id: 'method',
+            type: 'multi-select',
+            label: copy.method,
+            value: methods,
+            onChange: setMethods,
+            options: PAYMENT_METHODS.map((value) => ({ value, label: copy.methods[value] })),
+        },
+        {
+            id: 'amount',
+            type: 'number',
+            label: t.common.amount,
+            value: amountFilter,
+            onChange: setAmountFilter,
+            money: true,
+        },
+    ], [t, copy, dateRange, employeeIds, employeeOptions, payPeriods, periodOptions, methods, amountFilter]);
+
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const total = filtered.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        const cash = filtered.reduce((sum, p) => sum + (p.payment_method === 'CASH' ? Number(p.amount || 0) : 0), 0);
+        const items: ListStat[] = [
+            { id: 'count', icon: <Receipt aria-hidden />, label: copy.payments, value: filtered.length.toLocaleString(locale) },
+            { id: 'total', icon: <Banknote aria-hidden />, label: copy.total, value: money(total) },
+            {
+                id: 'people',
+                icon: <Users aria-hidden />,
+                label: copy.people,
+                value: new Set(filtered.map((p) => p.employee?.id).filter(Boolean)).size.toLocaleString(locale),
+            },
+            { id: 'average', icon: <Calculator aria-hidden />, label: copy.average, value: money(filtered.length ? total / filtered.length : 0) },
+            { id: 'cash', icon: <Wallet aria-hidden />, label: copy.cash, value: money(cash) },
+        ];
+        return { items, loading, label: copy.statsLabel };
+    }, [filtered, loading, locale, copy]);
 
     return (
         <PageShell>
                 <PageHeader
-                    title={(
-                        <span className="inline-flex items-center gap-2">
-                            <Banknote className="w-7 h-7 text-emerald-600" />
-                            {t.hr.hub.links.salaryPayments.title}
-                        </span>
-                    )}
+                    title={t.hr.hub.links.salaryPayments.title}
                     subtitle={t.hr.hub.links.salaryPayments.description}
                     breadcrumbs={modulePageBreadcrumbs(
                         t.dashboardHome.breadcrumbHome,
@@ -236,105 +338,82 @@ export default function SalaryPaymentsPage() {
                     )}
                     actions={(
                         <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => { resetForm(); setShowForm(true); }}>
-                            Pay Salary
+                            {copy.paySalary}
                         </Button>
                     )}
                 />
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
-                        <p className="text-xs font-medium text-gray-500">Period Total</p>
-                        <p className="text-2xl font-bold text-emerald-600 mt-1">{formatBDT(totalAmount)}</p>
-                        <p className="text-xs text-gray-400 mt-1">{payments.length} payment(s)</p>
-                    </div>
-                    <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 sm:col-span-2">
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <label className="space-y-1">
-                                <span className="text-xs font-medium text-gray-500">{t.common.date} (from)</span>
-                                <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm" />
-                            </label>
-                            <label className="space-y-1">
-                                <span className="text-xs font-medium text-gray-500">{t.common.date} (to)</span>
-                                <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm" />
-                            </label>
-                            <div className="space-y-1">
-                                <IdSearchSelect
-                                    items={employees}
-                                    value={employeeFilter}
-                                    onChange={setEmployeeFilter}
-                                    label="Employee"
-                                    placeholder="All employees"
-                                    emptyLabel={t.leaves.allEmployees}
-                                    noMatchLabel={t.common.noData}
-                                    subtitle={(emp) => emp.employee_code ?? ''}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <DataTable<SalaryPayment>
+                    tableId="salary-payments"
+                    title={t.hr.hub.links.salaryPayments.title}
+                    data={filtered}
+                    columns={columns}
+                    isLoading={loading}
+                    emptyIcon={<Banknote className="w-16 h-16 text-gray-200" />}
+                    searchPlaceholder={copy.searchPlaceholder}
+                    searchValue={search}
+                    onSearchChange={setSearch}
+                    filters={filters}
+                    filterLayout="row"
+                    stats={stats}
+                    enableColumnFilters={false}
+                    viewOptions
+                    emptyMessage={employees.length === 0 ? copy.addEmployeeFirst : t.common.noData}
+                />
 
-                {loading ? (
-                    <div className="flex items-center justify-center py-20 text-gray-400">
-                        <Loader2 className="w-6 h-6 animate-spin me-2" />
-                        {t.common.loading}
-                    </div>
-                ) : (
-                    <DataTable
-                        tableId="salary-payments"
-                        title="Salary Payments"
-                        data={payments}
-                        columns={columns}
-                        searchPlaceholder="Search payments..."
-                        emptyMessage={employees.length === 0 ? 'Add an employee first to record salary payments.' : t.common.noData}
-                    />
-                )}
+                <ConfirmDialog
+                    open={pendingDelete !== null}
+                    title={t.common.delete}
+                    prompt={copy.deleteConfirm}
+                    confirmLabel={t.common.delete}
+                    cancelLabel={t.common.cancel}
+                    loading={deleting}
+                    danger
+                    onConfirm={() => void handleDelete()}
+                    onCancel={() => { if (!deleting) setPendingDelete(null); }}
+                />
 
             {showForm && (
                 <ModalShell size="sm" onBackdropClick={() => setShowForm(false)}>
-                    <ModalHeader title="Pay Salary" onClose={() => setShowForm(false)} />
+                    <ModalHeader title={copy.paySalary} onClose={() => setShowForm(false)} />
                     <form onSubmit={handleCreate} className="contents">
                         <div className="p-4 space-y-4 overflow-y-auto">
                             {employees.length === 0 ? (
                                 <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-3">
-                                    Add an employee first to record salary payments.
+                                    {copy.addEmployeeFirst}
                                 </p>
                             ) : (
                                 <>
-                                    <Field label="Employee" required htmlFor="salary-employee">
+                                    <Field label={copy.employee} required htmlFor="salary-employee">
                                         <IdSearchSelect
                                             id="salary-employee"
                                             items={employees}
                                             value={formEmployeeId}
                                             onChange={handleEmployeeChange}
-                                            placeholder="Select employee…"
+                                            placeholder={t.leaves.selectEmployee}
                                             emptyLabel={t.leaves.selectEmployee}
                                             noMatchLabel={t.common.noData}
                                             subtitle={(emp) => emp.employee_code ?? ''}
                                         />
                                     </Field>
-                                    <Field label="Pay Period (month)" required>
+                                    <Field label={copy.payPeriodMonth} required>
                                         <Input type="month" value={formPayPeriod} onChange={(e) => setFormPayPeriod(e.target.value)} required />
                                     </Field>
                                     <Field label={t.common.amount} required>
                                         <Input type="number" min="0.01" step="0.01" value={formAmount} onChange={(e) => setFormAmount(e.target.value)} required />
                                     </Field>
-                                    <Field label={`Payment ${t.common.date}`} required>
+                                    <Field label={copy.paymentDate} required>
                                         <Input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} required />
                                     </Field>
-                                    <Field label="Payment Method">
+                                    <Field label={copy.method}>
                                         <Select value={formPaymentMethod} onChange={(e) => setFormPaymentMethod(e.target.value as typeof formPaymentMethod)}>
                                             {PAYMENT_METHODS.map((method) => (
-                                                <option key={method} value={method}>{method}</option>
+                                                <option key={method} value={method}>{copy.methods[method]}</option>
                                             ))}
                                         </Select>
                                     </Field>
-                                    <Field label="Notes">
-                                        <textarea
-                                            value={formNotes}
-                                            onChange={(e) => setFormNotes(e.target.value)}
-                                            rows={2}
-                                            className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white"
-                                        />
+                                    <Field label={copy.notes}>
+                                        <Textarea value={formNotes} onChange={(e) => setFormNotes(e.target.value)} rows={2} />
                                     </Field>
                                 </>
                             )}

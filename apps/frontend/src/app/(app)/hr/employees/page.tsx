@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Users, Plus, Eye, Pencil, Upload, UserCheck, UserX } from 'lucide-react';
+import { Users, Plus, Eye, Pencil, Upload, UserCheck, UserX, Clock, LogOut, KeyRound } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import EmployeeFormModal from './EmployeeFormModal';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, type ListFilter } from '@/components/data-table';
+import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
+import type { CreatedRange } from '@/lib/created-range';
+import { inDateRange, matchesAnyOf, matchesSearch } from '@/lib/list-filter';
 import { RowActions, RowActionButton } from '@/components/table';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
@@ -56,6 +58,8 @@ const statusLabel = (labels: Record<string, string>, status: string) => labels[s
 
 /** Still on staff: Deactivate takes them off; anyone else is offered Activate. */
 const ON_STAFF = new Set(['ACTIVE', 'PROBATION']);
+/** The department and designation chips' value for an employee without one. */
+const NONE = '__none__';
 
 const columnHelper = createColumnHelper<Employee>();
 
@@ -69,6 +73,14 @@ export default function EmployeesPage() {
     const [importOpen, setImportOpen] = useState(false);
     const [statusTarget, setStatusTarget] = useState<Employee | null>(null);
     const [changingStatus, setChangingStatus] = useState(false);
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState<string[]>([]);
+    const [statusExclude, setStatusExclude] = useState(false);
+    const [departmentIds, setDepartmentIds] = useState<string[]>([]);
+    const [designationIds, setDesignationIds] = useState<string[]>([]);
+    const [accessFilter, setAccessFilter] = useState<string | null>(null);
+    const [joinedRange, setJoinedRange] = useState<CreatedRange | null>(null);
+    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     useEffect(() => {
         if (!branch.ready) return;
@@ -160,8 +172,6 @@ export default function EmployeesPage() {
                 id: 'department',
                 header: t.employees.columns.department,
                 cell: (info) => info.getValue() || '—',
-                // The toolbar select sends an exact name.
-                filterFn: 'equalsString',
                 size: 150,
                 meta: { hideOnMobile: true },
             }),
@@ -200,10 +210,9 @@ export default function EmployeesPage() {
                     const status = info.getValue();
                     return <StatusBadge tone={statusTones[status] ?? 'neutral'}>{statusLabel(t.employees.statuses, status)}</StatusBadge>;
                 },
-                // "ACTIVE" is inside "INACTIVE": the toolbar select needs an exact match.
-                filterFn: 'equalsString',
                 size: 120,
             }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale, enableColumnFilter: false }),
             columnHelper.display({
                 id: 'actions',
                 header: t.common.actions,
@@ -232,31 +241,113 @@ export default function EmployeesPage() {
         [t, locale],
     );
 
-    const departmentNames = useMemo(
-        () => [...new Set(employees.map((e) => e.department?.name).filter((name): name is string => Boolean(name)))]
-            .sort((a, b) => a.localeCompare(b)),
-        [employees],
+    const departmentOptions = useMemo(() => {
+        const seen = new Map<string, string>();
+        for (const e of employees) if (e.department) seen.set(e.department.id, e.department.name);
+        return [...seen].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+    }, [employees]);
+
+    const designationOptions = useMemo(() => {
+        const seen = new Map<string, string>();
+        for (const e of employees) {
+            if (e.designation) {
+                seen.set(e.designation.id, e.designation.code ? `${e.designation.code} · ${e.designation.name}` : e.designation.name);
+            }
+        }
+        return [...seen].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+    }, [employees]);
+
+    // The whole roster is on the page, so the chips, the search and the strip
+    // all narrow the same rows here.
+    const filtered = useMemo(
+        () => employees.filter((e) => {
+            if (!matchesAnyOf(statusFilter, e.status, statusExclude)) return false;
+            if (!matchesAnyOf(departmentIds, e.department?.id ?? NONE)) return false;
+            if (!matchesAnyOf(designationIds, e.designation?.id ?? NONE)) return false;
+            if (accessFilter === 'yes' && !e.user) return false;
+            if (accessFilter === 'no' && e.user) return false;
+            if (!inDateRange(e.date_of_joining, joinedRange)) return false;
+            if (!inDateRange(e.created_at, createdRange)) return false;
+            return matchesSearch(
+                search,
+                e.employee_code, e.name, e.phone, e.email, e.nid,
+                e.department?.name, e.designation?.name, e.designation?.code,
+            );
+        }),
+        [employees, statusFilter, statusExclude, departmentIds, designationIds, accessFilter, joinedRange, createdRange, search],
     );
 
     const filters = useMemo<ListFilter[]>(
         () => [
             {
                 id: 'status',
-                type: 'select',
+                type: 'multi-select',
                 label: t.common.status,
-                columnId: 'status',
+                value: statusFilter,
+                onChange: setStatusFilter,
+                exclude: { value: statusExclude, onChange: setStatusExclude },
                 options: EMPLOYEE_STATUSES.map((value) => ({ value, label: statusLabel(t.employees.statuses, value) })),
             },
             {
                 id: 'department',
-                type: 'select',
+                type: 'multi-select',
                 label: t.employees.columns.department,
-                columnId: 'department',
-                options: departmentNames.map((name) => ({ value: name, label: name })),
+                value: departmentIds,
+                onChange: setDepartmentIds,
+                options: [{ value: NONE, label: t.hr.reports.common.unassigned }, ...departmentOptions],
             },
+            {
+                id: 'designation',
+                type: 'multi-select',
+                label: t.employees.columns.designation,
+                value: designationIds,
+                onChange: setDesignationIds,
+                options: [{ value: NONE, label: t.hr.reports.common.unassigned }, ...designationOptions],
+            },
+            {
+                id: 'joined',
+                type: 'date-range',
+                label: t.employees.columns.joined,
+                value: joinedRange,
+                onChange: setJoinedRange,
+                operators: true,
+            },
+            {
+                id: 'access',
+                type: 'select',
+                label: t.employees.columns.systemAccess,
+                value: accessFilter,
+                onChange: setAccessFilter,
+                options: [
+                    { value: 'yes', label: t.hr.listUi.hasAccess },
+                    { value: 'no', label: t.employees.noAccess },
+                ],
+                more: true,
+            },
+            { id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange, operators: true, more: true },
         ],
-        [t, departmentNames],
+        [t, statusFilter, statusExclude, departmentIds, departmentOptions, designationIds, designationOptions, joinedRange, accessFilter, createdRange],
     );
+
+    const stats = useMemo(() => {
+        const copy = t.hr.listUi.employees;
+        const count = (pick: (e: Employee) => boolean) => filtered.filter(pick).length.toLocaleString(locale);
+        const left = filtered.filter((e) => !ON_STAFF.has(e.status)).length;
+        const items: ListStat[] = [
+            { id: 'count', icon: <Users aria-hidden />, label: copy.employees, value: filtered.length.toLocaleString(locale) },
+            { id: 'active', icon: <UserCheck aria-hidden />, label: copy.active, value: count((e) => e.status === 'ACTIVE') },
+            { id: 'probation', icon: <Clock aria-hidden />, label: copy.probation, value: count((e) => e.status === 'PROBATION') },
+            {
+                id: 'left',
+                icon: <LogOut aria-hidden />,
+                label: copy.left,
+                value: left.toLocaleString(locale),
+                tone: left > 0 ? 'warning' : 'default',
+            },
+            { id: 'access', icon: <KeyRound aria-hidden />, label: copy.systemAccess, value: count((e) => Boolean(e.user)) },
+        ];
+        return { items, loading, label: copy.statsLabel };
+    }, [filtered, loading, locale, t]);
 
     const deactivating = statusTarget ? ON_STAFF.has(statusTarget.status) : false;
 
@@ -298,13 +389,18 @@ export default function EmployeesPage() {
                 <DataTable<Employee>
                     tableId="employees"
                     columns={columns}
-                    data={employees}
+                    data={filtered}
                     title={t.employees.title}
                     isLoading={loading}
                     emptyMessage={t.employees.emptyMessage}
                     emptyIcon={<Users className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.employees.searchPlaceholder}
+                    searchValue={search}
+                    onSearchChange={setSearch}
                     filters={filters}
+                    filterLayout="row"
+                    stats={stats}
+                    enableColumnFilters={false}
                     viewOptions
                 />
 
