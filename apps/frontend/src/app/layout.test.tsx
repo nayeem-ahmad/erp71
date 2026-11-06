@@ -17,17 +17,34 @@
  */
 import type { ReactElement } from 'react';
 
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import RootLayout from './layout';
 
 jest.mock('next/headers', () => ({
     cookies: async () => ({ get: () => undefined }),
 }));
 
-jest.mock('next/font/google', () => ({
-    Inter: jest.fn(() => ({ variable: 'var-inter' })),
-    Noto_Sans_Bengali: jest.fn(() => ({ variable: 'var-bengali' })),
-    Noto_Sans_Arabic: jest.fn(() => ({ variable: 'var-arabic' })),
+// `next/font/local` is a compiler transform; here it hands back the CSS
+// variable name it was asked for, which is all the layout uses.
+jest.mock('next/font/local', () => ({
+    __esModule: true,
+    default: jest.fn((options: { variable: string }) => ({ variable: `var${options.variable.replace('--font', '')}` })),
 }));
+
+type LocalFontOptions = {
+    src: string | { path: string }[];
+    variable: string;
+    preload?: boolean;
+    declarations?: { prop: string; value: string }[];
+};
+
+function fontCall(variable: string): LocalFontOptions {
+    const localFont = jest.requireMock('next/font/local').default as jest.Mock;
+    const call = localFont.mock.calls.find(([options]) => options.variable === variable);
+    if (!call) throw new Error(`no localFont call for ${variable}`);
+    return call[0] as LocalFontOptions;
+}
 
 async function renderTree() {
     const html = (await RootLayout({ children: null })) as ReactElement<{
@@ -61,10 +78,28 @@ describe('RootLayout', () => {
      * arrives the moment a page actually uses it.
      */
     it('preloads Inter and Bengali for everyone, but not the Arabic face', () => {
-        const fonts = jest.requireMock('next/font/google');
+        expect(fontCall('--font-arabic').preload).toBe(false);
+        expect(fontCall('--font-inter').preload).not.toBe(false);
+        expect(fontCall('--font-bengali').preload).not.toBe(false);
+    });
 
-        expect(fonts.Noto_Sans_Arabic).toHaveBeenCalledWith(expect.objectContaining({ preload: false }));
-        expect(fonts.Inter.mock.calls[0][0].preload).not.toBe(false);
-        expect(fonts.Noto_Sans_Bengali.mock.calls[0][0].preload).not.toBe(false);
+    /*
+     * The faces are self-hosted: `next/font/google` downloaded them at build
+     * time and failed the build whenever Google answered with a font URL that
+     * had no file extension.
+     */
+    it('serves every face from files in ./fonts, each limited to its script', () => {
+        for (const variable of ['--font-inter', '--font-bengali', '--font-arabic']) {
+            const options = fontCall(variable);
+            const paths = typeof options.src === 'string' ? [options.src] : options.src.map((entry) => entry.path);
+            expect(paths.length).toBeGreaterThan(0);
+            for (const path of paths) {
+                expect(existsSync(join(__dirname, path))).toBe(true);
+            }
+            expect(options.declarations).toEqual([
+                expect.objectContaining({ prop: 'unicode-range', value: expect.stringMatching(/^U\+/) }),
+            ]);
+        }
+        expect(readFileSync(join(__dirname, 'layout.tsx'), 'utf8')).not.toMatch(/from ['"]next\/font\/google['"]/);
     });
 });
