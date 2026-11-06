@@ -1,5 +1,67 @@
 export const purchasesMessages = {
     purchaseShared: {
+        lists: {
+            purchases: {
+                statsLabel: "खरीद सारांश",
+                stats: {
+                    bills: "खरीद",
+                    cancelled: "{count} रद्द",
+                    total: "कुल खरीद",
+                    paid: "भुगतान किया",
+                    due: "देय",
+                    average: "औसत बिल",
+                    returns: "वापसी",
+                    returnsCount: "{count} वापसी",
+                },
+                filters: {
+                    paid: "भुगतान किया",
+                    paymentStatus: "भुगतान स्थिति",
+                    paymentStatuses: {
+                        PAID: "पूरा भुगतान",
+                        PARTIAL: "आंशिक भुगतान",
+                        UNPAID: "अवैतनिक",
+                    },
+                },
+            },
+            returns: {
+                statsLabel: "खरीद वापसी सारांश",
+                stats: {
+                    returns: "वापसी",
+                    amount: "वापसी मूल्य",
+                    refunded: "प्राप्त रिफंड",
+                    adjusted: "देय में समायोजित",
+                    average: "औसत वापसी",
+                },
+                deleted: "खरीद वापसी हटाई गई",
+            },
+            orders: {
+                statsLabel: "खरीद आदेश सारांश",
+                stats: {
+                    orders: "आदेश",
+                    cancelled: "{count} रद्द",
+                    value: "आदेश मूल्य",
+                    open: "खुले",
+                    openCount: "{count} खुले",
+                    received: "प्राप्त",
+                    receivedCount: "{count} प्राप्त",
+                    overdue: "अतिदेय",
+                },
+                expectedDate: "अपेक्षित तिथि",
+            },
+            quotations: {
+                statsLabel: "खरीद कोटेशन सारांश",
+                stats: {
+                    rfqs: "आरएफक्यू",
+                    value: "उद्धृत मूल्य",
+                    pending: "प्रतीक्षारत",
+                    accepted: "स्वीकृत",
+                    acceptedCount: "{count} स्वीकृत",
+                    converted: "पीओ में परिवर्तित",
+                    expired: "समाप्त",
+                },
+                deleted: "आरएफक्यू हटाया गया",
+            },
+        },
         unlinked: "असंबद्ध",
         unlinkedSupplier: "असंबद्ध आपूर्तिकर्ता",
         noSupplier: "कोई आपूर्तिकर्ता नहीं चुना",

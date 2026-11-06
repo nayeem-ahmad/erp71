@@ -1,5 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { paginatedFindMany } from '../common/list-pagination.util';
+import { idsOrNoneClause, searchClause, statusSetClause, type DocumentListFilters } from '../common/document-list-filters';
+import { numberConditionFilter } from '../common/number-condition.util';
+import { resolveOrderBy, type SortableMap } from '../common/sort.util';
+import { startOfZonedToday, zonedDayRange } from '../common/tenant-time.util';
+import { roundMoney } from '@erp71/shared-types';
+import { Prisma } from '@prisma/client';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
@@ -7,6 +13,35 @@ import { issueDocumentNumber, numberTakenIn } from '../database/document-number.
 import { CreatePurchaseOrderDto, UpdatePurchaseOrderStatusDto } from './purchase-order.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
+
+const PURCHASE_ORDER_SORTABLE: SortableMap = {
+    po_number: (dir) => ({ po_number: dir }),
+    status: (dir) => ({ status: dir }),
+    total_amount: (dir) => ({ total_amount: dir }),
+    expected_date: (dir) => ({ expected_date: dir }),
+    created_at: (dir) => ({ created_at: dir }),
+    supplier: (dir) => ({ supplier: { name: dir } }),
+};
+
+/** A purchase order still waiting on its goods. */
+const OPEN_PO_STATUSES = ['DRAFT', 'SENT'];
+
+/** What narrows the purchase-orders list — and, alike, its stats strip. */
+export interface PurchaseOrderListFilters extends Partial<Omit<DocumentListFilters, 'timezone'>> {
+    timezone: string;
+}
+
+/** `GET /purchase-orders/summary` — see `PurchaseOrdersService.summary`. */
+export interface PurchaseOrderListSummary {
+    count: number;
+    cancelledCount: number;
+    /** Order totals, cancelled orders left out. */
+    value: number;
+    open: { count: number; amount: number };
+    received: { count: number; amount: number };
+    /** Open orders whose expected date has passed. */
+    overdue: number;
+}
 
 @Injectable()
 export class PurchaseOrdersService {
@@ -79,13 +114,37 @@ export class PurchaseOrdersService {
         });
     }
 
+    /**
+     * The `where` behind the list and its stats strip, so the two always
+     * describe the same documents. The date filter is the document's own
+     * `expected_date`; the created date has a filter of its own.
+     */
+    private listWhere(tenantId: string, opts?: PurchaseOrderListFilters): Prisma.PurchaseOrderWhereInput {
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
+        const ownDate = zonedDayRange(opts?.dateFrom, opts?.dateTo, opts?.timezone);
+        const where: Prisma.PurchaseOrderWhereInput = {
+            tenant_id: tenantId,
+            ...(opts?.storeId ? { store_id: opts.storeId } : {}),
+            ...(created ? { created_at: created } : {}),
+            ...(ownDate ? { expected_date: ownDate } : {}),
+            ...(statusSetClause(opts?.statuses, opts?.statusExclude) as Prisma.PurchaseOrderWhereInput),
+            ...(opts?.total ? { total_amount: numberConditionFilter(opts.total) } : {}),
+        };
+        const and: Prisma.PurchaseOrderWhereInput[] = [];
+        const search = searchClause(opts?.search, ['po_number', 'notes', 'supplier.name']);
+        if (search) and.push(search as Prisma.PurchaseOrderWhereInput);
+        const supplier = idsOrNoneClause('supplier_id', opts?.supplierIds);
+        if (supplier) and.push(supplier as Prisma.PurchaseOrderWhereInput);
+        if (and.length) where.AND = and;
+        return where;
+    }
+
     async findAll(
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string; timezone: string; storeId?: string },
+        opts?: PurchaseOrderListFilters & { sortBy?: string; sortDir?: string },
     ): Promise<PaginatedResult<unknown>> {
-        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         return paginatedFindMany({
             findMany: (args) =>
                 this.db.purchaseOrder.findMany({
@@ -97,11 +156,50 @@ export class PurchaseOrdersService {
                     },
                 }),
             count: (args) => this.db.purchaseOrder.count(args as any),
-            where: { tenant_id: tenantId, ...(opts?.storeId ? { store_id: opts.storeId } : {}), ...(created ? { created_at: created } : {}) },
-            orderBy: { created_at: 'desc' },
+            where: this.listWhere(tenantId, opts) as Record<string, unknown>,
+            orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, PURCHASE_ORDER_SORTABLE, { created_at: 'desc' }),
             page,
             limit,
         });
+    }
+
+    /**
+     * The stats strip above the purchase-orders list, over exactly the rows
+     * it shows: what is on order, what is still to arrive (and late), and
+     * what has been received. Cancelled orders are counted but carry no value.
+     */
+    async summary(tenantId: string, opts: PurchaseOrderListFilters): Promise<PurchaseOrderListSummary> {
+        const where = this.listWhere(tenantId, opts);
+        const within = (extra: Prisma.PurchaseOrderWhereInput): Prisma.PurchaseOrderWhereInput => ({ AND: [where, extra] });
+        const [count, cancelledCount, live, open, received, overdue] = await Promise.all([
+            this.db.purchaseOrder.count({ where }),
+            this.db.purchaseOrder.count({ where: within({ status: 'CANCELLED' }) }),
+            this.db.purchaseOrder.aggregate({ where: within({ status: { not: 'CANCELLED' } }), _sum: { total_amount: true } }),
+            this.db.purchaseOrder.aggregate({
+                where: within({ status: { in: OPEN_PO_STATUSES } }),
+                _count: { _all: true },
+                _sum: { total_amount: true },
+            }),
+            this.db.purchaseOrder.aggregate({
+                where: within({ status: 'RECEIVED' }),
+                _count: { _all: true },
+                _sum: { total_amount: true },
+            }),
+            this.db.purchaseOrder.count({
+                where: within({
+                    status: { in: OPEN_PO_STATUSES },
+                    expected_date: { lt: startOfZonedToday(opts.timezone) },
+                }),
+            }),
+        ]);
+        return {
+            count,
+            cancelledCount,
+            value: roundMoney(Number(live._sum.total_amount ?? 0)),
+            open: { count: open._count._all, amount: roundMoney(Number(open._sum.total_amount ?? 0)) },
+            received: { count: received._count._all, amount: roundMoney(Number(received._sum.total_amount ?? 0)) },
+            overdue,
+        };
     }
 
     async findOne(tenantId: string, id: string) {

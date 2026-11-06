@@ -8,7 +8,9 @@ jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branc
 
 jest.mock('@/lib/api', () => ({
     api: {
-        getPurchaseReturns: jest.fn(),
+        getPurchaseReturnsList: jest.fn(),
+        getPurchaseReturnsListSummary: jest.fn().mockResolvedValue(null),
+        getSuppliersPaged: jest.fn().mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 0 }),
         getPurchases: jest.fn(),
         createPurchaseReturn: jest.fn(),
         getInventoryWarehouses: jest.fn(),
@@ -47,11 +49,14 @@ const ANNEX_WAREHOUSE = {
     is_active: true,
 };
 
+/** One server page holding every row given. */
+const page = (items: unknown[]) => ({ items, total: items.length, page: 1, limit: 20, pages: 1 });
+
 describe('PurchaseReturnsPage — Epic 21: Purchase Returns List & Creation UI', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         const { api } = require('@/lib/api');
-        api.getPurchaseReturns.mockResolvedValue([
+        api.getPurchaseReturnsList.mockResolvedValue(page([
             {
                 id: 'pret-1',
                 return_number: 'PRET-00001',
@@ -61,7 +66,7 @@ describe('PurchaseReturnsPage — Epic 21: Purchase Returns List & Creation UI',
                 purchase: { id: 'purchase-1', purchase_number: 'PUR-00001' },
                 items: [{ id: 'line-1' }],
             },
-        ]);
+        ]));
         api.getPurchases.mockResolvedValue([
             {
                 id: 'purchase-1',

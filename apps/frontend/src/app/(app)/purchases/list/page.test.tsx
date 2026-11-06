@@ -9,7 +9,9 @@ jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branc
 
 jest.mock('@/lib/api', () => ({
     api: {
-        getPurchases: jest.fn(),
+        getPurchasesList: jest.fn(),
+        getPurchasesListSummary: jest.fn().mockResolvedValue(null),
+        getSuppliersPaged: jest.fn().mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 0 }),
         // The Cancel action is permission-gated, and `useTenantPlanFeatures`
         // resolves those through /auth/me on mount. No membership → no
         // CANCEL_ENTRY → the action is hidden, which is the default here.
@@ -54,13 +56,16 @@ jest.mock('next/navigation', () => ({
     useSearchParams: () => searchParams,
 }));
 
+/** One server page holding every row given. */
+const page = (items: unknown[]) => ({ items, total: items.length, page: 1, limit: 20, pages: 1 });
+
 describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         searchParams = new URLSearchParams();
         mockBranchScope();
         const { api } = require('@/lib/api');
-        api.getPurchases.mockResolvedValue([
+        api.getPurchasesList.mockResolvedValue(page([
             {
                 id: 'purchase-1',
                 purchase_number: 'PUR-00001',
@@ -71,7 +76,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
                     { id: 'item-1', quantity: 2, unit_cost: 10, product: { name: 'Coffee Beans' } },
                 ],
             },
-        ]);
+        ]));
     });
 
     it('renders purchases loaded from the API', async () => {
@@ -87,22 +92,22 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
         const { api } = require('@/lib/api');
         renderWithQueryClient(<PurchasesPage />);
         await waitFor(() =>
-            expect(api.getPurchases).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' })),
+            expect(api.getPurchasesList).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' })),
         );
-        expect(api.getPurchases).toHaveBeenCalledTimes(1);
+        expect(api.getPurchasesList).toHaveBeenCalledTimes(1);
 
         fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'all' } });
 
         await waitFor(() =>
-            expect(api.getPurchases).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'all' })),
+            expect(api.getPurchasesList).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'all' })),
         );
     });
 
     it('goes back to the header branch when the server refuses the chosen one', async () => {
         const { api } = require('@/lib/api');
-        const rows = await api.getPurchases();
-        api.getPurchases.mockClear();
-        api.getPurchases.mockImplementation(async ({ storeId }: { storeId?: string }) => {
+        const rows = await api.getPurchasesList();
+        api.getPurchasesList.mockClear();
+        api.getPurchasesList.mockImplementation(async ({ storeId }: { storeId?: string }) => {
             if (storeId === 'store-2') throw Object.assign(new Error('Forbidden'), { status: 403 });
             return rows;
         });
@@ -113,7 +118,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
 
         await waitFor(() => expect(resetToHeaderSpy).toHaveBeenCalled());
         await waitFor(() =>
-            expect(api.getPurchases).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-1' })),
+            expect(api.getPurchasesList).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-1' })),
         );
     });
 
@@ -141,7 +146,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
 
     it('marks a row that has purchase returns and opens their details from the icon', async () => {
         const { api } = require('@/lib/api');
-        api.getPurchases.mockResolvedValue([
+        api.getPurchasesList.mockResolvedValue(page([
             {
                 id: 'purchase-1',
                 purchase_number: 'PUR-00001',
@@ -169,7 +174,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
                     },
                 ],
             },
-        ]);
+        ]));
 
         renderWithQueryClient(<PurchasesPage />);
         await screen.findByText('PUR-00002');
@@ -281,7 +286,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
         it('marks a cancelled purchase and offers no second cancellation', async () => {
             const { api } = require('@/lib/api');
             asTenantAdmin();
-            api.getPurchases.mockResolvedValue([
+            api.getPurchasesList.mockResolvedValue(page([
                 {
                     id: 'purchase-1',
                     purchase_number: 'PUR-00001',
@@ -292,7 +297,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
                     supplier: { name: 'Fresh Farms' },
                     items: [],
                 },
-            ]);
+            ]));
 
             renderWithQueryClient(<PurchasesPage />);
 

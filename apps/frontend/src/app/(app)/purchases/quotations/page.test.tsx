@@ -7,7 +7,9 @@ jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branc
 
 jest.mock('@/lib/api', () => ({
     api: {
-        getPurchaseQuotations: jest.fn(),
+        getPurchaseQuotationsList: jest.fn(),
+        getPurchaseQuotationsListSummary: jest.fn().mockResolvedValue(null),
+        getSuppliersPaged: jest.fn().mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 0 }),
         deletePurchaseQuotation: jest.fn(),
         convertPurchaseQuotation: jest.fn(),
         getSuppliers: jest.fn(),
@@ -32,10 +34,13 @@ jest.mock('./CreatePurchaseQuotationModal', () => {
     };
 });
 
+/** One server page holding every row given. */
+const page = (items: unknown[]) => ({ items, total: items.length, page: 1, limit: 20, pages: 1 });
+
 describe('PurchaseQuotationsPage', () => {
     beforeEach(() => {
         const { api } = require('@/lib/api');
-        api.getPurchaseQuotations.mockResolvedValue([]);
+        api.getPurchaseQuotationsList.mockResolvedValue(page([]));
         api.getSuppliers.mockResolvedValue([]);
         api.getProducts.mockResolvedValue([]);
         api.getStores.mockResolvedValue([]);
@@ -44,7 +49,7 @@ describe('PurchaseQuotationsPage', () => {
 
     it('renders the page heading', async () => {
         const { api } = require('@/lib/api');
-        api.getPurchaseQuotations.mockResolvedValue([]);
+        api.getPurchaseQuotationsList.mockResolvedValue(page([]));
         render(<PurchaseQuotationsPage />);
         await waitFor(() => {
             expect(screen.getByRole('heading', { name: 'Purchase Quotations (RFQ)' })).toBeInTheDocument();
@@ -53,7 +58,7 @@ describe('PurchaseQuotationsPage', () => {
 
     it('displays loaded purchase quotation data', async () => {
         const { api } = require('@/lib/api');
-        api.getPurchaseQuotations.mockResolvedValue([
+        api.getPurchaseQuotationsList.mockResolvedValue(page([
             {
                 id: '1',
                 rfq_number: 'RFQ-0001',
@@ -66,7 +71,7 @@ describe('PurchaseQuotationsPage', () => {
                 store: { name: 'Main Store' },
                 items: [{ id: 'i1' }, { id: 'i2' }],
             },
-        ]);
+        ]));
         render(<PurchaseQuotationsPage />);
         await waitFor(() => {
             expect(screen.getByText('RFQ-0001')).toBeInTheDocument();
@@ -75,7 +80,7 @@ describe('PurchaseQuotationsPage', () => {
 
     it('handles empty state', async () => {
         const { api } = require('@/lib/api');
-        api.getPurchaseQuotations.mockResolvedValue([]);
+        api.getPurchaseQuotationsList.mockResolvedValue(page([]));
         render(<PurchaseQuotationsPage />);
         await waitFor(() => {
             expect(screen.getByText('No purchase quotations found')).toBeInTheDocument();
@@ -84,7 +89,7 @@ describe('PurchaseQuotationsPage', () => {
 
     it('renders the New RFQ button', async () => {
         const { api } = require('@/lib/api');
-        api.getPurchaseQuotations.mockResolvedValue([]);
+        api.getPurchaseQuotationsList.mockResolvedValue(page([]));
         render(<PurchaseQuotationsPage />);
         await waitFor(() => {
             expect(screen.getByText('New RFQ')).toBeInTheDocument();

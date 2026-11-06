@@ -1521,6 +1521,127 @@ function setSalesListFilterParams(query: URLSearchParams, params: SalesListFilte
     setColumnFilterParam(query, params.filters);
 }
 
+/**
+ * What narrows a purchase-side list — purchases, purchase returns, purchase
+ * orders, purchase quotations — sent alike to the list and its stats strip.
+ */
+export interface PurchaseDocumentListFilterParams {
+    search?: string;
+    /** One status or a comma-separated set. */
+    status?: string;
+    /** Every status but those in `status`. */
+    statusExclude?: boolean;
+    /** Supplier ids; `none` is a document with no supplier. */
+    supplierIds?: readonly string[];
+    total?: NumberCondition | null;
+    createdFrom?: string;
+    createdTo?: string;
+    /** The document's own date — bill date, expected date or valid-until. */
+    dateFrom?: string;
+    dateTo?: string;
+    /** A branch or `'all'`, from the page's branch filter. */
+    storeId?: string;
+}
+
+export type PurchasePaymentStatus = 'PAID' | 'PARTIAL' | 'UNPAID';
+
+export interface PurchaseListFilterParams extends PurchaseDocumentListFilterParams {
+    paid?: NumberCondition | null;
+    paymentStatus?: readonly PurchasePaymentStatus[];
+}
+
+/** `GET /purchases/summary`: every matching bill counted, amounts over the ones not cancelled. */
+export interface PurchaseListSummary {
+    count: number;
+    cancelledCount: number;
+    total: number;
+    paid: number;
+    due: number;
+    average: number;
+    returns: { count: number; amount: number };
+}
+
+/** `GET /purchase-returns/summary`. */
+export interface PurchaseReturnListSummary {
+    count: number;
+    amount: number;
+    /** Paid back by the supplier in money. */
+    refunded: number;
+    /** The rest, taken off the payable. */
+    adjusted: number;
+    average: number;
+}
+
+/** `GET /purchase-orders/summary`. */
+export interface PurchaseOrderListSummary {
+    count: number;
+    cancelledCount: number;
+    value: number;
+    open: { count: number; amount: number };
+    received: { count: number; amount: number };
+    overdue: number;
+}
+
+/** `GET /purchase-quotations/summary`. */
+export interface PurchaseQuotationListSummary {
+    count: number;
+    value: number;
+    pending: number;
+    accepted: { count: number; amount: number };
+    converted: number;
+    expired: number;
+}
+
+/** One server page of a purchase-side list, for `useServerList`. */
+export type PurchaseDocumentPageParams = {
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortDir?: 'asc' | 'desc';
+};
+
+function setPurchaseDocumentListParams(query: URLSearchParams, params: PurchaseListFilterParams): void {
+    if (params.search) query.set('search', params.search);
+    if (params.status) query.set('status', params.status);
+    if (params.status && params.statusExclude) query.set('statusExclude', 'true');
+    if (params.supplierIds?.length) query.set('supplierId', params.supplierIds.join(','));
+    const total = numberConditionParam(params.total);
+    if (total) query.set('total', total);
+    const paid = numberConditionParam(params.paid);
+    if (paid) query.set('paid', paid);
+    if (params.paymentStatus?.length) query.set('paymentStatus', params.paymentStatus.join(','));
+    if (params.createdFrom) query.set('createdFrom', params.createdFrom);
+    if (params.createdTo) query.set('createdTo', params.createdTo);
+    if (params.dateFrom) query.set('dateFrom', params.dateFrom);
+    if (params.dateTo) query.set('dateTo', params.dateTo);
+    if (params.storeId) query.set('storeId', params.storeId);
+}
+
+/** The list page and summary callers for one purchase-side endpoint. */
+function purchaseDocumentList<P extends PurchaseDocumentListFilterParams, S>(path: string) {
+    return {
+        list: (params: P & PurchaseDocumentPageParams) => {
+            const query = new URLSearchParams();
+            if (params.page) query.set('page', String(params.page));
+            if (params.limit) query.set('limit', String(params.limit));
+            if (params.sortBy) query.set('sortBy', params.sortBy);
+            if (params.sortDir) query.set('sortDir', params.sortDir);
+            setPurchaseDocumentListParams(query, params);
+            return fetchPaginated(`${path}?${query.toString()}`);
+        },
+        summary: (params: P): Promise<S> => {
+            const query = new URLSearchParams();
+            setPurchaseDocumentListParams(query, params);
+            return fetchWithAuth(`${path}/summary?${query.toString()}`);
+        },
+    };
+}
+
+const purchasesList = purchaseDocumentList<PurchaseListFilterParams, PurchaseListSummary>('/purchases');
+const purchaseReturnsList = purchaseDocumentList<PurchaseDocumentListFilterParams, PurchaseReturnListSummary>('/purchase-returns');
+const purchaseOrdersList = purchaseDocumentList<PurchaseDocumentListFilterParams, PurchaseOrderListSummary>('/purchase-orders');
+const purchaseQuotationsList = purchaseDocumentList<PurchaseDocumentListFilterParams, PurchaseQuotationListSummary>('/purchase-quotations');
+
 /** A payment method as `/payment-methods` and its layout routes return it. */
 export interface PaymentMethodRow {
     id: string;
@@ -3317,11 +3438,18 @@ export const api = {
     deleteSupplier: (id: string) => fetchWithAuth(`/suppliers/${id}`, { method: 'DELETE' }),
     getPurchaseInvoice: (id: string) => fetchWithAuth(`/purchases/${id}/invoice`),
     getPurchaseOrders: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/purchase-orders', params)),
+    /** One server page of the purchase-orders list, with its filter row applied. */
+    getPurchaseOrdersList: purchaseOrdersList.list,
+    /** The stats strip over the purchase-orders list: the same filters, counted and summed. */
+    getPurchaseOrdersListSummary: purchaseOrdersList.summary,
     getPurchaseOrder: (id: string) => fetchWithAuth(`/purchase-orders/${id}`),
     createPurchaseOrder: (data: any) => fetchWithAuth('/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
     updatePurchaseOrderStatus: (id: string, status: string) => fetchWithAuth(`/purchase-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
     getPurchaseOrderInvoice: (id: string) => fetchWithAuth(`/purchase-orders/${id}/invoice`),
     getPurchaseQuotations: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/purchase-quotations', params)),
+    /** One server page of the purchase-quotations list, with its filter row applied. */
+    getPurchaseQuotationsList: purchaseQuotationsList.list,
+    getPurchaseQuotationsListSummary: purchaseQuotationsList.summary,
     getPurchaseQuotation: (id: string) => fetchWithAuth(`/purchase-quotations/${id}`),
     createPurchaseQuotation: (data: any) => fetchWithAuth('/purchase-quotations', { method: 'POST', body: JSON.stringify(data) }),
     updatePurchaseQuotationStatus: (id: string, status: string) => fetchWithAuth(`/purchase-quotations/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
@@ -3336,6 +3464,13 @@ export const api = {
         if (params?.storeId) query.set('storeId', params.storeId);
         return fetchAllPages(`/purchases${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    /**
+     * One server page of the purchases list, with its filter row applied —
+     * the list itself; `getPurchases` stays for pickers that need every bill.
+     */
+    getPurchasesList: purchasesList.list,
+    /** The stats strip over the purchases list: the same filters, counted and summed. */
+    getPurchasesListSummary: purchasesList.summary,
     getPurchase: (id: string) => fetchWithAuth(`/purchases/${id}`),
     /** Cancel a posted purchase and reverse its impacts. Tenant-admin only. */
     cancelPurchase: (id: string, note: string) => fetchWithAuth(`/purchases/${id}/cancel`, {
@@ -3358,6 +3493,9 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getPurchaseReturns: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/purchase-returns', params)),
+    /** One server page of the purchase-returns list, with its filter row applied. */
+    getPurchaseReturnsList: purchaseReturnsList.list,
+    getPurchaseReturnsListSummary: purchaseReturnsList.summary,
     getPurchaseReturn: (id: string) => fetchWithAuth(`/purchase-returns/${id}`),
     createPurchaseReturn: (data: any) => fetchWithAuth('/purchase-returns', {
         method: 'POST',
