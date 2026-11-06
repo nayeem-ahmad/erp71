@@ -281,6 +281,13 @@ export const salesMessages = {
                 salesRep: 'बिक्री प्रतिनिधि',
                 noSalesRep: 'कोई प्रतिनिधि नहीं',
             },
+            returnsModal: {
+                viewReturns: 'बिक्री वापसी देखें ({count})',
+                title: '{serial} की बिक्री वापसी',
+                empty: 'इस बिक्री पर कोई वापसी नहीं',
+                reason: 'कारण',
+                openReturn: 'वापसी खोलें',
+            },
         },
         hub: {
             moduleLabel: "बिक्री मॉड्यूल",

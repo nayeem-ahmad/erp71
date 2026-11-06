@@ -281,6 +281,13 @@ export const salesMessages = {
                 salesRep: 'Vendedor',
                 noSalesRep: 'Sin vendedor',
             },
+            returnsModal: {
+                viewReturns: 'Ver devoluciones de venta ({count})',
+                title: 'Devoluciones de {serial}',
+                empty: 'No hay devoluciones en esta venta',
+                reason: 'Motivo',
+                openReturn: 'Abrir devolución',
+            },
         },
         hub: {
             moduleLabel: "Módulo de ventas",

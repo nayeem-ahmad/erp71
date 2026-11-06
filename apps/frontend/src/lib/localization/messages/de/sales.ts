@@ -281,6 +281,13 @@ export const salesMessages = {
                 salesRep: 'Vertreter',
                 noSalesRep: 'Kein Vertreter',
             },
+            returnsModal: {
+                viewReturns: 'Verkaufsretouren anzeigen ({count})',
+                title: 'Verkaufsretouren für {serial}',
+                empty: 'Keine Retouren zu diesem Verkauf',
+                reason: 'Grund',
+                openReturn: 'Retoure öffnen',
+            },
         },
         hub: {
             moduleLabel: "Verkaufsmodul",

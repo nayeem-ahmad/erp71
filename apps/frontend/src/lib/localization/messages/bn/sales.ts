@@ -281,6 +281,13 @@ export const salesMessages = {
                     salesRep: 'বিক্রয় প্রতিনিধি',
                     noSalesRep: 'প্রতিনিধি নেই',
                 },
+                returnsModal: {
+                    viewReturns: 'সেলস রিটার্ন দেখুন ({count})',
+                    title: '{serial}-এর সেলস রিটার্ন',
+                    empty: 'এই সেলে কোনো রিটার্ন নেই',
+                    reason: 'কারণ',
+                    openReturn: 'রিটার্ন খুলুন',
+                },
             },
             hub: {
                 moduleLabel: "বিক্রয় মডিউল",

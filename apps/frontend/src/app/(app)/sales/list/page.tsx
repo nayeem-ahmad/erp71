@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Receipt, Eye, Edit2, FileText, Printer, Trash2, TrendingUp, Wallet, Clock, Calculator, Undo2 } from 'lucide-react';
+import { Receipt, Eye, Edit2, FileText, Printer, Trash2, TrendingUp, Wallet, Clock, Calculator, Undo2, RotateCcw } from 'lucide-react';
 import { api, type PaymentMethodRow, type SalePaymentStatus, type SalesListFilterParams, type SalesListSummary } from '@/lib/api';
 import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import Link from 'next/link';
@@ -25,6 +25,7 @@ import { hasPermission, isOwner } from '@/lib/permissions';
 import SaleRowPrintButtons from '../components/SaleRowPrintButtons';
 import SaleRowOverflowMenu from '../components/SaleRowOverflowMenu';
 import PrintSettingsModal from '../components/PrintSettingsModal';
+import SaleReturnsModal, { type SaleReturnSummary } from '../components/SaleReturnsModal';
 import { useSalePrinting, fetchPrintableSale } from '@/lib/hooks/useSalePrinting';
 import { useInvoicePrintPrefs } from '@/lib/hooks/useInvoicePrintPrefs';
 
@@ -42,6 +43,8 @@ interface Sale {
     note?: string;
     posting_status?: string | null;
     voucher_number?: string | null;
+    /** Sales returns raised against this sale — present on the list payload. */
+    returns?: SaleReturnSummary[];
 }
 
 const SALE_STATUSES = ['DRAFT', 'COMPLETED', 'REFUNDED', 'PARTIAL_REFUND', 'CANCELLED'] as const;
@@ -82,6 +85,7 @@ export default function SalesPage() {
     const branch = useBranchScope();
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [cancelTarget, setCancelTarget] = useState<Sale | null>(null);
+    const [returnsTarget, setReturnsTarget] = useState<Sale | null>(null);
 
     // Cancelling reverses stock, balances and the ledger, so the action is
     // hidden without CANCEL_ENTRY rather than shown and left to 403. OWNER
@@ -261,7 +265,42 @@ export default function SalesPage() {
         () => [
             columnHelper.accessor('serial_number', {
                 header: t.sales.columns.serialNumber,
-                size: 140,
+                cell: (info) => {
+                    const sale = info.row.original;
+                    const returns = sale.returns ?? [];
+                    return (
+                        <span className="inline-flex items-center gap-1.5">
+                            <span>{sale.serial_number}</span>
+                            {returns.length > 0 ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setReturnsTarget(sale)}
+                                    aria-label={formatMessage(t.sales.list.returnsModal.viewReturns, {
+                                        count: returns.length,
+                                    })}
+                                    title={formatMessage(t.sales.list.returnsModal.viewReturns, {
+                                        count: returns.length,
+                                    })}
+                                    className={
+                                        'inline-flex h-7 min-w-7 items-center justify-center gap-0.5 rounded-md '
+                                        + 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 '
+                                        + 'hover:bg-amber-100 focus-visible:outline-none '
+                                        + 'focus-visible:ring-2 focus-visible:ring-blue-600/30 '
+                                        + 'max-md:min-h-touch max-md:min-w-touch'
+                                    }
+                                >
+                                    <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                                    {returns.length > 1 ? (
+                                        <span className="pe-1 text-[10px] font-semibold leading-none">
+                                            {returns.length}
+                                        </span>
+                                    ) : null}
+                                </button>
+                            ) : null}
+                        </span>
+                    );
+                },
+                size: 160,
             }),
             columnHelper.accessor((row) => row.sale_date ?? row.created_at, {
                 id: 'sale_date',
@@ -393,9 +432,8 @@ export default function SalesPage() {
                                 label={t.sales.printMenu.moreActions}
                                 paperSize={paperSize}
                                 onPrintReceipt={(size) => void printReceipt(sale.id, size)}
-                                // A row carries no return history, so a fully
-                                // returned sale still shows these; the entry
-                                // screen says nothing is left to return.
+                                // Fully returned sales still offer these: the
+                                // entry screen is what says nothing is left.
                                 canReturn={canCreateReturn && !isCancelled && sale.status !== 'DRAFT'}
                                 onCancel={
                                     canCancel && !isCancelled
@@ -655,6 +693,14 @@ export default function SalesPage() {
                         entryAmount={formatBDT(parseFloat(cancelTarget.total_amount), { locale })}
                         onConfirm={(note) => handleCancel(cancelTarget, note)}
                         onClose={() => setCancelTarget(null)}
+                    />
+                )}
+
+                {returnsTarget && (
+                    <SaleReturnsModal
+                        serialNumber={returnsTarget.serial_number}
+                        returns={returnsTarget.returns ?? []}
+                        onClose={() => setReturnsTarget(null)}
                     />
                 )}
 
