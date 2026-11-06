@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Ban, ClipboardList, Copy, Eye, Pencil, Plus, Printer } from 'lucide-react';
+import { Ban, ClipboardList, Copy, Eye, Pencil, Plus, Printer, RotateCcw } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
 import { DataTable, createdAtColumn, CreatedRangeFilter, DateRangeFilter } from '@/components/data-table';
@@ -22,6 +22,7 @@ import { CancelEntryModal } from '@/components/CancelEntryModal';
 import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { hasPermission, isOwner } from '@/lib/permissions';
 import PrintSettingsModal from '../../sales/components/PrintSettingsModal';
+import PurchaseReturnsModal, { type PurchaseReturnSummary } from '../components/PurchaseReturnsModal';
 import { usePurchasePrinting } from '@/lib/hooks/usePurchasePrinting';
 
 interface PurchaseItem {
@@ -49,6 +50,8 @@ interface Purchase {
     items: PurchaseItem[];
     posting_status?: string | null;
     voucher_number?: string | null;
+    /** Purchase returns raised against this bill — present on the list payload. */
+    returns?: PurchaseReturnSummary[];
 }
 
 const statusColors: Record<string, string> = {
@@ -69,6 +72,7 @@ export default function PurchasesPage() {
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [dateRange, setDateRange] = useState<CreatedRange | null>(null);
     const [cancelTarget, setCancelTarget] = useState<Purchase | null>(null);
+    const [returnsTarget, setReturnsTarget] = useState<Purchase | null>(null);
     const [printSettingsOpen, setPrintSettingsOpen] = useState(false);
 
     // Paper size and the preview opt-out are settings, not per-row choices, so
@@ -134,15 +138,47 @@ export default function PurchasesPage() {
         () => [
             columnHelper.accessor('purchase_number', {
                 header: t.purchases.columns.purchaseNumber,
-                cell: (info) => (
-                    <Link
-                        href={routes.purchases.purchaseDetail(info.row.original.id)}
-                        className="text-sm font-bold text-gray-900 hover:text-blue-600 hover:underline"
-                    >
-                        {info.getValue()}
-                    </Link>
-                ),
-                size: 150,
+                cell: (info) => {
+                    const purchase = info.row.original;
+                    const returns = purchase.returns ?? [];
+                    return (
+                        <span className="inline-flex items-center gap-1.5">
+                            <Link
+                                href={routes.purchases.purchaseDetail(purchase.id)}
+                                className="text-sm font-bold text-gray-900 hover:text-blue-600 hover:underline"
+                            >
+                                {info.getValue()}
+                            </Link>
+                            {returns.length > 0 ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setReturnsTarget(purchase)}
+                                    aria-label={formatMessage(t.purchases.returnsModal.viewReturns, {
+                                        count: returns.length,
+                                    })}
+                                    title={formatMessage(t.purchases.returnsModal.viewReturns, {
+                                        count: returns.length,
+                                    })}
+                                    className={
+                                        'inline-flex h-7 min-w-7 items-center justify-center gap-0.5 rounded-md '
+                                        + 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 '
+                                        + 'hover:bg-amber-100 focus-visible:outline-none '
+                                        + 'focus-visible:ring-2 focus-visible:ring-blue-600/30 '
+                                        + 'max-md:min-h-touch max-md:min-w-touch'
+                                    }
+                                >
+                                    <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                                    {returns.length > 1 ? (
+                                        <span className="pe-1 text-[10px] font-semibold leading-none">
+                                            {returns.length}
+                                        </span>
+                                    ) : null}
+                                </button>
+                            ) : null}
+                        </span>
+                    );
+                },
+                size: 170,
             }),
             columnHelper.accessor((row) => row.supplier?.name ?? t.purchaseShared.unlinked, {
                 id: 'supplier',
@@ -357,6 +393,14 @@ export default function PurchasesPage() {
                         entryAmount={formatBDT(Number(cancelTarget.total_amount || 0), { locale })}
                         onConfirm={(note) => handleCancel(cancelTarget, note)}
                         onClose={() => setCancelTarget(null)}
+                    />
+                )}
+
+                {returnsTarget && (
+                    <PurchaseReturnsModal
+                        purchaseNumber={returnsTarget.purchase_number}
+                        returns={returnsTarget.returns ?? []}
+                        onClose={() => setReturnsTarget(null)}
                     />
                 )}
     </PageShell>

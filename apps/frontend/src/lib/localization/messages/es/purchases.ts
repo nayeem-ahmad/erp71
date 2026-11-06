@@ -153,6 +153,13 @@ export const purchasesMessages = {
             RECORDED: 'Registrada',
             CANCELLED: 'Anulada',
         },
+        returnsModal: {
+            viewReturns: 'Ver devoluciones de compra ({count})',
+            title: 'Devoluciones de {number}',
+            empty: 'No hay devoluciones en esta factura',
+            notes: 'Notas',
+            openReturn: 'Abrir devolución',
+        },
         printInvoice: "Imprimir factura",
         printLoadFailed: "No se pudo cargar la compra para imprimir.",
         modal: {

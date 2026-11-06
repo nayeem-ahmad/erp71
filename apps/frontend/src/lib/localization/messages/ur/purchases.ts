@@ -153,6 +153,13 @@ export const purchasesMessages = {
             RECORDED: 'درج',
             CANCELLED: 'منسوخ',
         },
+        returnsModal: {
+            viewReturns: 'خریداری واپسی دیکھیں ({count})',
+            title: '{number} کی خریداری واپسیاں',
+            empty: 'اس بل پر کوئی خریداری واپسی نہیں',
+            notes: 'نوٹس',
+            openReturn: 'واپسی کھولیں',
+        },
         printInvoice: "انوائس چھاپیں",
         printLoadFailed: "خریداری پرنٹ کے لیے لوڈ نہیں ہو سکی۔",
         modal: {

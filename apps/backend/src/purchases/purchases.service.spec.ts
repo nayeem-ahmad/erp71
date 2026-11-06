@@ -445,6 +445,33 @@ describe('PurchasesService', () => {
         });
     });
 
+    it('loads each purchase\'s returns so the list can mark and open them', async () => {
+        db.purchase.findMany.mockResolvedValue([{ id: 'p1', returns: [{ id: 'r1' }] }]);
+        db.purchase.count = jest.fn().mockResolvedValue(1);
+        db.postingEvent = { findMany: jest.fn().mockResolvedValue([]) };
+
+        await service.findAll('tenant-1', 1, 20, { timezone: 'Asia/Dhaka' });
+
+        expect(db.purchase.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                include: expect.objectContaining({
+                    returns: {
+                        select: {
+                            id: true,
+                            return_number: true,
+                            total_amount: true,
+                            notes: true,
+                            status: true,
+                            created_at: true,
+                            _count: { select: { items: true } },
+                        },
+                        orderBy: { created_at: 'desc' },
+                    },
+                }),
+            }),
+        );
+    });
+
     it('filters purchase_date by dateFrom/dateTo, alongside created_at', async () => {
         db.purchase.findMany.mockResolvedValue([]);
         db.purchase.count = jest.fn().mockResolvedValue(0);

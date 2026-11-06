@@ -153,6 +153,13 @@ export const purchasesMessages = {
                 RECORDED: 'রেকর্ডকৃত',
                 CANCELLED: 'বাতিল',
             },
+            returnsModal: {
+                viewReturns: 'ক্রয় ফেরত দেখুন ({count})',
+                title: '{number}-এর ক্রয় ফেরত',
+                empty: 'এই বিলে কোনো ক্রয় ফেরত নেই',
+                notes: 'নোট',
+                openReturn: 'ফেরত খুলুন',
+            },
             printInvoice: "ইনভয়েস প্রিন্ট",
             printLoadFailed: "প্রিন্ট করতে ক্রয় লোড করা যায়নি।",
             modal: {
