@@ -198,6 +198,8 @@ export default function BankbookPage() {
                 value: accountId || null,
                 onChange: (next) => setAccountId(next ?? ''),
                 options: accounts.map((account) => ({ value: account.id, label: accountLabel(account) })),
+                // Past a handful of accounts, a search box finds one faster than scrolling.
+                searchable: accounts.length > 8,
             });
         }
         list.push(

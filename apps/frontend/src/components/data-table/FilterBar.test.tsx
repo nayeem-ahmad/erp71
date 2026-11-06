@@ -200,11 +200,167 @@ describe('FilterBar — phone sheet', () => {
     });
 });
 
+const ACCOUNT_OPTIONS = [
+    { value: 'cash', label: '1010 — Cash in Hand' },
+    { value: 'bank', label: '1020 — City Bank' },
+    { value: 'sales', label: '4010 — Sales Revenue' },
+];
+
+/** A searchable one-pick select and a one-day chip, held like a page holds them. */
+function PickHarness({ compact = false, required = false, more = false }: { compact?: boolean; required?: boolean; more?: boolean }) {
+    const [account, setAccount] = useState<string | null>(null);
+    const [asOf, setAsOf] = useState<string | null>(required ? '2026-03-31' : null);
+    const filters: ResolvedListFilter[] = [
+        { id: 'account', type: 'select', label: 'Account', options: ACCOUNT_OPTIONS, value: account, onChange: setAccount, searchable: true },
+        {
+            id: 'asOf',
+            type: 'date',
+            label: 'As of',
+            value: asOf,
+            // A report that must have a day goes back to its default.
+            onChange: (next) => setAsOf(next ?? (required ? '2026-03-31' : null)),
+            more,
+        },
+    ];
+    return <FilterBar filters={filters} compact={compact} layout="row" />;
+}
+
+describe('FilterBar — searchable select', () => {
+    it('searches the options and picks one, closing on the pick', () => {
+        render(<PickHarness />);
+        fireEvent.click(chip('Account'));
+        fireEvent.change(screen.getByRole('searchbox', { name: 'Search Account…' }), { target: { value: 'bank' } });
+        expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['1020 — City Bank']);
+        fireEvent.click(screen.getByRole('option', { name: '1020 — City Bank' }));
+        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+        expect(chip(/Account: 1020 — City Bank/)).toBeInTheDocument();
+    });
+
+    it('marks the pick, moves it on another pick, and clears from the panel', () => {
+        render(<PickHarness />);
+        fireEvent.click(chip('Account'));
+        fireEvent.click(screen.getByRole('option', { name: '1010 — Cash in Hand' }));
+        fireEvent.click(chip(/Account: 1010/));
+        expect(screen.getByRole('option', { name: '1010 — Cash in Hand' })).toHaveAttribute('aria-selected', 'true');
+        fireEvent.click(screen.getByRole('option', { name: '4010 — Sales Revenue' }));
+        expect(chip(/Account: 4010 — Sales Revenue/)).toBeInTheDocument();
+        fireEvent.click(chip(/Account: 4010/));
+        fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+        expect(chip('Account')).toBeInTheDocument();
+    });
+
+    it('asks the server as the box is typed in, and names the pick it found', async () => {
+        jest.useFakeTimers();
+        const loadOptions = jest.fn().mockResolvedValue([{ value: 'acc-9', label: '2050 — Loan Payable' }]);
+        function Remote() {
+            const [value, setValue] = useState<string | null>(null);
+            return (
+                <FilterBar
+                    compact={false}
+                    layout="row"
+                    filters={[{ id: 'account-remote', type: 'select', label: 'Account', options: [], value, onChange: setValue, loadOptions }]}
+                />
+            );
+        }
+        try {
+            render(<Remote />);
+            fireEvent.click(chip('Account'));
+            fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'loan' } });
+            await act(async () => {
+                jest.advanceTimersByTime(300);
+            });
+            expect(loadOptions).toHaveBeenCalledWith('loan');
+            fireEvent.click(await screen.findByRole('option', { name: '2050 — Loan Payable' }));
+            expect(chip(/Account: 2050 — Loan Payable/)).toBeInTheDocument();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('keeps a plain select without `searchable` a native select', () => {
+        render(<FilterBar compact={false} layout="row" filters={[{ id: 'k', type: 'select', label: 'Kind', options: ACCOUNT_OPTIONS, value: null, onChange: jest.fn() }]} />);
+        expect(screen.getByRole('combobox', { name: 'Kind' })).toBeInTheDocument();
+    });
+});
+
+describe('FilterBar — one-day date', () => {
+    const now = new Date();
+
+    it('sets the day from a shortcut and names it on the chip', () => {
+        render(<PickHarness />);
+        fireEvent.click(chip('As of'));
+        fireEvent.click(screen.getByRole('button', { name: 'End of last year' }));
+        expect(screen.queryByRole('dialog', { name: 'As of' })).not.toBeInTheDocument();
+        expect(chip(new RegExp(`^As of: 31 Dec ${now.getFullYear() - 1}`))).toBeInTheDocument();
+    });
+
+    it('applies a typed day, and asks for one before applying nothing', () => {
+        render(<PickHarness />);
+        fireEvent.click(chip('As of'));
+        fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+        expect(screen.getByText('Pick a date')).toBeInTheDocument();
+        fireEvent.change(screen.getByLabelText('As of', { selector: 'input' }), { target: { value: '2025-06-30' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+        expect(chip(/^As of: 30 Jun 2025/)).toBeInTheDocument();
+    });
+
+    it('clears from its chip', () => {
+        render(<PickHarness />);
+        fireEvent.click(chip('As of'));
+        fireEvent.click(screen.getByRole('button', { name: 'End of last month' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Remove filter As of' }));
+        expect(chip('As of')).toBeInTheDocument();
+    });
+
+    it('falls back to the page\'s day when a required one is cleared', () => {
+        render(<PickHarness required />);
+        expect(chip(/^As of: 31 Mar/)).toBeInTheDocument();
+        fireEvent.click(chip(/^As of/));
+        fireEvent.click(screen.getByRole('button', { name: 'End of last year' }));
+        expect(chip(/^As of: 31 Dec/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Clear All' }));
+        expect(chip(/^As of: 31 Mar/)).toBeInTheDocument();
+    });
+
+    it('opens in place behind More', () => {
+        render(<PickHarness more />);
+        expect(screen.queryByRole('button', { name: /^As of/ })).not.toBeInTheDocument();
+        fireEvent.click(chip('More'));
+        const more = screen.getByRole('dialog', { name: 'More' });
+        fireEvent.click(within(more).getByRole('button', { name: /^As of/ }));
+        fireEvent.click(within(more).getByRole('button', { name: 'End of last year' }));
+        expect(within(more).getByText(new RegExp(`31 Dec ${now.getFullYear() - 1}`))).toBeInTheDocument();
+    });
+});
+
+describe('FilterBar — phone sheet, picks and days', () => {
+    it('opens a searchable select and a date in place inside the sheet, and lists them as removable chips', () => {
+        render(<PickHarness compact />);
+        fireEvent.click(screen.getByRole('button', { name: /Filters/ }));
+        const sheet = () => screen.getByRole('heading', { name: 'Filters' }).parentElement as HTMLElement;
+        fireEvent.click(within(sheet()).getByRole('button', { name: /^Account/ }));
+        fireEvent.click(within(sheet()).getByRole('option', { name: '1020 — City Bank' }));
+        fireEvent.click(within(sheet()).getByRole('button', { name: /^As of/ }));
+        fireEvent.change(within(sheet()).getByLabelText('As of', { selector: 'input' }), { target: { value: '2025-12-31' } });
+        fireEvent.click(within(sheet()).getByRole('button', { name: 'Apply' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+        expect(screen.getByText('Account: 1020 — City Bank')).toBeInTheDocument();
+        expect(screen.getByText('As of: 31 Dec 2025')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Remove filter As of' }));
+        expect(screen.queryByText(/As of: /)).not.toBeInTheDocument();
+    });
+});
+
 describe('isFilterActive', () => {
     it('reads each new type', () => {
         expect(isFilterActive({ id: 'a', type: 'multi-select', label: 'A', options: [], value: [], onChange: jest.fn() })).toBe(false);
         expect(isFilterActive({ id: 'a', type: 'multi-select', label: 'A', options: [], value: ['x'], onChange: jest.fn() })).toBe(true);
         expect(isFilterActive({ id: 'b', type: 'number', label: 'B', value: null, onChange: jest.fn() })).toBe(false);
         expect(isFilterActive({ id: 'b', type: 'number', label: 'B', value: { op: 'eq', value: 0 }, onChange: jest.fn() })).toBe(true);
+        expect(isFilterActive({ id: 'c', type: 'date', label: 'C', value: null, onChange: jest.fn() })).toBe(false);
+        expect(isFilterActive({ id: 'c', type: 'date', label: 'C', value: '2026-03-31', onChange: jest.fn() })).toBe(true);
+        expect(isFilterActive({ id: 'd', type: 'select', label: 'D', options: [], value: null, onChange: jest.fn(), searchable: true })).toBe(false);
+        expect(isFilterActive({ id: 'd', type: 'select', label: 'D', options: [], value: 'x', onChange: jest.fn(), searchable: true })).toBe(true);
     });
 });

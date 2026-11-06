@@ -75,4 +75,29 @@ describe('AR aging', () => {
         expect(within(stat('Parties')).getByText('1')).toBeInTheDocument();
         expect(within(stat('Total due')).getByText(taka(7000))).toBeInTheDocument();
     });
+
+    it('totals the buckets under the table, and the totals follow the chips', async () => {
+        render(<ArAgingPage />);
+        await screen.findByText('Rahim Traders');
+
+        const footer = () => screen.getByRole('rowheader', { name: 'Totals' }).closest('tr') as HTMLElement;
+        const cell = (columnId: string) => footer().querySelector(`[data-column-id="${columnId}"]`) as HTMLElement;
+        expect(cell('balance')).toHaveTextContent(formatBDT(12000, { locale: 'en' }));
+        expect(cell('overdue_90_plus')).toHaveTextContent(formatBDT(4000, { locale: 'en' }));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Overdue only' }));
+        await waitFor(() => expect(cell('balance')).toHaveTextContent(formatBDT(7000, { locale: 'en' })));
+        expect(cell('current')).toHaveTextContent(formatBDT(1000, { locale: 'en' }));
+    });
+
+    it('asks for the day picked on the as-of chip', async () => {
+        render(<ArAgingPage />);
+        await screen.findByText('Rahim Traders');
+
+        fireEvent.click(screen.getByRole('button', { name: /^As of/ }));
+        fireEvent.change(screen.getByLabelText('As of', { selector: 'input' }), { target: { value: '2026-06-30' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+        await waitFor(() => expect(api.getArAging).toHaveBeenLastCalledWith(expect.objectContaining({ asOfDate: '2026-06-30' })));
+    });
 });

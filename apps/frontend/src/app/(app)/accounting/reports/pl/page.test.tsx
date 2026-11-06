@@ -102,6 +102,9 @@ describe('ProfitLossPage — report scope', () => {
             );
         });
         expect(screen.queryByRole('combobox', { name: 'Branch' })).not.toBeInTheDocument();
+        // A rarer option: behind More in the one-row toolbar.
+        expect(screen.queryByText('Company overhead')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /^More/ }));
         expect(screen.getByText('Company overhead')).toBeInTheDocument();
         expect(localStorage.getItem('report_scope')).toBe('compare');
     });

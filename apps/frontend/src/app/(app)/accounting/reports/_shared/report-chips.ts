@@ -1,4 +1,4 @@
-import type { ListFilter } from '@/components/data-table';
+import type { DatePreset, ListFilter } from '@/components/data-table';
 import type { CompareMatrixSection } from '@/components/accounting/CompareMatrixTable';
 import type { StatementGroup } from '@/components/accounting/StatementSection';
 import {
@@ -31,8 +31,8 @@ type Copy = ReturnType<typeof useI18n>['t'];
 /** Month-grained shortcuts for a report's period. */
 export const PERIOD_PRESETS: readonly CreatedRangePreset[] = ['thisMonth', 'last3Months', 'last6Months', 'last12Months', 'thisYear'];
 
-/** An as-of date is one day: the chip offers today and yesterday, or any day picked. */
-export const AS_OF_PRESETS: readonly CreatedRangePreset[] = ['today', 'yesterday'];
+/** An as-of date is one day: the chip offers today and the ends of the periods just closed, or any day picked. */
+export const AS_OF_PRESETS: readonly DatePreset[] = ['today', 'endOfLastMonth', 'endOfLastQuarter', 'endOfLastYear'];
 
 /** This month to date, on the workspace's calendar. */
 export const defaultPeriod = (): CreatedRange => createdRangeFromPreset('thisMonth');
@@ -45,14 +45,22 @@ export function requiredPeriod(next: CreatedRange | null, fallback: () => Create
     return isCreatedRangeEmpty(next) ? fallback() : (next as CreatedRange);
 }
 
-/** The as-of date drawn as a one-day range on the date chip. */
-export function asOfRange(asOf: string): CreatedRange {
-    return { from: asOf, to: asOf };
-}
-
-/** The day a date chip names as the as-of date — its end, or its start when open-ended; cleared, today. */
-export function asOfFromRange(next: CreatedRange | null): string {
-    return (next?.to ?? next?.from ?? '').slice(0, 10) || todayDate();
+/** A report's as-of date as a one-day chip: cleared, it goes back to `fallback` (today). */
+export function asOfFilter(input: {
+    label: string;
+    value: string;
+    onChange: (next: string) => void;
+    fallback?: () => string;
+}): ListFilter {
+    const fallback = input.fallback ?? todayDate;
+    return {
+        id: 'asOf',
+        type: 'date',
+        label: input.label,
+        value: input.value,
+        onChange: (next) => input.onChange(next ?? fallback()),
+        presets: AS_OF_PRESETS,
+    };
 }
 
 /** Whole taka, as the stats strip shows money. */
@@ -152,6 +160,7 @@ export function statementScopeFilters(t: Copy, input: {
                     label: scope.companyOverhead,
                     pressed: input.includeCompanyBucket,
                     onChange: input.onIncludeCompanyBucketChange,
+                    more: true,
                 },
             );
         }
@@ -170,11 +179,12 @@ export function statementScopeFilters(t: Copy, input: {
 
     return [
         ...filters,
+        // Rarely changed once set: behind More in the one-row toolbar.
         ...approvedOnlyFilter(t, {
             approvalEnabled: input.approvalEnabled,
             approvedOnly: input.approvedOnly,
             onChange: input.onApprovedOnlyChange,
-        }),
+        }).map((filter) => ({ ...filter, more: true })),
     ];
 }
 

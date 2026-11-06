@@ -71,4 +71,15 @@ describe('Budget vs. actual', () => {
 
         await waitFor(() => expect(api.getBudgetVsActual).toHaveBeenLastCalledWith(expect.objectContaining({ month: 3 })));
     });
+
+    it('totals the budget, actual and variance under the table, in red when over', async () => {
+        render(<BudgetVsActualPage />);
+        await screen.findByText('Rent');
+
+        const footer = screen.getByRole('rowheader', { name: 'Totals' }).closest('tr') as HTMLElement;
+        const cell = (columnId: string) => footer.querySelector(`[data-column-id="${columnId}"]`) as HTMLElement;
+        expect(cell('budget')).toHaveTextContent(formatBDT(15000, { locale: 'en' }));
+        expect(cell('actual')).toHaveTextContent(formatBDT(16000, { locale: 'en' }));
+        expect(within(cell('variance')).getByText(formatBDT(-1000, { locale: 'en' }))).toHaveClass('text-red-600');
+    });
 });

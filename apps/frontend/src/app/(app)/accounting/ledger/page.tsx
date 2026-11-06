@@ -327,17 +327,12 @@ function AccountingLedgerPageContent() {
     const filters = useMemo<ListFilter[]>(() => {
         const list: ListFilter[] = [
             {
-                // The report reads one account; ticking another moves to it.
+                // The report reads one account, picked from a searchable list.
                 id: 'account',
-                type: 'multi-select',
+                type: 'select',
                 label: t.accountingShared.account,
-                value: selectedAccountId ? [selectedAccountId] : [],
-                onChange: (next) => {
-                    const picked = next.filter((id) => id !== selectedAccountId);
-                    // "Select all" names no one account.
-                    if (picked.length > 1) return;
-                    setSelectedAccountId(picked[0] ?? (next.includes(selectedAccountId) ? selectedAccountId : ''));
-                },
+                value: selectedAccountId || null,
+                onChange: (next) => setSelectedAccountId(next ?? ''),
                 options: accountOptions,
                 searchable: true,
             },

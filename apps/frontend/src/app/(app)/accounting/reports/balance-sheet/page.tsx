@@ -34,9 +34,7 @@ import {
 import { BranchFilter, Button } from '@/components/ui';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import {
-    AS_OF_PRESETS,
-    asOfFromRange,
-    asOfRange,
+    asOfFilter,
     searchCompareSections,
     searchStatementGroups,
     statementScopeFilters,
@@ -224,16 +222,8 @@ export default function BalanceSheetPage() {
 
     const filters = useMemo<ResolvedListFilter[]>(() => {
         const list: ListFilter[] = [
-            {
-                id: 'asOf',
-                type: 'date-range',
-                label: t.accounting.reports.balanceSheet.asOf,
-                value: asOfRange(asOfDate),
-                // A balance sheet is always as of some day: cleared, it goes back to today.
-                onChange: (next) => setAsOfDate(asOfFromRange(next)),
-                presets: AS_OF_PRESETS,
-                operators: true,
-            },
+            // A balance sheet is always as of some day: cleared, it goes back to today.
+            asOfFilter({ label: t.accounting.reports.balanceSheet.asOf, value: asOfDate, onChange: setAsOfDate }),
             ...statementScopeFilters(t, {
                 canConsolidate,
                 compare,
@@ -334,6 +324,8 @@ export default function BalanceSheetPage() {
 
             <ListToolbar
                 tableId="accounting-balance-sheet"
+                filterLayout="row"
+                viewOptions={false}
                 filters={filters}
                 search={{ value: search, onChange: setSearch, placeholder: t.accountingReportsUi.common.searchAccounts }}
             />

@@ -202,6 +202,8 @@ export default function OpeningBalancesPage() {
 
             <ListToolbar
                 tableId="accounting-opening-balances"
+                filterLayout="row"
+                viewOptions={false}
                 filters={filters}
                 search={{ value: search, onChange: setSearch, placeholder: m.searchPlaceholder }}
             />

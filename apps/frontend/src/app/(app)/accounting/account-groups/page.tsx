@@ -329,6 +329,8 @@ export default function AccountGroupsPage() {
 
             <ListToolbar
                 tableId="accounting-account-subgroups"
+                filterLayout="row"
+                viewOptions={false}
                 filters={filters}
                 search={{ value: search, onChange: setSearch, placeholder: m.searchPlaceholder }}
             />

@@ -221,6 +221,8 @@ export default function CostCentersPage() {
 
             <ListToolbar
                 tableId="accounting-cost-centers"
+                filterLayout="row"
+                viewOptions={false}
                 filters={filters}
                 search={{ value: search, onChange: setSearch, placeholder: m.searchPlaceholder }}
             />

@@ -14,11 +14,9 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import { useApprovedOnly } from '@/lib/accounting-report-scope';
 import type { CreatedRange } from '@/lib/created-range';
 import {
-    AS_OF_PRESETS,
     PERIOD_PRESETS,
     approvedOnlyFilter,
-    asOfFromRange,
-    asOfRange,
+    asOfFilter,
     defaultPeriod,
     requiredPeriod,
     todayDate,
@@ -109,16 +107,8 @@ export default function FinancialRatiosPage() {
 
     const filters = useMemo<ResolvedListFilter[]>(() => {
         const list: ListFilter[] = [
-            {
-                id: 'asOf',
-                type: 'date-range',
-                label: ui.asOf,
-                value: asOfRange(asOfDate),
-                // The balance-sheet ratios are always as of some day: cleared, today.
-                onChange: (next) => setAsOfDate(asOfFromRange(next)),
-                presets: AS_OF_PRESETS,
-                operators: true,
-            },
+            // The balance-sheet ratios are always as of some day: cleared, today.
+            asOfFilter({ label: ui.asOf, value: asOfDate, onChange: setAsOfDate }),
             {
                 id: 'period',
                 type: 'date-range',
@@ -129,7 +119,7 @@ export default function FinancialRatiosPage() {
                 presets: PERIOD_PRESETS,
                 operators: true,
             },
-            ...approvedOnlyFilter(t, { approvalEnabled, approvedOnly, onChange: setApprovedOnly }),
+            ...approvedOnlyFilter(t, { approvalEnabled, approvedOnly, onChange: setApprovedOnly }).map((filter) => ({ ...filter, more: true })),
         ];
         return list as ResolvedListFilter[];
     }, [t, ui, asOfDate, period, approvalEnabled, approvedOnly, setApprovedOnly]);
@@ -170,7 +160,7 @@ export default function FinancialRatiosPage() {
 
             <ListStats stats={stats} loading={loading || !data} label={t.accountingReportsUi.common.stats} />
 
-            <ListToolbar tableId="accounting-financial-ratios" filters={filters} />
+            <ListToolbar tableId="accounting-financial-ratios" filters={filters} filterLayout="row" viewOptions={false} />
 
             {error && <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-700">{error}</div>}
 

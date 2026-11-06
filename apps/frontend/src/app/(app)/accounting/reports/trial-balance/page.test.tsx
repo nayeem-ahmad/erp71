@@ -166,6 +166,47 @@ describe('TrialBalancePage — print', () => {
         expect(tile('Difference')).toHaveTextContent(/Balanced/);
     });
 
+    it('ties a totals row under the table: server balances, gross over every row, narrowed by a search', async () => {
+        render(<TrialBalancePage />);
+        await screen.findByText('Petty Cash');
+
+        const footer = () => screen.getByRole('rowheader', { name: 'Totals' }).closest('tr') as HTMLElement;
+        const cell = (columnId: string) => footer().querySelector(`[data-column-id="${columnId}"]`) as HTMLElement;
+        expect(cell('debit_total')).toHaveTextContent(/৳\s?62,000/);
+        expect(cell('credit_total')).toHaveTextContent(/৳\s?24,000/);
+        expect(cell('debit_balance')).toHaveTextContent(/৳\s?38,000/);
+        expect(cell('credit_balance')).toHaveTextContent(/৳\s?38,000/);
+        expect(cell('debit_balance')).toHaveClass('text-end', 'tabular-nums');
+
+        // Hide-zero leaves the totals standing — the rows it drops net out.
+        fireEvent.click(screen.getByRole('button', { name: /hide zero/i }));
+        await waitFor(() => expect(screen.queryByText('Petty Cash')).not.toBeInTheDocument());
+        expect(cell('debit_total')).toHaveTextContent(/৳\s?62,000/);
+        expect(cell('credit_balance')).toHaveTextContent(/৳\s?38,000/);
+
+        // A search narrows them to the rows shown, as the printed copy does.
+        fireEvent.change(screen.getByPlaceholderText(/search/i), { target: { value: 'Cash in' } });
+        await waitFor(() => expect(cell('debit_total')).toHaveTextContent(/৳\s?50,000/));
+        expect(cell('credit_total')).toHaveTextContent(/৳\s?12,000/);
+        expect(cell('credit_balance')).toHaveTextContent(/৳\s?0/);
+    });
+
+    it('asks for the day picked on the as-of chip, and falls back to today when it is cleared', async () => {
+        render(<TrialBalancePage />);
+        await screen.findByText('Cash in Hand');
+        const today = new Date().toISOString().slice(0, 10);
+        expect(api.getTrialBalance).toHaveBeenLastCalledWith(expect.objectContaining({ asOfDate: today }));
+
+        fireEvent.click(screen.getByRole('button', { name: /^As of/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'End of last year' }));
+        const lastYearEnd = `${Number(today.slice(0, 4)) - 1}-12-31`;
+        await waitFor(() => expect(api.getTrialBalance).toHaveBeenLastCalledWith(expect.objectContaining({ asOfDate: lastYearEnd })));
+        expect(screen.getByRole('button', { name: /^As of: 31 Dec \d{4}/ })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Remove filter As of' }));
+        await waitFor(() => expect(api.getTrialBalance).toHaveBeenLastCalledWith(expect.objectContaining({ asOfDate: today })));
+    });
+
     it('warns when the trial does not balance', async () => {
         (api.getTrialBalance as jest.Mock).mockResolvedValue({
             ...RESPONSE,

@@ -35,9 +35,9 @@ import {
     statementScopeParams,
     useApprovedOnly,
 } from '@/lib/accounting-report-scope';
-import type { CreatedRangePreset } from '@/lib/created-range';
 import { matchesAnyOf, matchesSearch } from '@/lib/list-filter';
 import { BranchFilter } from '@/components/ui';
+import { asOfFilter } from '../_shared/report-chips';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 
 function defaultToday() {
@@ -65,7 +65,6 @@ interface TBData {
 }
 
 const ACCOUNT_TYPES = ['asset', 'liability', 'equity', 'revenue', 'expense'] as const;
-const AS_OF_PRESETS: readonly CreatedRangePreset[] = ['today', 'yesterday'];
 
 const columnHelper = createColumnHelper<TBRow>();
 
@@ -175,6 +174,33 @@ export default function TrialBalancePage() {
 
     const printCopy = t.accounting.reports.print;
 
+    /**
+     * The totals row: the server's balance totals, and the gross columns over
+     * every row it sent — hide-zero leaves those standing, as it leaves the
+     * balances tied. A type or search narrows all four to the rows shown, as
+     * the printed copy does.
+     */
+    const footerTotals = useMemo(() => {
+        const rows = isCompare ? [] : ((data?.rows ?? []) as TBRow[]);
+        const sum = (list: TBRow[], key: keyof Pick<TBRow, 'debit_total' | 'credit_total' | 'debit_balance' | 'credit_balance'>) => (
+            list.reduce((total, row) => total + Number(row[key] || 0), 0)
+        );
+        if (narrowed || !data || isCompare) {
+            return {
+                debitTotal: sum(visibleRows, 'debit_total'),
+                creditTotal: sum(visibleRows, 'credit_total'),
+                debitBalance: sum(visibleRows, 'debit_balance'),
+                creditBalance: sum(visibleRows, 'credit_balance'),
+            };
+        }
+        return {
+            debitTotal: sum(rows, 'debit_total'),
+            creditTotal: sum(rows, 'credit_total'),
+            debitBalance: Number(data.totals.debit),
+            creditBalance: Number(data.totals.credit),
+        };
+    }, [data, isCompare, narrowed, visibleRows]);
+
     const handlePrint = useCallback(async () => {
         if (!data || isCompare) return;
 
@@ -276,42 +302,43 @@ export default function TrialBalancePage() {
         columnHelper.accessor('debit_total', {
             header: printCopy.grossDebit,
             cell: (info) => <span className="text-gray-700">{formatBDT(info.getValue(), { locale })}</span>,
+            footer: () => formatBDT(footerTotals.debitTotal, { locale }),
             meta: { align: 'end', hideOnMobile: true },
             size: 140,
         }),
         columnHelper.accessor('credit_total', {
             header: printCopy.grossCredit,
             cell: (info) => <span className="text-gray-700">{formatBDT(info.getValue(), { locale })}</span>,
+            footer: () => formatBDT(footerTotals.creditTotal, { locale }),
             meta: { align: 'end', hideOnMobile: true },
             size: 140,
         }),
         columnHelper.accessor('debit_balance', {
             header: printCopy.debitBalance,
             cell: (info) => <span className="font-medium text-gray-800">{info.getValue() > 0 ? formatBDT(info.getValue(), { locale }) : '—'}</span>,
+            footer: () => formatBDT(footerTotals.debitBalance, { locale }),
             meta: { align: 'end' },
             size: 140,
         }),
         columnHelper.accessor('credit_balance', {
             header: printCopy.creditBalance,
             cell: (info) => <span className="font-medium text-gray-800">{info.getValue() > 0 ? formatBDT(info.getValue(), { locale }) : '—'}</span>,
+            footer: () => formatBDT(footerTotals.creditBalance, { locale }),
             meta: { align: 'end' },
             size: 140,
         }),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    ], [t, locale, rowLabel, activeLevel, printCopy]);
+    ], [t, locale, rowLabel, activeLevel, printCopy, footerTotals]);
 
     const filters = useMemo<ResolvedListFilter[]>(() => {
         const list: ResolvedListFilter[] = [
-            {
-                // A trial balance is always as of some day: cleared, it is today.
-                id: 'asOf',
-                type: 'date-range',
+            // A trial balance is always as of some day: cleared, it is today.
+            asOfFilter({
                 label: t.accounting.reports.balanceSheet.asOf,
-                value: { from: asOfDate, to: asOfDate },
-                onChange: (next) => setAsOfDate(next?.to?.slice(0, 10) ?? next?.from?.slice(0, 10) ?? defaultToday()),
-                presets: AS_OF_PRESETS,
-                operators: true,
-            },
+                value: asOfDate,
+                onChange: setAsOfDate,
+                fallback: defaultToday,
+            }) as ResolvedListFilter,
             {
                 id: 'level',
                 type: 'select',
@@ -458,7 +485,7 @@ export default function TrialBalancePage() {
 
             {compare ? (
                 <>
-                    <ListToolbar tableId="trial-balance-compare" filters={filters} />
+                    <ListToolbar tableId="trial-balance-compare" filters={filters} filterLayout="row" viewOptions={false} />
                     {loading ? (
                         <div className="rounded-lg border border-gray-100 bg-white py-8 text-center text-sm text-gray-400">
                             {t.accountingShared.loading}
@@ -493,6 +520,7 @@ export default function TrialBalancePage() {
                         stats={stats}
                         enableColumnFilters={false}
                         viewOptions
+                        footerLabel={t.accountingShared.totals}
                         // The header's Print prints the statement with its
                         // totals; a plain-table print beside it would be a
                         // second, lesser copy of the same thing.

@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useId, useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
-import { Button, Input, Select } from '@/components/ui';
+import { Check, Search } from 'lucide-react';
+import { Button, Field, Input, Select } from '@/components/ui';
 import { formatMessage, useI18n } from '@/lib/i18n';
+import { addCalendarDays, tenantDateOnly } from '@/lib/created-range';
 import { NUMBER_CONDITION_OPS, type NumberCondition, type NumberConditionOp } from '@/lib/number-condition';
 
 export interface ListFilterOption {
@@ -49,29 +50,14 @@ export interface MultiSelectPanelProps {
 }
 
 /**
- * Ticks several values of one filter — every tick narrows the list straight
- * away. With `exclude` it can also turn round to "is none of"; with
- * `loadOptions` the search box asks the server, for a list too long to send
- * whole.
+ * The search box behind an option list: filters `options` as the person
+ * types or, with `loadOptions`, asks the server once typing pauses.
  */
-export function MultiSelectPanel({
-    filterId,
-    label,
-    options,
-    value,
-    onChange,
-    exclude,
-    loadOptions,
-    searchable,
-}: MultiSelectPanelProps) {
-    const { t } = useI18n();
-    const copy = t.common.dataTable;
+function useOptionSearch(filterId: string, loadOptions?: (query: string) => Promise<readonly ListFilterOption[]>) {
     const [query, setQuery] = useState('');
     const [fetched, setFetched] = useState<readonly ListFilterOption[] | null>(null);
     const [loading, setLoading] = useState(false);
     const trimmed = query.trim();
-    const showSearch = Boolean(loadOptions) || (searchable ?? options.length > SEARCH_THRESHOLD);
-    const selected = useMemo(() => new Set(value), [value]);
 
     useEffect(() => {
         if (!loadOptions || !trimmed) {
@@ -101,12 +87,66 @@ export function MultiSelectPanel({
         };
     }, [filterId, loadOptions, trimmed]);
 
+    return { query, setQuery, trimmed, fetched, loading };
+}
+
+/** What a search matches: the server's answer, or the options whose label holds the text. */
+function matchedOptions(
+    trimmed: string,
+    options: readonly ListFilterOption[],
+    fetched: readonly ListFilterOption[] | null,
+    remote: boolean,
+): readonly ListFilterOption[] {
+    if (remote) return fetched ?? [];
+    const needle = trimmed.toLowerCase();
+    return options.filter((option) => option.label.toLowerCase().includes(needle));
+}
+
+function OptionSearchBox({ label, value, onChange }: { label: string; value: string; onChange: (next: string) => void }) {
+    const { t } = useI18n();
+    const text = formatMessage(t.common.dataTable.searchOptions, { label });
+    return (
+        <div className="p-2 pb-0">
+            <div className="relative">
+                <Search className="pointer-events-none absolute start-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                <Input
+                    type="search"
+                    value={value}
+                    onChange={(event) => onChange(event.target.value)}
+                    placeholder={text}
+                    aria-label={text}
+                    className="w-full ps-7 text-xs"
+                    autoFocus
+                />
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Ticks several values of one filter — every tick narrows the list straight
+ * away. With `exclude` it can also turn round to "is none of"; with
+ * `loadOptions` the search box asks the server, for a list too long to send
+ * whole.
+ */
+export function MultiSelectPanel({
+    filterId,
+    label,
+    options,
+    value,
+    onChange,
+    exclude,
+    loadOptions,
+    searchable,
+}: MultiSelectPanelProps) {
+    const { t } = useI18n();
+    const copy = t.common.dataTable;
+    const { query, setQuery, trimmed, fetched, loading } = useOptionSearch(filterId, loadOptions);
+    const showSearch = Boolean(loadOptions) || (searchable ?? options.length > SEARCH_THRESHOLD);
+    const selected = useMemo(() => new Set(value), [value]);
+
     const shown = useMemo(() => {
-        if (trimmed) {
-            if (loadOptions) return fetched ?? [];
-            const needle = trimmed.toLowerCase();
-            return options.filter((option) => option.label.toLowerCase().includes(needle));
-        }
+        if (trimmed) return matchedOptions(trimmed, options, fetched, Boolean(loadOptions));
         // What is ticked comes first, including picks fetched by an earlier
         // search that the static list does not carry.
         const fromSearch = value
@@ -142,22 +182,7 @@ export function MultiSelectPanel({
                     </div>
                 </div>
             ) : null}
-            {showSearch ? (
-                <div className="p-2 pb-0">
-                    <div className="relative">
-                        <Search className="pointer-events-none absolute start-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
-                        <Input
-                            type="search"
-                            value={query}
-                            onChange={(event) => setQuery(event.target.value)}
-                            placeholder={formatMessage(copy.searchOptions, { label })}
-                            aria-label={formatMessage(copy.searchOptions, { label })}
-                            className="w-full ps-7 text-xs"
-                            autoFocus
-                        />
-                    </div>
-                </div>
-            ) : null}
+            {showSearch ? <OptionSearchBox label={label} value={query} onChange={setQuery} /> : null}
             <div className="max-h-60 overflow-y-auto p-1" role="group" aria-label={label}>
                 {loading ? (
                     <p className="px-2 py-1.5 text-xs text-gray-400">{copy.searchingOptions}</p>
@@ -200,6 +225,221 @@ export function MultiSelectPanel({
                 >
                     {copy.clear}
                 </button>
+            </div>
+        </div>
+    );
+}
+
+export interface SingleSelectPanelProps {
+    filterId: string;
+    label: string;
+    options: readonly ListFilterOption[];
+    value: string | null;
+    onChange: (next: string | null) => void;
+    loadOptions?: (query: string) => Promise<readonly ListFilterOption[]>;
+    /** Called once a choice is made — the popover around the panel closes on it. */
+    onDone?: () => void;
+}
+
+/**
+ * Picks one value from a list long enough to want a search box (an account
+ * out of a chart of accounts). A pick applies at once; Clear empties it.
+ */
+export function SingleSelectPanel({ filterId, label, options, value, onChange, loadOptions, onDone }: SingleSelectPanelProps) {
+    const { t } = useI18n();
+    const copy = t.common.dataTable;
+    const { query, setQuery, trimmed, fetched, loading } = useOptionSearch(filterId, loadOptions);
+
+    const shown = useMemo(() => {
+        if (trimmed) return matchedOptions(trimmed, options, fetched, Boolean(loadOptions));
+        // A pick fetched by an earlier search is not among the static options.
+        if (value && !options.some((option) => option.value === value)) {
+            return [{ value, label: optionLabel(filterId, options, value) }, ...options];
+        }
+        return options;
+    }, [trimmed, options, fetched, loadOptions, value, filterId]);
+
+    const pick = (next: string | null) => {
+        onChange(next);
+        onDone?.();
+    };
+
+    return (
+        <div className="w-64 max-w-full">
+            <OptionSearchBox label={label} value={query} onChange={setQuery} />
+            <div className="max-h-60 overflow-y-auto p-1" role="listbox" aria-label={label}>
+                {loading ? (
+                    <p className="px-2 py-1.5 text-xs text-gray-400">{copy.searchingOptions}</p>
+                ) : shown.length === 0 ? (
+                    <p className="px-2 py-1.5 text-xs text-gray-400">{copy.noOptions}</p>
+                ) : (
+                    shown.map((option) => {
+                        const chosen = option.value === value;
+                        return (
+                            <button
+                                key={option.value}
+                                type="button"
+                                role="option"
+                                aria-selected={chosen}
+                                onClick={() => pick(option.value)}
+                                className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-start text-xs max-md:min-h-touch ${
+                                    chosen ? 'bg-blue-50 font-semibold text-blue-700' : 'text-gray-700 hover:bg-gray-50'
+                                }`}
+                            >
+                                <Check aria-hidden className={`h-3.5 w-3.5 shrink-0 ${chosen ? '' : 'invisible'}`} />
+                                <span className="truncate">{option.label}</span>
+                            </button>
+                        );
+                    })
+                )}
+            </div>
+            <div className="flex items-center justify-end border-t border-gray-100 px-3 py-2 text-xs">
+                <button
+                    type="button"
+                    onClick={() => pick(null)}
+                    disabled={!value}
+                    className="text-gray-500 hover:underline disabled:opacity-40 max-md:min-h-touch"
+                >
+                    {copy.clear}
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/** The shortcuts a one-day chip can offer. */
+export type DatePreset = 'today' | 'yesterday' | 'endOfLastMonth' | 'endOfLastQuarter' | 'endOfLastYear';
+
+export const DEFAULT_DATE_PRESETS: readonly DatePreset[] = ['today', 'yesterday', 'endOfLastMonth', 'endOfLastYear'];
+
+/** The day a preset names, on the workspace's calendar (`YYYY-MM-DD`). */
+export function dateFromPreset(preset: DatePreset, now: Date = new Date()): string {
+    const today = tenantDateOnly(now);
+    const [year, month] = today.split('-').map(Number);
+    switch (preset) {
+        case 'today':
+            return today;
+        case 'yesterday':
+            return addCalendarDays(today, -1);
+        case 'endOfLastMonth':
+            return addCalendarDays(`${today.slice(0, 8)}01`, -1);
+        case 'endOfLastQuarter': {
+            const quarterStart = Math.floor((month - 1) / 3) * 3 + 1;
+            return addCalendarDays(`${year}-${String(quarterStart).padStart(2, '0')}-01`, -1);
+        }
+        case 'endOfLastYear':
+            return `${year - 1}-12-31`;
+    }
+}
+
+/** "6 Nov", or "31 Dec 2025" for a day outside this year — as a chip names its day. */
+export function formatDateChip(ymd: string, now: Date = new Date()): string {
+    const [year, month, day] = ymd.slice(0, 10).split('-').map(Number);
+    if (!year || !month || !day) return ymd;
+    const sameYear = tenantDateOnly(now).slice(0, 4) === String(year);
+    return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        ...(sameYear ? {} : { year: 'numeric' }),
+        timeZone: 'UTC',
+    });
+}
+
+export interface DatePanelProps {
+    label: string;
+    value: string | null;
+    onChange: (next: string | null) => void;
+    presets?: readonly DatePreset[];
+    /** Called once a choice is made — the popover around the panel closes on it. */
+    onDone?: () => void;
+    /** Injected in tests so "Today" is a known day. */
+    now?: Date;
+}
+
+/**
+ * One day — a report's as-of date: shortcuts, then any day picked, then
+ * Clear and Apply. A page whose report must have a day falls back to its
+ * default when cleared.
+ */
+export function DatePanel({ label, value, onChange, presets = DEFAULT_DATE_PRESETS, onDone, now }: DatePanelProps) {
+    const { t } = useI18n();
+    const copy = t.common.createdRange;
+    const [date, setDate] = useState(value ?? '');
+    const [error, setError] = useState(false);
+    const inputId = useId();
+
+    useEffect(() => {
+        setDate(value ?? '');
+        setError(false);
+    }, [value]);
+
+    const presetLabel: Record<DatePreset, string> = {
+        today: copy.today,
+        yesterday: copy.yesterday,
+        endOfLastMonth: copy.endOfLastMonth,
+        endOfLastQuarter: copy.endOfLastQuarter,
+        endOfLastYear: copy.endOfLastYear,
+    };
+
+    const finish = (next: string | null) => {
+        onChange(next);
+        onDone?.();
+    };
+
+    const apply = () => {
+        if (!date) {
+            setError(true);
+            return;
+        }
+        finish(date);
+    };
+
+    return (
+        <div className="w-64 max-w-full space-y-3 p-3">
+            <div className="grid grid-cols-2 gap-1.5">
+                {presets.map((preset) => {
+                    const day = dateFromPreset(preset, now);
+                    return (
+                        <Button
+                            key={preset}
+                            type="button"
+                            variant={day === value ? 'primary' : 'secondary'}
+                            size="sm"
+                            aria-pressed={day === value}
+                            onClick={() => finish(day)}
+                        >
+                            {presetLabel[preset]}
+                        </Button>
+                    );
+                })}
+            </div>
+            <Field label={label} htmlFor={inputId} error={error ? copy.pickDate : undefined}>
+                <Input
+                    id={inputId}
+                    type="date"
+                    value={date}
+                    error={error}
+                    onChange={(event) => {
+                        setDate(event.target.value);
+                        setError(false);
+                    }}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                            event.preventDefault();
+                            apply();
+                        }
+                    }}
+                />
+            </Field>
+            <div className="flex items-center justify-end gap-2">
+                {value ? (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => finish(null)}>
+                        {copy.clear}
+                    </Button>
+                ) : null}
+                <Button type="button" size="sm" onClick={apply}>
+                    {copy.apply}
+                </Button>
             </div>
         </div>
     );

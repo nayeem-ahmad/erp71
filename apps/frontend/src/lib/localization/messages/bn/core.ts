@@ -92,6 +92,9 @@ export const coreMessages = {
                 fromAfterTo: "\"থেকে\" অবশ্যই \"পর্যন্ত\"-এর আগে বা একই হতে হবে",
                 date: 'তারিখ',
                 pickDate: 'একটি তারিখ বাছুন',
+                endOfLastMonth: 'গত মাসের শেষ দিন',
+                endOfLastQuarter: 'গত প্রান্তিকের শেষ দিন',
+                endOfLastYear: 'গত বছরের শেষ দিন',
                 ops: {
                     between: 'এর মধ্যে',
                     on: 'এই দিনে',

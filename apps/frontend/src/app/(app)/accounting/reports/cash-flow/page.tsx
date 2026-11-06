@@ -114,6 +114,7 @@ export default function CashFlowPage() {
                 pressed: approvedOnly,
                 onChange: setApprovedOnly,
                 control: 'checkbox',
+                more: true,
             });
         }
         return list;
@@ -160,6 +161,8 @@ export default function CashFlowPage() {
 
             <ListToolbar
                 tableId="cash-flow-statement"
+                filterLayout="row"
+                viewOptions={false}
                 filters={filters}
                 search={{ value: search, onChange: setSearch, placeholder: ui.searchPlaceholder }}
             />

@@ -297,6 +297,8 @@ export default function AttendancePage() {
             <ListToolbar
                 tableId="attendance-days"
                 filters={filters}
+                // Nothing to choose: the days are not a table, and there is no other layout.
+                viewOptions={false}
                 search={{ value: search, onChange: setSearch, placeholder: a.searchPlaceholder }}
             />
 

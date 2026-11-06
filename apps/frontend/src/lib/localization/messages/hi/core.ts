@@ -92,6 +92,9 @@ export const coreMessages = {
             fromAfterTo: "\"से\" को \"तक\" से पहले या उसके बराबर होना चाहिए",
             date: 'तारीख',
             pickDate: 'तारीख चुनें',
+            endOfLastMonth: 'पिछले महीने का अंत',
+            endOfLastQuarter: 'पिछली तिमाही का अंत',
+            endOfLastYear: 'पिछले साल का अंत',
             ops: {
                 between: 'के बीच',
                 on: 'को',

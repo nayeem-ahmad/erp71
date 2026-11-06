@@ -178,7 +178,22 @@ export interface PrintTableHeader {
     context?: HeaderContext;
 }
 
-export function printTable<T>(table: Table<T>, title: string, header?: PrintTableHeader, paperSize: PaperSize = 'A4') {
+/** A totals row under the printed rows: each column's text by id, and a label for the first column when it has none. */
+export interface PrintTableFooter {
+    label?: string;
+    cells: Record<string, string>;
+}
+
+const escapeHtml = (text: string) =>
+    text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+export function printTable<T>(
+    table: Table<T>,
+    title: string,
+    header?: PrintTableHeader,
+    paperSize: PaperSize = 'A4',
+    footer?: PrintTableFooter,
+) {
     const columns = table
         .getVisibleLeafColumns()
         .filter((c) => c.id !== 'actions' && c.id !== 'select');
@@ -192,6 +207,15 @@ export function printTable<T>(table: Table<T>, title: string, header?: PrintTabl
             return val == null ? '' : String(val);
         }),
     );
+
+    const footerTexts = footer
+        ? columns.map((c, i) => footer.cells[c.id] ?? (i === 0 ? footer.label ?? '' : ''))
+        : [];
+    // A last body row, not a <tfoot>: print repeats a <tfoot> on every page,
+    // and a total under page one's rows reads as page one's total.
+    const footerHtml = footerTexts.some(Boolean)
+        ? `<tr class="totals">${footerTexts.map((text, i) => `<td${cellAttr[i]}><strong>${escapeHtml(text)}</strong></td>`).join('')}</tr>`
+        : '';
 
     openPrintWindow({
         title,
@@ -207,7 +231,7 @@ export function printTable<T>(table: Table<T>, title: string, header?: PrintTabl
 <h1>${title}</h1>
 <table>
   <thead><tr>${headers.map((h, i) => `<th${cellAttr[i]}>${h}</th>`).join('')}</tr></thead>
-  <tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td${cellAttr[i]}>${c}</td>`).join('')}</tr>`).join('')}</tbody>
+  <tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td${cellAttr[i]}>${c}</td>`).join('')}</tr>`).join('')}${footerHtml}</tbody>
 </table>`,
         footerHtml: `<div class="footer">Printed on ${formatDateTime(new Date())}</div>`,
     });

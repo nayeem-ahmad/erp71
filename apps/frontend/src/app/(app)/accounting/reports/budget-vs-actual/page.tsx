@@ -92,6 +92,15 @@ export default function BudgetVsActualPage() {
         [allRows, search, types, statuses, varianceFilter],
     );
 
+    // The server's totals while every account is listed; the chips and the
+    // search narrow them to the accounts shown.
+    const totals = useMemo(() => {
+        if (data && rows.length === allRows.length) return data.totals;
+        const budget = rows.reduce((sum, row) => sum + row.budget, 0);
+        const actual = rows.reduce((sum, row) => sum + row.actual, 0);
+        return { budget, actual, variance: rows.reduce((sum, row) => sum + row.variance, 0) };
+    }, [data, rows, allRows]);
+
     const columns = useMemo(() => [
         {
             id: 'account',
@@ -121,6 +130,7 @@ export default function BudgetVsActualPage() {
             cell: ({ row }: { row: { original: BudgetRow } }) => (
                 <span className="tabular-nums">{formatBDT(row.original.budget, { locale })}</span>
             ),
+            footer: () => formatBDT(totals.budget, { locale }),
         },
         {
             id: 'actual',
@@ -130,6 +140,7 @@ export default function BudgetVsActualPage() {
             cell: ({ row }: { row: { original: BudgetRow } }) => (
                 <span className="tabular-nums">{formatBDT(row.original.actual, { locale })}</span>
             ),
+            footer: () => formatBDT(totals.actual, { locale }),
         },
         {
             id: 'variance',
@@ -139,6 +150,11 @@ export default function BudgetVsActualPage() {
             cell: ({ row }: { row: { original: BudgetRow } }) => (
                 <span className={`font-semibold tabular-nums ${varianceClass(row.original.variance)}`}>
                     {row.original.variance >= 0 ? '+' : ''}{formatBDT(row.original.variance, { locale })}
+                </span>
+            ),
+            footer: () => (
+                <span className={varianceClass(totals.variance)}>
+                    {totals.variance >= 0 ? '+' : ''}{formatBDT(totals.variance, { locale })}
                 </span>
             ),
         },
@@ -163,7 +179,7 @@ export default function BudgetVsActualPage() {
             },
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    ], [t, ui, copy, statusLabels, locale]);
+    ], [t, ui, copy, statusLabels, locale, totals]);
 
     const monthOptions = useMemo(
         () => Array.from({ length: 12 }, (_, index) => ({
@@ -285,6 +301,7 @@ export default function BudgetVsActualPage() {
                 stats={stats}
                 enableColumnFilters={false}
                 viewOptions
+                footerLabel={t.accountingShared.totals}
             />
         </AccountingPageShell>
     );

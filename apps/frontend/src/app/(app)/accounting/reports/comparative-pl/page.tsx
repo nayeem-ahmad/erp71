@@ -132,7 +132,7 @@ export default function ComparativePLPage() {
                 onChange: setSections,
                 options: SECTIONS.map((section) => ({ value: section, label: sectionLabels[section] })),
             },
-            ...approvedOnlyFilter(t, { approvalEnabled, approvedOnly, onChange: setApprovedOnly }),
+            ...approvedOnlyFilter(t, { approvalEnabled, approvedOnly, onChange: setApprovedOnly }).map((filter) => ({ ...filter, more: true })),
         ];
         return list as ResolvedListFilter[];
     }, [t, ui, period, sections, sectionLabels, approvalEnabled, approvedOnly, setApprovedOnly]);
@@ -245,6 +245,8 @@ export default function ComparativePLPage() {
 
             <ListToolbar
                 tableId="accounting-comparative-pl"
+                filterLayout="row"
+                viewOptions={false}
                 filters={filters}
                 search={{ value: search, onChange: setSearch, placeholder: t.accountingReportsUi.common.searchAccounts }}
             />

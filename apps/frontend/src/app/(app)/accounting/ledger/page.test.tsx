@@ -70,7 +70,7 @@ function tile(label: string) {
 
 async function pickAccount(name: RegExp) {
     fireEvent.click(screen.getByRole('button', { name: /^Account/ }));
-    fireEvent.click(await screen.findByRole('checkbox', { name }));
+    fireEvent.click(await screen.findByRole('option', { name }));
 }
 
 describe('AccountingLedgerPage', () => {
@@ -114,6 +114,24 @@ describe('AccountingLedgerPage', () => {
 
         expect(await screen.findByText('Select an account to review the ledger')).toBeInTheDocument();
         expect(api.getLedger).not.toHaveBeenCalled();
+    });
+
+    it('finds the account by typing in the account chip, and takes one account only', async () => {
+        render(<AccountingLedgerPage />);
+        await waitFor(() => expect(api.getAccounts).toHaveBeenCalled());
+
+        fireEvent.click(screen.getByRole('button', { name: /^Account/ }));
+        fireEvent.change(await screen.findByRole('searchbox', { name: 'Search Account…' }), { target: { value: 'sales' } });
+        const list = screen.getByRole('listbox', { name: 'Account' });
+        expect(within(list).getAllByRole('option').map((option) => option.textContent)).toEqual(['4010 — Sales Revenue']);
+        fireEvent.click(screen.getByRole('option', { name: /4010 — Sales Revenue/ }));
+
+        await waitFor(() => expect(api.getLedger).toHaveBeenLastCalledWith('revenue-1', expect.anything()));
+        expect(screen.getByRole('button', { name: /^Account: 4010 — Sales Revenue/ })).toBeInTheDocument();
+
+        // Another pick moves to that account rather than adding to it.
+        await pickAccount(/1010 — Cash in Hand/);
+        await waitFor(() => expect(api.getLedger).toHaveBeenLastCalledWith('cash-1', expect.anything()));
     });
 
     it('loads the picked account for this month, keeps the URL in step, and fills the strip', async () => {

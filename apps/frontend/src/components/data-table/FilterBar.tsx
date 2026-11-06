@@ -9,9 +9,18 @@ import { formatMessage, useI18n } from '@/lib/i18n';
 import { formatCreatedRangeLabel, isCreatedRangeEmpty, type CreatedRange, type CreatedRangePreset } from '@/lib/created-range';
 import { formatNumberCondition, type NumberCondition } from '@/lib/number-condition';
 import CreatedRangeFilter, { CreatedRangePanel } from './CreatedRangeFilter';
-import { MultiSelectPanel, NumberConditionPanel, optionLabel, type ListFilterOption } from './filter-panels';
+import {
+    DatePanel,
+    MultiSelectPanel,
+    NumberConditionPanel,
+    SingleSelectPanel,
+    formatDateChip,
+    optionLabel,
+    type DatePreset,
+    type ListFilterOption,
+} from './filter-panels';
 
-export type { ListFilterOption } from './filter-panels';
+export type { DatePreset, ListFilterOption } from './filter-panels';
 
 /**
  * A list's filters, declared as data and drawn by `DataTable` in its toolbar —
@@ -20,7 +29,11 @@ export type { ListFilterOption } from './filter-panels';
  *
  * A `select` filter either narrows one of the table's own columns
  * (`columnId`, filtered on the rows already loaded) or is the page's to apply
- * (`value`/`onChange`, e.g. sent to the server).
+ * (`value`/`onChange`, e.g. sent to the server). With `searchable` it is a
+ * chip opening a searchable list instead of a native select.
+ *
+ * A `date` filter is one day — a report's as-of date. A report that must
+ * have one falls back to its default in `onChange(null)` rather than clearing.
  *
  * `more` keeps a filter behind the toolbar's More button in the one-row
  * layout (`DataTable`'s `filterLayout="row"`) — the rarely used ones, so the
@@ -39,6 +52,13 @@ export type ListFilter =
           /** A scope can pin the value, so the control stays visible but refuses a choice. */
           disabled?: boolean;
           title?: string;
+          /**
+           * A chip opening a search box over the options, for a list too long
+           * to scroll (an account out of the chart of accounts). Still one pick.
+           */
+          searchable?: boolean;
+          /** Asks for options matching typed text, as `multi-select` does. Implies `searchable`. */
+          loadOptions?: (query: string) => Promise<readonly ListFilterOption[]>;
           more?: boolean;
       }
     | {
@@ -86,6 +106,17 @@ export type ListFilter =
       }
     | {
           id: string;
+          type: 'date';
+          label: string;
+          /** `YYYY-MM-DD`, or null for no day. */
+          value: string | null;
+          onChange: (next: string | null) => void;
+          /** The shortcuts the chip offers; defaults to today, yesterday, end of last month and of last year. */
+          presets?: readonly DatePreset[];
+          more?: boolean;
+      }
+    | {
+          id: string;
           type: 'toggle';
           label: string;
           pressed: boolean;
@@ -104,11 +135,21 @@ export type ResolvedListFilter =
     | Extract<ListFilter, { type: 'multi-select' }>
     | Extract<ListFilter, { type: 'number' }>
     | Extract<ListFilter, { type: 'date-range' }>
+    | Extract<ListFilter, { type: 'date' }>
     | Extract<ListFilter, { type: 'toggle' }>;
+
+/** A select drawn as a chip with a searchable list rather than a native select. */
+function isSearchableSelect(filter: ResolvedListFilter): boolean {
+    return filter.type === 'select' && Boolean(filter.searchable || filter.loadOptions);
+}
+
+/** Filters whose editor is a panel of its own — a chip with a popover, a row that opens in the sheet. */
+type PanelFilter = Extract<ResolvedListFilter, { type: 'multi-select' | 'number' | 'date-range' | 'date' | 'select' }>;
 
 export function isFilterActive(filter: ResolvedListFilter): boolean {
     switch (filter.type) {
         case 'select':
+        case 'date':
             return Boolean(filter.value);
         case 'multi-select':
             return filter.value.length > 0;
@@ -144,10 +185,10 @@ type Copy = ReturnType<typeof useI18n>['t'];
 /** What an active filter is set to, as its chip shows it: "Completed +1", "৳1,000 – ৳5,000". */
 function filterValueText(filter: ResolvedListFilter, t: Copy, locale: string): string {
     switch (filter.type) {
-        case 'select': {
-            const option = filter.options.find((o) => o.value === filter.value);
-            return option?.label ?? filter.value ?? '';
-        }
+        case 'select':
+            return filter.value ? optionLabel(filter.id, filter.options, filter.value) : '';
+        case 'date':
+            return filter.value ? formatDateChip(filter.value) : '';
         case 'multi-select': {
             const [first, ...rest] = filter.value;
             if (first === undefined) return '';
@@ -243,9 +284,9 @@ function ToggleControl({ filter }: { filter: Extract<ResolvedListFilter, { type:
 }
 
 function FilterControl({ filter, block = false }: { filter: ResolvedListFilter; block?: boolean }) {
-    if (filter.type === 'select') return <SelectChip filter={filter} block={block} />;
+    if (filter.type === 'select' && !isSearchableSelect(filter)) return <SelectChip filter={filter} block={block} />;
     if (filter.type === 'toggle') return <ToggleControl filter={filter} />;
-    if (filter.type === 'multi-select' || filter.type === 'number') return <PopoverChip filter={filter} />;
+    if (filter.type !== 'date-range') return <PopoverChip filter={filter} />;
     const range = (
         <CreatedRangeFilter
             value={filter.value}
@@ -299,7 +340,22 @@ function FilterPanel({ filter, onDone }: { filter: ResolvedListFilter; onDone?: 
                     />
                 </div>
             );
+        case 'date':
+            return <DatePanel label={filter.label} value={filter.value} onChange={filter.onChange} presets={filter.presets} onDone={onDone} />;
         case 'select':
+            if (isSearchableSelect(filter)) {
+                return (
+                    <SingleSelectPanel
+                        filterId={filter.id}
+                        label={filter.label}
+                        options={filter.options}
+                        value={filter.value}
+                        onChange={filter.onChange}
+                        loadOptions={filter.loadOptions}
+                        onDone={onDone}
+                    />
+                );
+            }
             return (
                 <div className="p-2">
                     <SelectChip filter={filter} block />
@@ -374,7 +430,7 @@ const chipClass = (active: boolean) =>
  * A filter drawn as a chip that opens its editor: "Status ▾" while idle,
  * "Status: Completed +1 ✕" once it narrows the list.
  */
-function PopoverChip({ filter }: { filter: Extract<ResolvedListFilter, { type: 'multi-select' | 'number' | 'date-range' }> }) {
+function PopoverChip({ filter }: { filter: PanelFilter }) {
     const { t, locale } = useI18n();
     const popover = useChipPopover();
     const active = isFilterActive(filter);
@@ -386,8 +442,10 @@ function PopoverChip({ filter }: { filter: Extract<ResolvedListFilter, { type: '
                     type="button"
                     aria-expanded={popover.open}
                     aria-haspopup="dialog"
+                    disabled={filter.type === 'select' ? filter.disabled : undefined}
+                    title={filter.type === 'select' ? filter.title : undefined}
                     onClick={() => popover.setOpen(!popover.open)}
-                    className={`inline-flex items-center gap-1 py-1.5 ps-2.5 max-md:min-h-touch ${active ? 'pe-1' : 'pe-2'}`}
+                    className={`inline-flex items-center gap-1 py-1.5 ps-2.5 max-md:min-h-touch disabled:cursor-not-allowed ${active ? 'pe-1' : 'pe-2'}`}
                 >
                     <span className={active ? 'text-blue-700' : 'text-gray-500'}>
                         {label}
@@ -396,7 +454,7 @@ function PopoverChip({ filter }: { filter: Extract<ResolvedListFilter, { type: '
                     {active ? <span className="max-w-[10rem] truncate font-semibold">{filterValueText(filter, t, locale)}</span> : null}
                     <ChevronDown aria-hidden className="h-3.5 w-3.5 opacity-60" />
                 </button>
-                {active ? (
+                {active && !(filter.type === 'select' && filter.disabled) ? (
                     <button
                         type="button"
                         onClick={() => {
@@ -428,7 +486,7 @@ function PopoverChip({ filter }: { filter: Extract<ResolvedListFilter, { type: '
 
 /** One chip of the one-row layout. */
 function RowChip({ filter }: { filter: ResolvedListFilter }) {
-    if (filter.type === 'select') return <SelectChip filter={filter} />;
+    if (filter.type === 'select' && !isSearchableSelect(filter)) return <SelectChip filter={filter} />;
     if (filter.type === 'toggle') return <ToggleControl filter={filter} />;
     return <PopoverChip filter={filter} />;
 }
@@ -648,7 +706,7 @@ export default function FilterBar({
         panelGroup = [];
     };
     for (const filter of filters) {
-        if (filter.type === 'multi-select' || filter.type === 'number') {
+        if (filter.type === 'multi-select' || filter.type === 'number' || filter.type === 'date' || isSearchableSelect(filter)) {
             panelGroup.push(filter);
             continue;
         }

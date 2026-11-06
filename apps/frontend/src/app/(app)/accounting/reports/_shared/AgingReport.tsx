@@ -12,7 +12,7 @@ import { useI18n } from '@/lib/i18n';
 import type { NumberCondition } from '@/lib/number-condition';
 import { matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
 import { useApprovedOnly } from '@/lib/accounting-report-scope';
-import { AS_OF_PRESETS, approvedOnlyFilter, asOfFromRange, asOfRange, todayDate, wholeTaka } from './report-chips';
+import { approvedOnlyFilter, asOfFilter, todayDate, wholeTaka } from './report-chips';
 
 export interface AgingAccount {
     id: string;
@@ -106,6 +106,21 @@ export default function AgingReport({ kind }: { kind: 'ar' | 'ap' }) {
         [data, search, buckets, excludeBuckets, overdueOnly, balanceFilter],
     );
 
+    // The server's totals while every party is listed; the chips and the
+    // search narrow them to the parties shown.
+    const narrowed = rows.length !== (data?.accounts.length ?? 0);
+    const totals = useMemo(() => {
+        if (data && !narrowed) return data.totals;
+        const sum = (pick: (account: AgingAccount) => number) => rows.reduce((total, account) => total + pick(account), 0);
+        return {
+            balance: sum((account) => account.balance),
+            current: sum((account) => account.buckets.current),
+            overdue_31_60: sum((account) => account.buckets.overdue_31_60),
+            overdue_61_90: sum((account) => account.buckets.overdue_61_90),
+            overdue_90_plus: sum((account) => account.buckets.overdue_90_plus),
+        };
+    }, [data, rows, narrowed]);
+
     const columns = useMemo(() => {
         const money = (value: number, tone = '') => (
             <span className={`tabular-nums ${Math.abs(value) > EPSILON ? tone : ''}`}>{formatBDT(value, { locale })}</span>
@@ -130,6 +145,7 @@ export default function AgingReport({ kind }: { kind: 'ar' | 'ap' }) {
                 cell: ({ row }: { row: { original: AgingAccount } }) => (
                     <span className="font-semibold tabular-nums">{formatBDT(row.original.balance, { locale })}</span>
                 ),
+                footer: () => formatBDT(totals.balance, { locale }),
             },
             {
                 id: 'current',
@@ -137,6 +153,7 @@ export default function AgingReport({ kind }: { kind: 'ar' | 'ap' }) {
                 accessorFn: (row: AgingAccount) => row.buckets.current,
                 meta: { align: 'end', hideOnMobile: true },
                 cell: ({ row }: { row: { original: AgingAccount } }) => money(row.original.buckets.current),
+                footer: () => money(totals.current),
             },
             {
                 id: 'overdue_31_60',
@@ -144,6 +161,7 @@ export default function AgingReport({ kind }: { kind: 'ar' | 'ap' }) {
                 accessorFn: (row: AgingAccount) => row.buckets.overdue_31_60,
                 meta: { align: 'end', hideOnMobile: true },
                 cell: ({ row }: { row: { original: AgingAccount } }) => money(row.original.buckets.overdue_31_60, 'text-amber-700'),
+                footer: () => money(totals.overdue_31_60, 'text-amber-700'),
             },
             {
                 id: 'overdue_61_90',
@@ -151,6 +169,7 @@ export default function AgingReport({ kind }: { kind: 'ar' | 'ap' }) {
                 accessorFn: (row: AgingAccount) => row.buckets.overdue_61_90,
                 meta: { align: 'end', hideOnMobile: true },
                 cell: ({ row }: { row: { original: AgingAccount } }) => money(row.original.buckets.overdue_61_90, 'text-amber-700'),
+                footer: () => money(totals.overdue_61_90, 'text-amber-700'),
             },
             {
                 id: 'overdue_90_plus',
@@ -158,21 +177,14 @@ export default function AgingReport({ kind }: { kind: 'ar' | 'ap' }) {
                 accessorFn: (row: AgingAccount) => row.buckets.overdue_90_plus,
                 meta: { align: 'end' },
                 cell: ({ row }: { row: { original: AgingAccount } }) => money(row.original.buckets.overdue_90_plus, 'text-red-600'),
+                footer: () => money(totals.overdue_90_plus, 'text-red-600'),
             },
         ];
-    }, [ui, copy, locale]);
+    }, [ui, copy, locale, totals]);
 
     const filters = useMemo<ListFilter[]>(() => [
-        {
-            id: 'asOf',
-            type: 'date-range',
-            label: t.accounting.reports.balanceSheet.asOf,
-            value: asOfRange(asOfDate),
-            // Aging is always as of some day: cleared, it goes back to today.
-            onChange: (next) => setAsOfDate(asOfFromRange(next)),
-            presets: AS_OF_PRESETS,
-            operators: true,
-        },
+        // Aging is always as of some day: cleared, it goes back to today.
+        asOfFilter({ label: t.accounting.reports.balanceSheet.asOf, value: asOfDate, onChange: setAsOfDate }),
         {
             id: 'bucket',
             type: 'multi-select',
@@ -257,6 +269,7 @@ export default function AgingReport({ kind }: { kind: 'ar' | 'ap' }) {
                 stats={stats}
                 enableColumnFilters={false}
                 viewOptions
+                footerLabel={t.accountingShared.totals}
             />
 
             {data?.note ? <p className="text-xs text-gray-400 italic">{data.note}</p> : null}

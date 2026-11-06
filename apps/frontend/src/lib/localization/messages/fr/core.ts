@@ -92,6 +92,9 @@ export const coreMessages = {
             fromAfterTo: "« Du » doit être antérieur ou égal à « Au »",
             date: 'Date',
             pickDate: 'Choisissez une date',
+            endOfLastMonth: 'Fin du mois dernier',
+            endOfLastQuarter: 'Fin du trimestre dernier',
+            endOfLastYear: "Fin de l'année dernière",
             ops: {
                 between: 'est entre',
                 on: 'est le',

@@ -320,6 +320,8 @@ export default function ProfitLossPage() {
 
             <ListToolbar
                 tableId="accounting-profit-loss"
+                filterLayout="row"
+                viewOptions={false}
                 filters={filters}
                 search={{ value: search, onChange: setSearch, placeholder: t.accountingReportsUi.common.searchAccounts }}
             />
