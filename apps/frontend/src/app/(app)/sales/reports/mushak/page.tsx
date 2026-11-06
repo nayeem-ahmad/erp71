@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Download, Printer } from 'lucide-react';
+import { Calculator, Download, FileText, Landmark, Printer, Receipt, Scale, Wallet } from 'lucide-react';
 import { MUSHAK_FORMS, MushakForm, toBengaliDigits } from '@erp71/shared-types';
-import { Alert, BranchFilter, Button, Checkbox, Field, Input, PageHeader, PageShell } from '@/components/ui';
+import { Alert, BranchFilter, Button, PageHeader, PageShell } from '@/components/ui';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import GroupByChip from '@/components/hr/GroupByChip';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import MushakDocument, {
     MushakColumnHead,
@@ -15,6 +17,8 @@ import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { formatBDT, formatDate } from '@/lib/format';
+import { matchesSearch } from '@/lib/list-filter';
+import type { CreatedRange, CreatedRangePreset } from '@/lib/created-range';
 
 interface BookRow {
     saleId: string;
@@ -47,7 +51,7 @@ interface Book {
 }
 
 /** First and last day of the month a date falls in — NBR's tax period. */
-function currentTaxPeriod() {
+function currentTaxPeriod(): Required<CreatedRange> {
     const now = new Date();
     const first = new Date(now.getFullYear(), now.getMonth(), 1);
     const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -56,10 +60,14 @@ function currentTaxPeriod() {
     return { from: iso(first), to: iso(last) };
 }
 
+const PERIOD_PRESETS: readonly CreatedRangePreset[] = ['thisMonth', 'last3Months', 'last6Months', 'thisYear'];
+
 function csvCell(value: string | number | null): string {
     const text = value == null ? '' : String(value);
     return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
+
+const sum = (rows: BookRow[], pick: (row: BookRow) => number) => rows.reduce((total, row) => total + pick(row), 0);
 
 /**
  * মূসক-৬.২ · বিক্রয় হিসাব পুস্তক and মূসক-৬.১০ · the statement of large supplies
@@ -68,18 +76,25 @@ function csvCell(value: string | number | null): string {
  * One screen for both: they read the same sales over the same tax period and
  * differ only in which rows survive, so splitting them would duplicate the
  * period controls, the export and the table for no gain.
+ *
+ * On screen the book is a list like any other — the tax period and the
+ * taxable-only switch in the toolbar, the totals in the strip. Printed, it is
+ * the gazetted form: `MushakDocument`, with its Bangla headings and its own
+ * column numbers, always the whole book whatever the search box holds.
  */
 export default function MushakBooksPage() {
     const { t, locale } = useI18n();
     const m = t.sales.mushak;
-    const period = useMemo(currentTaxPeriod, []);
     const branch = useBranchScope();
     const storeId = branch.apiStoreId;
 
     const [form, setForm] = useState<string>(MushakForm.SALES_BOOK);
-    const [from, setFrom] = useState(period.from);
-    const [to, setTo] = useState(period.to);
+    // Cleared, the period goes back to the tax period under way.
+    const [period, setPeriod] = useState<CreatedRange>(currentTaxPeriod);
+    const from = period.from ?? '';
+    const to = period.to ?? '';
     const [taxableOnly, setTaxableOnly] = useState(false);
+    const [search, setSearch] = useState('');
     const [book, setBook] = useState<Book | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -90,9 +105,10 @@ export default function MushakBooksPage() {
         setLoading(true);
         setError('');
         try {
+            const params = { from: from || undefined, to: to || undefined, storeId };
             const data = isStatement
-                ? await api.getMushakLargeSupplyStatement({ from, to, storeId })
-                : await api.getMushakSalesBook({ from, to, storeId, taxableOnly });
+                ? await api.getMushakLargeSupplyStatement(params)
+                : await api.getMushakSalesBook({ ...params, taxableOnly });
             setBook(data);
         } catch (err: any) {
             if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
@@ -107,6 +123,25 @@ export default function MushakBooksPage() {
         if (!branch.ready) return;
         void load();
     }, [branch.ready, load]);
+
+    // Sl. is the row's place in the book, so it matches the printed form.
+    const serial = useMemo(
+        () => new Map((book?.rows ?? []).map((row, index) => [row.saleId, index + 1])),
+        [book],
+    );
+
+    const rows = useMemo(
+        () => (book?.rows ?? []).filter((row) => matchesSearch(
+            search,
+            row.invoiceNumber,
+            row.buyer.name,
+            row.buyer.bin,
+            row.buyer.nid,
+            row.buyer.address,
+            row.description,
+        )),
+        [book, search],
+    );
 
     const exportCsv = () => {
         if (!book) return;
@@ -133,12 +168,146 @@ export default function MushakBooksPage() {
         URL.revokeObjectURL(url);
     };
 
-    const money = (value: number) => formatBDT(value, { locale });
+    const money = useCallback((value: number) => formatBDT(value, { locale }), [locale]);
     const title = isStatement ? m.largeSupplyTitle : m.salesBookTitle;
+    const c = m.columns;
+
+    const columns = useMemo(() => {
+        const amount = (value: number) => <span className="tabular-nums">{money(value)}</span>;
+        const figure = (id: keyof BookRow, header: string, mobile = false) => ({
+            id,
+            header,
+            accessorKey: id,
+            meta: mobile ? { align: 'end' } : { align: 'end', hideOnMobile: true },
+            cell: ({ row }: { row: { original: BookRow } }) => amount(row.original[id] as number),
+            footer: () => amount(sum(rows, (row) => row[id] as number)),
+        });
+        return [
+            {
+                id: 'sl',
+                header: c.sl,
+                accessorFn: (row: BookRow) => serial.get(row.saleId) ?? 0,
+                meta: { align: 'end', hideOnMobile: true },
+                size: 60,
+            },
+            {
+                id: 'date',
+                header: c.date,
+                accessorKey: 'date',
+                cell: ({ row }: { row: { original: BookRow } }) => formatDate(row.original.date, locale),
+                footer: () => t.common.total,
+            },
+            {
+                id: 'invoiceNumber',
+                header: c.invoice,
+                accessorKey: 'invoiceNumber',
+                cell: ({ row }: { row: { original: BookRow } }) => (
+                    <Link href={routes.sales.mushak(row.original.saleId)} className="font-mono text-blue-600 hover:underline">
+                        {row.original.invoiceNumber}
+                    </Link>
+                ),
+            },
+            {
+                id: 'buyer',
+                header: c.buyer,
+                accessorFn: (row: BookRow) => row.buyer.name,
+            },
+            {
+                id: 'buyerId',
+                header: isStatement ? c.nid : c.buyerBin,
+                accessorFn: (row: BookRow) => (isStatement ? row.buyer.nid : row.buyer.bin) ?? '—',
+                meta: { hideOnMobile: true },
+                cell: ({ row }: { row: { original: BookRow } }) => (
+                    <span className="font-mono">{(isStatement ? row.original.buyer.nid : row.original.buyer.bin) ?? '—'}</span>
+                ),
+            },
+            {
+                id: 'address',
+                header: c.address,
+                accessorFn: (row: BookRow) => row.buyer.address ?? '—',
+                meta: { hideOnMobile: true },
+            },
+            {
+                id: 'description',
+                header: c.description,
+                accessorKey: 'description',
+                meta: { hideOnMobile: true },
+            },
+            ...(isStatement
+                ? []
+                : [
+                    {
+                        id: 'quantity',
+                        header: c.quantity,
+                        accessorKey: 'quantity',
+                        meta: { align: 'end', hideOnMobile: true },
+                        cell: ({ row }: { row: { original: BookRow } }) => (
+                            <span className="tabular-nums">{row.original.quantity}</span>
+                        ),
+                    },
+                    figure('totalValue', c.valueExclTax),
+                    figure('sdAmount', c.sd),
+                    figure('vatAmount', c.vat),
+                ]),
+            figure('inclusiveTotal', c.totalInclTax, true),
+        ];
+    }, [c, t, isStatement, rows, serial, locale, money]);
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'period',
+            type: 'date-range',
+            label: m.taxPeriod,
+            value: period,
+            onChange: (next) => setPeriod(next ?? currentTaxPeriod()),
+            presets: PERIOD_PRESETS,
+            operators: true,
+        },
+        ...(isStatement ? [] : [{
+            id: 'taxableOnly',
+            type: 'toggle' as const,
+            label: m.taxableOnly,
+            pressed: taxableOnly,
+            onChange: setTaxableOnly,
+            control: 'button' as const,
+        }]),
+    ], [m, period, isStatement, taxableOnly]);
+
+    const stats = useMemo(() => {
+        const items: ListStat[] = isStatement
+            ? [
+                { id: 'invoices', icon: <Receipt aria-hidden />, label: m.invoices, value: rows.length.toLocaleString() },
+                {
+                    id: 'inclusiveTotal',
+                    icon: <Wallet aria-hidden />,
+                    label: c.totalInclTax,
+                    value: money(sum(rows, (row) => row.inclusiveTotal)),
+                },
+                {
+                    id: 'threshold',
+                    icon: <Scale aria-hidden />,
+                    label: m.threshold,
+                    value: book?.threshold != null ? money(book.threshold) : '—',
+                },
+            ]
+            : [
+                { id: 'invoices', icon: <Receipt aria-hidden />, label: m.invoices, value: rows.length.toLocaleString() },
+                { id: 'totalValue', icon: <FileText aria-hidden />, label: c.valueExclTax, value: money(sum(rows, (row) => row.totalValue)) },
+                { id: 'sdAmount', icon: <Landmark aria-hidden />, label: c.sd, value: money(sum(rows, (row) => row.sdAmount)) },
+                { id: 'vatAmount', icon: <Calculator aria-hidden />, label: c.vat, value: money(sum(rows, (row) => row.vatAmount)) },
+                {
+                    id: 'inclusiveTotal',
+                    icon: <Wallet aria-hidden />,
+                    label: c.totalInclTax,
+                    value: money(sum(rows, (row) => row.inclusiveTotal)),
+                },
+            ];
+        return { items, loading: loading && !book, label: m.statsLabel };
+    }, [isStatement, rows, book, loading, m, c, money]);
 
     return (
         <PageShell>
-            <div className="no-print space-y-4">
+            <div className="no-print space-y-4 print:hidden">
                 <PageHeader
                     title={title}
                     subtitle={m.booksSubtitle}
@@ -163,71 +332,73 @@ export default function MushakBooksPage() {
                     }
                 />
 
-                <div className="grid items-end gap-3 rounded-md border border-gray-200 bg-white p-3 md:grid-cols-4">
-                    <Field label={m.form}>
-                        <div className="flex gap-2">
-                            {[MushakForm.SALES_BOOK, MushakForm.LARGE_SUPPLY_STATEMENT].map((code) => (
-                                <button
-                                    key={code}
-                                    type="button"
-                                    onClick={() => setForm(code)}
-                                    className={`min-h-touch rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors md:min-h-0 ${
-                                        form === code
-                                            ? 'border-blue-600 bg-blue-600 text-white'
-                                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    মূসক-{toBengaliDigits(code)}
-                                </button>
-                            ))}
-                        </div>
-                    </Field>
-                    <Field label={m.periodFrom}>
-                        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-                    </Field>
-                    <Field label={m.periodTo}>
-                        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-                    </Field>
-                    {!isStatement ? (
-                        <label className="flex items-center gap-2 text-xs text-gray-700">
-                            <Checkbox
-                                checked={taxableOnly}
-                                onChange={(e) => setTaxableOnly(e.target.checked)}
-                            />
-                            {m.taxableOnly}
-                        </label>
-                    ) : (
-                        <p className="text-xs text-gray-500">{m.largeSupplyHint}</p>
-                    )}
-                </div>
-
                 {error ? <Alert tone="danger">{error}</Alert> : null}
-                {loading ? <p className="text-sm text-gray-400">{t.common.loading}</p> : null}
+                {book && !book.issuer.readiness.ready ? (
+                    <Alert tone="warning" title={m.issuerIncomplete.title}>
+                        {m.issuerIncomplete.body}{' '}
+                        <Link href={routes.settings.tax} className="font-semibold underline">
+                            {m.issuerIncomplete.link}
+                        </Link>
+                    </Alert>
+                ) : null}
+                {book?.estimated ? (
+                    <Alert tone="warning" title={m.estimated.title}>
+                        {m.estimated.body}
+                    </Alert>
+                ) : null}
+                {isStatement ? <p className="text-xs text-gray-500">{m.largeSupplyHint}</p> : null}
+
+                <DataTable
+                    title={title}
+                    tableId="sales-mushak-books"
+                    columns={columns as never}
+                    data={rows}
+                    getRowId={(row: BookRow) => row.saleId}
+                    isLoading={loading}
+                    emptyMessage={m.noRows}
+                    emptyIcon={<Receipt className="h-16 w-16 text-gray-200" />}
+                    searchValue={search}
+                    onSearchChange={setSearch}
+                    filters={filters}
+                    filterLayout="row"
+                    stats={stats}
+                    enableColumnFilters={false}
+                    viewOptions
+                    toolbarActions={(
+                        <GroupByChip<string>
+                            label={m.form}
+                            value={form}
+                            onChange={setForm}
+                            options={[MushakForm.SALES_BOOK, MushakForm.LARGE_SUPPLY_STATEMENT].map((code) => ({
+                                value: code,
+                                label: `মূসক-${toBengaliDigits(code)}`,
+                            }))}
+                        />
+                    )}
+                />
+
+                {/* What this build does not produce. Said plainly, so a
+                    workspace knows which books it still keeps by hand. */}
+                <div className="rounded-md border border-gray-200 bg-white p-3">
+                    <div className="mb-2 text-xs font-semibold text-gray-700">{m.otherForms.title}</div>
+                    <p className="mb-2 text-xs text-gray-500">{m.otherForms.body}</p>
+                    <ul className="grid gap-1 text-xs text-gray-500 md:grid-cols-2">
+                        {MUSHAK_FORMS.filter((entry) => !entry.supported).map((entry) => (
+                            <li key={entry.code}>
+                                <span className="font-medium text-gray-700">মূসক-{toBengaliDigits(entry.code)}</span>
+                                {' — '}
+                                {entry.titleBn} <span className="text-gray-400">({entry.titleEn})</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
             </div>
 
+            {/* The statutory form, for the printer only: the gazetted layout,
+                the whole book, its Bangla headings untouched. */}
             {book && !loading ? (
-                <div className="mt-4">
-                    <MushakDocument
-                        form={book.form}
-                        issuer={book.issuer}
-                        banner={
-                            <>
-                                {!book.issuer.readiness.ready && (
-                                    <Alert tone="warning" title={m.issuerIncomplete.title}>
-                                        {m.issuerIncomplete.body}{' '}
-                                        <Link href={routes.settings.tax} className="font-semibold underline">
-                                            {m.issuerIncomplete.link}
-                                        </Link>
-                                    </Alert>
-                                )}
-                                {book.estimated && (
-                                    <Alert tone="warning" title={m.estimated.title}>
-                                        {m.estimated.body}
-                                    </Alert>
-                                )}
-                            </>
-                        }
-                    >
+                <div className="hidden print:block">
+                    <MushakDocument form={book.form} issuer={book.issuer}>
                         <div className="border-b border-gray-300 py-2 text-xs text-gray-700">
                             করমেয়াদ
                             <span className="ms-1 text-[10px] text-gray-400">(Tax period)</span>:{' '}
@@ -372,22 +543,6 @@ export default function MushakBooksPage() {
                             </table>
                         </div>
                     </MushakDocument>
-
-                    {/* What this build does not produce. Said plainly, so a
-                        workspace knows which books it still keeps by hand. */}
-                    <div className="no-print mt-4 rounded-md border border-gray-200 bg-white p-3">
-                        <div className="mb-2 text-xs font-semibold text-gray-700">{m.otherForms.title}</div>
-                        <p className="mb-2 text-xs text-gray-500">{m.otherForms.body}</p>
-                        <ul className="grid gap-1 text-xs text-gray-500 md:grid-cols-2">
-                            {MUSHAK_FORMS.filter((entry) => !entry.supported).map((entry) => (
-                                <li key={entry.code}>
-                                    <span className="font-medium text-gray-700">মূসক-{toBengaliDigits(entry.code)}</span>
-                                    {' — '}
-                                    {entry.titleBn} <span className="text-gray-400">({entry.titleEn})</span>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
                 </div>
             ) : null}
         </PageShell>

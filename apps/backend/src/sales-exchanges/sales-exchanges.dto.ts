@@ -10,6 +10,7 @@ import {
     Min,
     ValidateNested,
 } from 'class-validator';
+import { SalesDocumentListQueryDto } from '../common/sales-document-list-filters';
 
 export class CreateSalesExchangeLineDto {
     @IsUUID()
@@ -44,4 +45,15 @@ export class CreateSalesExchangeDto {
     @ValidateNested({ each: true })
     @Type(() => CreateSalesExchangeLineDto)
     lines: CreateSalesExchangeLineDto[];
+}
+
+/**
+ * `GET /sales-exchanges` and its summary: the customer-document filters, plus
+ * how the difference was settled.
+ */
+export class SalesExchangeListQueryDto extends SalesDocumentListQueryDto {
+    /** Comma-separated settlement modes: `cash`, `bank`, `bkash`, `nagad`, `credit`. */
+    @IsOptional()
+    @IsString()
+    settlement?: string;
 }

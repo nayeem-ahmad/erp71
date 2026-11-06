@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, ForbiddenException, Logger, NotFoundException } from '@nestjs/common';
 import { SmsService } from '../sms/sms.service';
-import { CustomerType, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { checkedSalesRepId, listSalesReps, SALES_REP_SELECT } from './sales-rep.util';
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
@@ -22,16 +22,9 @@ import {
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { runImport, ImportResult } from '../common/import.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
-import {
-    applyColumnFilters,
-    codesContaining,
-    ColumnFilters,
-    containsInsensitive,
-    FilterableMap,
-    numberEquals,
-} from '../common/column-filter.util';
 import { createdAtRange } from '../common/created-range.util';
-import { zonedDayRange } from '../common/tenant-time.util';
+import { zonedDateString, zonedDayRange, zonedDayStart } from '../common/tenant-time.util';
+import { customerListWhere, type CustomerListFilters, type CustomerListSummary } from './customer-list-filters';
 import {
     assertNotAheadOfSeries,
     assertSerialFree,
@@ -62,24 +55,6 @@ const CUSTOMER_SORTABLE: SortableMap = {
     due_balance: (dir) => ({ due_balance: dir }),
 };
 const CUSTOMER_DEFAULT_ORDER = { created_at: 'desc' as const };
-
-/**
- * Columns of the customers table that take an advanced filter, by the column id
- * the table sends. The Customer cell shows the phone under the name, so that
- * column matches either.
- */
-const CUSTOMER_FILTERABLE: FilterableMap<Prisma.CustomerWhereInput> = {
-    customer_code: (v) => ({ customer_code: containsInsensitive(v) }),
-    name: (v) => ({ OR: [{ name: containsInsensitive(v) }, { phone: containsInsensitive(v) }] }),
-    owner_name: (v) => ({ owner_name: containsInsensitive(v) }),
-    customer_type: (v) => ({ customer_type: { in: codesContaining(Object.values(CustomerType), v) } }),
-    group: (v) => ({ customerGroup: { name: containsInsensitive(v) } }),
-    territory: (v) => ({ territory: { name: containsInsensitive(v) } }),
-    total_spent: numberEquals('total_spent'),
-    due_balance: numberEquals('due_balance'),
-    loyalty_points: numberEquals('loyalty_points'),
-    segment_category: (v) => ({ segment_category: containsInsensitive(v) }),
-};
 
 /** Amounts below this are rounding dust, not money. Matches customer-credit.utils. */
 /** A customer's most recent sale, as the customer list shows it. */
@@ -455,42 +430,18 @@ export class CustomersService {
 
     async findAll(
         tenantId: string,
-        opts?: {
+        opts?: Partial<CustomerListFilters> & {
             page?: number;
             limit?: number;
-            search?: string;
-            segment?: string;
-            customerType?: string;
             sortBy?: string;
             sortDir?: string;
-            createdFrom?: string;
-            createdTo?: string;
-            /** IANA zone the calendar-day bounds above are measured in. */
-            timezone: string;
-            /** Whose customers — see `customer-visibility.ts`. Omitted: everyone's. */
-            scope?: CustomerScope;
-            /** The table's advanced column filters — see CUSTOMER_FILTERABLE. */
-            filters?: ColumnFilters;
         },
     ): Promise<PaginatedResult<any>> {
         const page = opts?.page ?? 1;
         const limit = Math.min(opts?.limit ?? 20, 100);
         const skip = (page - 1) * limit;
 
-        const where: any = { tenant_id: tenantId, deleted_at: null, ...customerScopeWhere(opts?.scope ?? null) };
-        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
-        if (created) where.created_at = created;
-        if (opts?.search) {
-            where.OR = [
-                { name: { contains: opts.search, mode: 'insensitive' } },
-                { owner_name: { contains: opts.search, mode: 'insensitive' } },
-                { phone: { contains: opts.search } },
-                { customer_code: { contains: opts.search, mode: 'insensitive' } },
-            ];
-        }
-        if (opts?.segment) where.segment_category = opts.segment;
-        if (opts?.customerType) where.customer_type = opts.customerType;
-        const filtered = applyColumnFilters(where, opts?.filters, CUSTOMER_FILTERABLE);
+        const filtered = customerListWhere(tenantId, { ...opts, timezone: opts?.timezone as string });
 
         const [items, total] = await Promise.all([
             this.db.customer.findMany({
@@ -517,6 +468,38 @@ export class CustomersService {
             page,
             limit,
         );
+    }
+
+    /**
+     * The stats strip above the customers list, over exactly the customers the
+     * list matches: how many, how many joined this month, who owes and how
+     * much, what they have spent, and the VIP / at-risk split the segmentation
+     * keeps. A negative due is an advance the shop holds, not money owed to
+     * it, so the receivable sums only what customers owe.
+     */
+    async listSummary(tenantId: string, opts: CustomerListFilters, now: Date = new Date()): Promise<CustomerListSummary> {
+        const where = customerListWhere(tenantId, opts);
+        const monthStart = zonedDayStart(`${zonedDateString(now, opts.timezone).slice(0, 8)}01`, opts.timezone) as Date;
+        const owing: Prisma.CustomerWhereInput = { AND: [where, { due_balance: { gt: AMOUNT_EPSILON } }] };
+        const [all, fresh, due, segments] = await Promise.all([
+            this.db.customer.aggregate({ where, _count: { _all: true }, _sum: { total_spent: true } }),
+            this.db.customer.count({ where: { AND: [where, { created_at: { gte: monthStart } }] } }),
+            this.db.customer.aggregate({ where: owing, _count: { _all: true }, _sum: { due_balance: true } }),
+            this.db.customer.groupBy({ by: ['segment_category'], where, _count: { _all: true } }),
+        ]);
+        const segmentCount = (name: string) =>
+            (segments as Array<{ segment_category: string; _count: { _all: number } }>)
+                .find((row) => row.segment_category === name)?._count._all ?? 0;
+        const money = (value: unknown) => Math.round(Number(value ?? 0) * 100) / 100;
+        return {
+            count: all._count._all,
+            newThisMonth: fresh,
+            withDue: due._count._all,
+            receivable: money(due._sum.due_balance),
+            totalSpent: money(all._sum.total_spent),
+            vip: segmentCount('VIP'),
+            atRisk: segmentCount('At-Risk'),
+        };
     }
 
     /**

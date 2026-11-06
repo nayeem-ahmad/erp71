@@ -29,24 +29,38 @@ jest.mock('next/navigation', () => ({
     useSearchParams: () => ({ get: jest.fn() }),
 }));
 
-// The rows the page hands the table, in order, and its toolbar filters drawn
-// as plain selects — "All" is the empty value, as in the real FilterBar.
+// The rows the page hands the table, in order, its strip, and its toolbar
+// chips drawn as plain selects — "All" is the empty value, as in the real
+// FilterBar; a multi-select chip takes one value here.
 jest.mock('@/components/data-table', () => ({
-    DataTable: ({ data, title, isLoading, filters = [], columns }: any) => (
+    DataTable: ({ data, title, isLoading, filters = [], columns, stats, onSearchChange }: any) => (
         <div>
             <div data-testid="data-table-title">{title}</div>
             {isLoading && <div data-testid="loading-indicator">Loading</div>}
-            {filters.map((filter: any) => (
-                <select
-                    key={filter.id}
-                    aria-label={filter.label}
-                    value={filter.value ?? ''}
-                    onChange={(e) => filter.onChange(e.target.value || null)}
-                >
-                    <option value="">All</option>
-                    {filter.options.map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-            ))}
+            <input aria-label="Search" onChange={(e) => onSearchChange?.(e.target.value)} />
+            {filters.filter((filter: any) => filter.options).map((filter: any) => {
+                const multi = filter.type === 'multi-select';
+                return (
+                    <select
+                        key={filter.id}
+                        aria-label={filter.label}
+                        value={(multi ? filter.value[0] : filter.value) ?? ''}
+                        onChange={(e) => filter.onChange(multi ? (e.target.value ? [e.target.value] : []) : e.target.value || null)}
+                    >
+                        <option value="">All</option>
+                        {filter.options.map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                );
+            })}
+            <div data-testid="filter-ids">{filters.map((filter: any) => filter.id).join(',')}</div>
+            <section aria-label={stats?.label}>
+                {stats?.items.map((item: any) => (
+                    <div key={item.id} data-tone={item.tone ?? 'default'}>
+                        <p>{item.label}</p>
+                        <p>{item.value}</p>
+                    </div>
+                ))}
+            </section>
             <div data-testid="columns">{columns.map((c: any) => c.id ?? c.accessorKey).join(',')}</div>
             <ul data-testid="rows">
                 {data.map((row: any) => <li key={row.customer.id}>{row.customer.name}</li>)}
@@ -149,6 +163,39 @@ describe('DueAgingReportPage', () => {
 
         expect(stat('0–30 days')).toContain('1,000');
         expect(stat('Total due')).toContain('6,500');
+        expect(stat('Customers')).toBe('2');
+    });
+
+    it('tints a bracket only while it holds money', async () => {
+        render(<DueAgingReportPage />);
+        await waitFor(() => expect(shownRows()).toHaveLength(4));
+
+        const tone = (label: string) => screen.getByText(label, { selector: 'p' }).parentElement?.getAttribute('data-tone');
+        expect(tone('31–60 days')).toBe('warning');
+        expect(tone('90+ days')).toBe('danger');
+
+        // Past 60 days only Rahim Traders and Fresh Mart are left, neither with money at 31–60.
+        fireEvent.change(screen.getByLabelText('Overdue'), { target: { value: '61' } });
+        expect(tone('31–60 days')).toBe('default');
+        expect(tone('61–90 days')).toBe('warning');
+        expect(tone('90+ days')).toBe('danger');
+    });
+
+    it('searches the loaded customers, and the strip follows', async () => {
+        render(<DueAgingReportPage />);
+        await waitFor(() => expect(shownRows()).toHaveLength(4));
+
+        fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'mart' } });
+
+        expect(shownRows()).toEqual(['Fresh Mart']);
+        expect(stat('Total due')).toContain('1,500');
+    });
+
+    it('offers an amount chip on the total due', async () => {
+        render(<DueAgingReportPage />);
+        await waitFor(() => expect(shownRows()).toHaveLength(4));
+
+        expect(screen.getByTestId('filter-ids').textContent).toContain('total');
     });
 
     it("opens on the viewer's own customers when they are someone's sales rep", async () => {

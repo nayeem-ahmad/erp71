@@ -1444,6 +1444,7 @@ export const coreMessages = {
         onlineBadge: "إلكتروني",
     },
     partyPayments: {
+        listUi: { statsLabel: "ملخص المدفوعات", payments: "المدفوعات", topMethod: "الطريقة الأكثر استخدامًا" },
         directionAll: "الكل",
         directionIn: "وارد",
         directionOut: "صادر",
@@ -1569,6 +1570,7 @@ export const coreMessages = {
     },
     customerLedger: {
         title: 'دفتر الزبون',
+        statsLabel: "ملخص الدفتر",
         ledgerTitle: 'قيود الدفتر',
         subtitle: 'اعرض الأرصدة المستحقة وسجل المعاملات الآجلة.',
         currentDue: 'المستحق الحالي',

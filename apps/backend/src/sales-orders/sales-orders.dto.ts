@@ -1,6 +1,7 @@
 import { IsBoolean, IsString, IsArray, IsNumber, IsOptional, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { InlineCustomerDto } from '../customers/customer.dto';
+import { SalesDocumentListQueryDto } from '../common/sales-document-list-filters';
 
 export class CreateSalesOrderItemDto {
     @IsString()
@@ -93,4 +94,19 @@ export class AddDepositDto {
 
     @IsString()
     paymentMethod: string;
+}
+
+/** An order's payment state, as `payment_status` holds it. */
+export const SALES_ORDER_PAYMENT_STATUSES = ['UNPAID', 'PARTIAL', 'PAID'] as const;
+export type SalesOrderPaymentStatus = (typeof SALES_ORDER_PAYMENT_STATUSES)[number];
+
+/**
+ * The sales-orders list and its stats strip: the shared customer-document
+ * filters (the date filter is the delivery date) plus the payment state.
+ */
+export class SalesOrderListQueryDto extends SalesDocumentListQueryDto {
+    /** Comma-separated `UNPAID`, `PARTIAL`, `PAID`. */
+    @IsOptional()
+    @IsString()
+    paymentStatus?: string;
 }

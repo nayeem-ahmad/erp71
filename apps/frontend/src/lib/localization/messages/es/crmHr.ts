@@ -1795,6 +1795,39 @@ export const crmHrMessages = {
         }
     },
     "delivery": {
+        "listUi": {
+            "searchPlaceholder": "Buscar cliente, teléfono, dirección, repartidor o factura…",
+            "statsLabel": "Resumen de entregas",
+            "unassigned": "Sin asignar",
+            "sale": "Venta",
+            "overdueHint": "La hora programada ya pasó",
+            "markDelivered": "Marcar como entregada",
+            "markedDelivered": "Entregada a {customer}",
+            "cancelDelivery": "Cancelar entrega",
+            "cancelled": "Entrega cancelada",
+            "saved": "Entrega guardada",
+            "saveFailed": "No se pudo guardar la entrega",
+            "form": {
+                "saleId": "ID de venta (opcional)",
+                "customerName": "Nombre del cliente",
+                "customerPhone": "Teléfono del cliente",
+                "deliveryAddress": "Dirección de entrega",
+                "driverName": "Nombre del repartidor",
+                "driverPhone": "Teléfono del repartidor",
+                "scheduledAt": "Fecha y hora programadas",
+                "required": "El nombre del cliente y la dirección de entrega son obligatorios."
+            },
+            "stats": {
+                "deliveries": "Entregas",
+                "pending": "Pendientes",
+                "inTransit": "En tránsito",
+                "delivered": "Entregadas",
+                "overdue": "Atrasadas",
+                "failed": "Fallidas / canceladas",
+                "unassigned": "{count} sin asignar",
+                "cancelledHint": "{count} canceladas"
+            }
+        },
         "title": "Órdenes de entrega",
         "subtitle": "Programa y sigue las entregas a clientes",
         "newDelivery": "Nueva entrega",

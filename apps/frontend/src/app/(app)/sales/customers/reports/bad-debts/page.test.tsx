@@ -8,6 +8,31 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
+// A wide screen, so the secondary columns and the chips sit in the toolbar rather than the phone's sheet.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
+}));
+jest.mock('next/navigation', () => ({
+    useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: jest.fn() }),
+    usePathname: () => '/sales/customers/reports/bad-debts',
+    useSearchParams: () => ({ get: jest.fn() }),
+}));
+
+/** A toolbar chip: a button that opens its own panel. */
+function chip(name: string | RegExp): HTMLElement {
+    const found = screen
+        .getAllByRole('button', { name })
+        .find((button) => button.getAttribute('aria-haspopup') === 'dialog');
+    if (!found) throw new Error(`No filter chip named ${String(name)}`);
+    return found;
+}
+
+/** The figure beside a label in the summary strip. */
+function stat(label: string) {
+    const strip = screen.getByRole('region', { name: 'Write-off summary' });
+    return within(strip).getByText(label).nextElementSibling?.textContent ?? '';
+}
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { api } = require('@/lib/api');
@@ -45,11 +70,32 @@ describe('BadDebtsReportPage', () => {
         expect(screen.getByText('JV-00042')).toBeInTheDocument();
     });
 
-    it('totals what has been forgiven', async () => {
+    it('totals what has been forgiven, in the strip and the total row', async () => {
         api.getCustomerWriteOffs.mockResolvedValue([ROW, { ...ROW, id: 'wo-2', amount: 1500 }]);
         render(<BadDebtsReportPage />);
 
-        expect(await screen.findByText(/4,500/)).toBeInTheDocument();
+        await waitFor(() => expect(stat('Written Off')).toContain('4,500'));
+        expect(stat('Write-offs')).toBe('2');
+        expect(stat('Customers')).toBe('1');
+        expect(stat('Largest')).toContain('3,000');
+        expect(screen.getAllByText(/4,500/)).toHaveLength(2);
+    });
+
+    it('narrows the register and its strip by reason', async () => {
+        api.getCustomerWriteOffs.mockResolvedValue([
+            ROW,
+            { ...ROW, id: 'wo-2', amount: 1500, reason: 'REFUSED', customer: { id: 'cust-2', name: 'Bob Stores', phone: null } },
+        ]);
+        render(<BadDebtsReportPage />);
+        await screen.findByText('Bob Stores');
+
+        fireEvent.click(chip('Reason'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Refuses to pay' }));
+
+        await waitFor(() => expect(screen.queryByText('Alice Corp')).not.toBeInTheDocument());
+        expect(screen.getByText('Bob Stores')).toBeInTheDocument();
+        expect(stat('Written Off')).toContain('1,500');
+        expect(stat('Write-offs')).toBe('1');
     });
 
     it('says so plainly when nothing has been written off', async () => {

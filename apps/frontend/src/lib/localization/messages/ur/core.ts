@@ -1444,6 +1444,7 @@ export const coreMessages = {
         onlineBadge: "آن لائن",
     },
     partyPayments: {
+        listUi: { statsLabel: "ادائیگیوں کا خلاصہ", payments: "ادائیگیاں", topMethod: "سب سے زیادہ طریقہ" },
         directionAll: "تمام",
         directionIn: "آمد",
         directionOut: "ادائیگی",
@@ -1569,6 +1570,7 @@ export const coreMessages = {
     },
     customerLedger: {
         title: 'گاہک کھاتہ',
+        statsLabel: "کھاتے کا خلاصہ",
         ledgerTitle: 'کھاتے کے اندراجات',
         subtitle: 'واجب بیلنس اور ادھار لین دین کی تاریخ دیکھیں۔',
         currentDue: 'موجودہ واجب',

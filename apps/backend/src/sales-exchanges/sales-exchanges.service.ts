@@ -1,8 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { splitTaxInclusive } from '@erp71/shared-types';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
+import { searchClause, statusSetClause, type SalesDocumentListFilters } from '../common/sales-document-list-filters';
+import { numberConditionFilter } from '../common/number-condition.util';
+import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { DatabaseService } from '../database/database.service';
 import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { applyInventoryMovement, resolveEntryWarehouses, usableWarehouseIds } from '../database/inventory.utils';
@@ -25,6 +29,41 @@ const SALE_ITEM_INCLUDE = {
     returns: true,
     exchangeLines: completedExchangeLinesInclude,
 } as const;
+
+const SALES_EXCHANGE_SORTABLE: SortableMap = {
+    exchange_number: (dir) => ({ exchange_number: dir }),
+    created_at: (dir) => ({ created_at: dir }),
+    returned_total: (dir) => ({ returned_total: dir }),
+    replacement_total: (dir) => ({ replacement_total: dir }),
+    difference: (dir) => ({ difference: dir }),
+    settlement_mode: (dir) => ({ settlement_mode: dir }),
+    invoice: (dir) => ({ sale: { serial_number: dir } }),
+    customer: (dir) => ({ sale: { customer: { name: dir } } }),
+};
+
+/** What narrows the exchanges list — and, alike, its stats strip. */
+export interface SalesExchangeListFilters extends Partial<Omit<SalesDocumentListFilters, 'timezone'>> {
+    timezone: string;
+    /** How the difference was settled — `cash`, `bank`, `bkash`, `nagad`, `credit`. */
+    settlementModes?: string[];
+}
+
+/** `GET /sales-exchanges/summary` — see `SalesExchangesService.summary`. */
+export interface SalesExchangeListSummary {
+    /** Every matching exchange, cancelled ones included. */
+    count: number;
+    cancelledCount: number;
+    /** The goods that came back, over the exchanges not cancelled. */
+    returned: number;
+    /** The goods that went out in their place. */
+    replacement: number;
+    /** Exchanges where the customer paid the difference, and how much. */
+    charged: { count: number; amount: number };
+    /** Exchanges where the customer got the difference back, and how much. */
+    refunded: { count: number; amount: number };
+}
+
+const NOT_CANCELLED: Prisma.SalesExchangeWhereInput = { status: { not: 'CANCELLED' } };
 
 @Injectable()
 export class SalesExchangesService {
@@ -249,13 +288,50 @@ export class SalesExchangesService {
         });
     }
 
+    /**
+     * The `where` behind the exchanges list and its stats strip. An exchange
+     * is dated when it is posted, so the date filter is `created_at`; the
+     * amount filter is the difference — positive when the customer paid.
+     */
+    private listWhere(tenantId: string, opts?: SalesExchangeListFilters): Prisma.SalesExchangeWhereInput {
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
+        const where: Prisma.SalesExchangeWhereInput = {
+            tenant_id: tenantId,
+            ...(opts?.storeId ? { store_id: opts.storeId } : {}),
+            ...(created ? { created_at: created } : {}),
+            ...(statusSetClause(opts?.statuses, opts?.statusExclude) as Prisma.SalesExchangeWhereInput),
+            ...(opts?.total ? { difference: numberConditionFilter(opts.total) } : {}),
+            ...(opts?.settlementModes?.length ? { settlement_mode: { in: opts.settlementModes } } : {}),
+        };
+        const and: Prisma.SalesExchangeWhereInput[] = [];
+        const search = searchClause(opts?.search, [
+            'exchange_number',
+            'reason',
+            'sale.serial_number',
+            'sale.reference_number',
+            'sale.customer.name',
+            'sale.customer.phone',
+        ]);
+        if (search) and.push(search as Prisma.SalesExchangeWhereInput);
+        // The customer is the original sale's; `none` is a walk-in sale.
+        const ids = opts?.customerIds;
+        if (ids?.length) {
+            const named = ids.filter((id) => id !== 'none');
+            const clauses: Prisma.SalesExchangeWhereInput[] = [];
+            if (named.length) clauses.push({ sale: { customer_id: { in: named } } });
+            if (named.length !== ids.length) clauses.push({ sale: { customer_id: null } });
+            and.push(clauses.length === 1 ? clauses[0] : { OR: clauses });
+        }
+        if (and.length) where.AND = and;
+        return where;
+    }
+
     async findAll(
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string; timezone: string; storeId?: string },
+        opts?: SalesExchangeListFilters & { sortBy?: string; sortDir?: string },
     ): Promise<PaginatedResult<unknown>> {
-        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         const result = await paginatedFindMany({
             findMany: (args) =>
                 this.db.salesExchange.findMany({
@@ -266,12 +342,8 @@ export class SalesExchangesService {
                     },
                 }),
             count: (args) => this.db.salesExchange.count(args as any),
-            where: {
-                tenant_id: tenantId,
-                ...(opts?.storeId ? { store_id: opts.storeId } : {}),
-                ...(created ? { created_at: created } : {}),
-            },
-            orderBy: { created_at: 'desc' },
+            where: this.listWhere(tenantId, opts) as Record<string, unknown>,
+            orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, SALES_EXCHANGE_SORTABLE, { created_at: 'desc' }),
             page,
             limit,
         });
@@ -285,6 +357,42 @@ export class SalesExchangesService {
         return {
             ...result,
             items: result.items.map((row: { id: string }) => ({ ...row, ...(summaries.get(row.id) ?? NO_POSTING_EVENT) })),
+        };
+    }
+
+    /**
+     * The stats strip above the exchanges list, over exactly the rows the list
+     * shows: how many (and how many of those were cancelled), and — over the
+     * ones that stand — the goods that came back, the goods that went out, and
+     * the difference the customer paid or got back.
+     */
+    async summary(tenantId: string, opts: SalesExchangeListFilters): Promise<SalesExchangeListSummary> {
+        const where = this.listWhere(tenantId, opts);
+        const live = (extra?: Prisma.SalesExchangeWhereInput): Prisma.SalesExchangeWhereInput => ({
+            AND: [where, NOT_CANCELLED, ...(extra ? [extra] : [])],
+        });
+        const [count, cancelledCount, totals, charged, refunded] = await Promise.all([
+            this.db.salesExchange.count({ where }),
+            this.db.salesExchange.count({ where: { AND: [where, { status: 'CANCELLED' }] } }),
+            this.db.salesExchange.aggregate({ where: live(), _sum: { returned_total: true, replacement_total: true } }),
+            this.db.salesExchange.aggregate({
+                where: live({ difference: { gt: 0 } }),
+                _count: { _all: true },
+                _sum: { difference: true },
+            }),
+            this.db.salesExchange.aggregate({
+                where: live({ difference: { lt: 0 } }),
+                _count: { _all: true },
+                _sum: { difference: true },
+            }),
+        ]);
+        return {
+            count,
+            cancelledCount,
+            returned: roundMoney(Number(totals._sum.returned_total ?? 0)),
+            replacement: roundMoney(Number(totals._sum.replacement_total ?? 0)),
+            charged: { count: charged._count._all, amount: roundMoney(Number(charged._sum.difference ?? 0)) },
+            refunded: { count: refunded._count._all, amount: roundMoney(Math.abs(Number(refunded._sum.difference ?? 0))) },
         };
     }
 

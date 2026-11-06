@@ -1,15 +1,39 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { ClipboardList, Plus, Eye, Pencil, Printer, Trash2, ReceiptText, CheckCircle2, PlayCircle, PackageCheck } from 'lucide-react';
+import {
+    AlarmClock,
+    CheckCircle2,
+    ClipboardList,
+    Eye,
+    HandCoins,
+    PackageCheck,
+    Pencil,
+    PlayCircle,
+    Plus,
+    Printer,
+    ReceiptText,
+    Trash2,
+    Truck,
+    Wallet,
+} from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { api } from '@/lib/api';
+import {
+    api,
+    type SalesOrderListFilterParams,
+    type SalesOrderListSummary,
+    type SalesOrderPaymentStatus,
+} from '@/lib/api';
 import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, createdAtColumn, type BulkAction, type ListFilter } from '@/components/data-table';
+import { DataTable, createdAtColumn, type BulkAction, type ListFilter, type ListStat } from '@/components/data-table';
 import { RowActions, RowActionButton } from '@/components/table';
-import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
+import { applyCreatedRangeQuery, applyDateRangeQuery, type CreatedRange } from '@/lib/created-range';
+import type { NumberCondition } from '@/lib/number-condition';
+import { useServerList } from '@/hooks/useServerList';
+import { useListSummary } from '@/hooks/useListSummary';
+import { customerListFilter } from '../components/customer-list-filter';
 import { toast } from '@/lib/toast';
 import StorefrontOrdersPanel from './StorefrontOrdersPanel';
 import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml, sheetPaper } from '@/lib/print';
@@ -22,7 +46,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { BranchFilter, ConfirmDialog, PageShell, StatusBadge, buttonClassName, type StatusBadgeTone } from '@/components/ui';
 import { Tabs } from '@/components/ui/compact/Tabs';
-import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 
 type OrdersTab = 'sales' | 'online';
 
@@ -36,15 +60,17 @@ interface SalesOrder {
     amount_paid: string;
     status: string;
     payment_status: string;
-    delivery_date?: string;
+    delivery_date?: string | null;
     items: any[];
     deposits: any[];
-    customer?: { name: string; phone?: string };
+    customer?: { name: string; phone?: string } | null;
     store_id?: string;
 }
 
 const ORDER_STATUSES = ['DRAFT', 'CONFIRMED', 'PROCESSING', 'DELIVERED', 'CANCELLED'] as const;
-const PAYMENT_STATUSES = ['UNPAID', 'PARTIAL', 'PAID'] as const;
+const PAYMENT_STATUSES: readonly SalesOrderPaymentStatus[] = ['UNPAID', 'PARTIAL', 'PAID'];
+/** Still to be delivered — the ones a delivery date can make late. */
+const OPEN_STATUSES = new Set(['DRAFT', 'CONFIRMED', 'PROCESSING']);
 
 const statusTones: Record<string, StatusBadgeTone> = {
     DRAFT: 'neutral',
@@ -62,8 +88,13 @@ const paymentTones: Record<string, StatusBadgeTone> = {
 
 const columnHelper = createColumnHelper<SalesOrder>();
 
+function startOfToday(): number {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+}
+
 export default function OrdersPage() {
-    const { t, locale } = useI18n();
+    const { t, locale, fmt } = useI18n();
     const branch = useBranchScope();
     const printHeader = usePrintHeader('SALES_ORDER');
     // This browser's paper, as invoices print on; A4 for a till roll.
@@ -71,9 +102,15 @@ export default function OrdersPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const activeTab: OrdersTab = searchParams.get('tab') === 'online' ? 'online' : 'sales';
-    const [orders, setOrders] = useState<SalesOrder[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [deliveryRange, setDeliveryRange] = useState<CreatedRange | null>(null);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
+    const [statusFilter, setStatusFilter] = useState<string[]>([]);
+    const [statusExclude, setStatusExclude] = useState(false);
+    const [customerIds, setCustomerIds] = useState<string[]>([]);
+    const [paymentStatus, setPaymentStatus] = useState<string[]>([]);
+    const [totalFilter, setTotalFilter] = useState<NumberCondition | null>(null);
     const [pendingDelete, setPendingDelete] = useState<SalesOrder | null>(null);
     const [deleting, setDeleting] = useState(false);
     const [selectedOrders, setSelectedOrders] = useState<SalesOrder[]>([]);
@@ -94,22 +131,48 @@ export default function OrdersPage() {
     }, [router, searchParams]);
 
     useEffect(() => {
-        if (activeTab === 'sales' && branch.ready) {
-            loadOrders();
-        }
-    }, [activeTab, createdRange, branch.ready, branch.apiStoreId]);
+        const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
 
-    const loadOrders = async () => {
-        setLoading(true);
-        try {
-            const data = await api.getOrders({ ...applyCreatedRangeQuery(createdRange), storeId: branch.apiStoreId });
-            setOrders(data);
-        } catch (error) {
-            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
-            console.error('Failed to load orders', error);
-        } finally {
-            setLoading(false);
-        }
+    // The order's own date is the day it is promised to the customer.
+    const filterParams = useMemo<SalesOrderListFilterParams>(
+        () => ({
+            search: debouncedSearch || undefined,
+            status: statusFilter.length ? statusFilter.join(',') : undefined,
+            statusExclude,
+            ...applyDateRangeQuery(deliveryRange),
+            ...applyCreatedRangeQuery(createdRange),
+            storeId: branch.apiStoreId,
+            customerIds,
+            paymentStatus: paymentStatus as SalesOrderPaymentStatus[],
+            total: totalFilter,
+        }),
+        [
+            debouncedSearch, statusFilter, statusExclude, deliveryRange, createdRange, branch.apiStoreId,
+            customerIds, paymentStatus, totalFilter,
+        ],
+    );
+
+    // The online tab is the storefront's own queue; nothing here loads behind it.
+    const listEnabled = branch.ready && activeTab === 'sales';
+    const { items: orders, loading, error: listError, serverPagination, reload } = useServerList<SalesOrder>({
+        tableId: 'sales-orders',
+        initialSort: { id: 'created_at', desc: true },
+        deps: [filterParams],
+        enabled: listEnabled,
+        fetch: (params) => api.getOrdersList({ ...params, ...filterParams }),
+    });
+    useBranchForbiddenReset(listError, branch, t.dashboardLayout.branchFilterForbidden);
+
+    const { summary, loading: summaryLoading, reload: reloadSummary } = useListSummary<
+        SalesOrderListFilterParams,
+        SalesOrderListSummary
+    >({ fetch: api.getOrdersListSummary, params: filterParams, enabled: listEnabled });
+
+    const refresh = async () => {
+        reloadSummary();
+        await reload();
     };
 
     const confirmDelete = async () => {
@@ -117,8 +180,9 @@ export default function OrdersPage() {
         setDeleting(true);
         try {
             await api.deleteOrder(pendingDelete.id);
-            setOrders((prev) => prev.filter((o) => o.id !== pendingDelete.id));
             setPendingDelete(null);
+            toast.success(t.orders.deleted);
+            void refresh();
         } catch (error: any) {
             toast.error(error?.message || t.shared.errors.deleteOrder);
         } finally {
@@ -148,7 +212,7 @@ export default function OrdersPage() {
         setBulkBusy(false);
         setPendingBulk(null);
         setClearSelectionSignal((n) => n + 1);
-        await loadOrders();
+        await refresh();
     };
 
     const advance = (rows: SalesOrder[], status: string) =>
@@ -225,13 +289,33 @@ export default function OrdersPage() {
         });
     };
 
-    const columns: ColumnDef<SalesOrder, any>[] = useMemo(
-        () => [
+    const columns: ColumnDef<SalesOrder, any>[] = useMemo(() => {
+        const today = startOfToday();
+        return [
             columnHelper.accessor('order_number', {
                 header: t.orders.columns.orderNumber,
+                cell: (info) => (
+                    <Link
+                        href={routes.sales.orderDetail(info.row.original.id)}
+                        className="font-medium text-gray-900 hover:text-blue-600 hover:underline"
+                    >
+                        {info.getValue()}
+                    </Link>
+                ),
                 size: 140,
             }),
-            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
+            columnHelper.accessor('delivery_date', {
+                header: t.shared.form.deliveryDate,
+                cell: (info) => {
+                    const value = info.getValue();
+                    if (!value) return <span className="text-gray-400">—</span>;
+                    // An order still to go out past its promised day is late.
+                    const late = OPEN_STATUSES.has(info.row.original.status) && new Date(value).getTime() < today;
+                    return <span className={late ? 'font-medium text-amber-700' : undefined}>{formatDate(value, locale)}</span>;
+                },
+                size: 130,
+            }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale, enableColumnFilter: false }),
             columnHelper.accessor((row) => row.customer?.name ?? '', {
                 id: 'customer',
                 header: t.orders.columns.customer,
@@ -241,8 +325,6 @@ export default function OrdersPage() {
             columnHelper.accessor('total_amount', {
                 header: t.orders.columns.total,
                 cell: (info) => formatBDT(parseFloat(info.getValue()), { locale }),
-                sortingFn: (a, b) =>
-                    parseFloat(a.getValue('total_amount')) - parseFloat(b.getValue('total_amount')),
                 size: 130,
                 meta: { align: 'end' },
             }),
@@ -256,8 +338,8 @@ export default function OrdersPage() {
                         </StatusBadge>
                     );
                 },
-                filterFn: 'equalsString',
                 size: 100,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('status', {
                 header: t.orders.columns.status,
@@ -269,7 +351,6 @@ export default function OrdersPage() {
                         </StatusBadge>
                     );
                 },
-                filterFn: 'equalsString',
                 size: 120,
             }),
             columnHelper.display({
@@ -279,8 +360,8 @@ export default function OrdersPage() {
                     const row = info.row.original;
                     return (
                         <RowActions>
-                            <RowActionButton icon={<Eye />} label={t.common.view} href={`/sales/orders/${row.id}`} />
-                            <RowActionButton icon={<Pencil />} label={t.common.edit} href={`/sales/orders/${row.id}?edit=true`} />
+                            <RowActionButton icon={<Eye />} label={t.common.view} href={routes.sales.orderDetail(row.id)} />
+                            <RowActionButton icon={<Pencil />} label={t.common.edit} href={`${routes.sales.orderDetail(row.id)}?edit=true`} />
                             {/* Opens the sale entry screen seeded from this
                                 order; the sale records the link back when it is
                                 saved. */}
@@ -300,9 +381,9 @@ export default function OrdersPage() {
                 enableResizing: false,
                 size: 168,
             }),
-        ],
-        [t, locale],
-    );
+        ];
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [t, locale]);
 
     /*
      * The same forward steps the order page offers, each applied only to the
@@ -357,23 +438,96 @@ export default function OrdersPage() {
     const filters = useMemo<ListFilter[]>(
         () => [
             {
-                id: 'status',
-                type: 'select',
-                label: t.orders.columns.status,
-                columnId: 'status',
-                options: ORDER_STATUSES.map((value) => ({ value, label: t.shared.statuses.order[value] ?? value })),
+                id: 'deliveryDate',
+                type: 'date-range',
+                label: t.shared.form.deliveryDate,
+                value: deliveryRange,
+                onChange: setDeliveryRange,
+                operators: true,
             },
             {
+                id: 'status',
+                type: 'multi-select',
+                label: t.orders.columns.status,
+                value: statusFilter,
+                onChange: setStatusFilter,
+                exclude: { value: statusExclude, onChange: setStatusExclude },
+                options: ORDER_STATUSES.map((value) => ({ value, label: t.shared.statuses.order[value] ?? value })),
+            },
+            customerListFilter({
+                label: t.orders.columns.customer,
+                walkInLabel: t.shared.walkIn,
+                value: customerIds,
+                onChange: setCustomerIds,
+                storeId: branch.apiStoreId,
+            }),
+            {
                 id: 'payment',
-                type: 'select',
+                type: 'multi-select',
                 label: t.orders.columns.payment,
-                columnId: 'payment_status',
+                value: paymentStatus,
+                onChange: setPaymentStatus,
                 options: PAYMENT_STATUSES.map((value) => ({ value, label: t.shared.statuses.payment[value] ?? value })),
             },
-            { id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange },
+            {
+                id: 'total',
+                type: 'number',
+                label: t.orders.columns.total,
+                value: totalFilter,
+                onChange: setTotalFilter,
+                money: true,
+            },
+            { id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange, operators: true, more: true },
         ],
-        [t, createdRange],
+        [t, branch.apiStoreId, deliveryRange, statusFilter, statusExclude, customerIds, paymentStatus, totalFilter, createdRange],
     );
+
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const copy = t.orders.stats;
+        const dash = '—';
+        const items: ListStat[] = [
+            {
+                id: 'count',
+                icon: <ClipboardList aria-hidden />,
+                label: copy.orders,
+                value: summary ? summary.count.toLocaleString(locale) : dash,
+                hint: summary?.cancelledCount ? fmt(copy.cancelled, { count: summary.cancelledCount }) : undefined,
+            },
+            { id: 'value', icon: <Wallet aria-hidden />, label: copy.value, value: summary ? money(summary.value) : dash },
+            {
+                id: 'advance',
+                icon: <HandCoins aria-hidden />,
+                label: copy.advance,
+                value: summary ? money(summary.advance) : dash,
+                hint: summary && summary.value > 0
+                    ? new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(summary.advance / summary.value)
+                    : undefined,
+            },
+            {
+                id: 'open',
+                icon: <Truck aria-hidden />,
+                label: copy.open,
+                value: summary ? money(summary.open.amount) : dash,
+                hint: summary?.open.count ? fmt(copy.openCount, { count: summary.open.count }) : undefined,
+            },
+            {
+                id: 'delivered',
+                icon: <PackageCheck aria-hidden />,
+                label: copy.delivered,
+                value: summary ? money(summary.delivered.amount) : dash,
+                hint: summary?.delivered.count ? fmt(copy.deliveredCount, { count: summary.delivered.count }) : undefined,
+            },
+            {
+                id: 'overdue',
+                icon: <AlarmClock aria-hidden />,
+                label: copy.overdue,
+                value: summary ? summary.overdue.toLocaleString(locale) : dash,
+                tone: summary && summary.overdue > 0 ? 'warning' : 'default',
+            },
+        ];
+        return { items, loading: summaryLoading && !summary, label: t.orders.statsLabel };
+    }, [summary, summaryLoading, locale, t, fmt]);
 
     return (
         <PageShell>
@@ -420,26 +574,30 @@ export default function OrdersPage() {
                         onShopBranch={Boolean(branch.branches.find((b) => b.id === branch.apiStoreId && !b.is_online))}
                     />
                 ) : (
-                    <>
-                        <DataTable<SalesOrder>
-                            tableId="sales-orders"
-                            columns={columns}
-                            data={orders}
-                            title={t.orders.dataTable.title}
-                            isLoading={loading}
-                            emptyMessage={t.orders.dataTable.emptyMessage}
-                            emptyIcon={<ClipboardList className="w-16 h-16 text-gray-200" />}
-                            searchPlaceholder={t.orders.dataTable.searchPlaceholder}
-                            filters={filters}
-                            viewOptions
-                            enableRowSelection
-                            getRowId={(order) => order.id}
-                            onRowSelectionChange={setSelectedOrders}
-                            clearSelectionSignal={clearSelectionSignal}
-                            bulkActions={bulkActions}
-                            bulkActionsDisabled={bulkBusy}
-                        />
-                    </>
+                    <DataTable<SalesOrder>
+                        tableId="sales-orders"
+                        columns={columns}
+                        data={orders}
+                        title={t.orders.dataTable.title}
+                        isLoading={loading}
+                        emptyMessage={t.orders.dataTable.emptyMessage}
+                        emptyIcon={<ClipboardList className="w-16 h-16 text-gray-200" />}
+                        searchPlaceholder={t.orders.dataTable.searchPlaceholder}
+                        onSearchChange={setSearch}
+                        filters={filters}
+                        filterLayout="row"
+                        stats={stats}
+                        // The filter row covers what the per-column boxes did, and sends it to the server.
+                        enableColumnFilters={false}
+                        viewOptions
+                        serverPagination={serverPagination}
+                        enableRowSelection
+                        getRowId={(order) => order.id}
+                        onRowSelectionChange={setSelectedOrders}
+                        clearSelectionSignal={clearSelectionSignal}
+                        bulkActions={bulkActions}
+                        bulkActionsDisabled={bulkBusy}
+                    />
                 )}
 
                 <ConfirmDialog

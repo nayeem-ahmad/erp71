@@ -29,14 +29,56 @@ jest.mock('next/navigation', () => ({
     useSearchParams: () => ({ get: jest.fn() }),
 }));
 
-// The rows the page hands the table, in order — what it chose to show.
+// The rows the page hands the table, in order — what it chose to show — its
+// strip, and its toolbar chips drawn as plain controls: a select per chip with
+// options ("All" is the empty value; a multi-select takes one value here) and
+// a checkbox per toggle.
 jest.mock('@/components/data-table', () => ({
-    DataTable: ({ data, title, isLoading }: { data: { id: string; name: string }[]; title: string; isLoading: boolean }) => (
+    DataTable: ({ data, title, isLoading, filters = [], stats, onSearchChange }: any) => (
         <div>
             <div data-testid="data-table-title">{title}</div>
             {isLoading && <div data-testid="loading-indicator">Loading</div>}
+            <input aria-label="Search" onChange={(e) => onSearchChange?.(e.target.value)} />
+            {filters.map((filter: any) => {
+                if (filter.type === 'toggle') {
+                    return (
+                        <label key={filter.id}>
+                            <input type="checkbox" checked={filter.pressed} onChange={(e) => filter.onChange(e.target.checked)} />
+                            {filter.label}
+                        </label>
+                    );
+                }
+                if (filter.type === 'number') {
+                    return (
+                        <input
+                            key={filter.id}
+                            aria-label={filter.label}
+                            onChange={(e) => filter.onChange(e.target.value ? { op: 'gt', value: Number(e.target.value) } : null)}
+                        />
+                    );
+                }
+                return (
+                    <select
+                        key={filter.id}
+                        aria-label={filter.label}
+                        value={filter.value[0] ?? ''}
+                        onChange={(e) => filter.onChange(e.target.value ? [e.target.value] : [])}
+                    >
+                        <option value="">All</option>
+                        {filter.options.map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                );
+            })}
+            <section aria-label={stats?.label}>
+                {stats?.items.map((item: any) => (
+                    <div key={item.id}>
+                        <p>{item.label}</p>
+                        <p>{item.value}</p>
+                    </div>
+                ))}
+            </section>
             <ul data-testid="rows">
-                {data.map((row) => <li key={row.id}>{row.name}</li>)}
+                {data.map((row: { id: string; name: string }) => <li key={row.id}>{row.name}</li>)}
             </ul>
         </div>
     ),
@@ -68,7 +110,7 @@ function shownRows() {
 }
 
 function stat(label: string) {
-    return screen.getByText(label).nextElementSibling?.textContent;
+    return screen.getByText(label, { selector: 'p' }).nextElementSibling?.textContent;
 }
 
 describe('CustomerDuesSummaryPage', () => {
@@ -154,7 +196,7 @@ describe('CustomerDuesSummaryPage', () => {
         await waitFor(() => expect(shownRows()).toHaveLength(4));
 
         const options = within(screen.getByLabelText('Sales rep')).getAllByRole('option').map((o) => o.textContent);
-        expect(options).toEqual(['All sales reps', 'Karim', 'Salma', 'No sales rep']);
+        expect(options).toEqual(['All', 'Karim', 'Salma', 'No sales rep']);
     });
 
     it('can hide the customers who owe nothing', async () => {
@@ -164,6 +206,28 @@ describe('CustomerDuesSummaryPage', () => {
         fireEvent.click(screen.getByLabelText('Only customers who owe'));
 
         expect(shownRows()).toEqual(['Rahim Traders', 'Bhai Bhai Store']);
+        expect(stat('Customers')).toBe('2');
+    });
+
+    it('narrows by the amount due, and the strip follows', async () => {
+        render(<CustomerDuesSummaryPage />);
+        await waitFor(() => expect(shownRows()).toHaveLength(4));
+
+        fireEvent.change(screen.getByLabelText('Due'), { target: { value: '3000' } });
+
+        expect(shownRows()).toEqual(['Rahim Traders']);
+        expect(stat('Total due')).toContain('5,000');
+        expect(stat('Paid in advance')).toContain('0');
+    });
+
+    it('searches by name, code or phone', async () => {
+        render(<CustomerDuesSummaryPage />);
+        await waitFor(() => expect(shownRows()).toHaveLength(4));
+
+        fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'CUST-c2' } });
+
+        expect(shownRows()).toEqual(['Bhai Bhai Store']);
+        expect(stat('Customers')).toBe('1');
     });
 
     it('survives a failed load', async () => {

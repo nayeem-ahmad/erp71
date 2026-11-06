@@ -4,6 +4,31 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { paginate, type PaginatedResult } from '../common/pagination.dto';
+import { resolveOrderBy, type SortableMap } from '../common/sort.util';
+import { zonedDateString, zonedDayStart } from '../common/tenant-time.util';
+import {
+    loyaltyActivityWindow,
+    loyaltyCustomerWhere,
+    type LoyaltyCustomerListFilters,
+    type LoyaltyCustomerListSummary,
+} from './loyalty-customer-list';
+
+/** One row of the loyalty list. */
+export interface LoyaltyCustomerRow {
+    id: string;
+    name: string;
+    phone: string | null;
+    loyalty_points: number;
+    last_transaction_at: Date | null;
+}
+
+const LOYALTY_CUSTOMER_SORTABLE: SortableMap = {
+    name: (dir) => ({ name: dir }),
+    phone: (dir) => ({ phone: dir }),
+    loyalty_points: (dir) => ({ loyalty_points: dir }),
+};
+const LOYALTY_CUSTOMER_DEFAULT_ORDER = [{ loyalty_points: 'desc' as const }, { name: 'asc' as const }];
 import { UpdateLoyaltySettingsDto, EarnPointsDto, RedeemPointsDto, AdjustPointsDto } from './loyalty.dto';
 
 @Injectable()
@@ -230,41 +255,91 @@ export class LoyaltyService {
         };
     }
 
-    async listCustomersWithPoints(tenantId: string, search?: string) {
-        const customers = await this.db.customer.findMany({
-            where: {
-                tenant_id: tenantId,
-                deleted_at: null,
-                ...(search
-                    ? {
-                          OR: [
-                              { name: { contains: search, mode: 'insensitive' } },
-                              { phone: { contains: search, mode: 'insensitive' } },
-                          ],
-                      }
-                    : {}),
-            },
-            select: {
-                id: true,
-                name: true,
-                phone: true,
-                loyalty_points: true,
-                loyaltyTransactions: {
-                    orderBy: { created_at: 'desc' },
-                    take: 1,
-                    select: { created_at: true },
+    /**
+     * The loyalty list: one page of the customers the filters match, with each
+     * one's latest points activity. Highest balance first unless sorted.
+     */
+    async listCustomersWithPoints(
+        tenantId: string,
+        filters: LoyaltyCustomerListFilters,
+        opts: { page?: number; limit?: number; sortBy?: string; sortDir?: string } = {},
+    ): Promise<PaginatedResult<LoyaltyCustomerRow>> {
+        const page = opts.page ?? 1;
+        const limit = Math.min(opts.limit ?? 20, 100);
+        const where = loyaltyCustomerWhere(tenantId, filters);
+        const [customers, total] = await Promise.all([
+            this.db.customer.findMany({
+                where,
+                select: {
+                    id: true,
+                    name: true,
+                    phone: true,
+                    loyalty_points: true,
+                    loyaltyTransactions: {
+                        orderBy: { created_at: 'desc' },
+                        take: 1,
+                        select: { created_at: true },
+                    },
                 },
-            },
-            orderBy: { loyalty_points: 'desc' },
-            take: 100,
-        });
+                orderBy: resolveOrderBy(opts.sortBy, opts.sortDir, LOYALTY_CUSTOMER_SORTABLE, LOYALTY_CUSTOMER_DEFAULT_ORDER),
+                skip: (page - 1) * limit,
+                take: limit,
+            }),
+            this.db.customer.count({ where }),
+        ]);
 
-        return customers.map((c) => ({
-            id: c.id,
-            name: c.name,
-            phone: c.phone,
-            loyalty_points: c.loyalty_points,
-            last_transaction_at: c.loyaltyTransactions[0]?.created_at ?? null,
-        }));
+        return paginate(
+            customers.map((c) => ({
+                id: c.id,
+                name: c.name,
+                phone: c.phone,
+                loyalty_points: c.loyalty_points,
+                last_transaction_at: c.loyaltyTransactions[0]?.created_at ?? null,
+            })),
+            total,
+            page,
+            limit,
+        );
+    }
+
+    /**
+     * The stats strip above the loyalty list, over exactly the customers it
+     * matches: how many, how many hold points and how many points that is, and
+     * what they earned and redeemed — in the activity days picked, else this
+     * month on the tenant's calendar.
+     */
+    async customerListSummary(
+        tenantId: string,
+        filters: LoyaltyCustomerListFilters,
+        now: Date = new Date(),
+    ): Promise<LoyaltyCustomerListSummary> {
+        const where = loyaltyCustomerWhere(tenantId, filters);
+        const picked = loyaltyActivityWindow(filters);
+        const window = picked ?? {
+            gte: zonedDayStart(`${zonedDateString(now, filters.timezone).slice(0, 8)}01`, filters.timezone) as Date,
+        };
+        const activity = (type: string) =>
+            this.db.loyaltyTransaction.aggregate({
+                where: { tenantId, type, created_at: window, customer: where },
+                _sum: { points: true },
+            });
+        const [count, holding, earned, redeemed] = await Promise.all([
+            this.db.customer.count({ where }),
+            this.db.customer.aggregate({
+                where: { AND: [where, { loyalty_points: { gt: 0 } }] },
+                _count: { _all: true },
+                _sum: { loyalty_points: true },
+            }),
+            activity('EARN'),
+            activity('REDEEM'),
+        ]);
+        return {
+            count,
+            members: holding._count._all,
+            points: holding._sum.loyalty_points ?? 0,
+            earned: earned._sum.points ?? 0,
+            redeemed: Math.abs(redeemed._sum.points ?? 0),
+            windowed: Boolean(picked),
+        };
     }
 }

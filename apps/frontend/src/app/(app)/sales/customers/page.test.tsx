@@ -21,9 +21,20 @@ jest.mock('@/lib/api', () => ({
         getCustomerGroups: jest.fn(),
         getTerritories: jest.fn(),
         getSalesSettings: jest.fn(),
-        getCustomerSegmentStats: jest.fn(),
+        getCustomersListSummary: jest.fn(),
     },
 }));
+
+/** A filter chip on the toolbar row — a button that opens its own popover. */
+function chip(name: string | RegExp): HTMLElement {
+    const found = screen
+        .getAllByRole('button', { name })
+        .find((button) => button.getAttribute('aria-haspopup') === 'dialog');
+    if (!found) throw new Error(`No filter chip named ${String(name)}`);
+    return found;
+}
+
+const SUMMARY = { count: 40, newThisMonth: 3, withDue: 6, receivable: 18250, totalSpent: 90000, vip: 4, atRisk: 7 };
 
 // DataTable hides `hideOnMobile` columns (customer_code, customer_type,
 // customerGroup, segment_category, ...) when this reports a narrow viewport.
@@ -84,7 +95,7 @@ describe('CustomersPage — Customer Management', () => {
         api.getCustomerGroups.mockResolvedValue([{ id: 'grp-1', name: 'Wholesale' }]);
         api.getTerritories.mockResolvedValue([{ id: 'ter-1', name: 'Dhaka North', parent: null }]);
         api.getSalesSettings.mockResolvedValue({ show_customer_credit: false });
-        api.getCustomerSegmentStats.mockResolvedValue({ total: 0, breakdown: [] });
+        api.getCustomersListSummary.mockResolvedValue(SUMMARY);
         // An owner: customers start on every branch.
         mockBranchScope({ value: 'all', defaultValue: 'all' });
     });
@@ -93,41 +104,71 @@ describe('CustomersPage — Customer Management', () => {
         jest.clearAllMocks();
     });
 
-    // The table's advanced filters go to the server, so their matches are paged
-    // together rather than left wherever they fell in the unfiltered list.
-    it('filters on the server, from page 1, rather than within the rows on screen', async () => {
-        const { api } = require('@/lib/api');
+    it('shows the strip for the customers the filters match', async () => {
         render(<CustomersPage />);
-        await screen.findByText('Alice Smith');
-
-        fireEvent.click(screen.getByRole('button', { name: /filters/i }));
-        fireEvent.change(screen.getByPlaceholderText(/^Filter Code/), { target: { value: 'CUST-9' } });
-
-        await waitFor(() =>
-            expect(api.getCustomersPaged).toHaveBeenLastCalledWith(
-                expect.objectContaining({ page: 1, filters: { customer_code: 'CUST-9' } }),
-            ),
-        );
+        const strip = await screen.findByRole('region', { name: 'Customer figures' });
+        await within(strip).findByText('40');
+        for (const label of ['Customers', 'New this month', 'With due', 'Receivable', 'VIP', 'At-Risk']) {
+            expect(within(strip).getByText(label)).toBeInTheDocument();
+        }
+        expect(within(strip).getByText(formatBDT(18250, { minimumFractionDigits: 0, maximumFractionDigits: 0 }))).toHaveClass('text-amber-700');
+        // The old per-segment cards gave way to the strip.
+        expect(screen.queryByText('Total Customers')).not.toBeInTheDocument();
     });
 
-    it('filters by segment and type from the table toolbar, on the server', async () => {
+    it('filters by group — "No group" included — on the server, for rows and strip alike', async () => {
         const { api } = require('@/lib/api');
         render(<CustomersPage />);
         await screen.findByText('Alice Smith');
 
-        fireEvent.change(screen.getByRole('combobox', { name: 'Segment' }), { target: { value: 'At-Risk' } });
+        fireEvent.click(chip('Group'));
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'Wholesale' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'No group' }));
+
         await waitFor(() =>
             expect(api.getCustomersPaged).toHaveBeenLastCalledWith(
-                expect.objectContaining({ page: 1, segment: 'At-Risk' }),
+                expect.objectContaining({ page: 1, groupIds: ['grp-1', 'none'] }),
+            ),
+        );
+        expect(api.getCustomersListSummary).toHaveBeenLastCalledWith(expect.objectContaining({ groupIds: ['grp-1', 'none'] }));
+    });
+
+    it('finds the customers who owe money with the Due chip', async () => {
+        const { api } = require('@/lib/api');
+        render(<CustomersPage />);
+        await screen.findByText('Alice Smith');
+
+        fireEvent.click(chip('Due'));
+        fireEvent.change(screen.getByRole('combobox', { name: 'Due' }), { target: { value: 'gt' } });
+        fireEvent.change(screen.getByRole('textbox', { name: 'Due (Amount)' }), { target: { value: '0' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+        await waitFor(() =>
+            expect(api.getCustomersPaged).toHaveBeenLastCalledWith(
+                expect.objectContaining({ page: 1, due: { op: 'gt', value: 0 } }),
+            ),
+        );
+        expect(api.getCustomersListSummary).toHaveBeenLastCalledWith(expect.objectContaining({ due: { op: 'gt', value: 0 } }));
+    });
+
+    it('filters segments on the server and keeps type, spend and points behind More', async () => {
+        const { api } = require('@/lib/api');
+        render(<CustomersPage />);
+        await screen.findByText('Alice Smith');
+
+        fireEvent.click(chip('Segment'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'At-Risk' }));
+        await waitFor(() =>
+            expect(api.getCustomersPaged).toHaveBeenLastCalledWith(
+                expect.objectContaining({ page: 1, segments: ['At-Risk'] }),
             ),
         );
 
-        fireEvent.change(screen.getByRole('combobox', { name: 'Type' }), { target: { value: 'ORGANIZATION' } });
-        await waitFor(() =>
-            expect(api.getCustomersPaged).toHaveBeenLastCalledWith(
-                expect.objectContaining({ page: 1, segment: 'At-Risk', customerType: 'ORGANIZATION' }),
-            ),
-        );
+        fireEvent.click(chip(/^More/));
+        const more = screen.getByRole('dialog', { name: 'More' });
+        for (const name of ['Type', 'Total Spent', 'Points']) {
+            expect(within(more).getByRole('button', { name: new RegExp(`^${name}`) })).toBeInTheDocument();
+        }
     });
 
     it('searches the server from the table toolbar box', async () => {
@@ -189,18 +230,12 @@ describe('CustomersPage — Customer Management', () => {
         });
     });
 
-    it('displays INDIVIDUAL type badge', async () => {
+    it('names the customer type in words', async () => {
         render(<CustomersPage />);
-        await waitFor(() => {
-            expect(screen.getByText('INDIVIDUAL')).toBeInTheDocument();
-        });
-    });
-
-    it('displays ORGANIZATION type badge', async () => {
-        render(<CustomersPage />);
-        await waitFor(() => {
-            expect(screen.getByText('ORGANIZATION')).toBeInTheDocument();
-        });
+        const alice = (await screen.findByText('Alice Smith')).closest('tr')!;
+        const corp = screen.getByText('TechCorp Ltd').closest('tr')!;
+        expect(within(alice).getByText('Individual')).toBeInTheDocument();
+        expect(within(corp).getByText('Organization')).toBeInTheDocument();
     });
 
     it('shows customer group name when set', async () => {
@@ -212,16 +247,14 @@ describe('CustomersPage — Customer Management', () => {
 
     it('shows VIP segment badge', async () => {
         render(<CustomersPage />);
-        await waitFor(() => {
-            expect(screen.getByText('VIP')).toBeInTheDocument();
-        });
+        const row = (await screen.findByText('Alice Smith')).closest('tr')!;
+        expect(within(row).getByText('VIP')).toBeInTheDocument();
     });
 
-    it('shows default GENERAL segment when not set', async () => {
+    it('reads a customer the segmentation has not reached as Regular', async () => {
         render(<CustomersPage />);
-        await waitFor(() => {
-            expect(screen.getByText('GENERAL')).toBeInTheDocument();
-        });
+        const row = (await screen.findByText('TechCorp Ltd')).closest('tr')!;
+        expect(within(row).getByText('Regular')).toBeInTheDocument();
     });
 
     it('renders view action link to customer detail page', async () => {
@@ -481,14 +514,16 @@ describe('CustomersPage — Customer Management', () => {
             await waitFor(() =>
                 expect(api.getCustomersPaged).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'all' })),
             );
-            expect(api.getCustomerSegmentStats).toHaveBeenCalledWith('all');
+            expect(api.getCustomersListSummary).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'all' }));
 
             fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
 
             await waitFor(() =>
                 expect(api.getCustomersPaged).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-2', page: 1 })),
             );
-            await waitFor(() => expect(api.getCustomerSegmentStats).toHaveBeenLastCalledWith('store-2'));
+            await waitFor(() =>
+                expect(api.getCustomersListSummary).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-2' })),
+            );
         });
 
         it('asks nothing until the branch is known', async () => {
@@ -497,7 +532,7 @@ describe('CustomersPage — Customer Management', () => {
             render(<CustomersPage />);
             await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
             expect(api.getCustomersPaged).not.toHaveBeenCalled();
-            expect(api.getCustomerSegmentStats).not.toHaveBeenCalled();
+            expect(api.getCustomersListSummary).not.toHaveBeenCalled();
         });
 
         it('lets a member who sees every branch move a customer to another one', async () => {
