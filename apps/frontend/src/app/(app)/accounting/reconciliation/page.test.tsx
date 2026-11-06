@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import PostingExceptionsPage from './page';
 
 jest.mock('next/link', () => ({
@@ -14,8 +14,26 @@ jest.mock('next/navigation', () => ({
     useParams: jest.fn(() => ({})),
 }));
 
+jest.mock('@/lib/toast', () => ({
+    toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
+}));
+
+// The table has a suite of its own. This stand-in counts the rows and keeps
+// the props, so a test can read the strip and set a chip.
+let lastTableProps: any = null;
+
 jest.mock('@/components/data-table', () => ({
-    DataTable: ({ data }: any) => <div data-testid="data-table">{data?.length ?? 0} rows</div>,
+    DataTable: (props: any) => {
+        lastTableProps = props;
+        return (
+            <div data-testid="data-table">
+                {props.data?.length ?? 0} rows
+                {(props.stats?.items ?? []).map((item: { id: string; value: string }) => (
+                    <span key={item.id} data-testid={`stat-${item.id}`}>{item.value}</span>
+                ))}
+            </div>
+        );
+    },
 }));
 
 jest.mock('@/lib/api', () => ({
@@ -83,11 +101,13 @@ describe('PostingExceptionsPage', () => {
         expect(document.body).toBeInTheDocument();
     });
 
-    it('calls getPostingExceptions on mount', async () => {
+    it('loads the first page on mount, with no status chosen', async () => {
         const api = getApi();
         render(<PostingExceptionsPage />);
         await waitFor(() => {
-            expect(api.getPostingExceptions).toHaveBeenCalledTimes(1);
+            expect(api.getPostingExceptions).toHaveBeenCalledWith(
+                expect.objectContaining({ status: undefined, page: 1, limit: 20 }),
+            );
         });
     });
 
@@ -110,24 +130,60 @@ describe('PostingExceptionsPage', () => {
         });
     });
 
-    it('renders status filter dropdown', async () => {
+    it('puts status, module and date in the one-row toolbar', async () => {
         render(<PostingExceptionsPage />);
-        await waitFor(() => {
-            expect(screen.getByText(/all statuses/i)).toBeInTheDocument();
-        });
+        await waitFor(() => expect(screen.getByText('0 rows')).toBeInTheDocument());
+        expect(lastTableProps.filterLayout).toBe('row');
+        expect(lastTableProps.filters.map((f: { id: string }) => f.id)).toEqual(['status', 'module', 'updated']);
+        expect(lastTableProps.serverPagination).toEqual(expect.objectContaining({ page: 1, pageSize: 20 }));
     });
 
-    it('refetches when status filter changes', async () => {
+    it('refetches when the status chip changes', async () => {
         const api = getApi();
         render(<PostingExceptionsPage />);
-        await waitFor(() => expect(api.getPostingExceptions).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(screen.getByText('0 rows')).toBeInTheDocument());
 
-        const select = screen.getAllByRole('combobox')[0];
-        fireEvent.change(select, { target: { value: 'failed' } });
+        const status = lastTableProps.filters.find((f: { id: string }) => f.id === 'status');
+        act(() => status.onChange('failed'));
 
         await waitFor(() => {
             expect(api.getPostingExceptions).toHaveBeenCalledWith(
-                expect.objectContaining({ status: 'failed' })
+                expect.objectContaining({ status: 'failed', page: 1, limit: 20 })
+            );
+        });
+    });
+
+    it('counts each status for the strip, and only the chosen one once a status is set', async () => {
+        const api = getApi();
+        const totals: Record<string, number> = { pending: 3, failed: 2, posted: 10, skipped: 1 };
+        api.getPostingExceptions.mockImplementation((params: { status?: string; limit?: number }) => Promise.resolve({
+            data: [],
+            pagination: { page: 1, limit: params.limit ?? 20, total: params.status ? totals[params.status] : 16 },
+        }));
+        render(<PostingExceptionsPage />);
+
+        await waitFor(() => expect(screen.getByTestId('stat-count')).toHaveTextContent('16'));
+        expect(screen.getByTestId('stat-pending')).toHaveTextContent('3');
+        expect(screen.getByTestId('stat-failed')).toHaveTextContent('2');
+
+        const status = lastTableProps.filters.find((f: { id: string }) => f.id === 'status');
+        act(() => status.onChange('failed'));
+
+        await waitFor(() => expect(screen.getByTestId('stat-count')).toHaveTextContent('2'));
+        expect(screen.getByTestId('stat-pending')).toHaveTextContent('0');
+    });
+
+    it('sends the date chip as from/to', async () => {
+        const api = getApi();
+        render(<PostingExceptionsPage />);
+        await waitFor(() => expect(screen.getByText('0 rows')).toBeInTheDocument());
+
+        const updated = lastTableProps.filters.find((f: { id: string }) => f.id === 'updated');
+        act(() => updated.onChange({ from: '2026-06-01', to: '2026-06-30' }));
+
+        await waitFor(() => {
+            expect(api.getPostingExceptions).toHaveBeenCalledWith(
+                expect.objectContaining({ from: '2026-06-01', to: '2026-06-30' }),
             );
         });
     });

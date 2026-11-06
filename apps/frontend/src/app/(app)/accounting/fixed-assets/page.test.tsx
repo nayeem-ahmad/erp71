@@ -1,6 +1,7 @@
 'use client';
 
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { formatBDT } from '@/lib/format';
 import FixedAssetsPage from './page';
 
 jest.mock('@/lib/api', () => ({
@@ -15,6 +16,13 @@ jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
     usePathname: () => '/accounting/fixed-assets',
     useSearchParams: () => ({ get: jest.fn() }),
+}));
+
+// DataTable hides `hideOnMobile` columns on a narrow viewport, which is all
+// the global matchMedia mock reports.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
 }));
 
 const mockAssets = [
@@ -80,15 +88,10 @@ describe('FixedAssetsPage', () => {
 
     it('renders table column headers', async () => {
         render(<FixedAssetsPage />);
-        await waitFor(() => {
-            expect(screen.getByText('Code')).toBeInTheDocument();
-            expect(screen.getByText('Name')).toBeInTheDocument();
-            expect(screen.getByText('Purchase Date')).toBeInTheDocument();
-            expect(screen.getByText('Cost')).toBeInTheDocument();
-            expect(screen.getByText('Accum. Dep.')).toBeInTheDocument();
-            expect(screen.getByText('Net Book Value')).toBeInTheDocument();
-            expect(screen.getByText('Method')).toBeInTheDocument();
-        });
+        await waitFor(() => expect(screen.getByText('FA-001')).toBeInTheDocument());
+        for (const name of ['Code', 'Name', 'Purchase Date', 'Cost', 'Accum. Dep.', 'Net Book Value', 'Method']) {
+            expect(screen.getByRole('columnheader', { name: new RegExp(`^${name}`) })).toBeInTheDocument();
+        }
     });
 
     it('renders Add Asset button', async () => {
@@ -173,7 +176,7 @@ describe('FixedAssetsPage', () => {
         const { api } = require('@/lib/api');
         api.listFixedAssets.mockImplementation(() => new Promise(() => {}));
         render(<FixedAssetsPage />);
-        expect(screen.getByText('Loading…')).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Fixed asset figures' })).toHaveAttribute('aria-busy', 'true');
     });
 
     it('shows error message on API failure', async () => {
@@ -215,5 +218,22 @@ describe('FixedAssetsPage', () => {
         expect(screen.getByText('Add Fixed Asset')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
         expect(screen.queryByText('Add Fixed Asset')).not.toBeInTheDocument();
+    });
+
+    it('sums the rows the search leaves in the strip', async () => {
+        const money = (value: number) => formatBDT(value, { locale: 'en', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        render(<FixedAssetsPage />);
+        await waitFor(() => expect(screen.getByText('FA-002')).toBeInTheDocument());
+
+        const strip = screen.getByRole('region', { name: 'Fixed asset figures' });
+        expect(within(strip).getByText(money(170_000))).toBeInTheDocument();
+        expect(within(strip).getByText(money(120_000))).toBeInTheDocument();
+
+        fireEvent.change(screen.getByPlaceholderText('Search by code or name…'), { target: { value: 'server' } });
+
+        await waitFor(() => expect(screen.queryByText('FA-001')).not.toBeInTheDocument());
+        expect(screen.getByText('FA-002')).toBeInTheDocument();
+        expect(within(strip).getByText(money(80_000))).toBeInTheDocument();
+        expect(within(strip).queryByText(money(170_000))).not.toBeInTheDocument();
     });
 });

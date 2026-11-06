@@ -1,41 +1,51 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle, RefreshCw, XCircle } from 'lucide-react';
-import { createColumnHelper } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
-import {
-    AccountingPageShell,
-} from '@/components/accounting/compact';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { CircleAlert, CircleCheck, CircleSlash, Hourglass, ListChecks, RefreshCw } from 'lucide-react';
+import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { AccountingPageShell } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { Button, StatusBadge, type StatusBadgeTone } from '@/components/ui';
+import { RowActions, RowActionButton } from '@/components/table';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
+import { applyDateRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { formatDateTime } from '@/lib/format';
-import { useI18n, formatMessage } from '@/lib/i18n';
-import { compactDensity } from '@/lib/ui/compact-density';
+import { useI18n } from '@/lib/i18n';
+import { toast } from '@/lib/toast';
 
-const STATUS_STYLES: Record<string, string> = {
-    posted: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    pending: 'bg-amber-50 text-amber-700 border-amber-200',
-    failed: 'bg-red-50 text-red-700 border-red-200',
-    skipped: 'bg-gray-50 text-gray-500 border-gray-200',
+const STATUSES = ['pending', 'failed', 'posted', 'skipped'] as const;
+type PostingStatus = (typeof STATUSES)[number];
+
+const STATUS_TONE: Record<PostingStatus, StatusBadgeTone> = {
+    posted: 'success',
+    pending: 'warning',
+    failed: 'danger',
+    skipped: 'neutral',
 };
 
-const STATUS_ICONS: Record<string, React.ReactNode> = {
-    posted: <CheckCircle className="w-3 h-3" />,
-    pending: <RefreshCw className="w-3 h-3" />,
-    failed: <XCircle className="w-3 h-3" />,
-    skipped: <AlertTriangle className="w-3 h-3" />,
-};
-
-const EVENT_TYPE_LABELS: Record<string, string> = {
-    sale: 'Sale',
-    sale_return: 'Sale Return',
-    purchase: 'Purchase',
-    purchase_return: 'Purchase Return',
-    inventory_adjustment: 'Inventory Adjustment',
-    fund_movement: 'Fund Movement',
-};
+/** The modules that queue posting events; the server filters on one of them. */
+const MODULES = [
+    'accounting',
+    'cashier-sessions',
+    'customers',
+    'expenses',
+    'external-sync',
+    'fund-transfers',
+    'fund_transfers',
+    'imports',
+    'inventory',
+    'investors',
+    'loans',
+    'payroll',
+    'purchase-orders',
+    'purchases',
+    'salary-payments',
+    'sales',
+    'suppliers',
+    'warehouse_transfers',
+] as const;
 
 interface PostingEvent {
     id: string;
@@ -62,250 +72,309 @@ interface Pagination {
 
 const columnHelper = createColumnHelper<PostingEvent>();
 
+/** "inventory_adjustment" → "Inventory adjustment", for an event type with no label of its own. */
+function humanize(code: string): string {
+    const words = code.replace(/[_-]+/g, ' ').trim();
+    return words ? words.charAt(0).toUpperCase() + words.slice(1) : code;
+}
+
 export default function PostingExceptionsPage() {
     const { t, locale } = useI18n();
+    const pe = t.postingExceptions;
+    const ui = t.accountingFinanceUi.postingExceptions;
+    const statusLabels = t.accountingShared.postingStatus;
+    const eventLabels = t.accountingShared.eventTypes;
     const [events, setEvents] = useState<PostingEvent[]>([]);
     const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 20, total: 0 });
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
     const [loading, setLoading] = useState(true);
-    const [filterStatus, setFilterStatus] = useState('');
-    const [filterModule, setFilterModule] = useState('');
+    const [filterStatus, setFilterStatus] = useState<string | null>(null);
+    const [filterModule, setFilterModule] = useState<string | null>(null);
+    const [dateRange, setDateRange] = useState<CreatedRange | null>(null);
+    const [counts, setCounts] = useState<Record<PostingStatus, number> | null>(null);
+    const [countsLoading, setCountsLoading] = useState(true);
     const [retryingId, setRetryingId] = useState<string | null>(null);
-    const [retryMessage, setRetryMessage] = useState<{ id: string; text: string; ok: boolean } | null>(null);
 
-    useEffect(() => {
-        void loadEvents();
-    }, [filterStatus, filterModule]);
+    const scope = useMemo(() => {
+        const range = applyDateRangeQuery(dateRange);
+        return { module: filterModule || undefined, from: range.dateFrom, to: range.dateTo };
+    }, [filterModule, dateRange]);
 
-    const loadEvents = async (page = 1) => {
+    const loadEvents = useCallback(async () => {
         setLoading(true);
         try {
             const data = await api.getPostingExceptions({
                 status: filterStatus || undefined,
-                module: filterModule || undefined,
+                ...scope,
                 page,
-                limit: 20,
+                limit: pageSize,
             });
-            setEvents(data.data ?? []);
-            setPagination(data.pagination ?? { page: 1, limit: 20, total: 0 });
+            setEvents(data?.data ?? []);
+            setPagination(data?.pagination ?? { page: 1, limit: pageSize, total: 0 });
         } catch (err) {
             console.error('Failed to load posting exceptions', err);
+            toast.error(err instanceof Error && err.message ? err.message : t.accountingShared.loadFailed);
         } finally {
             setLoading(false);
         }
+    }, [filterStatus, scope, page, pageSize, t]);
+
+    // The strip counts each status over the module and date chips: one
+    // one-row request per status, read for its total.
+    const loadCounts = useCallback(async () => {
+        setCountsLoading(true);
+        try {
+            const totals = await Promise.all(
+                STATUSES.map((status) =>
+                    api.getPostingExceptions({ status, ...scope, page: 1, limit: 1 })
+                        .then((data: { pagination?: Pagination } | null) => Number(data?.pagination?.total ?? 0))
+                        .catch(() => 0),
+                ),
+            );
+            setCounts(Object.fromEntries(STATUSES.map((status, i) => [status, totals[i]])) as Record<PostingStatus, number>);
+        } finally {
+            setCountsLoading(false);
+        }
+    }, [scope]);
+
+    useEffect(() => {
+        void loadEvents();
+    }, [loadEvents]);
+
+    useEffect(() => {
+        void loadCounts();
+    }, [loadCounts]);
+
+    const refresh = () => {
+        void loadEvents();
+        void loadCounts();
     };
 
     const handleRetry = async (id: string) => {
         setRetryingId(id);
-        setRetryMessage(null);
         try {
             const result = await api.retryPostingException(id);
-            setRetryMessage({ id, text: result.message ?? 'Retry queued.', ok: true });
-            await loadEvents(pagination.page);
+            toast.success(result?.message ?? pe.retryQueued);
+            refresh();
         } catch (err: any) {
-            setRetryMessage({ id, text: err.message ?? 'Retry failed.', ok: false });
+            toast.error(err?.message ?? pe.retryFailed);
         } finally {
             setRetryingId(null);
         }
     };
 
-    const uniqueModules = useMemo(() => {
-        const mods = new Set(events.map((e) => e.sourceModule));
-        return [...mods].sort();
-    }, [events]);
+    const statusLabel = (status: string) => statusLabels[status as PostingStatus] ?? status;
+    const eventLabel = (type: string) => eventLabels[type as keyof typeof eventLabels] ?? humanize(type);
 
-    const columns = useMemo(
+    const moduleOptions = useMemo(() => {
+        const known = new Set<string>(MODULES);
+        for (const event of events) known.add(event.sourceModule);
+        if (filterModule) known.add(filterModule);
+        return [...known].sort().map((value) => ({ value, label: value }));
+    }, [events, filterModule]);
+
+    const filters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'status',
+                type: 'select',
+                label: t.accountingShared.status,
+                value: filterStatus,
+                onChange: (next) => { setFilterStatus(next); setPage(1); },
+                options: STATUSES.map((value) => ({ value, label: statusLabel(value) })),
+            },
+            {
+                id: 'module',
+                type: 'select',
+                label: pe.columns.module,
+                value: filterModule,
+                onChange: (next) => { setFilterModule(next); setPage(1); },
+                options: moduleOptions,
+            },
+            {
+                id: 'updated',
+                type: 'date-range',
+                label: ui.lastActivity,
+                value: dateRange,
+                onChange: (next) => { setDateRange(next); setPage(1); },
+                operators: true,
+            },
+        ],
+        [t, pe, ui, filterStatus, filterModule, moduleOptions, dateRange],
+    );
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        // With a status chosen, the other statuses have no rows in the list.
+        const countOf = (status: PostingStatus) => (filterStatus && filterStatus !== status ? 0 : counts?.[status] ?? 0);
+        const total = STATUSES.reduce((sum, status) => sum + countOf(status), 0);
+        const items: ListStat[] = [
+            { id: 'count', icon: <ListChecks aria-hidden />, label: t.accountingShared.postingEvents, value: n(total) },
+            {
+                id: 'pending',
+                icon: <Hourglass aria-hidden />,
+                label: statusLabels.pending,
+                value: n(countOf('pending')),
+                tone: countOf('pending') > 0 ? 'warning' : 'default',
+            },
+            {
+                id: 'failed',
+                icon: <CircleAlert aria-hidden />,
+                label: statusLabels.failed,
+                value: n(countOf('failed')),
+                tone: countOf('failed') > 0 ? 'danger' : 'default',
+            },
+            { id: 'posted', icon: <CircleCheck aria-hidden />, label: statusLabels.posted, value: n(countOf('posted')) },
+            { id: 'skipped', icon: <CircleSlash aria-hidden />, label: statusLabels.skipped, value: n(countOf('skipped')) },
+        ];
+        return { items, loading: countsLoading && !counts, label: ui.statsLabel };
+    }, [counts, countsLoading, filterStatus, locale, statusLabels, t, ui]);
+
+    const columns = useMemo<ColumnDef<PostingEvent, any>[]>(
         () => [
             columnHelper.accessor('eventType', {
-                header: t.postingExceptions.columns.event,
-                cell: (info) => (
-                    <span className="text-sm font-medium text-gray-800">
-                        {EVENT_TYPE_LABELS[info.getValue()] ?? info.getValue()}
-                    </span>
-                ),
+                header: pe.columns.event,
+                cell: (info) => eventLabel(info.getValue()),
+                enableSorting: false,
+                size: 170,
             }),
             columnHelper.accessor('sourceModule', {
-                header: t.postingExceptions.columns.module,
-                cell: (info) => (
-                    <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-700">
-                        {info.getValue()}
-                    </span>
-                ),
+                header: pe.columns.module,
+                cell: (info) => <span className="font-mono text-xs">{info.getValue()}</span>,
+                enableSorting: false,
+                meta: { hideOnMobile: true },
+                size: 130,
             }),
             columnHelper.accessor('sourceId', {
-                header: t.postingExceptions.columns.source,
+                header: pe.columns.source,
                 cell: (info) => (
-                    <div>
+                    <div className="min-w-0">
                         <span className="block text-xs text-gray-500">{info.row.original.sourceType}</span>
-                        <span className="block font-mono text-xs text-gray-700 truncate max-w-[120px]" title={info.getValue()}>
+                        <span className="block font-mono text-xs truncate max-w-[120px]" title={info.getValue()}>
                             {info.getValue()}
                         </span>
                     </div>
                 ),
+                enableSorting: false,
+                meta: { hideOnMobile: true },
+                size: 150,
             }),
             columnHelper.accessor('status', {
                 header: t.accountingShared.status,
-                cell: (info) => {
-                    const s = info.getValue();
-                    return (
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${STATUS_STYLES[s] ?? 'bg-gray-50 text-gray-600 border-gray-200'}`}>
-                            {STATUS_ICONS[s]}
-                            {s}
-                        </span>
-                    );
-                },
+                cell: (info) => (
+                    <StatusBadge tone={STATUS_TONE[info.getValue() as PostingStatus] ?? 'neutral'}>
+                        {statusLabel(info.getValue())}
+                    </StatusBadge>
+                ),
+                enableSorting: false,
+                size: 100,
             }),
             columnHelper.accessor('attemptCount', {
-                header: t.postingExceptions.columns.attempts,
-                cell: (info) => (
-                    <span className="text-sm text-gray-500 font-mono">{info.getValue()}</span>
-                ),
+                header: pe.columns.attempts,
+                cell: (info) => Number(info.getValue() ?? 0).toLocaleString(locale),
+                enableSorting: false,
+                meta: { align: 'end', hideOnMobile: true },
+                size: 90,
             }),
             columnHelper.accessor('lastError', {
-                header: t.postingExceptions.columns.lastError,
+                header: pe.columns.lastError,
                 cell: (info) => {
                     const err = info.getValue();
                     return err ? (
                         <span className="text-xs text-red-600 font-mono" title={err}>
                             {err.length > 40 ? `${err.slice(0, 40)}…` : err}
                         </span>
-                    ) : (
-                        <span className="text-gray-300 text-xs">—</span>
-                    );
+                    ) : '—';
                 },
+                enableSorting: false,
+                size: 220,
             }),
             columnHelper.display({
                 id: 'voucher',
-                header: t.postingExceptions.columns.voucher,
-                cell: ({ row }) => {
-                    const v = row.original.voucher;
-                    return v ? (
-                        <span className="font-mono text-xs text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
-                            {v.voucher_number}
-                        </span>
-                    ) : (
-                        <span className="text-gray-300 text-xs">—</span>
-                    );
-                },
+                header: pe.columns.voucher,
+                cell: ({ row }) => row.original.voucher?.voucher_number
+                    ? <span className="font-mono text-xs">{row.original.voucher.voucher_number}</span>
+                    : '—',
+                meta: { hideOnMobile: true },
+                size: 120,
             }),
             columnHelper.accessor('lastAttemptAt', {
-                header: t.postingExceptions.columns.lastAttempt,
-                cell: (info) => {
-                    const v = info.getValue();
-                    return v ? (
-                        <span className="text-xs text-gray-500">
-                            {formatDateTime(v, locale)}
-                        </span>
-                    ) : (
-                        <span className="text-gray-300 text-xs">—</span>
-                    );
-                },
+                header: pe.columns.lastAttempt,
+                cell: (info) => (info.getValue() ? formatDateTime(info.getValue() as string, locale) : '—'),
+                enableSorting: false,
+                meta: { hideOnMobile: true },
+                size: 150,
             }),
             columnHelper.display({
                 id: 'actions',
-                header: '',
+                header: t.common.actions,
                 cell: ({ row }) => {
                     const event = row.original;
                     if (event.status === 'posted' || event.status === 'skipped') return null;
                     const isRetrying = retryingId === event.id;
                     return (
-                        <div className="flex flex-col items-start gap-1">
-                            <button
-                                onClick={() => handleRetry(event.id)}
+                        <RowActions>
+                            <RowActionButton
+                                icon={<RefreshCw className={isRetrying ? 'animate-spin' : undefined} />}
+                                label={isRetrying ? pe.retrying : pe.retry}
                                 disabled={isRetrying}
-                                className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-hover font-medium disabled:opacity-50"
-                            >
-                                <RefreshCw className={`w-3.5 h-3.5 ${isRetrying ? 'animate-spin' : ''}`} />
-                                {isRetrying ? 'Retrying…' : 'Retry'}
-                            </button>
-                            {retryMessage?.id === event.id && (
-                                <span className={`text-xs ${retryMessage.ok ? 'text-emerald-600' : 'text-red-600'}`}>
-                                    {retryMessage.text}
-                                </span>
-                            )}
-                        </div>
+                                onClick={() => void handleRetry(event.id)}
+                            />
+                        </RowActions>
                     );
                 },
+                enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
+                size: 80,
             }),
         ],
-        [retryingId, retryMessage],
+        [t, pe, locale, retryingId],
     );
-
-    const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.limit));
 
     return (
         <AccountingPageShell maxWidth="full">
             <PageHeader
-                title={t.postingExceptions.title}
-                subtitle={t.postingExceptions.subtitle}
+                title={pe.title}
+                subtitle={pe.subtitle}
                 breadcrumbs={modulePageBreadcrumbs(
                     t.dashboardHome.breadcrumbHome,
                     t.sidebar.modules.accounting,
-                    t.postingExceptions.title,
+                    pe.title,
                     'accounting',
                 )}
                 actions={(
-                    <>
-                        <span className="text-xs text-gray-500">
-                            {pagination.total} event{pagination.total !== 1 ? 's' : ''}
-                        </span>
-                        <button onClick={() => loadEvents(pagination.page)} className={compactDensity.btnSecondary}>
-                            <RefreshCw className="w-3.5 h-3.5" />
-                            Refresh
-                        </button>
-                    </>
+                    <Button variant="secondary" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={refresh}>
+                        {t.common.refresh}
+                    </Button>
                 )}
             />
 
-            <div className={compactDensity.filterBar}>
-                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={compactDensity.formField}>
-                    <option value="">All statuses</option>
-                    <option value="pending">Pending</option>
-                    <option value="failed">Failed</option>
-                    <option value="posted">Posted</option>
-                    <option value="skipped">Skipped</option>
-                </select>
-                {uniqueModules.length > 1 && (
-                    <select value={filterModule} onChange={(e) => setFilterModule(e.target.value)} className={compactDensity.formField}>
-                        <option value="">All modules</option>
-                        {uniqueModules.map((m) => (
-                            <option key={m} value={m}>{m}</option>
-                        ))}
-                    </select>
-                )}
-            </div>
-
-            {loading ? (
-                <div className="text-center py-12 text-gray-400 text-sm">{t.postingExceptions.title}...</div>
-            ) : (
-                <DataTable
-                    tableId="posting-exceptions"
-                    title={t.accountingShared.postingEvents}
-                    columns={columns}
-                    data={events}
-                />
-            )}
-
-            {totalPages > 1 && (
-                <div className="flex justify-center items-center gap-2">
-                    <button
-                        disabled={pagination.page <= 1}
-                        onClick={() => loadEvents(pagination.page - 1)}
-                        className={`${compactDensity.btnSecondary} disabled:opacity-40`}
-                    >
-                        Previous
-                    </button>
-                    <span className="text-xs text-gray-500">
-                        Page {pagination.page} of {totalPages}
-                    </span>
-                    <button
-                        disabled={pagination.page >= totalPages}
-                        onClick={() => loadEvents(pagination.page + 1)}
-                        className={`${compactDensity.btnSecondary} disabled:opacity-40`}
-                    >
-                        Next
-                    </button>
-                </div>
-            )}
+            <DataTable
+                tableId="posting-exceptions"
+                title={t.accountingShared.postingEvents}
+                columns={columns}
+                data={events}
+                isLoading={loading}
+                showSearch={false}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+                emptyMessage={t.common.noData}
+                emptyIcon={<ListChecks className="w-16 h-16 text-gray-200" />}
+                serverPagination={{
+                    total: pagination.total,
+                    page,
+                    pageSize,
+                    onPageChange: setPage,
+                    onPageSizeChange: (size) => { setPageSize(size); setPage(1); },
+                    sort: null,
+                    onSortChange: () => undefined,
+                }}
+            />
         </AccountingPageShell>
     );
 }
