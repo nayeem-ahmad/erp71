@@ -461,9 +461,6 @@ export const accountingMessages = {
         loadAccountsFailed: "Die Kontenauswahl konnte nicht geladen werden.",
         openJournal: "Journal öffnen",
         openVoucherDetail: "Details des letzten Belegs öffnen",
-        accountAria: "Konto",
-        fromDateAria: "Konto von Datum",
-        toDateAria: "Konto bis Datum",
         columns: {
             voucherNumber: "Belegnr.",
             date: "Datum",
@@ -491,10 +488,6 @@ export const accountingMessages = {
         open: "Öffnen",
         accountingJournal: "Buchungsjournal",
         emptyMessage: "Für die gewählten Filter wurden keine Belege gefunden",
-        searchPlaceholder: "Journalzeilen nach Belegnummer, Beschreibung oder Art durchsuchen...",
-        voucherTypeAria: "Journal-Belegart",
-        fromDateAria: "Journal von Datum",
-        toDateAria: "Journal bis Datum",
         detail: {
             loading: "Belegdetails werden geladen...",
             loadFailed: "Die Belegdetails konnten nicht geladen werden.",
@@ -545,7 +538,6 @@ export const accountingMessages = {
             editVoucher: "Beleg bearbeiten",
             saveChanges: "Änderungen speichern",
             emptyMessage: "Für die gewählten Filter wurden keine Belege gefunden",
-            searchPlaceholder: "Nach Belegnummer, Referenz oder Art suchen...",
             deleteConfirm: "Beleg {voucherNumber} löschen?",
             deleteSuccess: "Beleg gelöscht.",
             deleteFailed: "Der Beleg konnte nicht gelöscht werden.",
