@@ -1121,7 +1121,15 @@ export type LineItemSearchParams = {
     filters?: Record<string, string>;
 };
 
-export type SalesLineItemParams = LineItemSearchParams & { customerId?: string };
+export type SalesLineItemParams = LineItemSearchParams & {
+    /** One customer id or a comma-separated set; `none` is a walk-in sale. */
+    customerId?: string;
+    /** `gt:100`, `between:100,500` — see `numberConditionParam`. */
+    unitPrice?: string;
+    quantity?: string;
+    /** Lines with something returned against them (`yes`) or nothing (`no`). */
+    returned?: 'yes' | 'no';
+};
 export type PurchaseLineItemParams = LineItemSearchParams & { supplierId?: string };
 
 type LineItemProduct = { id: string; name: string; sku: string | null; unit_type?: string | null };
@@ -1180,7 +1188,12 @@ type LineItemFilters = {
 /** A page of lines plus totals over every line that matched, not just the page. */
 export interface SalesLineItemsReport {
     summary: LineItemTotals & { invoiceCount: number };
-    filters: LineItemFilters & { customer: SalesLineItemRow['customer'] };
+    filters: LineItemFilters & {
+        customer: SalesLineItemRow['customer'];
+        /** Every customer and product the search was narrowed by, named. */
+        customers?: NonNullable<SalesLineItemRow['customer']>[];
+        products?: { id: string; name: string; sku: string | null }[];
+    };
     rows: SalesLineItemRow[];
     pagination: { page: number; limit: number; total: number; pages: number };
 }
@@ -1641,6 +1654,446 @@ const purchasesList = purchaseDocumentList<PurchaseListFilterParams, PurchaseLis
 const purchaseReturnsList = purchaseDocumentList<PurchaseDocumentListFilterParams, PurchaseReturnListSummary>('/purchase-returns');
 const purchaseOrdersList = purchaseDocumentList<PurchaseDocumentListFilterParams, PurchaseOrderListSummary>('/purchase-orders');
 const purchaseQuotationsList = purchaseDocumentList<PurchaseDocumentListFilterParams, PurchaseQuotationListSummary>('/purchase-quotations');
+
+/** What narrows the voucher list — sent alike to the list and to its stats strip. */
+export interface VoucherListFilterParams {
+    /** Voucher number, reference or narration. */
+    search?: string;
+    /** One voucher type, or several (any of them). */
+    voucherType?: string | readonly string[];
+    /** The voucher date, whole days. */
+    from?: string;
+    to?: string;
+    createdFrom?: string;
+    createdTo?: string;
+    /** One approval status, or several. `PENDING` alone is the approval queue. */
+    approvalStatus?: string | readonly string[];
+    /** The voucher's total. */
+    amount?: NumberCondition | null;
+    /** Keyed in by hand, or posted by another module. */
+    source?: 'manual' | 'system';
+    /** A branch or `'all'`, from the page's branch filter. */
+    storeId?: string;
+}
+
+/**
+ * What narrows a customer-side document list — sales returns, exchanges,
+ * quotations, sales orders, customer payments — sent alike to the list and
+ * its stats strip. The backend reads it with `SalesDocumentListQueryDto`.
+ */
+export interface SalesDocumentListFilterParams {
+    search?: string;
+    /** One status or a comma-separated set. */
+    status?: string;
+    /** Every status but those in `status`. */
+    statusExclude?: boolean;
+    /** Customer ids; `none` is a walk-in document with no customer. */
+    customerIds?: readonly string[];
+    total?: NumberCondition | null;
+    createdFrom?: string;
+    createdTo?: string;
+    /** The document's own date — return date, valid-until, delivery date. */
+    dateFrom?: string;
+    dateTo?: string;
+    /** A branch or `'all'`, from the page's branch filter. */
+    storeId?: string;
+}
+
+/** One server page of the voucher list. */
+export type VoucherListPageParams = {
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortDir?: 'asc' | 'desc';
+};
+
+/** `GET /accounting/vouchers/summary`. */
+export interface VoucherListSummary {
+    count: number;
+    totalAmount: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+    /** Posted by another module — a sale, a purchase, payroll. */
+    systemCount: number;
+    /** Keyed in by hand. */
+    manualCount: number;
+}
+
+/** The posting-exceptions list's filters, shared by the list and its summary. */
+export interface PostingExceptionFilterParams {
+    /** One status, or several. */
+    status?: string | readonly string[];
+    /** With `status`: every status but those. */
+    statusExclude?: boolean;
+    /** One source module, or several. */
+    module?: string | readonly string[];
+    /** Source id/type/module, voucher number, error text or event type. */
+    search?: string;
+    /** Last activity, whole days. */
+    from?: string;
+    to?: string;
+}
+
+/** `GET /accounting/reconciliation/posting-exceptions/summary`. */
+export interface PostingExceptionSummary {
+    count: number;
+    pending: number;
+    posted: number;
+    failed: number;
+    skipped: number;
+}
+
+function setPostingExceptionParams(query: URLSearchParams, params: PostingExceptionFilterParams): void {
+    const list = (value: string | readonly string[] | undefined) =>
+        (typeof value === 'string' ? value : value?.join(',')) || undefined;
+    const status = list(params.status);
+    const modules = list(params.module);
+    if (status) query.set('status', status);
+    if (status && params.statusExclude) query.set('statusExclude', 'true');
+    if (modules) query.set('module', modules);
+    if (params.search) query.set('search', params.search);
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
+}
+
+function setVoucherListParams(query: URLSearchParams, params: VoucherListFilterParams): void {
+    const list = (value: string | readonly string[] | undefined) =>
+        (typeof value === 'string' ? value : value?.join(',')) || undefined;
+    const voucherType = list(params.voucherType);
+    const approvalStatus = list(params.approvalStatus);
+    if (params.search) query.set('search', params.search);
+    if (voucherType) query.set('voucherType', voucherType);
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
+    if (params.createdFrom) query.set('createdFrom', params.createdFrom);
+    if (params.createdTo) query.set('createdTo', params.createdTo);
+    if (approvalStatus) query.set('approvalStatus', approvalStatus);
+    const amount = numberConditionParam(params.amount);
+    if (amount) query.set('amount', amount);
+    if (params.source) query.set('source', params.source);
+    if (params.storeId) query.set('storeId', params.storeId);
+}
+
+function setSalesDocumentListParams(query: URLSearchParams, params: SalesDocumentListFilterParams): void {
+    if (params.search) query.set('search', params.search);
+    if (params.status) query.set('status', params.status);
+    if (params.status && params.statusExclude) query.set('statusExclude', 'true');
+    if (params.customerIds?.length) query.set('customerId', params.customerIds.join(','));
+    const total = numberConditionParam(params.total);
+    if (total) query.set('total', total);
+    if (params.createdFrom) query.set('createdFrom', params.createdFrom);
+    if (params.createdTo) query.set('createdTo', params.createdTo);
+    if (params.dateFrom) query.set('dateFrom', params.dateFrom);
+    if (params.dateTo) query.set('dateTo', params.dateTo);
+    if (params.storeId) query.set('storeId', params.storeId);
+}
+
+/**
+ * The list page and summary callers for one customer-side endpoint. A list
+ * with keys of its own passes `extra` to write them onto the query.
+ */
+function salesDocumentList<P extends SalesDocumentListFilterParams, S>(
+    path: string,
+    extra?: (query: URLSearchParams, params: P) => void,
+) {
+    const build = (query: URLSearchParams, params: P) => {
+        setSalesDocumentListParams(query, params);
+        extra?.(query, params);
+    };
+    return {
+        list: (params: P & PurchaseDocumentPageParams) => {
+            const query = new URLSearchParams();
+            if (params.page) query.set('page', String(params.page));
+            if (params.limit) query.set('limit', String(params.limit));
+            if (params.sortBy) query.set('sortBy', params.sortBy);
+            if (params.sortDir) query.set('sortDir', params.sortDir);
+            build(query, params);
+            return fetchPaginated(`${path}?${query.toString()}`);
+        },
+        summary: (params: P): Promise<S> => {
+            const query = new URLSearchParams();
+            build(query, params);
+            return fetchWithAuth(`${path}/summary?${query.toString()}`);
+        },
+    };
+}
+// Each sales-side list declares its caller here, e.g.
+// const salesReturnsList = salesDocumentList<SalesDocumentListFilterParams, SalesReturnListSummary>('/sales-returns');
+
+/**
+ * What narrows the customers list, sent alike to `GET /customers` and its
+ * stats strip, `GET /customers/summary`.
+ */
+export interface CustomerListFilterParams {
+    search?: string;
+    /** Segments (`VIP`, `At-Risk`, `New`, `Regular`). */
+    segments?: readonly string[];
+    /** Every segment but those in `segments`. */
+    segmentExclude?: boolean;
+    /** `INDIVIDUAL`, `ORGANIZATION`. */
+    customerTypes?: readonly string[];
+    /** Customer-group ids; `none` is a customer in no group. */
+    groupIds?: readonly string[];
+    /** Territory ids; `none` is a customer in no territory. */
+    territoryIds?: readonly string[];
+    /** What the customer owes. */
+    due?: NumberCondition | null;
+    totalSpent?: NumberCondition | null;
+    points?: NumberCondition | null;
+    createdFrom?: string;
+    createdTo?: string;
+    /** A branch id or `all`; omitted, the server shows every customer the member may see. */
+    storeId?: string;
+}
+
+/** `GET /customers/summary`. */
+export interface CustomerListSummary {
+    count: number;
+    /** Added since the start of this month. */
+    newThisMonth: number;
+    /** Customers owing money, and what they owe in all. */
+    withDue: number;
+    receivable: number;
+    totalSpent: number;
+    vip: number;
+    atRisk: number;
+}
+
+function setCustomerListParams(query: URLSearchParams, params: CustomerListFilterParams): void {
+    if (params.search) query.set('search', params.search);
+    if (params.storeId) query.set('storeId', params.storeId);
+    if (params.segments?.length) query.set('segment', params.segments.join(','));
+    if (params.segments?.length && params.segmentExclude) query.set('segmentExclude', 'true');
+    if (params.customerTypes?.length) query.set('customerType', params.customerTypes.join(','));
+    if (params.groupIds?.length) query.set('groupId', params.groupIds.join(','));
+    if (params.territoryIds?.length) query.set('territoryId', params.territoryIds.join(','));
+    const due = numberConditionParam(params.due);
+    if (due) query.set('due', due);
+    const totalSpent = numberConditionParam(params.totalSpent);
+    if (totalSpent) query.set('totalSpent', totalSpent);
+    const points = numberConditionParam(params.points);
+    if (points) query.set('points', points);
+    if (params.createdFrom) query.set('createdFrom', params.createdFrom);
+    if (params.createdTo) query.set('createdTo', params.createdTo);
+}
+
+/** What narrows the loyalty list and its stats strip. */
+export interface LoyaltyCustomerListFilterParams {
+    search?: string;
+    /** The points balance. */
+    points?: NumberCondition | null;
+    /** Customers with points activity within these days. */
+    activeFrom?: string;
+    activeTo?: string;
+    /** `EARN`, `REDEEM`, `ADJUST`: activity of those kinds only. */
+    activityTypes?: readonly string[];
+    storeId?: string;
+}
+
+/** `GET /loyalty/customers/summary`. */
+export interface LoyaltyCustomerListSummary {
+    count: number;
+    /** Customers holding points, and how many points that is. */
+    members: number;
+    points: number;
+    /** Earned and redeemed in the activity days picked, else this month. */
+    earned: number;
+    redeemed: number;
+    /** True when `earned`/`redeemed` cover the activity days picked rather than this month. */
+    windowed: boolean;
+}
+
+function setLoyaltyCustomerListParams(query: URLSearchParams, params: LoyaltyCustomerListFilterParams): void {
+    if (params.search) query.set('search', params.search);
+    if (params.storeId) query.set('storeId', params.storeId);
+    const points = numberConditionParam(params.points);
+    if (points) query.set('points', points);
+    if (params.activeFrom) query.set('activeFrom', params.activeFrom);
+    if (params.activeTo) query.set('activeTo', params.activeTo);
+    if (params.activityTypes?.length) query.set('activityType', params.activityTypes.join(','));
+}
+
+/** `GET /sales-returns/summary`. */
+export interface SalesReturnListSummary {
+    count: number;
+    amount: number;
+    /** Handed back to the customer in money — cash, bKash, bank. */
+    refunded: number;
+    /** The rest, taken off what the customer owes. */
+    adjusted: number;
+    average: number;
+}
+const salesReturnsList = salesDocumentList<SalesDocumentListFilterParams, SalesReturnListSummary>('/sales-returns');
+
+/** Exchanges: `total` is the difference (positive when the customer paid), plus how it was settled. */
+export interface SalesExchangeListFilterParams extends SalesDocumentListFilterParams {
+    /** `cash`, `bank`, `bkash`, `nagad`, `credit`. */
+    settlementModes?: readonly string[];
+}
+
+/** `GET /sales-exchanges/summary`: every match counted, money over the ones not cancelled. */
+export interface SalesExchangeListSummary {
+    count: number;
+    cancelledCount: number;
+    /** Goods that came back. */
+    returned: number;
+    /** Goods that went out in their place. */
+    replacement: number;
+    /** Exchanges where the customer paid the difference. */
+    charged: { count: number; amount: number };
+    /** Exchanges where the customer got the difference back. */
+    refunded: { count: number; amount: number };
+}
+const salesExchangesList = salesDocumentList<SalesExchangeListFilterParams, SalesExchangeListSummary>(
+    '/sales-exchanges',
+    (query, params) => {
+        if (params.settlementModes?.length) query.set('settlement', params.settlementModes.join(','));
+    },
+);
+
+/** `GET /warranty-claims/summary` — the claims the list's filters match, by where they stand. */
+export interface WarrantyClaimListSummary {
+    count: number;
+    /** Lodged, waiting on approve or reject. */
+    awaiting: number;
+    /** Approved, repair or replacement still to come. */
+    inProgress: number;
+    repaired: number;
+    replaced: number;
+    completed: number;
+    rejected: number;
+}
+/** Warranty claims: `dateFrom`/`dateTo` are the day a claim was resolved. */
+const warrantyClaimsList = salesDocumentList<SalesDocumentListFilterParams, WarrantyClaimListSummary>('/warranty-claims');
+
+/** Quotations: `dateFrom`/`dateTo` are the valid-until date; `docKind` keeps quotes or proformas alone. */
+export interface QuotationListFilterParams extends SalesDocumentListFilterParams {
+    docKind?: 'QUOTE' | 'PROFORMA';
+}
+
+/** `GET /sales-quotations/summary` — amounts in taka, a foreign-currency proforma at its own rate. */
+export interface QuotationListSummary {
+    count: number;
+    /** Rejected, expired and revised quotations left out. */
+    value: number;
+    /** Drafted or sent, not yet answered. */
+    awaiting: number;
+    accepted: { count: number; amount: number };
+    converted: number;
+    /** Marked expired, or still live past their valid-until date. */
+    expired: number;
+}
+const quotationsList = salesDocumentList<QuotationListFilterParams, QuotationListSummary>(
+    '/sales-quotations',
+    (query, params) => {
+        if (params.docKind) query.set('docKind', params.docKind);
+    },
+);
+
+export type SalesOrderPaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
+
+/** Sales orders: `dateFrom`/`dateTo` are the delivery date. */
+export interface SalesOrderListFilterParams extends SalesDocumentListFilterParams {
+    paymentStatus?: readonly SalesOrderPaymentStatus[];
+}
+
+/** `GET /sales-orders/summary`. */
+export interface SalesOrderListSummary {
+    count: number;
+    cancelledCount: number;
+    /** Order totals, cancelled orders left out. */
+    value: number;
+    /** Deposits taken against those orders. */
+    advance: number;
+    open: { count: number; amount: number };
+    delivered: { count: number; amount: number };
+    /** Open orders whose delivery date has passed. */
+    overdue: number;
+}
+const salesOrdersList = salesDocumentList<SalesOrderListFilterParams, SalesOrderListSummary>(
+    '/sales-orders',
+    (query, params) => {
+        if (params.paymentStatus?.length) query.set('paymentStatus', params.paymentStatus.join(','));
+    },
+);
+
+/** What narrows the delivery list and its strip. Deliveries are the tenant's, so no branch. */
+export interface DeliveryListFilterParams {
+    search?: string;
+    /** One status or a comma-separated set. */
+    status?: string;
+    statusExclude?: boolean;
+    /** Driver names; `none` is a delivery with no driver yet. */
+    drivers?: readonly string[];
+    /** The scheduled day. */
+    dateFrom?: string;
+    dateTo?: string;
+    createdFrom?: string;
+    createdTo?: string;
+}
+
+/** `GET /delivery/summary`. */
+export interface DeliveryListSummary {
+    count: number;
+    pending: number;
+    inTransit: number;
+    delivered: number;
+    failed: number;
+    cancelled: number;
+    /** Still open with the scheduled time past. */
+    overdue: number;
+    /** Still open with no driver. */
+    unassigned: number;
+}
+
+function setDeliveryListParams(query: URLSearchParams, params: DeliveryListFilterParams): void {
+    if (params.search) query.set('search', params.search);
+    if (params.status) query.set('status', params.status);
+    if (params.status && params.statusExclude) query.set('statusExclude', 'true');
+    if (params.drivers?.length) query.set('driver', params.drivers.join(','));
+    if (params.dateFrom) query.set('dateFrom', params.dateFrom);
+    if (params.dateTo) query.set('dateTo', params.dateTo);
+    if (params.createdFrom) query.set('createdFrom', params.createdFrom);
+    if (params.createdTo) query.set('createdTo', params.createdTo);
+}
+
+/** A delivery as the create and update forms send it. */
+export interface DeliveryInput {
+    saleId?: string;
+    customerName?: string;
+    customerPhone?: string;
+    deliveryAddress?: string;
+    driverName?: string;
+    driverPhone?: string;
+    notes?: string;
+    scheduledAt?: string;
+    status?: string;
+}
+
+/** `GET /cashier-sessions/overview` — tills open now and shifts closed today. */
+export interface CashierOverviewRow {
+    id: string;
+    status: 'OPEN' | 'CLOSED' | string;
+    store?: { id: string; name: string } | null;
+    counter?: { id: string; name: string; counter_number: number | string } | null;
+    cashier?: { id: string; name: string } | null;
+    opened_at: string;
+    closed_at: string | null;
+    opening_cash: number;
+    sales_count: number;
+    sales_total: number;
+    cash_takings: number | null;
+    expected_cash: number | null;
+    closing_cash: number | null;
+    /** Counted less expected: negative is short. Null while open, or on a shift never reconciled. */
+    variance: number | null;
+}
+export interface CashierOverview {
+    store_id: string | null;
+    open: CashierOverviewRow[];
+    closed_today: CashierOverviewRow[];
+}
 
 /** A payment method as `/payment-methods` and its layout routes return it. */
 export interface PaymentMethodRow {
@@ -2323,33 +2776,33 @@ export const api = {
         fetchPaginated(
             `/customers?search=${encodeURIComponent(search)}&limit=${limit}${storeId ? `&storeId=${encodeURIComponent(storeId)}` : ''}`,
         ).then((r) => r.items),
-    getCustomersPaged: (params?: {
+    getCustomersPaged: (params?: CustomerListFilterParams & {
         page?: number;
         limit?: number;
-        search?: string;
+        /** One segment; `segments` sends a set. */
         segment?: string;
+        /** One type; `customerTypes` sends a set. */
         customerType?: string;
         sortBy?: string;
         sortDir?: string;
-        createdFrom?: string;
-        createdTo?: string;
-        /** A branch id or `all`; omitted, the server shows every customer the member may see. */
-        storeId?: string;
         filters?: Record<string, string>;
     }) => {
         const query = new URLSearchParams();
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
-        if (params?.search) query.set('search', params.search);
-        if (params?.storeId) query.set('storeId', params.storeId);
-        if (params?.segment) query.set('segment', params.segment);
-        if (params?.customerType) query.set('customerType', params.customerType);
+        if (params) setCustomerListParams(query, params);
+        if (params?.segment && !params.segments?.length) query.set('segment', params.segment);
+        if (params?.customerType && !params.customerTypes?.length) query.set('customerType', params.customerType);
         if (params?.sortBy) query.set('sortBy', params.sortBy);
         if (params?.sortDir) query.set('sortDir', params.sortDir);
-        if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
-        if (params?.createdTo) query.set('createdTo', params.createdTo);
         setColumnFilterParam(query, params?.filters);
         return fetchPaginated(`/customers${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    /** The stats strip above the customers list, over the same filters. */
+    getCustomersListSummary: (params: CustomerListFilterParams): Promise<CustomerListSummary> => {
+        const query = new URLSearchParams();
+        setCustomerListParams(query, params);
+        return fetchWithAuth(`/customers/summary${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getCustomer: (id: string) => fetchWithAuth(`/customers/${id}`),
     getCustomerPurchaseHistory: (id: string, params?: { page?: number; limit?: number; from?: string; to?: string }) => {
@@ -2961,18 +3414,20 @@ export const api = {
         return fetchWithAuth(`/accounting/accounts/next-code?${query.toString()}`);
     },
     getVoucherNumberPreview: (voucherType: string) => fetchWithAuth(`/accounting/vouchers/next-number?voucherType=${encodeURIComponent(voucherType)}`),
-    getVouchers: (params?: { voucherType?: string; from?: string; to?: string; createdFrom?: string; createdTo?: string; approvalStatus?: string; page?: number; limit?: number; storeId?: string }) => {
+    getVouchers: (params?: VoucherListFilterParams & VoucherListPageParams) => {
         const query = new URLSearchParams();
-        if (params?.voucherType) query.set('voucherType', params.voucherType);
-        if (params?.from) query.set('from', params.from);
-        if (params?.to) query.set('to', params.to);
-        if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
-        if (params?.createdTo) query.set('createdTo', params.createdTo);
-        if (params?.approvalStatus) query.set('approvalStatus', params.approvalStatus);
+        setVoucherListParams(query, params ?? {});
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
-        if (params?.storeId) query.set('storeId', params.storeId);
+        if (params?.sortBy) query.set('sortBy', params.sortBy);
+        if (params?.sortDir) query.set('sortDir', params.sortDir);
         return fetchWithAuth(`/accounting/vouchers${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    /** The stats strip above the voucher list — the list's own filters, every matching voucher counted. */
+    getVouchersSummary: (params: VoucherListFilterParams = {}): Promise<VoucherListSummary> => {
+        const query = new URLSearchParams();
+        setVoucherListParams(query, params);
+        return fetchWithAuth(`/accounting/vouchers/summary${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getVoucher: (id: string) => fetchWithAuth(`/accounting/vouchers/${id}`),
     getLedger: (accountId: string, params?: { from?: string; to?: string; storeId?: string } & ApprovedOnlyParams) => {
@@ -3070,15 +3525,18 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getPostingExceptions: (params?: { status?: string; module?: string; from?: string; to?: string; page?: number; limit?: number }) => {
+    getPostingExceptions: (params?: PostingExceptionFilterParams & { page?: number; limit?: number }) => {
         const query = new URLSearchParams();
-        if (params?.status) query.set('status', params.status);
-        if (params?.module) query.set('module', params.module);
-        if (params?.from) query.set('from', params.from);
-        if (params?.to) query.set('to', params.to);
+        setPostingExceptionParams(query, params ?? {});
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
         return fetchWithAuth(`/accounting/reconciliation/posting-exceptions${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    /** The stats strip above the posting-exceptions list — the list's own filters, counted per status. */
+    getPostingExceptionsSummary: (params: PostingExceptionFilterParams = {}): Promise<PostingExceptionSummary> => {
+        const query = new URLSearchParams();
+        setPostingExceptionParams(query, params);
+        return fetchWithAuth(`/accounting/reconciliation/posting-exceptions/summary${query.toString() ? `?${query.toString()}` : ''}`);
     },
     retryPostingException: (id: string) => fetchWithAuth(`/accounting/reconciliation/posting-exceptions/${id}/retry`, {
         method: 'POST',
@@ -3219,6 +3677,9 @@ export const api = {
         return fetchBlobWithAuth(`/accounting/export?${query.toString()}`);
     },
     getReturns: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/sales-returns', params)),
+    /** One server page of the sales-returns list, with its filter row applied. */
+    getReturnsList: salesReturnsList.list,
+    getReturnsListSummary: salesReturnsList.summary,
     getReturn: (id: string) => fetchWithAuth(`/sales-returns/${id}`),
     createReturn: (data: any) => fetchWithAuth('/sales-returns', {
         method: 'POST',
@@ -3234,6 +3695,9 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     getExchanges: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/sales-exchanges', params)),
+    /** One server page of the exchanges list, with its filter row applied. */
+    getExchangesList: salesExchangesList.list,
+    getExchangesListSummary: salesExchangesList.summary,
     getExchange: (id: string) => fetchWithAuth(`/sales-exchanges/${id}`),
     createExchange: (data: {
         saleId: string;
@@ -3258,6 +3722,9 @@ export const api = {
     getExchangeMushak: (id: string) => fetchWithAuth(`/sales-exchanges/${id}/mushak`),
     getExchangeCreditNote: (id: string) => fetchWithAuth(`/sales-exchanges/${id}/credit-note`),
     getOrders: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/sales-orders', params)),
+    /** One server page of the sales-orders list, with its filter row applied. */
+    getOrdersList: salesOrdersList.list,
+    getOrdersListSummary: salesOrdersList.summary,
     getOrder: (id: string) => fetchWithAuth(`/sales-orders/${id}`),
     createOrder: (data: any) => fetchWithAuth('/sales-orders', {
         method: 'POST',
@@ -3599,6 +4066,9 @@ export const api = {
     getImportBankLimits: () => fetchWithAuth('/imports/bank-limits'),
 
     getQuotations: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/sales-quotations', params)),
+    /** One server page of the quotations list, with its filter row applied. */
+    getQuotationsList: quotationsList.list,
+    getQuotationsListSummary: quotationsList.summary,
     getQuotation: (id: string) => fetchWithAuth(`/sales-quotations/${id}`),
     createQuotation: (data: any) => fetchWithAuth('/sales-quotations', {
         method: 'POST',
@@ -3892,6 +4362,9 @@ export const api = {
     getCashierSessionSummary: (sessionId: string) => fetchWithAuth(`/cashier-sessions/${sessionId}/summary`),
     /** Every till open in a store right now, each with its own summary. */
     getOpenCashierSessionsByStore: (storeId: string) => fetchWithAuth(`/cashier-sessions/store/${storeId}/open`),
+    /** Tills open now and shifts closed today, in one branch (or `all`). */
+    getCashierSessionOverview: (storeId?: string): Promise<CashierOverview> =>
+        fetchWithAuth(`/cashier-sessions/overview${storeId ? `?storeId=${encodeURIComponent(storeId)}` : ''}`),
     // POS Counters
     getCounters: (storeId: string) => fetchWithAuth(`/counters?storeId=${storeId}`),
     getActiveCounters: (storeId: string) => fetchWithAuth(`/counters/active?storeId=${storeId}`),
@@ -5251,6 +5724,36 @@ export const api = {
     lookupWarrantySerial: (serialNumber: string) =>
         fetchWithAuth(`/warranty-claims/lookup?serialNumber=${encodeURIComponent(serialNumber)}`),
     getWarrantyClaims: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/warranty-claims', params)),
+    getWarrantyClaimsList: warrantyClaimsList.list,
+    getWarrantyClaimsListSummary: warrantyClaimsList.summary,
+    // Delivery orders
+    getDeliveriesList: (params: DeliveryListFilterParams & PurchaseDocumentPageParams) => {
+        const query = new URLSearchParams();
+        if (params.page) query.set('page', String(params.page));
+        if (params.limit) query.set('limit', String(params.limit));
+        if (params.sortBy) query.set('sortBy', params.sortBy);
+        if (params.sortDir) query.set('sortDir', params.sortDir);
+        setDeliveryListParams(query, params);
+        return fetchPaginated(`/delivery?${query.toString()}`);
+    },
+    getDeliveriesListSummary: (params: DeliveryListFilterParams): Promise<DeliveryListSummary> => {
+        const query = new URLSearchParams();
+        setDeliveryListParams(query, params);
+        return fetchWithAuth(`/delivery/summary?${query.toString()}`);
+    },
+    /** Driver names used on earlier deliveries, for the Driver chip. */
+    getDeliveryDrivers: (): Promise<string[]> => fetchWithAuth('/delivery/drivers'),
+    createDelivery: (data: DeliveryInput) => fetchWithAuth('/delivery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    }),
+    updateDelivery: (id: string, data: DeliveryInput) => fetchWithAuth(`/delivery/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    }),
+    cancelDelivery: (id: string) => fetchWithAuth(`/delivery/${id}`, { method: 'DELETE' }),
     getWarrantyClaim: (id: string) => fetchWithAuth(`/warranty-claims/${id}`),
     createWarrantyClaim: (data: any) => fetchWithAuth('/warranty-claims', {
         method: 'POST',
@@ -5785,6 +6288,9 @@ export const api = {
     listFixedAssets: () => fetchWithAuth('/accounting/fixed-assets'),
     createFixedAsset: (data: any) =>
         fetchWithAuth('/accounting/fixed-assets', { method: 'POST', body: JSON.stringify(data) }),
+    /** Only the category can change after an asset is recorded; null clears it. */
+    updateFixedAsset: (id: string, data: { category: string | null }) =>
+        fetchWithAuth(`/accounting/fixed-assets/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     runDepreciation: (data: { year: number; month: number }) =>
         fetchWithAuth('/accounting/fixed-assets/run-depreciation', { method: 'POST', body: JSON.stringify(data) }),
     getDepreciationSchedule: (id: string) => fetchWithAuth(`/accounting/fixed-assets/${id}/schedule`),
@@ -5852,6 +6358,24 @@ export const api = {
         return response.json().then((body) => (body?.data !== undefined ? body.data : body));
     }),
     getLoyaltySettings: () => fetchWithAuth('/loyalty/settings'),
+    /** One page of the loyalty list — highest balance first unless sorted. */
+    getLoyaltyCustomersPaged: (
+        params: LoyaltyCustomerListFilterParams & { page?: number; limit?: number; sortBy?: string; sortDir?: string },
+    ) => {
+        const query = new URLSearchParams();
+        if (params.page) query.set('page', String(params.page));
+        if (params.limit) query.set('limit', String(params.limit));
+        if (params.sortBy) query.set('sortBy', params.sortBy);
+        if (params.sortDir) query.set('sortDir', params.sortDir);
+        setLoyaltyCustomerListParams(query, params);
+        return fetchPaginated(`/loyalty/customers${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    /** The stats strip above the loyalty list, over the same filters. */
+    getLoyaltyCustomersSummary: (params: LoyaltyCustomerListFilterParams): Promise<LoyaltyCustomerListSummary> => {
+        const query = new URLSearchParams();
+        setLoyaltyCustomerListParams(query, params);
+        return fetchWithAuth(`/loyalty/customers/summary${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     getCustomerLoyaltyPoints: (customerId: string) => fetchWithAuth(`/loyalty/customers/${customerId}/points`),
     getAuditLogs: (params?: {
         entity?: string;

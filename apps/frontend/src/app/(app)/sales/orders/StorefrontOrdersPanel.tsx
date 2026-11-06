@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react';
-import { fetchWithAuth } from '@/lib/api';
+import { useMemo, useState } from 'react';
+import { ShoppingBag } from 'lucide-react';
+import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
+import { fetchWithAuth, type Paginated } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
-import { useI18n, formatMessage } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 import { Alert } from '@/components/ui';
+import { DataTable } from '@/components/data-table';
+import { useServerList } from '@/hooks/useServerList';
 import { STOREFRONT_ORDER_STATUSES, storefrontOrderRef } from '@erp71/shared-types';
 
 interface StorefrontOrder {
@@ -28,21 +31,10 @@ interface StorefrontOrder {
     }[];
 }
 
-interface PaginatedOrders {
-    items: StorefrontOrder[];
-    total: number;
-    page: number;
-    limit: number;
-    pages: number;
-}
+/** The storefront's queue pages 20 at a time unless the viewer picked otherwise. */
+const PAGE_SIZE = 20;
 
-const STATUS_COLORS: Record<string, string> = {
-    PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
-    CONFIRMED: 'bg-blue-50 text-blue-700 border-blue-200',
-    SHIPPED: 'bg-blue-50 text-blue-700 border-blue-200',
-    DELIVERED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    CANCELLED: 'bg-red-50 text-red-700 border-red-200',
-};
+const columnHelper = createColumnHelper<StorefrontOrder>();
 
 interface StorefrontOrdersPanelProps {
     /** The page's branch filter: a branch id, `all`, or undefined for the server's default. */
@@ -56,30 +48,22 @@ interface StorefrontOrdersPanelProps {
 }
 
 export default function StorefrontOrdersPanel({ storeId, onShopBranch = false }: StorefrontOrdersPanelProps) {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const m = t.storefront.dashboard.orders;
-    const [data, setData] = useState<PaginatedOrders | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [page, setPage] = useState(1);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (!onShopBranch) loadOrders(page);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page, storeId, onShopBranch]);
-
-    const loadOrders = async (p: number) => {
-        setLoading(true);
-        try {
+    // `/storefront/orders` pages and scopes to a branch; it takes no sort or
+    // search, so the table offers neither.
+    const { items: orders, loading, serverPagination, reload } = useServerList<StorefrontOrder>({
+        tableId: 'storefront-orders',
+        initialPageSize: PAGE_SIZE,
+        deps: [storeId],
+        enabled: !onShopBranch,
+        fetch: ({ page, limit }) => {
             const branchQuery = storeId ? `&storeId=${encodeURIComponent(storeId)}` : '';
-            const result = await fetchWithAuth(`/storefront/orders?page=${p}&limit=20${branchQuery}`);
-            setData(result);
-        } catch (err) {
-            console.error('Failed to load storefront orders', err);
-        } finally {
-            setLoading(false);
-        }
-    };
+            return fetchWithAuth(`/storefront/orders?page=${page}&limit=${limit}${branchQuery}`) as Promise<Paginated<StorefrontOrder>>;
+        },
+    });
 
     const handleStatusChange = async (orderId: string, newStatus: string) => {
         setUpdatingId(orderId);
@@ -89,139 +73,128 @@ export default function StorefrontOrdersPanel({ storeId, onShopBranch = false }:
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: newStatus }),
             });
-            await loadOrders(page);
+            await reload();
         } catch (err: any) {
-            toast.error(err.message || m.updateFailed);
+            toast.error(err?.message || m.updateFailed);
         } finally {
             setUpdatingId(null);
         }
     };
+
+    const columns: ColumnDef<StorefrontOrder, any>[] = useMemo(
+        () => ([
+            columnHelper.accessor('id', {
+                header: m.columns.orderId,
+                cell: (info) => (
+                    <span className="font-mono text-xs text-gray-500" title={info.getValue()}>
+                        #{storefrontOrderRef(info.getValue())}
+                    </span>
+                ),
+                size: 110,
+            }),
+            columnHelper.accessor('customerName', {
+                header: m.columns.customer,
+                cell: (info) => {
+                    const order = info.row.original;
+                    return (
+                        <div>
+                            <div>{order.customerName}</div>
+                            <div className="text-xs text-gray-500">{order.customerPhone || order.customerEmail}</div>
+                        </div>
+                    );
+                },
+                size: 180,
+            }),
+            columnHelper.accessor((row) => [row.deliveryAddress, row.deliveryArea].filter(Boolean).join(', '), {
+                id: 'deliverTo',
+                header: m.deliverTo,
+                cell: (info) => {
+                    const notes = info.row.original.notes;
+                    if (!info.getValue() && !notes) return <span className="text-gray-400">—</span>;
+                    return (
+                        <div>
+                            {info.getValue() ? <div>{info.getValue()}</div> : null}
+                            {notes ? (
+                                <div className="text-xs text-gray-500">
+                                    {m.notes}: {notes}
+                                </div>
+                            ) : null}
+                        </div>
+                    );
+                },
+                size: 200,
+                meta: { hideOnMobile: true },
+            }),
+            columnHelper.accessor((row) => row.items.length, {
+                id: 'items',
+                header: m.columns.items,
+                cell: (info) => (
+                    <div className="space-y-0.5 text-xs">
+                        {info.row.original.items.map((item) => (
+                            <div key={item.id}>{`${item.product.name} × ${item.quantity}`}</div>
+                        ))}
+                    </div>
+                ),
+                size: 180,
+                meta: { hideOnMobile: true },
+            }),
+            columnHelper.accessor('totalAmount', {
+                header: m.columns.total,
+                cell: (info) => formatBDT(Number(info.getValue()), { locale }),
+                size: 110,
+                meta: { align: 'end' },
+            }),
+            columnHelper.accessor('created_at', {
+                header: m.columns.date,
+                cell: (info) => formatDate(info.getValue(), locale),
+                size: 110,
+                meta: { hideOnMobile: true },
+            }),
+            columnHelper.accessor('status', {
+                header: m.columns.status,
+                // Changed in place: the storefront's queue is worked from here.
+                cell: (info) => {
+                    const order = info.row.original;
+                    return (
+                        <select
+                            value={order.status}
+                            disabled={updatingId === order.id}
+                            aria-label={m.columns.status}
+                            onChange={(e) => void handleStatusChange(order.id, e.target.value)}
+                            className="min-h-touch md:min-h-0 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs focus:border-primary/40 focus:bg-white focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                        >
+                            {STOREFRONT_ORDER_STATUSES.map((status) => (
+                                <option key={status} value={status}>
+                                    {m.status[status.toLowerCase() as keyof typeof m.status]}
+                                </option>
+                            ))}
+                        </select>
+                    );
+                },
+                size: 140,
+            }),
+        ] as ColumnDef<StorefrontOrder, any>[]).map((column) => ({ ...column, enableSorting: false, enableColumnFilter: false })),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [m, locale, updatingId],
+    );
 
     if (onShopBranch) {
         return <Alert tone="info">{t.branchParties.onlineOrdersElsewhere}</Alert>;
     }
 
     return (
-        <div className="space-y-4">
-            <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
-                {loading ? (
-                    <div className="flex items-center justify-center py-16">
-                        <div className="animate-spin w-7 h-7 border-4 border-blue-600 border-t-transparent rounded-full" />
-                    </div>
-                ) : !data?.items?.length ? (
-                    <div className="text-center py-16 text-gray-400">
-                        <ShoppingBag className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                        <p className="font-medium">{m.emptyTitle}</p>
-                        <p className="text-sm mt-1">{m.emptyDescription}</p>
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b bg-gray-50 text-start">
-                                    <th className="px-5 py-3 font-semibold text-gray-600">{m.columns.orderId}</th>
-                                    <th className="px-5 py-3 font-semibold text-gray-600">{m.columns.customer}</th>
-                                    <th className="px-5 py-3 font-semibold text-gray-600">{m.columns.items}</th>
-                                    <th className="px-5 py-3 font-semibold text-gray-600">{m.columns.total}</th>
-                                    <th className="px-5 py-3 font-semibold text-gray-600">{m.columns.date}</th>
-                                    <th className="px-5 py-3 font-semibold text-gray-600">{m.columns.status}</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {data.items.map((order) => (
-                                    <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-5 py-3 font-mono text-xs text-gray-500 whitespace-nowrap" title={order.id}>
-                                            #{storefrontOrderRef(order.id)}
-                                        </td>
-                                        <td className="px-5 py-3">
-                                            <p className="font-semibold text-gray-900">{order.customerName}</p>
-                                            <p className="text-xs text-gray-500">{order.customerEmail}</p>
-                                            {order.customerPhone ? (
-                                                <p className="text-xs text-gray-400">{order.customerPhone}</p>
-                                            ) : null}
-                                            {order.deliveryAddress || order.deliveryArea ? (
-                                                <p className="text-xs text-gray-600 mt-1">
-                                                    <span className="font-medium">{m.deliverTo}:</span>{' '}
-                                                    {[order.deliveryAddress, order.deliveryArea].filter(Boolean).join(', ')}
-                                                </p>
-                                            ) : null}
-                                            {order.notes ? (
-                                                <p className="text-xs text-gray-500 mt-0.5">
-                                                    <span className="font-medium">{m.notes}:</span> {order.notes}
-                                                </p>
-                                            ) : null}
-                                        </td>
-                                        <td className="px-5 py-3">
-                                            <div className="space-y-0.5">
-                                                {order.items.map((item) => (
-                                                    <div key={item.id} className="text-xs text-gray-600">
-                                                        {item.product.name} × {item.quantity}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </td>
-                                        <td className="px-5 py-3 font-bold text-gray-900 whitespace-nowrap">
-                                            {formatBDT(Number(order.totalAmount))}
-                                        </td>
-                                        <td className="px-5 py-3 text-gray-500 whitespace-nowrap">
-                                            {formatDate(order.created_at)}
-                                        </td>
-                                        <td className="px-5 py-3">
-                                            <select
-                                                value={order.status}
-                                                disabled={updatingId === order.id}
-                                                onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                                                className={`text-xs font-semibold px-2 py-1 rounded-lg border cursor-pointer focus:outline-none ${
-                                                    STATUS_COLORS[order.status] || 'bg-gray-50 text-gray-700 border-gray-200'
-                                                }`}
-                                            >
-                                                {STOREFRONT_ORDER_STATUSES.map((status) => (
-                                                    <option key={status} value={status}>
-                                                        {m.status[status.toLowerCase() as keyof typeof m.status]}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
-
-            {data && data.pages > 1 ? (
-                <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-500">
-                        {formatMessage(m.pagination, {
-                            start: (page - 1) * 20 + 1,
-                            end: Math.min(page * 20, data.total),
-                            total: data.total,
-                        })}
-                    </p>
-                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                        <button
-                            type="button"
-                            onClick={() => setPage((p) => Math.max(1, p - 1))}
-                            disabled={page === 1}
-                            className="p-2 rounded-xl border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition-colors"
-                        >
-                            <ChevronLeft className="w-4 h-4" />
-                        </button>
-                        <span className="text-sm font-semibold text-gray-700 px-2">
-                            {page} / {data.pages}
-                        </span>
-                        <button
-                            type="button"
-                            onClick={() => setPage((p) => Math.min(data.pages, p + 1))}
-                            disabled={page === data.pages}
-                            className="p-2 rounded-xl border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition-colors"
-                        >
-                            <ChevronRight className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
-            ) : null}
-        </div>
+        <DataTable<StorefrontOrder>
+            tableId="storefront-orders"
+            columns={columns}
+            data={orders}
+            title={m.title}
+            isLoading={loading}
+            emptyMessage={m.emptyTitle}
+            emptyIcon={<ShoppingBag className="w-16 h-16 text-gray-200" />}
+            showSearch={false}
+            enableColumnFilters={false}
+            viewOptions
+            serverPagination={serverPagination}
+        />
     );
 }

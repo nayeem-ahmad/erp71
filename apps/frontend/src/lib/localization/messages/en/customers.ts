@@ -109,6 +109,11 @@ export const customersMessages = {
             "noCreditTransactions": "No credit transactions yet",
             "writeOff": {
                 "title": "Write Off Bad Debt",
+                "statsLabel": "Write-off summary",
+                "writeOffs": "Write-offs",
+                "customers": "Customers",
+                "largest": "Largest",
+                "recordedBy": "Recorded by",
                 "action": "Write Off Bad Debt",
                 "intro": "Forgives a debt this customer is not going to pay. The amount leaves their due balance and is booked to Bad Debt Expense — the original sale and its VAT are not reversed.",
                 "amount": "Amount to write off",
@@ -212,6 +217,58 @@ export const customersMessages = {
             "website": "https://brand.com"
         },
         "saving": "Saving..."
+    },
+    /** The Sales module's master lists — customers, groups, price lists, territories: filter chips and stats strips. */
+    salesMasterLists: {
+        customers: {
+            statsLabel: 'Customer figures',
+            noGroup: 'No group',
+            noTerritory: 'No territory',
+            segments: { new: 'New', regular: 'Regular', vip: 'VIP', atRisk: 'At-Risk' },
+            stats: {
+                customers: 'Customers',
+                newThisMonth: 'New this month',
+                withDue: 'With due',
+                receivable: 'Receivable',
+                vip: 'VIP',
+                atRisk: 'At-Risk',
+            },
+        },
+        groups: {
+            statsLabel: 'Customer group figures',
+            noPriceList: 'No price list',
+            stats: { groups: 'Groups', customers: 'Customers', withPriceList: 'With a price list', withDiscount: 'With a discount' },
+            deleteTitle: 'Delete {name}?',
+            deletePrompt: 'The group will be removed. This cannot be undone.',
+            deleted: 'Group deleted',
+            inUse: 'Has customers — reassign them first',
+        },
+        priceLists: {
+            statsLabel: 'Price list figures',
+            discountTypes: { percentage: 'Percentage', fixed: 'Fixed amount', none: 'No discount' },
+            stats: {
+                lists: 'Price lists',
+                defaultList: 'Default list',
+                withDiscount: 'With a discount',
+                products: 'Products priced',
+                groups: 'Groups using them',
+            },
+            none: 'None',
+            deleteTitle: 'Delete {name}?',
+            deletePrompt: 'The price list and its prices will be removed. This cannot be undone.',
+            deleted: 'Price list deleted',
+            inUse: 'Assigned to customer groups — reassign them first',
+            defaultLocked: 'The default list cannot be deleted',
+        },
+        territories: {
+            statsLabel: 'Territory figures',
+            levelN: 'Level {level}',
+            stats: { territories: 'Territories', topLevel: 'Top level', levels: 'Levels', customers: 'Customers', unused: 'Unused' },
+            deleteTitle: 'Delete {name}?',
+            deletePrompt: 'The territory will be removed. This cannot be undone.',
+            deleted: 'Territory deleted',
+            inUse: 'Has customers or sub-territories',
+        },
     },
     "customerGroups": {
         "title": "Customer Groups",

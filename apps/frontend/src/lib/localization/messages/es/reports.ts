@@ -1,6 +1,9 @@
 export const reportsMessages = {
     consolidated: {
         title: "Informe consolidado",
+        period: "Periodo",
+        statsLabel: "Resumen consolidado",
+        branches: "Sucursales",
         description: "Resumen de ingresos y transacciones por sucursal",
         fromLabel: "Desde",
         toLabel: "Hasta",
@@ -31,6 +34,10 @@ export const reportsMessages = {
     },
     branch: {
         title: "Informe de sucursal",
+        period: "Periodo",
+        statsLabel: "Resumen de la sucursal",
+        groupBy: "Agrupar por",
+        groups: { day: "Día", week: "Semana", month: "Mes" },
         description: "Rendimiento de ventas detallado de una sucursal",
         storeLabel: "Tienda",
         fromLabel: "Desde",

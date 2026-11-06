@@ -1,0 +1,62 @@
+/** Accounting list UI (Sales list pattern) — books pages. */
+export const accountingBooksUiMessages = {
+    accountingBooksUi: {
+        common: {
+            voucherType: 'ভাউচারের ধরন',
+            side: 'পক্ষ',
+            entries: 'এন্ট্রি',
+            openingBalance: 'প্রারম্ভিক ব্যালেন্স',
+            closingBalance: 'সমাপনী ব্যালেন্স',
+            totalDebit: 'মোট ডেবিট',
+            totalCredit: 'মোট ক্রেডিট',
+            neutral: 'নিরপেক্ষ',
+        },
+        ledger: {
+            subtitle: 'প্রারম্ভিক ব্যালেন্স, সময়কালের পরিবর্তন, সমাপনী অবস্থান এবং ভাউচার ড্রিল-ডাউনসহ একবারে একটি অ্যাকাউন্ট পর্যালোচনা করুন।',
+            loadFailed: 'লেজার রিপোর্ট লোড করা যায়নি।',
+            statsLabel: 'লেজার সারসংক্ষেপ',
+        },
+        cashbook: {
+            loadFailed: 'ক্যাশবুক লোড করা যায়নি',
+            statsLabel: 'ক্যাশবুক সারসংক্ষেপ',
+            flow: 'প্রাপ্তি বা পরিশোধ',
+            totalReceipts: 'মোট প্রাপ্তি',
+            totalPayments: 'মোট পরিশোধ',
+        },
+        bankbook: {
+            loadFailed: 'ব্যাংকবুক লোড করা যায়নি',
+            statsLabel: 'ব্যাংকবুক সারসংক্ষেপ',
+            bankAccount: 'ব্যাংক অ্যাকাউন্ট',
+            flow: 'জমা বা উত্তোলন',
+            totalDeposits: 'মোট জমা',
+            totalWithdrawals: 'মোট উত্তোলন',
+        },
+        expenseReports: {
+            statsLabel: 'খরচ রিপোর্ট সারসংক্ষেপ',
+            months: 'মাস',
+            periods: 'সময়কাল',
+            highestMonth: 'সর্বোচ্চ মাস',
+            highestPeriod: 'সর্বোচ্চ সময়কাল',
+            topHead: 'শীর্ষ খাত',
+        },
+        trialBalance: {
+            statsLabel: 'ট্রায়াল ব্যালেন্স সারসংক্ষেপ',
+            accountType: 'অ্যাকাউন্টের ধরন',
+            accounts: 'অ্যাকাউন্ট',
+            rows: 'সারি',
+            branches: 'শাখা',
+            searchPlaceholder: 'কোড, অ্যাকাউন্ট বা গ্রুপ দিয়ে খুঁজুন…',
+        },
+        cashFlow: {
+            statsLabel: 'নগদ প্রবাহ সারসংক্ষেপ',
+            operating: 'পরিচালন',
+            investing: 'বিনিয়োগ',
+            financing: 'অর্থায়ন',
+            netSection: 'নিট {label}',
+            openingCash: 'প্রারম্ভিক নগদ ব্যালেন্স',
+            closingCash: 'সমাপনী নগদ ব্যালেন্স',
+            searchPlaceholder: 'কার্যক্রম খুঁজুন…',
+            noMatches: 'খোঁজার সাথে কোনো কার্যক্রম মেলেনি',
+        },
+    },
+} as const;

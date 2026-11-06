@@ -1,14 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle, AlertCircle } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertCircle, CheckCircle, Landmark, RefreshCw, Scale, Wallet, Building2 } from 'lucide-react';
 import {
     AccountingPageShell,
-    AccountingToolbar,
     CompactSection,
 } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import ReportScopeBar from '@/components/accounting/ReportScopeBar';
+import { ListStats, ListToolbar, type ListFilter, type ListStat, type ResolvedListFilter } from '@/components/data-table';
 import CompareMatrixTable, { type CompareMatrixSection } from '@/components/accounting/CompareMatrixTable';
 import StatementSection, {
     hideZeroGroups,
@@ -32,8 +31,17 @@ import {
     statementScopeParams,
     useApprovedOnly,
 } from '@/lib/accounting-report-scope';
-import { BranchFilter } from '@/components/ui';
+import { BranchFilter, Button } from '@/components/ui';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import {
+    asOfFilter,
+    searchCompareSections,
+    searchStatementGroups,
+    statementScopeFilters,
+    todayDate,
+    totalFigure,
+    wholeTaka,
+} from '../_shared/report-chips';
 
 type Group = StatementGroup;
 
@@ -44,7 +52,8 @@ interface BSData {
     assets?: { groups: Group[]; total: number };
     liabilities?: { groups: Group[]; total: number };
     equity?: { groups: Group[]; net_profit: number; total: number };
-    total_liabilities_and_equity?: number;
+    /** A number for one branch or the company; per column in a comparison. */
+    total_liabilities_and_equity?: number | Record<string, number>;
     is_balanced?: boolean;
     columns?: Array<{ key: string; label: string; type?: string }>;
     sections?: CompareMatrixSection[];
@@ -69,7 +78,8 @@ export default function BalanceSheetPage() {
     const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
     const [includeCompanyBucket, setIncludeCompanyBucket] = useState(false);
     const [hideZero, setHideZero] = useState(false);
-    const [asOfDate, setAsOfDate] = useState(new Date().toISOString().slice(0, 10));
+    const [asOfDate, setAsOfDate] = useState(todayDate);
+    const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [initialized, setInitialized] = useState(false);
@@ -197,7 +207,7 @@ export default function BalanceSheetPage() {
                 },
                 {
                     label: t.accounting.reports.totalLiabilitiesAndEquity,
-                    amount: data.total_liabilities_and_equity ?? 0,
+                    amount: totalFigure(data.total_liabilities_and_equity),
                     strong: true,
                 },
             ],
@@ -208,6 +218,76 @@ export default function BalanceSheetPage() {
         data, isCompare, printHeader, businessName, t, scope, stores, storeId, level,
         approvedOnly, approvalEnabled, printCopy, locale, hideZero,
     ]);
+
+
+    const filters = useMemo<ResolvedListFilter[]>(() => {
+        const list: ListFilter[] = [
+            // A balance sheet is always as of some day: cleared, it goes back to today.
+            asOfFilter({ label: t.accounting.reports.balanceSheet.asOf, value: asOfDate, onChange: setAsOfDate }),
+            ...statementScopeFilters(t, {
+                canConsolidate,
+                compare,
+                onCompareChange: setCompare,
+                stores,
+                selectedStoreIds,
+                onSelectedStoreIdsChange: setSelectedStoreIds,
+                includeCompanyBucket,
+                onIncludeCompanyBucketChange: setIncludeCompanyBucket,
+                level,
+                onLevelChange: setLevel,
+                hideZero,
+                onHideZeroChange: setHideZero,
+                approvalEnabled,
+                approvedOnly,
+                onApprovedOnlyChange: setApprovedOnly,
+            }),
+        ];
+        return list as ResolvedListFilter[];
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [t, asOfDate, canConsolidate, compare, stores, selectedStoreIds, includeCompanyBucket, level, hideZero, approvalEnabled, approvedOnly]);
+
+    // A comparison carries its liabilities + equity per column; the "total"
+    // column is the whole company's.
+    const compareTotals = data?.totals
+        ?? (typeof data?.total_liabilities_and_equity === 'object' ? data.total_liabilities_and_equity : undefined);
+
+    const stats = useMemo(() => {
+        const assets = isCompare ? totalFigure(data?.total_assets) : (data?.assets?.total ?? 0);
+        const liabilities = isCompare ? totalFigure(data?.sections?.[1]?.subtotals) : (data?.liabilities?.total ?? 0);
+        const equity = isCompare
+            ? totalFigure(data?.sections?.[2]?.subtotals) + totalFigure(data?.net_profit)
+            : (data?.equity?.total ?? 0);
+        const difference = assets - totalFigure(data?.total_liabilities_and_equity);
+        const balanced = Math.abs(difference) < 0.01;
+        const items: ListStat[] = [
+            { id: 'assets', icon: <Wallet aria-hidden />, label: t.accounting.reports.totalAssets, value: wholeTaka(assets, locale) },
+            { id: 'liabilities', icon: <Landmark aria-hidden />, label: t.accounting.reports.totalLiabilities, value: wholeTaka(liabilities, locale) },
+            { id: 'equity', icon: <Building2 aria-hidden />, label: t.accounting.reports.totalEquity, value: wholeTaka(equity, locale) },
+            {
+                id: 'difference',
+                icon: <Scale aria-hidden />,
+                label: t.accountingShared.difference,
+                value: wholeTaka(difference, locale),
+                hint: balanced ? t.accountingShared.balanced : t.accountingShared.notBalanced,
+                tone: balanced ? 'default' : 'warning',
+            },
+        ];
+        return items;
+    }, [data, isCompare, locale, t]);
+
+    const assetGroups = useMemo(
+        () => searchStatementGroups(hideZeroGroups(data?.assets?.groups ?? [], hideZero), search),
+        [data, hideZero, search],
+    );
+    const liabilityGroups = useMemo(
+        () => searchStatementGroups(hideZeroGroups(data?.liabilities?.groups ?? [], hideZero), search),
+        [data, hideZero, search],
+    );
+    const equityGroups = useMemo(
+        () => searchStatementGroups(hideZeroGroups(data?.equity?.groups ?? [], hideZero), search),
+        [data, hideZero, search],
+    );
+    const compareSections = useMemo(() => searchCompareSections(data?.sections ?? [], search), [data, search]);
 
     return (
         <AccountingPageShell maxWidth={isCompare ? 'full' : 'narrow'}>
@@ -220,46 +300,35 @@ export default function BalanceSheetPage() {
                     t.accounting.reports.balanceSheet.title,
                     'accounting',
                 )}
-                actions={compare ? null : <BranchFilter scope={branch} />}
-            />
-            <AccountingToolbar
                 actions={(
-                    <ReportPrintButton
-                        onPrint={() => void handlePrint()}
-                        disabled={!data || loading || isCompare}
-                        disabledReason={isCompare ? printCopy.unavailableInCompare : undefined}
-                    />
+                    <>
+                        {compare ? null : <BranchFilter scope={branch} />}
+                        <Button
+                            variant="secondary"
+                            onClick={() => void load()}
+                            disabled={loading || (compare && selectedStoreIds.length === 0)}
+                        >
+                            <RefreshCw aria-hidden className="h-3.5 w-3.5" />
+                            {t.accounting.reports.reportScope.generate}
+                        </Button>
+                        <ReportPrintButton
+                            onPrint={() => void handlePrint()}
+                            disabled={!data || loading || isCompare}
+                            disabledReason={isCompare ? printCopy.unavailableInCompare : undefined}
+                        />
+                    </>
                 )}
-            >
-                <ReportScopeBar
-                    compare={compare}
-                    onCompareChange={setCompare}
-                    selectedStoreIds={selectedStoreIds}
-                    onSelectedStoreIdsChange={setSelectedStoreIds}
-                    includeCompanyBucket={includeCompanyBucket}
-                    onIncludeCompanyBucketChange={setIncludeCompanyBucket}
-                    stores={stores}
-                    canConsolidate={canConsolidate}
-                    dateMode="asOf"
-                    from={asOfDate}
-                    to={asOfDate}
-                    asOfDate={asOfDate}
-                    onDateChange={(field, value) => {
-                        if (field === 'asOfDate') {
-                            setAsOfDate(value);
-                        }
-                    }}
-                    onGenerate={() => void load()}
-                    generating={loading}
-                    level={level}
-                    onLevelChange={setLevel}
-                    approvedOnly={approvedOnly}
-                    onApprovedOnlyChange={setApprovedOnly}
-                    approvalEnabled={approvalEnabled}
-                    hideZero={hideZero}
-                    onHideZeroChange={setHideZero}
-                />
-            </AccountingToolbar>
+            />
+
+            <ListStats stats={stats} loading={loading || !data} label={t.accountingReportsUi.common.stats} />
+
+            <ListToolbar
+                tableId="accounting-balance-sheet"
+                filterLayout="row"
+                viewOptions={false}
+                filters={filters}
+                search={{ value: search, onChange: setSearch, placeholder: t.accountingReportsUi.common.searchAccounts }}
+            />
 
             {error && <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-700">{error}</div>}
 
@@ -273,7 +342,7 @@ export default function BalanceSheetPage() {
                         </div>
                         <CompareMatrixTable
                             columns={data.columns}
-                            sections={data.sections}
+                            sections={compareSections}
                             footerRows={[
                                 ...(data.net_profit ? [{
                                     label: t.accounting.reports.currentPeriodNetProfit,
@@ -285,9 +354,9 @@ export default function BalanceSheetPage() {
                                     amounts: data.total_assets,
                                     emphasis: 'default' as const,
                                 }] : []),
-                                ...(data.totals ? [{
+                                ...(compareTotals ? [{
                                     label: t.accounting.reports.totalLiabilitiesAndEquity,
-                                    amounts: data.totals,
+                                    amounts: compareTotals,
                                     emphasis: 'total' as const,
                                 }] : []),
                             ]}
@@ -303,18 +372,18 @@ export default function BalanceSheetPage() {
                             <span className="ms-2">{t.accounting.reports.balanceSheet.asOf} {data.as_of}</span>
                         </div>
 
-                        <div className="grid md:grid-cols-2 gap-3">
-                            <CompactSection className="space-y-3">
-                                <StatementSection groups={hideZeroGroups(data.assets?.groups ?? [], hideZero)} label={t.accounting.reports.assets} colorClass="bg-sky-50 text-sky-700" />
-                                <div className="flex justify-between items-center px-3 py-2 bg-sky-50 rounded-lg font-semibold text-sm text-sky-800 border border-sky-100">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <CompactSection className="min-w-0 space-y-3">
+                                <StatementSection groups={assetGroups} label={t.accounting.reports.assets} colorClass="bg-gray-100 text-gray-700" />
+                                <div className="flex justify-between items-center px-3 py-2 bg-gray-100 rounded-lg font-semibold text-sm text-gray-800 border border-gray-200">
                                     <span>{t.accounting.reports.totalAssets}</span>
                                     <span>{formatBDT(data.assets?.total ?? 0, { locale })}</span>
                                 </div>
                             </CompactSection>
 
-                            <div className="space-y-3">
+                            <div className="min-w-0 space-y-3">
                                 <CompactSection className="space-y-3">
-                                    <StatementSection groups={hideZeroGroups(data.liabilities?.groups ?? [], hideZero)} label={t.accounting.reports.liabilities} colorClass="bg-danger-light text-danger-text" />
+                                    <StatementSection groups={liabilityGroups} label={t.accounting.reports.liabilities} colorClass="bg-danger-light text-danger-text" />
                                     <div className="flex justify-between items-center px-3 py-2 bg-danger-light rounded-lg font-semibold text-sm text-danger-text border border-red-100">
                                         <span>{t.accounting.reports.totalLiabilities}</span>
                                         <span>{formatBDT(data.liabilities?.total ?? 0, { locale })}</span>
@@ -322,7 +391,7 @@ export default function BalanceSheetPage() {
                                 </CompactSection>
 
                                 <CompactSection className="space-y-3">
-                                    <StatementSection groups={hideZeroGroups(data.equity?.groups ?? [], hideZero)} label={t.accounting.reports.equity} colorClass="bg-primary-light text-blue-700" />
+                                    <StatementSection groups={equityGroups} label={t.accounting.reports.equity} colorClass="bg-primary-light text-blue-700" />
                                     <div className="flex justify-between items-center px-5 py-1 text-sm text-gray-600">
                                         <span>{t.accounting.reports.currentPeriodNetProfit}</span>
                                         <span className={(data.equity?.net_profit ?? 0) >= 0 ? 'text-emerald-700 font-semibold' : 'text-red-600 font-semibold'}>
@@ -337,7 +406,7 @@ export default function BalanceSheetPage() {
 
                                 <div className="flex justify-between items-center px-4 py-3 bg-gray-900 text-white rounded-lg font-semibold text-sm">
                                     <span>{t.accounting.reports.totalLiabilitiesAndEquity}</span>
-                                    <span>{formatBDT(data.total_liabilities_and_equity ?? 0, { locale })}</span>
+                                    <span>{formatBDT(totalFigure(data.total_liabilities_and_equity), { locale })}</span>
                                 </div>
                             </div>
                         </div>

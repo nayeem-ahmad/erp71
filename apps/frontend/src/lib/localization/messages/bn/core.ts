@@ -92,6 +92,9 @@ export const coreMessages = {
                 fromAfterTo: "\"থেকে\" অবশ্যই \"পর্যন্ত\"-এর আগে বা একই হতে হবে",
                 date: 'তারিখ',
                 pickDate: 'একটি তারিখ বাছুন',
+                endOfLastMonth: 'গত মাসের শেষ দিন',
+                endOfLastQuarter: 'গত প্রান্তিকের শেষ দিন',
+                endOfLastYear: 'গত বছরের শেষ দিন',
                 ops: {
                     between: 'এর মধ্যে',
                     on: 'এই দিনে',
@@ -1444,6 +1447,7 @@ export const coreMessages = {
             onlineBadge: "অনলাইন",
         },
         partyPayments: {
+            listUi: { statsLabel: "পেমেন্টের সারাংশ", payments: "পেমেন্ট", topMethod: "শীর্ষ পদ্ধতি" },
             directionAll: "সব",
             directionIn: "প্রাপ্তি",
             directionOut: "প্রদান",
@@ -1569,6 +1573,7 @@ export const coreMessages = {
         },
         customerLedger: {
             title: "গ্রাহক লেজার",
+            statsLabel: "লেজার সারসংক্ষেপ",
             ledgerTitle: "লেজার এন্ট্রি",
             subtitle: "বকেয়া ব্যালেন্স ও ক্রেডিট লেনদেনের ইতিহাস দেখুন।",
             currentDue: "বর্তমান বকেয়া",

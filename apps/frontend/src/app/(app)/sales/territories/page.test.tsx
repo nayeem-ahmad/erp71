@@ -1,6 +1,6 @@
 'use client';
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import TerritoriesPage from './page';
 
 jest.mock('@/lib/api', () => ({
@@ -11,6 +11,23 @@ jest.mock('@/lib/api', () => ({
         deleteTerritory: jest.fn(),
     },
 }));
+
+jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
+
+// Desktop width: the one-row filter toolbar and the columns kept off phones.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
+}));
+
+/** A filter chip on the toolbar row — a button that opens its own popover. */
+function chip(name: string | RegExp): HTMLElement {
+    const found = screen
+        .getAllByRole('button', { name })
+        .find((button) => button.getAttribute('aria-haspopup') === 'dialog');
+    if (!found) throw new Error(`No filter chip named ${String(name)}`);
+    return found;
+}
 
 jest.mock('next/link', () => {
     const MockLink = ({ children, href }: { children: React.ReactNode; href: string }) => (
@@ -42,6 +59,14 @@ const mockTerritories = [
         parent: { id: 'ter-1', name: 'Dhaka' },
         description: null,
         _count: { customers: 8 },
+    },
+    {
+        id: 'ter-3',
+        name: 'Uttara',
+        parent_id: 'ter-1',
+        parent: { id: 'ter-1', name: 'Dhaka' },
+        description: null,
+        _count: { customers: 0 },
     },
 ];
 
@@ -111,5 +136,58 @@ describe('TerritoriesPage', () => {
         await waitFor(() => {
             expect(screen.getByText('Root')).toBeInTheDocument();
         });
+    });
+
+    it('counts territories, top level, levels, customers and unused ones in the strip', async () => {
+        render(<TerritoriesPage />);
+        const strip = await screen.findByRole('region', { name: 'Territory figures' });
+        await waitFor(() => expect(within(strip).getByText('3')).toBeInTheDocument());
+        expect(within(strip).getByText('28')).toBeInTheDocument();
+        expect(within(strip).getByText('2')).toBeInTheDocument(); // levels
+        // Top level (Dhaka) and unused (Uttara) are one each.
+        expect(within(strip).getAllByText('1')).toHaveLength(2);
+    });
+
+    it('narrows to the top-level territories with the Parent chip', async () => {
+        render(<TerritoriesPage />);
+        await screen.findByText('Mirpur');
+
+        fireEvent.click(chip('Parent'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Root' }));
+
+        await waitFor(() => expect(screen.queryByText('Mirpur')).not.toBeInTheDocument());
+        expect(screen.queryByText('Uttara')).not.toBeInTheDocument();
+        expect(within(screen.getByRole('region', { name: 'Territory figures' })).getAllByText('1').length).toBeGreaterThan(0);
+    });
+
+    it('picks territories by level', async () => {
+        render(<TerritoriesPage />);
+        await screen.findByText('Mirpur');
+
+        fireEvent.click(chip('Level'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Level 2' }));
+
+        await waitFor(() => expect(screen.queryByText('Capital region')).not.toBeInTheDocument());
+        expect(screen.getByText('Mirpur')).toBeInTheDocument();
+        expect(screen.getByText('Uttara')).toBeInTheDocument();
+    });
+
+    it('deletes an unused territory through a dialog, and keeps delete off one in use', async () => {
+        const { api } = require('@/lib/api');
+        const { toast } = require('@/lib/toast');
+        const confirmSpy = jest.spyOn(window, 'confirm');
+        render(<TerritoriesPage />);
+        const mirpur = (await screen.findByText('Mirpur')).closest('tr')!;
+        expect(within(mirpur).getByRole('button', { name: 'Has customers or sub-territories' })).toHaveAttribute('aria-disabled', 'true');
+
+        const uttara = screen.getByText('Uttara').closest('tr')!;
+        fireEvent.click(within(uttara).getByRole('button', { name: 'Delete' }));
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+        await waitFor(() => expect(api.deleteTerritory).toHaveBeenCalledWith('ter-3'));
+        await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Territory deleted'));
+        expect(confirmSpy).not.toHaveBeenCalled();
+        confirmSpy.mockRestore();
     });
 });

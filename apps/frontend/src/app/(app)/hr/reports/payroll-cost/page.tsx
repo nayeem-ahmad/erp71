@@ -182,6 +182,8 @@ export default function HrPayrollCostReportPage() {
             type: 'date-range',
             label: t.hr.listUi.period,
             value: period,
+            required: true,
+            defaultValue: defaultPeriod(),
             onChange: (next) => setPeriod(next ?? defaultPeriod()),
             presets: MONTH_RANGE_PRESETS,
         },

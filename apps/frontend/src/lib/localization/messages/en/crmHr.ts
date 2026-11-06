@@ -1820,10 +1820,43 @@ export const crmHrMessages = {
         },
         "statuses": {
             "pending": "Pending",
-            "inTransit": "IN_TRANSIT",
-            "delivered": "DELIVERED",
-            "failed": "FAILED",
+            "inTransit": "In transit",
+            "delivered": "Delivered",
+            "failed": "Failed",
             "cancelled": "Cancelled"
+        },
+        "listUi": {
+            "searchPlaceholder": "Search customer, phone, address, driver or invoice…",
+            "statsLabel": "Deliveries summary",
+            "unassigned": "Unassigned",
+            "sale": "Sale",
+            "overdueHint": "The scheduled time has passed",
+            "markDelivered": "Mark delivered",
+            "markedDelivered": "Delivered to {customer}",
+            "cancelDelivery": "Cancel delivery",
+            "cancelled": "Delivery cancelled",
+            "saved": "Delivery saved",
+            "saveFailed": "Could not save the delivery",
+            "form": {
+                "saleId": "Sale ID (optional)",
+                "customerName": "Customer name",
+                "customerPhone": "Customer phone",
+                "deliveryAddress": "Delivery address",
+                "driverName": "Driver name",
+                "driverPhone": "Driver phone",
+                "scheduledAt": "Scheduled date & time",
+                "required": "Customer name and delivery address are required."
+            },
+            "stats": {
+                "deliveries": "Deliveries",
+                "pending": "Pending",
+                "inTransit": "In transit",
+                "delivered": "Delivered",
+                "overdue": "Overdue",
+                "failed": "Failed / cancelled",
+                "unassigned": "{count} unassigned",
+                "cancelledHint": "{count} cancelled"
+            }
         }
     },
     "manufacturing": {

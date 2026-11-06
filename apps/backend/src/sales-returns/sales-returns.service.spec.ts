@@ -332,7 +332,7 @@ describe('SalesReturnsService', () => {
       expect.objectContaining({
         where: { tenant_id: 'tenant-1' },
         include: {
-          sale: true,
+          sale: { include: { customer: { select: { id: true, name: true } } } },
           items: { include: { product: true } },
           payments: { orderBy: { created_at: 'asc' } },
         },

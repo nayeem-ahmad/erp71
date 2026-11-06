@@ -12,7 +12,7 @@ import {
     Length,
     ValidateNested,
 } from 'class-validator';
-import { BranchListQueryDto } from '../common/branch-list-query.dto';
+import { SalesDocumentListQueryDto } from '../common/sales-document-list-filters';
 import { Type } from 'class-transformer';
 import { InlineCustomerDto } from '../customers/customer.dto';
 
@@ -185,8 +185,11 @@ export class UpdateQuotationStatusDto {
     status: string;
 }
 
-/** The quotation list: a branch-aware list narrowed by document kind. */
-export class ListQuotationsQueryDto extends BranchListQueryDto {
+/**
+ * The quotation list and its stats strip: the shared customer-document
+ * filters (the date filter is `valid_until`) plus the document kind.
+ */
+export class ListQuotationsQueryDto extends SalesDocumentListQueryDto {
     /** Allow-listed again by the controller before it reaches a `where`. */
     @IsOptional()
     @IsString()

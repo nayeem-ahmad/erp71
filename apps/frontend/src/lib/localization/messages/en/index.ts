@@ -14,6 +14,11 @@ import { componentsMessages } from './components';
 import { helpMessages } from './help';
 import { projectsMessages } from './projects';
 import { chatMessages } from './chat';
+import { accountingVouchersUiMessages } from './accountingListUi/vouchers';
+import { accountingMastersUiMessages } from './accountingListUi/masters';
+import { accountingFinanceUiMessages } from './accountingListUi/finance';
+import { accountingBooksUiMessages } from './accountingListUi/books';
+import { accountingReportsUiMessages } from './accountingListUi/reports';
 
 export const enMessages = {
     ...coreMessages,
@@ -23,6 +28,11 @@ export const enMessages = {
     ...customersMessages,
     ...inventoryExtrasMessages,
     ...crmHrMessages,
+    ...accountingVouchersUiMessages,
+    ...accountingMastersUiMessages,
+    ...accountingFinanceUiMessages,
+    ...accountingBooksUiMessages,
+    ...accountingReportsUiMessages,
     admin: adminMessages,
     storefront: storefrontMessages,
     marketing: marketingMessages,

@@ -1,26 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import {
-    AccountingPageShell,
-    AccountingToolbar,
-    CompactSection,
-    CompactStat,
-} from '@/components/accounting/compact';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowDownLeft, ArrowUpRight, Landmark, ListChecks } from 'lucide-react';
+import { AccountingPageShell } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { StatusBadge } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { compactDensity } from '@/lib/ui/compact-density';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
-import { useI18n, formatMessage } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { useApprovedOnly } from '@/lib/accounting-report-scope';
-import { ApprovedOnlyToggle } from '@/components/accounting/ApprovedOnlyToggle';
-
-function defaultFrom() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-}
-function defaultTo() { return new Date().toISOString().slice(0, 10); }
+import type { CreatedRange } from '@/lib/created-range';
+import { matchesAnyOf, matchesSearch } from '@/lib/list-filter';
+import { PERIOD_PRESETS, approvedOnlyFilter, defaultPeriod, requiredPeriod, wholeTaka } from '../_shared/report-chips';
 
 interface VatAccount { id: string; name: string; code?: string | null; type: string; total: number; }
 interface VatData {
@@ -31,30 +24,134 @@ interface VatData {
     note: string;
 }
 
+type Side = 'output' | 'input';
+interface VatRow extends VatAccount { side: Side; }
+
+const SIDES: Side[] = ['output', 'input'];
+
 export default function VatTaxPage() {
     const { t, locale } = useI18n();
+    const ui = t.accountingReportsUi.vat;
     const [data, setData] = useState<VatData | null>(null);
-    const [fromDate, setFromDate] = useState(defaultFrom());
-    const [toDate, setToDate] = useState(defaultTo());
+    const [period, setPeriod] = useState<CreatedRange>(defaultPeriod);
     const [loading, setLoading] = useState(true);
     const { approvedOnly, setApprovedOnly, approvalEnabled, ready: approvalReady } = useApprovedOnly();
     const [error, setError] = useState<string | null>(null);
+    const [search, setSearch] = useState('');
+    const [sides, setSides] = useState<string[]>([]);
 
     // approvalReady holds the first fetch until the tenant's approved-only
     // setting is known, so the report is never generated against the wrong value.
-    useEffect(() => { if (approvalReady) void load(); }, [fromDate, toDate, approvalReady, approvedOnly]);
+    useEffect(() => {
+        if (!approvalReady) return;
+        let active = true;
+        setLoading(true);
+        setError(null);
+        api.getVatTaxReport({ approvedOnly, from: period.from || undefined, to: period.to || undefined })
+            .then((result: VatData) => {
+                if (active) setData(result);
+            })
+            .catch((err: unknown) => {
+                if (active) setError(err instanceof Error ? err.message : t.accounting.reports.loadFailed);
+            })
+            .finally(() => {
+                if (active) setLoading(false);
+            });
+        return () => {
+            active = false;
+        };
+    }, [period, approvalReady, approvedOnly, t.accounting.reports.loadFailed]);
 
-    const load = async () => {
-        setLoading(true); setError(null);
-        try {
-            const result = await (api as any).getVatTaxReport({ approvedOnly, from: fromDate || undefined, to: toDate || undefined });
-            setData(result);
-        } catch (err: any) { setError(err?.message ?? 'Failed to load'); }
-        finally { setLoading(false); }
-    };
+    const sideLabels: Record<Side, string> = useMemo(() => ({ output: ui.output, input: ui.input }), [ui]);
+
+    const allRows = useMemo<VatRow[]>(() => [
+        ...(data?.output_vat.accounts ?? []).map((account) => ({ ...account, side: 'output' as const })),
+        ...(data?.input_vat.accounts ?? []).map((account) => ({ ...account, side: 'input' as const })),
+    ], [data]);
+
+    const rows = useMemo(
+        () => allRows.filter((row) => matchesAnyOf(sides, row.side) && matchesSearch(search, row.name, row.code)),
+        [allRows, sides, search],
+    );
+
+    const columns = useMemo(() => [
+        {
+            id: 'name',
+            header: t.accountingShared.account,
+            accessorKey: 'name',
+            cell: ({ row }: { row: { original: VatRow } }) => (
+                <span className="font-medium text-gray-800">
+                    {row.original.name}
+                    {row.original.code ? <span className="ms-2 text-xs text-gray-400">{row.original.code}</span> : null}
+                </span>
+            ),
+        },
+        {
+            id: 'side',
+            header: ui.side,
+            accessorKey: 'side',
+            cell: ({ row }: { row: { original: VatRow } }) => (
+                <StatusBadge tone={row.original.side === 'output' ? 'warning' : 'neutral'}>{sideLabels[row.original.side]}</StatusBadge>
+            ),
+        },
+        {
+            id: 'total',
+            header: t.accountingShared.amount,
+            accessorKey: 'total',
+            meta: { align: 'end' },
+            cell: ({ row }: { row: { original: VatRow } }) => (
+                <span className="tabular-nums">{formatBDT(row.original.total, { locale })}</span>
+            ),
+        },
+    ], [t, ui, sideLabels, locale]);
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'period',
+            type: 'date-range',
+            label: t.accountingShared.period,
+            value: period,
+            // A VAT return is always for some period: cleared, it goes back to this month.
+            required: true,
+            defaultValue: defaultPeriod(),
+            onChange: (next) => setPeriod(requiredPeriod(next)),
+            presets: PERIOD_PRESETS,
+            operators: true,
+        },
+        {
+            id: 'side',
+            type: 'multi-select',
+            label: ui.side,
+            value: sides,
+            onChange: setSides,
+            options: SIDES.map((side) => ({ value: side, label: sideLabels[side] })),
+        },
+        ...approvedOnlyFilter(t, { approvalEnabled, approvedOnly, onChange: setApprovedOnly }),
+    ], [t, ui, period, sides, sideLabels, approvalEnabled, approvedOnly, setApprovedOnly]);
+
+    const stats = useMemo(() => {
+        const sum = (side: Side) => rows.filter((row) => row.side === side).reduce((total, row) => total + row.total, 0);
+        const output = sum('output');
+        const input = sum('input');
+        const net = output - input;
+        const items: ListStat[] = [
+            { id: 'accounts', icon: <ListChecks aria-hidden />, label: t.accountingReportsUi.common.accounts, value: rows.length.toLocaleString(locale) },
+            { id: 'output', icon: <ArrowUpRight aria-hidden />, label: t.accounting.reports.vatTax.outputVat, value: wholeTaka(output, locale) },
+            { id: 'input', icon: <ArrowDownLeft aria-hidden />, label: t.accounting.reports.vatTax.inputVat, value: wholeTaka(input, locale) },
+            {
+                id: 'net',
+                icon: <Landmark aria-hidden />,
+                // Money owed to NBR is amber; a refund due back is not a warning.
+                label: net >= 0 ? ui.netPayable : ui.refundable,
+                value: wholeTaka(Math.abs(net), locale),
+                tone: net > 0 ? 'warning' : 'default',
+            },
+        ];
+        return { items, loading, label: t.accountingReportsUi.common.stats };
+    }, [rows, loading, locale, t, ui]);
 
     return (
-        <AccountingPageShell maxWidth="narrow">
+        <AccountingPageShell maxWidth="full">
             <PageHeader
                 title={t.accounting.reports.vatTax.title}
                 subtitle={t.accounting.reports.vatTax.subtitle}
@@ -65,76 +162,27 @@ export default function VatTaxPage() {
                     'accounting',
                 )}
             />
-            <AccountingToolbar>
-                <div className={compactDensity.filterBar}>
-                    <div className="flex flex-col gap-1">
-                        <span className={compactDensity.formLabel}>From</span>
-                        <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
-                            className={compactDensity.formField} />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        <span className={compactDensity.formLabel}>To</span>
-                        <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
-                            className={compactDensity.formField} />
-                    </div>
-
-                    <ApprovedOnlyToggle checked={approvedOnly} onChange={setApprovedOnly} enabled={approvalEnabled} />
-                </div>
-            </AccountingToolbar>
 
             {error && <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-700">{error}</div>}
 
-            {loading ? (
-                <CompactSection className="py-8 text-center text-gray-400 text-sm font-medium">Loading…</CompactSection>
-            ) : data ? (
-                <div className="space-y-3">
-                    {data.net_vat_payable >= 0 ? (
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex justify-between items-center">
-                            <CompactStat
-                                label="Net VAT Payable"
-                                value={formatBDT(data.net_vat_payable, { locale })}
-                                tone="warning"
-                                className="border-0 p-0 shadow-none bg-transparent"
-                            />
-                            <p className="text-xs text-amber-600 max-w-xs text-end">{data.note}</p>
-                        </div>
-                    ) : (
-                        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex justify-between items-center">
-                            <CompactStat
-                                label="VAT Refundable"
-                                value={formatBDT(Math.abs(data.net_vat_payable))}
-                                tone="positive"
-                                className="border-0 p-0 shadow-none bg-transparent"
-                            />
-                            <p className="text-xs text-emerald-600 max-w-xs text-end">{data.note}</p>
-                        </div>
-                    )}
-                    <CompactSection title="Output VAT (Collected)" className="space-y-2">
-                        {data.output_vat.accounts.map((a) => (
-                            <div key={a.id} className="flex justify-between text-sm py-1 border-b border-gray-50">
-                                <span className="text-gray-700">{a.name}{a.code && <span className="ms-2 text-xs text-gray-400">{a.code}</span>}</span>
-                                <span className="font-medium text-gray-900">{formatBDT(a.total, { locale })}</span>
-                            </div>
-                        ))}
-                        <div className="flex justify-between font-semibold text-sm pt-1">
-                            <span>Total Output VAT</span>
-                            <span className="text-danger-text">{formatBDT(data.output_vat.total, { locale })}</span>
-                        </div>
-                    </CompactSection>
-                    <CompactSection title="Input VAT (Paid)" className="space-y-2">
-                        {data.input_vat.accounts.map((a) => (
-                            <div key={a.id} className="flex justify-between text-sm py-1 border-b border-gray-50">
-                                <span className="text-gray-700">{a.name}{a.code && <span className="ms-2 text-xs text-gray-400">{a.code}</span>}</span>
-                                <span className="font-medium text-gray-900">{formatBDT(a.total, { locale })}</span>
-                            </div>
-                        ))}
-                        <div className="flex justify-between font-semibold text-sm pt-1">
-                            <span>Total Input VAT</span>
-                            <span className="text-emerald-700">{formatBDT(data.input_vat.total, { locale })}</span>
-                        </div>
-                    </CompactSection>
-                </div>
-            ) : null}
+            <DataTable
+                title={t.accounting.reports.vatTax.title}
+                tableId="accounting-vat-tax"
+                columns={columns as never}
+                data={rows}
+                isLoading={loading}
+                emptyMessage={ui.empty}
+                searchValue={search}
+                onSearchChange={setSearch}
+                searchPlaceholder={t.accountingReportsUi.common.searchAccounts}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+            />
+
+            {data?.note ? <p className="text-xs text-gray-400 italic">{data.note}</p> : null}
         </AccountingPageShell>
     );
 }

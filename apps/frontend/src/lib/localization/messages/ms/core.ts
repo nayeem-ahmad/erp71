@@ -92,6 +92,9 @@ export const coreMessages = {
                 fromAfterTo: "\"Dari\" mesti sebelum atau sama dengan \"Hingga\"",
                 date: 'Tarikh',
                 pickDate: 'Pilih tarikh',
+                endOfLastMonth: 'Akhir bulan lepas',
+                endOfLastQuarter: 'Akhir suku tahun lepas',
+                endOfLastYear: 'Akhir tahun lepas',
                 ops: {
                     between: 'antara',
                     on: 'pada',
@@ -1445,6 +1448,7 @@ export const coreMessages = {
             onlineBadge: "Dalam talian",
         },
         partyPayments: {
+            listUi: { statsLabel: "Ringkasan bayaran", payments: "Bayaran", topMethod: "Kaedah utama" },
             directionAll: "Semua",
             directionIn: "Masuk",
             directionOut: "Keluar",
@@ -1570,6 +1574,7 @@ export const coreMessages = {
         },
         customerLedger: {
             title: "Lejar Pelanggan",
+            statsLabel: "Ringkasan lejar",
             ledgerTitle: "Entri lejar",
             subtitle: "Lihat baki tertunggak dan sejarah transaksi kredit.",
             currentDue: "Baki tertunggak semasa",

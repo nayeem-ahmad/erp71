@@ -10,7 +10,15 @@ import {
     UseInterceptors,
 } from '@nestjs/common';
 import { LoyaltyService } from './loyalty.service';
-import { UpdateLoyaltySettingsDto, EarnPointsDto, RedeemPointsDto, AdjustPointsDto } from './loyalty.dto';
+import {
+    UpdateLoyaltySettingsDto,
+    EarnPointsDto,
+    RedeemPointsDto,
+    AdjustPointsDto,
+    LoyaltyCustomerListQueryDto,
+} from './loyalty.dto';
+import { readLoyaltyCustomerListFilters } from './loyalty-customer-list';
+import { CustomerScopeService } from '../customers/customer-scope.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
@@ -22,7 +30,10 @@ import { LOYALTY_ADJUST, SALES_READ, SALE_WRITE } from '../auth/permission-sets'
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class LoyaltyController {
-    constructor(private readonly loyaltyService: LoyaltyService) {}
+    constructor(
+        private readonly loyaltyService: LoyaltyService,
+        private readonly customerScope: CustomerScopeService,
+    ) {}
 
     @RequireAnyStorePermission(...SALES_READ)
     @Get('settings')
@@ -43,9 +54,32 @@ export class LoyaltyController {
     @Get('customers')
     async listCustomers(
         @Tenant() tenant: TenantContext,
-        @Query('search') search?: string,
+        @Query() query: LoyaltyCustomerListQueryDto,
     ) {
-        return this.loyaltyService.listCustomersWithPoints(tenant.tenantId, search);
+        return this.loyaltyService.listCustomersWithPoints(tenant.tenantId, await this.listFilters(tenant, query), {
+            page: query.page,
+            limit: query.limit,
+            sortBy: query.sortBy,
+            sortDir: query.sortDir,
+        });
+    }
+
+    /** The stats strip above the loyalty list, over the same filters as `GET customers`. */
+    @RequireAnyStorePermission(...SALES_READ)
+    @Get('customers/summary')
+    async customerListSummary(
+        @Tenant() tenant: TenantContext,
+        @Query() query: LoyaltyCustomerListQueryDto,
+    ) {
+        return this.loyaltyService.customerListSummary(tenant.tenantId, await this.listFilters(tenant, query));
+    }
+
+    /** A limited member sees only their branches' customers — see `customer-visibility.ts`. */
+    private async listFilters(tenant: TenantContext, query: LoyaltyCustomerListQueryDto) {
+        return readLoyaltyCustomerListFilters(query, {
+            timezone: tenant.timezone,
+            scope: await this.customerScope.resolve(tenant, query.storeId),
+        });
     }
 
     @RequireAnyStorePermission(...SALES_READ)

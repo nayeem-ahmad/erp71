@@ -1,17 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { BarChart3, Calculator, Package, ShoppingCart, Store, TrendingUp } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate } from '@/lib/format';
-import { useI18n, formatMessage } from '@/lib/i18n';
-import PageHeader from '@/components/ui/compact/PageHeader';
+import { formatBDT } from '@/lib/format';
+import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { TrendingUp, ShoppingCart, BarChart3, Package } from 'lucide-react';
-import { PageShell } from '@/components/ui';
-
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
+import { Alert, PageHeader, PageShell } from '@/components/ui';
+import { createdRangeFromPreset, type CreatedRange, type CreatedRangePreset } from '@/lib/created-range';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
+import type { NumberCondition } from '@/lib/number-condition';
 
 interface StoreRow {
     store_id: string;
@@ -35,375 +34,204 @@ interface ConsolidatedReport {
     by_store: StoreRow[];
 }
 
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
-/* ------------------------------------------------------------------ */
+const PERIOD_PRESETS: readonly CreatedRangePreset[] = [
+    'today', 'yesterday', 'last7', 'last30', 'thisMonth', 'last3Months', 'last6Months', 'thisYear',
+];
+// Cleared, the period goes back to the last 30 days.
+const defaultPeriod = () => createdRangeFromPreset('last30');
 
-function defaultFrom(): string {
-    const d = new Date();
-    d.setDate(d.getDate() - 29);
-    return d.toISOString().slice(0, 10);
-}
-
-function defaultTo(): string {
-    return new Date().toISOString().slice(0, 10);
-}
-
-/* ------------------------------------------------------------------ */
-/*  Skeleton                                                           */
-/* ------------------------------------------------------------------ */
-
-function Skeleton({ className }: { className?: string }) {
-    return (
-        <div
-            className={`animate-pulse bg-gray-200 rounded ${className ?? ''}`}
-        />
-    );
-}
-
-function SummaryCardSkeleton() {
-    return (
-        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-5 space-y-3">
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="h-7 w-36" />
-        </div>
-    );
-}
-
-function TableSkeleton() {
-    return (
-        <div className="space-y-2 mt-4">
-            {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full" />
-            ))}
-        </div>
-    );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Summary Card                                                       */
-/* ------------------------------------------------------------------ */
-
-function SummaryCard({
-    icon: Icon,
-    label,
-    value,
-    accent,
-}: {
-    icon: React.ComponentType<{ className?: string }>;
-    label: string;
-    value: string;
-    accent: string;
-}) {
-    return (
-        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-5 flex items-start gap-4">
-            <div className={`rounded-xl p-2.5 ${accent}`}>
-                <Icon className="w-5 h-5 text-white" />
-            </div>
-            <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label}</p>
-                <p className="mt-1 text-xl font-bold text-gray-900 truncate">{value}</p>
-            </div>
-        </div>
-    );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Bar Chart (CSS-only)                                               */
-/* ------------------------------------------------------------------ */
-
-function RevenueBarChart({ stores, title }: { stores: StoreRow[]; title: string }) {
-    if (stores.length === 0) return null;
-
-    const maxRevenue = Math.max(...stores.map((s) => s.revenue), 1);
-
-    return (
-        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-6">
-            <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400 mb-5">
-                {title}
-            </h3>
-            <div className="space-y-3">
-                {stores.map((store) => {
-                    const widthPct = Math.max((store.revenue / maxRevenue) * 100, 0.5);
-                    return (
-                        <div key={store.store_id} className="flex items-center gap-3">
-                            {/* Label */}
-                            <span
-                                className="w-32 shrink-0 text-sm text-gray-600 truncate text-end"
-                                title={store.store_name}
-                            >
-                                {store.store_name}
-                            </span>
-                            {/* Bar track */}
-                            <div className="flex-1 h-7 bg-gray-100 rounded-lg overflow-hidden relative">
-                                <div
-                                    className="h-full bg-blue-500 rounded-lg transition-all duration-500"
-                                    style={{ width: `${widthPct}%` }}
-                                />
-                            </div>
-                            {/* Value label */}
-                            <span className="w-32 shrink-0 text-sm font-semibold text-gray-700">
-                                {formatBDT(store.revenue)}
-                            </span>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Store Breakdown Table                                              */
-/* ------------------------------------------------------------------ */
-
-function StoreTable({ stores, m }: { stores: StoreRow[]; m: ReturnType<typeof useI18n>['t']['reports']['consolidated'] }) {
-    return (
-        <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100">
-                <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">
-                    {m.storeBreakdown}
-                </h3>
-            </div>
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr className="bg-gray-50">
-                            <th className="text-start px-6 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
-                                {m.columns.storeName}
-                            </th>
-                            <th className="text-end px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
-                                {m.columns.revenue}
-                            </th>
-                            <th className="text-end px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
-                                {m.columns.transactions}
-                            </th>
-                            <th className="text-end px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
-                                {m.columns.avgOrder}
-                            </th>
-                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-widest text-gray-400 min-w-[160px]">
-                                {m.columns.revenueShare}
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                        {stores.map((store) => (
-                            <tr key={store.store_id} className="hover:bg-gray-50 transition-colors">
-                                <td className="px-6 py-3 font-medium text-gray-800">
-                                    {store.store_name}
-                                </td>
-                                <td className="px-4 py-3 text-end font-semibold text-gray-900">
-                                    {formatBDT(store.revenue)}
-                                </td>
-                                <td className="px-4 py-3 text-end text-gray-600">
-                                    {store.transactions.toLocaleString()}
-                                </td>
-                                <td className="px-4 py-3 text-end text-gray-600">
-                                    {formatBDT(store.avg_order)}
-                                </td>
-                                <td className="px-4 py-3">
-                                    <div className="flex items-center gap-2">
-                                        {/* Progress bar */}
-                                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                            <div
-                                                className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                                                style={{
-                                                    width: `${Math.min(store.revenue_share, 100)}%`,
-                                                }}
-                                            />
-                                        </div>
-                                        <span className="text-xs font-semibold text-gray-500 w-12 text-end shrink-0">
-                                            {store.revenue_share.toFixed(1)}%
-                                        </span>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Empty State                                                        */
-/* ------------------------------------------------------------------ */
-
-function EmptyState({ m }: { m: ReturnType<typeof useI18n>['t']['reports']['consolidated'] }) {
-    return (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mb-4">
-                <BarChart3 className="w-8 h-8 text-gray-300" />
-            </div>
-            <p className="text-base font-semibold text-gray-500">{m.empty.title}</p>
-            <p className="text-sm text-gray-400 mt-1">
-                {m.empty.description}
-            </p>
-        </div>
-    );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Page                                                               */
-/* ------------------------------------------------------------------ */
-
+/**
+ * Sales › Reports › Consolidated: every branch side by side over a period.
+ * The period goes to the server; the branch and revenue chips narrow the
+ * branches already loaded, and the strip and the total row add up what is
+ * left. The top product is the company's, whichever branches are shown.
+ */
 export default function ConsolidatedReportPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const m = t.reports.consolidated;
-    const [from, setFrom] = useState(defaultFrom);
-    const [to, setTo] = useState(defaultTo);
-    const [inputFrom, setInputFrom] = useState(defaultFrom);
-    const [inputTo, setInputTo] = useState(defaultTo);
+    const [period, setPeriod] = useState<CreatedRange>(defaultPeriod);
+    const [branches, setBranches] = useState<string[]>([]);
+    const [branchesExclude, setBranchesExclude] = useState(false);
+    const [revenueFilter, setRevenueFilter] = useState<NumberCondition | null>(null);
+    const [search, setSearch] = useState('');
     const [report, setReport] = useState<ConsolidatedReport | null>(null);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchReport = async (fromDate: string, toDate: string) => {
+    const load = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            const data = await api.getConsolidatedReport({ from: fromDate, to: toDate });
+            const data = await api.getConsolidatedReport({ from: period.from, to: period.to });
             setReport(data as ConsolidatedReport);
         } catch (err: any) {
             setError(err?.message ?? m.loadFailed);
+            setReport(null);
         } finally {
             setLoading(false);
         }
-    };
+    }, [period, m.loadFailed]);
 
-    // Load on initial mount with default range
     useEffect(() => {
-        void fetchReport(from, to);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        void load();
+    }, [load]);
 
-    const handleGenerate = () => {
-        setFrom(inputFrom);
-        setTo(inputTo);
-        void fetchReport(inputFrom, inputTo);
-    };
+    const rows = useMemo(
+        () => (report?.by_store ?? []).filter((row) => (
+            matchesAnyOf(branches, row.store_id, branchesExclude)
+            && matchesNumberCondition(row.revenue, revenueFilter)
+            && matchesSearch(search, row.store_name)
+        )),
+        [report, branches, branchesExclude, revenueFilter, search],
+    );
 
-    const hasData = report && report.by_store.length > 0;
+    const totals = useMemo(() => {
+        const revenue = rows.reduce((total, row) => total + row.revenue, 0);
+        const transactions = rows.reduce((total, row) => total + row.transactions, 0);
+        const share = rows.reduce((total, row) => total + row.revenue_share, 0);
+        return { revenue, transactions, share, average: transactions > 0 ? revenue / transactions : 0 };
+    }, [rows]);
+
+    const columns = useMemo(() => {
+        const money = (value: number) => <span className="tabular-nums">{formatBDT(value, { locale })}</span>;
+        return [
+            {
+                id: 'store_name',
+                header: m.columns.storeName,
+                accessorKey: 'store_name',
+                footer: () => t.common.total,
+            },
+            {
+                id: 'revenue',
+                header: m.columns.revenue,
+                accessorKey: 'revenue',
+                meta: { align: 'end' },
+                cell: ({ row }: { row: { original: StoreRow } }) => money(row.original.revenue),
+                footer: () => money(totals.revenue),
+            },
+            {
+                id: 'transactions',
+                header: m.columns.transactions,
+                accessorKey: 'transactions',
+                meta: { align: 'end', hideOnMobile: true },
+                cell: ({ row }: { row: { original: StoreRow } }) => (
+                    <span className="tabular-nums">{row.original.transactions.toLocaleString()}</span>
+                ),
+                footer: () => <span className="tabular-nums">{totals.transactions.toLocaleString()}</span>,
+            },
+            {
+                id: 'avg_order',
+                header: m.columns.avgOrder,
+                accessorKey: 'avg_order',
+                meta: { align: 'end', hideOnMobile: true },
+                cell: ({ row }: { row: { original: StoreRow } }) => money(row.original.avg_order),
+                footer: () => money(totals.average),
+            },
+            {
+                id: 'revenue_share',
+                header: m.columns.revenueShare,
+                accessorKey: 'revenue_share',
+                meta: { hideOnMobile: true },
+                cell: ({ row }: { row: { original: StoreRow } }) => (
+                    <div className="flex items-center gap-2">
+                        <div className="h-1.5 min-w-[48px] flex-1 rounded-full bg-gray-100">
+                            <div
+                                className="h-1.5 rounded-full bg-blue-600"
+                                style={{ width: `${Math.min(row.original.revenue_share, 100)}%` }}
+                            />
+                        </div>
+                        <span className="w-12 text-end tabular-nums text-gray-600">
+                            {row.original.revenue_share.toFixed(1)}%
+                        </span>
+                    </div>
+                ),
+                footer: () => <span className="tabular-nums">{totals.share.toFixed(1)}%</span>,
+            },
+        ];
+    }, [m, t, totals, locale]);
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'period',
+            type: 'date-range',
+            label: m.period,
+            value: period,
+            onChange: (next) => setPeriod(next ?? defaultPeriod()),
+            presets: PERIOD_PRESETS,
+            operators: true,
+        },
+        {
+            id: 'branch',
+            type: 'multi-select',
+            label: t.common.branch,
+            value: branches,
+            onChange: setBranches,
+            exclude: { value: branchesExclude, onChange: setBranchesExclude },
+            options: (report?.by_store ?? []).map((row) => ({ value: row.store_id, label: row.store_name })),
+        },
+        {
+            id: 'revenue',
+            type: 'number',
+            label: m.columns.revenue,
+            value: revenueFilter,
+            onChange: setRevenueFilter,
+            money: true,
+        },
+    ], [m, t, period, branches, branchesExclude, report, revenueFilter]);
+
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale });
+        const items: ListStat[] = [
+            { id: 'revenue', icon: <TrendingUp aria-hidden />, label: m.summary.totalRevenue, value: money(totals.revenue) },
+            {
+                id: 'transactions',
+                icon: <ShoppingCart aria-hidden />,
+                label: m.summary.totalTransactions,
+                value: totals.transactions.toLocaleString(),
+            },
+            { id: 'average', icon: <Calculator aria-hidden />, label: m.summary.avgOrderValue, value: money(totals.average) },
+            { id: 'branches', icon: <Store aria-hidden />, label: m.branches, value: rows.length.toLocaleString() },
+            {
+                id: 'topProduct',
+                icon: <Package aria-hidden />,
+                label: m.summary.topProduct,
+                value: report?.overall.top_product ?? m.summary.none,
+            },
+        ];
+        return { items, loading: loading && !report, label: m.statsLabel };
+    }, [totals, rows, report, loading, locale, m]);
 
     return (
         <PageShell>
-            <div className="w-full px-4 sm:px-6 py-8 space-y-6">
-
-                <PageHeader
-                    title={m.title}
-                    subtitle={m.description}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.sales,
-                        m.title,
-                        'sales',
-                    )}
-                />
-
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                        <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
-                            <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest shrink-0">
-                                {m.fromLabel}
-                            </label>
-                            <input
-                                type="date"
-                                value={inputFrom}
-                                max={inputTo}
-                                onChange={(e) => setInputFrom(e.target.value)}
-                                className="text-sm text-gray-700 bg-transparent border-none outline-none"
-                            />
-                        </div>
-                        <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
-                            <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest shrink-0">
-                                {m.toLabel}
-                            </label>
-                            <input
-                                type="date"
-                                value={inputTo}
-                                min={inputFrom}
-                                onChange={(e) => setInputTo(e.target.value)}
-                                className="text-sm text-gray-700 bg-transparent border-none outline-none"
-                            />
-                        </div>
-                        <button
-                            onClick={handleGenerate}
-                            disabled={loading}
-                            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl shadow-sm transition-colors"
-                        >
-                            {loading ? m.loading : m.generate}
-                        </button>
-                </div>
-
-                {/* Period badge */}
-                {!loading && report && (
-                    <p className="text-xs text-gray-400">
-                        {formatMessage(m.periodLabel, { from: formatDate(from), to: formatDate(to) })}
-                    </p>
+            <PageHeader
+                title={m.title}
+                subtitle={m.description}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.sales,
+                    m.title,
+                    'sales',
                 )}
+            />
 
-                {/* ---- Error ---- */}
-                {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
-                        {error}
-                    </div>
-                )}
+            {error ? <Alert tone="danger">{error}</Alert> : null}
 
-                {/* ---- Loading skeleton ---- */}
-                {loading && (
-                    <>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                            {[...Array(4)].map((_, i) => <SummaryCardSkeleton key={i} />)}
-                        </div>
-                        <TableSkeleton />
-                        <TableSkeleton />
-                    </>
-                )}
-
-                {/* ---- Content ---- */}
-                {!loading && report && (
-                    <>
-                        {/* Overall Summary Cards */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                            <SummaryCard
-                                icon={TrendingUp}
-                                label={m.summary.totalRevenue}
-                                value={formatBDT(report.overall.revenue)}
-                                accent="bg-blue-500"
-                            />
-                            <SummaryCard
-                                icon={ShoppingCart}
-                                label={m.summary.totalTransactions}
-                                value={report.overall.transactions.toLocaleString()}
-                                accent="bg-emerald-500"
-                            />
-                            <SummaryCard
-                                icon={BarChart3}
-                                label={m.summary.avgOrderValue}
-                                value={formatBDT(report.overall.avg_order)}
-                                accent="bg-primary"
-                            />
-                            <SummaryCard
-                                icon={Package}
-                                label={m.summary.topProduct}
-                                value={report.overall.top_product ?? m.summary.none}
-                                accent="bg-amber-500"
-                            />
-                        </div>
-
-                        {/* Empty state */}
-                        {!hasData && <EmptyState m={m} />}
-
-                        {/* Store table + bar chart */}
-                        {hasData && (
-                            <>
-                                <StoreTable stores={report.by_store} m={m} />
-                                <RevenueBarChart stores={report.by_store} title={m.revenueByStore} />
-                            </>
-                        )}
-                    </>
-                )}
-            </div>
+            <DataTable
+                title={m.storeBreakdown}
+                tableId="sales-consolidated-report"
+                columns={columns as never}
+                data={rows}
+                isLoading={loading}
+                emptyMessage={m.empty.title}
+                emptyIcon={<BarChart3 className="h-16 w-16 text-gray-200" />}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+            />
         </PageShell>
     );
 }

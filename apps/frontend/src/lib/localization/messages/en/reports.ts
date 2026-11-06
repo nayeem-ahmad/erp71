@@ -1,6 +1,9 @@
 export const reportsMessages = {
     consolidated: {
         title: 'Consolidated Report',
+        period: "Period",
+        statsLabel: "Consolidated summary",
+        branches: "Branches",
         description: 'Cross-branch revenue and transaction overview',
         fromLabel: 'From',
         toLabel: 'To',
@@ -31,6 +34,10 @@ export const reportsMessages = {
     },
     branch: {
         title: 'Branch Report',
+        period: "Period",
+        statsLabel: "Branch summary",
+        groupBy: "Group by",
+        groups: { day: "Day", week: "Week", month: "Month" },
         description: 'Detailed sales performance for a single branch',
         storeLabel: 'Store',
         fromLabel: 'From',

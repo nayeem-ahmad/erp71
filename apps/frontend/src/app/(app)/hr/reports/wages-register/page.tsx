@@ -173,7 +173,9 @@ export default function WagesRegisterPage() {
             type: 'select',
             label: wr.month,
             value: monthKey(period),
-            // A register is always for some month: All goes back to this one.
+            // A register is always for some month; Clear all goes back to this one.
+            required: true,
+            defaultValue: monthKey(currentMonthKey()),
             onChange: (next) => {
                 if (!next) return setPeriod(currentMonthKey());
                 const [year, month] = next.split('-').map(Number);

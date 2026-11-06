@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle, Edit2, XCircle } from 'lucide-react';
-import { createColumnHelper } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { CheckCircle2, CircleOff, Filter, ListChecks, Pencil, Workflow } from 'lucide-react';
+import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
+import { POSTING_RULE_EVENT_TYPES, PostingRuleConditionKey } from '@erp71/shared-types';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
 import {
     AccountingPageShell,
     AccountingToolbar,
@@ -14,41 +16,31 @@ import { ContextualHelpPanel } from '@/components/ContextualHelpPanel';
 import { HelpTooltip } from '@/components/HelpTooltip';
 import { POSTING_RULES_FIELD_HELP, POSTING_RULES_HELP } from '@/lib/help/contextual-help';
 import { api } from '@/lib/api';
-import { useI18n, formatMessage } from '@/lib/i18n';
+import { humanizeKey } from '@/lib/audit-description';
+import { useI18n } from '@/lib/i18n';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
+import type { NumberCondition } from '@/lib/number-condition';
+import { toast } from '@/lib/toast';
 import { compactDensity } from '@/lib/ui/compact-density';
-import { Button } from '@/components/ui';
+import { Button, StatusBadge } from '@/components/ui';
 import AccountSelect from '@/components/accounting/AccountSelect';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 
-const EVENT_TYPE_LABELS: Record<string, string> = {
-    sale: 'Sale',
-    sale_return: 'Sale Return',
-    purchase: 'Purchase',
-    purchase_return: 'Purchase Return',
-    inventory_adjustment: 'Inventory Adjustment',
-    fund_movement: 'Fund Movement',
-    loan_disbursement: 'Loan Disbursement',
-    loan_repayment: 'Loan Repayment',
-};
+/** The conditions a rule can carry, the default first. */
+const CONDITION_KEYS: readonly string[] = [
+    PostingRuleConditionKey.NONE,
+    ...Object.values(PostingRuleConditionKey).filter((key) => key !== PostingRuleConditionKey.NONE),
+];
 
-const CONDITION_KEY_LABELS: Record<string, string> = {
-    payment_mode: 'Payment Mode',
-    reason_type: 'Reason Type',
-    transfer_scope: 'Transfer Scope',
-    loan_direction: 'Loan Direction',
-    none: 'None (default)',
-};
-
-const EVENT_TYPE_BADGE: Record<string, string> = {
-    sale: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    sale_return: 'bg-amber-50 text-amber-700 border-amber-200',
-    purchase: 'bg-sky-50 text-sky-700 border-sky-200',
-    purchase_return: 'bg-orange-50 text-orange-700 border-orange-200',
-    inventory_adjustment: 'bg-primary-light text-blue-700 border-primary-border',
-    fund_movement: 'bg-gray-50 text-gray-700 border-gray-200',
-    loan_disbursement: 'bg-primary-light text-blue-700 border-primary-border',
-    loan_repayment: 'bg-teal-50 text-teal-700 border-teal-200',
-};
+/**
+ * The known values first, in their own order, then any the rules carry that
+ * the list does not know yet — so the chip can still filter by them.
+ */
+function withUnknown(known: readonly string[], seen: Iterable<string>): string[] {
+    const out = [...known];
+    for (const value of seen) if (value && !out.includes(value)) out.push(value);
+    return out;
+}
 
 interface Account {
     id: string;
@@ -81,6 +73,8 @@ const columnHelper = createColumnHelper<PostingRule>();
 
 export default function PostingRulesPage() {
     const { t, locale } = useI18n();
+    const p = t.postingRules;
+    const m = t.accountingMastersUi.postingRules;
     const [rules, setRules] = useState<PostingRule[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [loading, setLoading] = useState(true);
@@ -95,11 +89,19 @@ export default function PostingRulesPage() {
     });
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState('');
-    const [filterActive, setFilterActive] = useState<string>('');
-    const [filterEventType, setFilterEventType] = useState('');
+    const [search, setSearch] = useState('');
+    const [eventFilter, setEventFilter] = useState<string[]>([]);
+    const [eventExclude, setEventExclude] = useState(false);
+    const [statusFilter, setStatusFilter] = useState<string[]>([]);
+    const [conditionFilter, setConditionFilter] = useState<string[]>([]);
+    const [debitFilter, setDebitFilter] = useState<string[]>([]);
+    const [creditFilter, setCreditFilter] = useState<string[]>([]);
+    const [priorityFilter, setPriorityFilter] = useState<NumberCondition | null>(null);
 
     useEffect(() => {
         void loadData();
+        // Loaded once; the loader reads only the copy.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const loadData = async () => {
@@ -109,13 +111,22 @@ export default function PostingRulesPage() {
                 api.getAccounts(),
             ]);
             setRules(rulesData.data ?? []);
-            setAccounts(accountsData);
+            setAccounts(Array.isArray(accountsData) ? accountsData : []);
         } catch (err) {
             console.error('Failed to load posting rules', err);
+            toast.error(p.loadFailed);
         } finally {
             setLoading(false);
         }
     };
+
+    // A type the copy does not name yet reads as words ("Bad debt write off"), never raw snake_case.
+    const eventLabel = (type: string) => m.eventTypes[type as keyof typeof m.eventTypes] ?? humanizeKey(type);
+    const conditionLabel = (key: string) => m.conditionKeys[key as keyof typeof m.conditionKeys] ?? humanizeKey(key);
+    // Every event a rule can map (from the schema's enum), plus any the rules carry beyond it.
+    const eventTypes = useMemo(() => withUnknown(POSTING_RULE_EVENT_TYPES, rules.map((r) => r.eventType)), [rules]);
+    const conditionKeys = useMemo(() => withUnknown(CONDITION_KEYS, rules.map((r) => r.conditionKey)), [rules]);
+    const statusOf = (rule: PostingRule) => (rule.isActive ? 'active' : 'inactive');
 
     const openEdit = (rule: PostingRule) => {
         setEditingRule(rule);
@@ -145,121 +156,232 @@ export default function PostingRulesPage() {
             });
             await loadData();
             setEditingRule(null);
+            toast.success(m.saved);
         } catch (err: any) {
-            setSaveError(err.message ?? 'Failed to save rule');
+            setSaveError(err.message ?? p.saveFailed);
         } finally {
             setSaving(false);
         }
     };
 
-    const filteredRules = useMemo(() => {
-        return rules.filter((r) => {
-            if (filterActive === 'active' && !r.isActive) return false;
-            if (filterActive === 'inactive' && r.isActive) return false;
-            if (filterEventType && r.eventType !== filterEventType) return false;
-            return true;
-        });
-    }, [rules, filterActive, filterEventType]);
+    const filteredRules = useMemo(
+        () =>
+            rules.filter((r) => {
+                if (!matchesAnyOf(eventFilter, r.eventType, eventExclude)) return false;
+                if (!matchesAnyOf(statusFilter, statusOf(r))) return false;
+                if (!matchesAnyOf(conditionFilter, r.conditionKey)) return false;
+                if (!matchesAnyOf(debitFilter, r.debitAccount?.id)) return false;
+                if (!matchesAnyOf(creditFilter, r.creditAccount?.id)) return false;
+                if (!matchesNumberCondition(r.priority, priorityFilter)) return false;
+                return matchesSearch(
+                    search,
+                    eventLabel(r.eventType),
+                    conditionLabel(r.conditionKey),
+                    r.conditionValue,
+                    r.debitAccount?.name,
+                    r.debitAccount?.code,
+                    r.creditAccount?.name,
+                    r.creditAccount?.code,
+                );
+            }),
+        // eventLabel/conditionLabel read only `m`.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [rules, eventFilter, eventExclude, statusFilter, conditionFilter, debitFilter, creditFilter, priorityFilter, search, m],
+    );
 
-    const columns = useMemo(
+    const filters = useMemo<ListFilter[]>(() => {
+        /** The accounts some rule posts to on one side, so the chip offers only those. */
+        const sideOptions = (pick: (rule: PostingRule) => Account) => {
+            const seen = new Map<string, Account>();
+            rules.forEach((rule) => {
+                const account = pick(rule);
+                if (account?.id) seen.set(account.id, account);
+            });
+            return [...seen.values()]
+                .sort((a, b) => (a.code ?? a.name).localeCompare(b.code ?? b.name))
+                .map((account) => ({ value: account.id, label: account.code ? `${account.code} · ${account.name}` : account.name }));
+        };
+        return [
+            {
+                id: 'event',
+                type: 'multi-select',
+                label: p.columns.event,
+                value: eventFilter,
+                onChange: setEventFilter,
+                exclude: { value: eventExclude, onChange: setEventExclude },
+                options: eventTypes.map((type) => ({ value: type, label: eventLabel(type) })),
+            },
+            {
+                id: 'status',
+                type: 'multi-select',
+                label: p.columns.status,
+                value: statusFilter,
+                onChange: setStatusFilter,
+                options: [
+                    { value: 'active', label: p.active },
+                    { value: 'inactive', label: p.inactive },
+                ],
+            },
+            {
+                id: 'condition',
+                type: 'multi-select',
+                label: p.columns.condition,
+                value: conditionFilter,
+                onChange: setConditionFilter,
+                options: conditionKeys.map((key) => ({ value: key, label: conditionLabel(key) })),
+            },
+            {
+                id: 'debitAccount',
+                type: 'multi-select',
+                label: p.columns.debitAccount,
+                value: debitFilter,
+                onChange: setDebitFilter,
+                options: sideOptions((rule) => rule.debitAccount),
+                more: true,
+            },
+            {
+                id: 'creditAccount',
+                type: 'multi-select',
+                label: p.columns.creditAccount,
+                value: creditFilter,
+                onChange: setCreditFilter,
+                options: sideOptions((rule) => rule.creditAccount),
+                more: true,
+            },
+            {
+                id: 'priority',
+                type: 'number',
+                label: p.columns.priority,
+                value: priorityFilter,
+                onChange: setPriorityFilter,
+                more: true,
+            },
+        ];
+        // eventLabel/conditionLabel read only `m`.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [p, m, rules, eventTypes, conditionKeys, eventFilter, eventExclude, statusFilter, conditionFilter, debitFilter, creditFilter, priorityFilter]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const active = filteredRules.filter((r) => r.isActive);
+        const items: ListStat[] = [
+            { id: 'rules', icon: <ListChecks aria-hidden />, label: m.rules, value: n(filteredRules.length) },
+            { id: 'active', icon: <CheckCircle2 aria-hidden />, label: p.active, value: n(active.length) },
+            { id: 'inactive', icon: <CircleOff aria-hidden />, label: p.inactive, value: n(filteredRules.length - active.length) },
+            {
+                id: 'conditional',
+                icon: <Filter aria-hidden />,
+                label: m.conditional,
+                value: n(filteredRules.filter((r) => r.conditionKey !== 'none').length),
+            },
+            {
+                id: 'events',
+                icon: <Workflow aria-hidden />,
+                label: m.eventsCovered,
+                value: n(new Set(active.map((r) => r.eventType)).size),
+                hint: `/ ${n(eventTypes.length)}`,
+            },
+        ];
+        return { items, loading, label: m.statsLabel };
+    }, [filteredRules, eventTypes, loading, locale, m, p]);
+
+    const columns = useMemo<ColumnDef<PostingRule, any>[]>(
         () => [
             columnHelper.accessor('eventType', {
-                header: 'Event',
-                cell: (info) => {
-                    const v = info.getValue();
-                    return (
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${EVENT_TYPE_BADGE[v] ?? 'bg-gray-50 text-gray-600 border-gray-200'}`}>
-                            {EVENT_TYPE_LABELS[v] ?? v}
-                        </span>
-                    );
-                },
+                header: p.columns.event,
+                cell: (info) => <StatusBadge tone="neutral">{eventLabel(info.getValue())}</StatusBadge>,
+                size: 170,
             }),
             columnHelper.accessor('conditionKey', {
-                header: 'Condition',
+                header: p.columns.condition,
                 cell: (info) => {
                     const key = info.getValue();
                     const value = info.row.original.conditionValue;
                     if (key === 'none') {
-                        return <span className="text-sm text-gray-400 italic">Default (no condition)</span>;
+                        return <span className="text-gray-400 italic">{p.defaultCondition}</span>;
                     }
                     return (
-                        <span className="text-sm text-gray-700">
-                            {CONDITION_KEY_LABELS[key] ?? key}
+                        <span className="text-gray-700">
+                            {conditionLabel(key)}
                             {value && (
                                 <span className="ms-1 font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">{value}</span>
                             )}
                         </span>
                     );
                 },
+                size: 200,
             }),
-            columnHelper.display({
+            columnHelper.accessor((row) => row.debitAccount?.name ?? '', {
                 id: 'debitAccount',
-                header: 'Debit Account',
+                header: p.columns.debitAccount,
                 cell: ({ row }) => (
-                    <div>
-                        <span className="block text-sm font-medium text-gray-900">{row.original.debitAccount.name}</span>
+                    <div className="min-w-0">
+                        <span className="block truncate text-gray-900">{row.original.debitAccount.name}</span>
                         {row.original.debitAccount.code && (
                             <span className="block text-xs font-mono text-gray-400">{row.original.debitAccount.code}</span>
                         )}
                     </div>
                 ),
+                size: 200,
             }),
-            columnHelper.display({
+            columnHelper.accessor((row) => row.creditAccount?.name ?? '', {
                 id: 'creditAccount',
-                header: 'Credit Account',
+                header: p.columns.creditAccount,
                 cell: ({ row }) => (
-                    <div>
-                        <span className="block text-sm font-medium text-gray-900">{row.original.creditAccount.name}</span>
+                    <div className="min-w-0">
+                        <span className="block truncate text-gray-900">{row.original.creditAccount.name}</span>
                         {row.original.creditAccount.code && (
                             <span className="block text-xs font-mono text-gray-400">{row.original.creditAccount.code}</span>
                         )}
                     </div>
                 ),
+                size: 200,
             }),
             columnHelper.accessor('priority', {
-                header: 'Priority',
-                cell: (info) => (
-                    <span className="text-sm text-gray-500 font-mono">{info.getValue()}</span>
-                ),
+                header: p.columns.priority,
+                cell: (info) => <span className="font-mono text-gray-500">{info.getValue()}</span>,
+                size: 90,
+                meta: { align: 'end', hideOnMobile: true },
             }),
-            columnHelper.accessor('isActive', {
-                header: 'Status',
-                cell: (info) => {
-                    const active = info.getValue();
-                    return (
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
-                            {active ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                            {active ? 'Active' : 'Inactive'}
-                        </span>
-                    );
-                },
+            columnHelper.accessor((row) => statusOf(row), {
+                id: 'status',
+                header: p.columns.status,
+                cell: (info) =>
+                    info.getValue() === 'active' ? (
+                        <StatusBadge tone="success">{p.active}</StatusBadge>
+                    ) : (
+                        <StatusBadge tone="neutral">{p.inactive}</StatusBadge>
+                    ),
+                size: 100,
             }),
             columnHelper.display({
                 id: 'actions',
-                header: '',
+                header: t.common.actions,
                 cell: ({ row }) => (
-                    <button
-                        onClick={() => openEdit(row.original)}
-                        className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-hover font-medium"
-                    >
-                        <Edit2 className="w-3.5 h-3.5" />
-                        Edit
-                    </button>
+                    <RowActions>
+                        <RowActionButton icon={<Pencil />} label={t.common.edit} onClick={() => openEdit(row.original)} />
+                    </RowActions>
                 ),
+                enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
+                size: 70,
             }),
         ],
-        [],
+        // eventLabel/conditionLabel/openEdit read only the copy and setters.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [t, p, m],
     );
 
     return (
         <AccountingPageShell maxWidth="full">
             <PageHeader
-                title={t.postingRules.title}
-                subtitle="Configure how operational events automatically create accounting vouchers."
+                title={p.title}
+                subtitle={m.subtitle}
                 breadcrumbs={modulePageBreadcrumbs(
                     t.dashboardHome.breadcrumbHome,
                     t.sidebar.modules.accounting,
-                    t.postingRules.title,
+                    p.title,
                     'accounting',
                 )}
             />
@@ -267,39 +389,32 @@ export default function PostingRulesPage() {
 
             <ContextualHelpPanel {...POSTING_RULES_HELP} />
 
-            <div className={compactDensity.filterBar}>
-                <select value={filterEventType} onChange={(e) => setFilterEventType(e.target.value)} className={compactDensity.formField}>
-                    <option value="">All events</option>
-                    {Object.entries(EVENT_TYPE_LABELS).map(([k, v]) => (
-                        <option key={k} value={k}>{v}</option>
-                    ))}
-                </select>
-                <select value={filterActive} onChange={(e) => setFilterActive(e.target.value)} className={compactDensity.formField}>
-                    <option value="">All statuses</option>
-                    <option value="active">Active only</option>
-                    <option value="inactive">Inactive only</option>
-                </select>
-            </div>
-
-            {loading ? (
-                <div className="text-center py-12 text-gray-400 text-sm">Loading posting rules...</div>
-            ) : (
-                <DataTable
-                    tableId="posting-rules"
-                    title={t.postingRules.title}
-                    columns={columns}
-                    data={filteredRules}
-                />
-            )}
+            <DataTable<PostingRule>
+                tableId="posting-rules"
+                title={p.title}
+                columns={columns}
+                data={filteredRules}
+                isLoading={loading}
+                emptyIcon={<Workflow className="h-10 w-10 text-gray-200" />}
+                searchPlaceholder={m.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+                getRowId={(row) => row.id}
+            />
 
             {editingRule && (
                 <ModalShell size="md" onBackdropClick={() => setEditingRule(null)}>
                     <div className="flex max-h-[90vh] flex-col overflow-hidden">
                         <ModalHeader
-                            title="Edit Posting Rule"
+                            title={p.editTitle}
                             subtitle={(
                                 <>
-                                    {EVENT_TYPE_LABELS[editingRule.eventType] ?? editingRule.eventType}
+                                    {eventLabel(editingRule.eventType)}
                                     {editingRule.conditionValue && (
                                         <span className="ms-1 font-mono text-xs bg-gray-100 px-1 rounded">{editingRule.conditionValue}</span>
                                     )}
@@ -313,7 +428,7 @@ export default function PostingRulesPage() {
                                 <div>
                                     <label className={`${compactDensity.formLabel} block mb-1`}>
                                         <span className="inline-flex items-center gap-1.5">
-                                            Debit Account <span className="text-red-500">*</span>
+                                            {p.columns.debitAccount} <span className="text-red-500">*</span>
                                             <HelpTooltip text={POSTING_RULES_FIELD_HELP.debit} side="right" />
                                         </span>
                                     </label>
@@ -321,7 +436,7 @@ export default function PostingRulesPage() {
                                         accounts={accounts}
                                         value={form.debitAccountId}
                                         onChange={(id) => setForm((f) => ({ ...f, debitAccountId: id }))}
-                                        ariaLabel="Debit Account"
+                                        ariaLabel={p.columns.debitAccount}
                                         placeholder={t.accountingShared.selectAccountPlaceholder}
                                         className={compactDensity.formField}
                                     />
@@ -329,7 +444,7 @@ export default function PostingRulesPage() {
                                 <div>
                                     <label className={`${compactDensity.formLabel} block mb-1`}>
                                         <span className="inline-flex items-center gap-1.5">
-                                            Credit Account <span className="text-red-500">*</span>
+                                            {p.columns.creditAccount} <span className="text-red-500">*</span>
                                             <HelpTooltip text={POSTING_RULES_FIELD_HELP.credit} side="right" />
                                         </span>
                                     </label>
@@ -337,7 +452,7 @@ export default function PostingRulesPage() {
                                         accounts={accounts}
                                         value={form.creditAccountId}
                                         onChange={(id) => setForm((f) => ({ ...f, creditAccountId: id }))}
-                                        ariaLabel="Credit Account"
+                                        ariaLabel={p.columns.creditAccount}
                                         placeholder={t.accountingShared.selectAccountPlaceholder}
                                         className={compactDensity.formField}
                                     />
@@ -348,7 +463,7 @@ export default function PostingRulesPage() {
                                 <div>
                                     <label className={`${compactDensity.formLabel} block mb-1`}>
                                         <span className="inline-flex items-center gap-1.5">
-                                            Priority
+                                            {p.columns.priority}
                                             <HelpTooltip text={POSTING_RULES_FIELD_HELP.priority} side="right" />
                                         </span>
                                     </label>
@@ -359,7 +474,7 @@ export default function PostingRulesPage() {
                                         onChange={(e) => setForm((f) => ({ ...f, priority: Number(e.target.value) }))}
                                         className={compactDensity.formField}
                                     />
-                                    <p className="text-xs text-gray-400 mt-1">Lower number = higher priority</p>
+                                    <p className="text-xs text-gray-400 mt-1">{p.priorityHint}</p>
                                 </div>
                                 <div className="flex flex-col justify-center">
                                     <label className="flex items-center gap-2 cursor-pointer">
@@ -370,11 +485,11 @@ export default function PostingRulesPage() {
                                             className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/40"
                                         />
                                         <span className={`${compactDensity.formLabel} inline-flex items-center gap-1.5`}>
-                                            Active
+                                            {p.active}
                                             <HelpTooltip text={POSTING_RULES_FIELD_HELP.active} side="right" />
                                         </span>
                                     </label>
-                                    <p className="text-xs text-gray-400 mt-1 ms-6">Inactive rules are skipped</p>
+                                    <p className="text-xs text-gray-400 mt-1 ms-6">{p.inactiveSkipped}</p>
                                 </div>
                             </div>
 
@@ -387,7 +502,7 @@ export default function PostingRulesPage() {
 
                         <ModalFooter>
                             <Button variant="secondary" onClick={() => setEditingRule(null)}>
-                                Cancel
+                                {t.common.cancel}
                             </Button>
                             <Button
                                 variant="primary"
@@ -395,7 +510,7 @@ export default function PostingRulesPage() {
                                 loading={saving}
                                 disabled={!form.debitAccountId || !form.creditAccountId}
                             >
-                                Save Rule
+                                {p.saveRule}
                             </Button>
                         </ModalFooter>
                     </div>

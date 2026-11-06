@@ -1,6 +1,9 @@
 export const reportsMessages = {
     consolidated: {
         title: "التقرير الموحّد",
+        period: "الفترة",
+        statsLabel: "الملخص الموحّد",
+        branches: "الفروع",
         description: "نظرة عامة على الإيرادات والمعاملات عبر الفروع",
         fromLabel: "من",
         toLabel: "إلى",
@@ -31,6 +34,10 @@ export const reportsMessages = {
     },
     branch: {
         title: "تقرير الفرع",
+        period: "الفترة",
+        statsLabel: "ملخص الفرع",
+        groupBy: "التجميع حسب",
+        groups: { day: "يوم", week: "أسبوع", month: "شهر" },
         description: "أداء مبيعات تفصيلي لفرع واحد",
         storeLabel: "المتجر",
         fromLabel: "من",

@@ -1,10 +1,11 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { SalesExchangesService } from './sales-exchanges.service';
-import { CreateSalesExchangeDto } from './sales-exchanges.dto';
+import { CreateSalesExchangeDto, SalesExchangeListQueryDto } from './sales-exchanges.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
-import { BranchListQueryDto } from '../common/branch-list-query.dto';
+import { readSalesDocumentListFilters } from '../common/sales-document-list-filters';
+import { readIdListQuery } from '../common/number-condition.util';
 import { BranchScopeService } from '../database/branch-scope.service';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
@@ -32,14 +33,24 @@ export class SalesExchangesController {
 
     @RequireAnyStorePermission(...SALES_READ)
     @Get()
-    async findAll(@Tenant() tenant: TenantContext, @Query() query: BranchListQueryDto) {
+    async findAll(@Tenant() tenant: TenantContext, @Query() query: SalesExchangeListQueryDto) {
         const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: SALES_READ });
         return this.exchangesService.findAll(tenant.tenantId, query.page, query.limit, {
-            timezone: tenant.timezone,
-            createdFrom: query.createdFrom,
-            createdTo: query.createdTo,
-            storeId,
+            ...this.listFilters(tenant, query, storeId),
+            sortBy: query.sortBy,
+            sortDir: query.sortDir,
         });
+    }
+
+    /**
+     * The stats strip above the exchanges list, over the same filters as
+     * `GET /sales-exchanges`. Declared before `:id`.
+     */
+    @RequireAnyStorePermission(...SALES_READ)
+    @Get('summary')
+    async summary(@Tenant() tenant: TenantContext, @Query() query: SalesExchangeListQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: SALES_READ });
+        return this.exchangesService.summary(tenant.tenantId, this.listFilters(tenant, query, storeId));
     }
 
     @RequireAnyStorePermission(...SALES_READ)
@@ -71,5 +82,12 @@ export class SalesExchangesController {
     @Get(':id/credit-note')
     creditNote(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.mushak.getExchangeCreditNote(tenant.tenantId, id);
+    }
+
+    private listFilters(tenant: TenantContext, query: SalesExchangeListQueryDto, storeId: string | undefined) {
+        return {
+            ...readSalesDocumentListFilters(query, { storeId, timezone: tenant.timezone }),
+            settlementModes: readIdListQuery(query.settlement),
+        };
     }
 }

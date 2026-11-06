@@ -1,6 +1,9 @@
 export const reportsMessages = {
     consolidated: {
         title: "समेकित रिपोर्ट",
+        period: "अवधि",
+        statsLabel: "समेकित सारांश",
+        branches: "शाखाएँ",
         description: "सभी शाखाओं का राजस्व और लेन-देन अवलोकन",
         fromLabel: "से",
         toLabel: "तक",
@@ -31,6 +34,10 @@ export const reportsMessages = {
     },
     branch: {
         title: "शाखा रिपोर्ट",
+        period: "अवधि",
+        statsLabel: "शाखा सारांश",
+        groupBy: "समूह बनाएँ",
+        groups: { day: "दिन", week: "सप्ताह", month: "महीना" },
         description: "एकल शाखा का विस्तृत बिक्री प्रदर्शन",
         storeLabel: "स्टोर",
         fromLabel: "से",

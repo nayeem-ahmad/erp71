@@ -3,14 +3,20 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { Plus, Tag, Pencil, Trash2, X, Upload } from 'lucide-react';
+import { Plus, Tag, Pencil, Trash2, X, Upload, Eye, Star, Percent, Package, FolderTree } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
+import type { NumberCondition } from '@/lib/number-condition';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
+import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { toast } from '@/lib/toast';
+import { routes } from '@/lib/routes';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
-import { PageShell } from '@/components/ui';
+import { ConfirmDialog, PageShell, StatusBadge, buttonClassName } from '@/components/ui';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
@@ -29,27 +35,48 @@ interface PriceList {
 
 const columnHelper = createColumnHelper<PriceList>();
 
-function formatOverallDiscount(list: PriceList) {
-    if (!list.overall_discount_type || list.overall_discount_value == null) return '—';
-    const value = Number(list.overall_discount_value);
-    if (list.overall_discount_type === 'PERCENTAGE') return `${value}%`;
-    return `৳${value}`;
-}
+/** The discount chip's values: the list's overall discount type, or none. */
+type DiscountKind = 'PERCENTAGE' | 'FIXED_AMOUNT' | 'NONE';
 
+const discountKindOf = (list: PriceList): DiscountKind =>
+    list.overall_discount_type && list.overall_discount_value != null && Number(list.overall_discount_value) > 0
+        ? list.overall_discount_type
+        : 'NONE';
+/** The overall discount as the list shows it; null when the list has none. */
+function discountLabel(list: PriceList, locale: string): string | null {
+    const kind = discountKindOf(list);
+    if (kind === 'NONE') return null;
+    const value = Number(list.overall_discount_value);
+    return kind === 'PERCENTAGE' ? `${value}%` : formatBDT(value, { locale });
+}
+const productsOf = (list: PriceList) => list._count?.items ?? 0;
+const groupsOf = (list: PriceList) => list._count?.customerGroups ?? 0;
+
+/**
+ * The price-list master. Every list is loaded — a shop keeps a few — so the
+ * toolbar chips and the strip work on the rows in the browser.
+ */
 export default function PriceListsPage() {
-    const { t } = useI18n();
+    const { t, fmt, locale } = useI18n();
+    const copy = t.salesMasterLists.priceLists;
     const [lists, setLists] = useState<PriceList[]>([]);
     const [loading, setLoading] = useState(true);
     const [editingList, setEditingList] = useState<PriceList | null>(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<PriceList | null>(null);
+    const [deleting, setDeleting] = useState(false);
+    const [search, setSearch] = useState('');
+    const [discountKinds, setDiscountKinds] = useState<string[]>([]);
+    const [productCount, setProductCount] = useState<NumberCondition | null>(null);
+    const [groupCount, setGroupCount] = useState<NumberCondition | null>(null);
 
-    useEffect(() => { loadLists(); }, []);
+    useEffect(() => { void loadLists(); }, []);
 
     const loadLists = async () => {
         try {
             const data = await api.getPriceLists();
-            setLists(data);
+            setLists(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Failed to load price lists', error);
         } finally {
@@ -65,18 +92,90 @@ export default function PriceListsPage() {
         }
         setIsFormOpen(false);
         setEditingList(null);
-        loadLists();
+        void loadLists();
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm(t.priceLists.deleteConfirm)) return;
+    const confirmDelete = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
         try {
-            await api.deletePriceList(id);
-            loadLists();
+            await api.deletePriceList(deleteTarget.id);
+            setDeleteTarget(null);
+            toast.success(copy.deleted);
+            void loadLists();
         } catch (err: any) {
-            alert(err.message || t.priceLists.deleteFailed);
+            toast.error(err?.message || t.priceLists.deleteFailed);
+        } finally {
+            setDeleting(false);
         }
     };
+
+    const filtered = useMemo(
+        () => lists.filter((list) => {
+            if (!matchesAnyOf(discountKinds, discountKindOf(list))) return false;
+            if (!matchesNumberCondition(productsOf(list), productCount)) return false;
+            if (!matchesNumberCondition(groupsOf(list), groupCount)) return false;
+            return matchesSearch(search, list.name, list.description);
+        }),
+        [lists, discountKinds, productCount, groupCount, search],
+    );
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'discount',
+            type: 'multi-select',
+            label: t.priceLists.overallDiscount,
+            value: discountKinds,
+            onChange: setDiscountKinds,
+            options: [
+                { value: 'PERCENTAGE', label: copy.discountTypes.percentage },
+                { value: 'FIXED_AMOUNT', label: copy.discountTypes.fixed },
+                { value: 'NONE', label: copy.discountTypes.none },
+            ],
+        },
+        {
+            id: 'products',
+            type: 'number',
+            label: t.priceLists.columns.products,
+            value: productCount,
+            onChange: setProductCount,
+        },
+        {
+            id: 'groups',
+            type: 'number',
+            label: t.priceLists.columns.groups,
+            value: groupCount,
+            onChange: setGroupCount,
+        },
+    ], [t, copy, discountKinds, productCount, groupCount]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const defaultList = filtered.find((list) => list.is_default);
+        const items: ListStat[] = [
+            { id: 'count', icon: <Tag aria-hidden />, label: copy.stats.lists, value: n(filtered.length) },
+            { id: 'default', icon: <Star aria-hidden />, label: copy.stats.defaultList, value: defaultList?.name ?? copy.none },
+            {
+                id: 'discount',
+                icon: <Percent aria-hidden />,
+                label: copy.stats.withDiscount,
+                value: n(filtered.filter((list) => discountKindOf(list) !== 'NONE').length),
+            },
+            {
+                id: 'products',
+                icon: <Package aria-hidden />,
+                label: copy.stats.products,
+                value: n(filtered.reduce((sum, list) => sum + productsOf(list), 0)),
+            },
+            {
+                id: 'groups',
+                icon: <FolderTree aria-hidden />,
+                label: copy.stats.groups,
+                value: n(filtered.reduce((sum, list) => sum + groupsOf(list), 0)),
+            },
+        ];
+        return { items, loading, label: copy.statsLabel };
+    }, [filtered, loading, locale, copy]);
 
     const columns: ColumnDef<PriceList, any>[] = useMemo(
         () => [
@@ -85,123 +184,148 @@ export default function PriceListsPage() {
                 cell: (info) => {
                     const list = info.row.original;
                     return (
-                        <div>
-                            <Link href={`/sales/price-lists/${list.id}`} className="block text-sm font-bold text-blue-600 hover:text-blue-800">
-                                {list.name}
-                            </Link>
-                            <span className="block text-xs text-gray-400">{list.description || '—'}</span>
-                            {list.is_default && (
-                                <span className="inline-block mt-1 text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
-                                    {t.priceLists.defaultBadge}
-                                </span>
-                            )}
+                        <div className="min-w-0">
+                            <span className="flex items-center gap-2">
+                                <Link href={routes.sales.priceListDetail(list.id)} className="text-blue-600 hover:underline">
+                                    {list.name}
+                                </Link>
+                                {list.is_default && <StatusBadge tone="info">{t.priceLists.defaultBadge}</StatusBadge>}
+                            </span>
+                            {list.description && <span className="block truncate text-gray-500">{list.description}</span>}
                         </div>
                     );
                 },
+                size: 260,
             }),
-            columnHelper.display({
+            columnHelper.accessor((row) => Number(row.overall_discount_value ?? 0), {
                 id: 'overallDiscount',
                 header: t.priceLists.columns.overallDiscount,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-gray-700">
-                        {formatOverallDiscount(info.row.original)}
-                    </span>
-                ),
+                cell: (info) => discountLabel(info.row.original, locale) ?? <span className="text-gray-400">—</span>,
+                size: 150,
+                meta: { align: 'end' },
             }),
-            columnHelper.display({
+            columnHelper.accessor(productsOf, {
                 id: 'products',
                 header: t.priceLists.columns.products,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-gray-600">
-                        {info.row.original._count?.items ?? 0}
-                    </span>
-                ),
+                cell: (info) => info.getValue().toLocaleString(locale),
+                size: 110,
+                meta: { align: 'end' },
             }),
-            columnHelper.display({
+            columnHelper.accessor(groupsOf, {
                 id: 'groups',
                 header: t.priceLists.columns.groups,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-gray-600">
-                        {info.row.original._count?.customerGroups ?? 0}
-                    </span>
-                ),
+                cell: (info) => info.getValue().toLocaleString(locale),
+                size: 140,
+                meta: { align: 'end', hideOnMobile: true },
             }),
             columnHelper.display({
                 id: 'actions',
-                header: '',
+                header: t.common.actions,
                 cell: (info) => {
                     const list = info.row.original;
+                    const blocked = list.is_default ? copy.defaultLocked : groupsOf(list) > 0 ? copy.inUse : null;
                     return (
-                        <div className="flex items-center gap-2 justify-end">
-                            <button onClick={() => { setEditingList(list); setIsFormOpen(true); }} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-blue-600">
-                                <Pencil className="w-4 h-4" />
-                            </button>
-                            <button onClick={() => handleDelete(list.id)} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600">
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        </div>
+                        <RowActions>
+                            <RowActionButton icon={<Eye />} label={t.common.view} href={routes.sales.priceListDetail(list.id)} />
+                            <RowActionButton
+                                icon={<Pencil />}
+                                label={t.common.edit}
+                                onClick={() => { setEditingList(list); setIsFormOpen(true); }}
+                            />
+                            <RowActionButton
+                                icon={<Trash2 />}
+                                label={blocked ?? t.common.delete}
+                                intent="danger"
+                                disabled={blocked !== null}
+                                onClick={() => setDeleteTarget(list)}
+                            />
+                        </RowActions>
                     );
                 },
+                enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
+                size: 130,
             }),
         ],
-        [t],
+        [t, copy, locale],
     );
 
     return (
         <PageShell>
-                <PageHeader
-                    title={t.priceLists.title}
-                    subtitle={t.priceLists.subtitle}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.sales,
-                        t.priceLists.title,
-                        'sales',
-                    )}
-                    actions={
-                        <>
-                            <button
-                                onClick={() => setImportOpen(true)}
-                                className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
-                            >
-                                <Upload className="w-4 h-4 me-1.5" />
-                                Import
-                            </button>
-                            <button onClick={() => { setEditingList(null); setIsFormOpen(true); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors">
-                                <Plus className="w-4 h-4" /> {t.priceLists.newList}
-                            </button>
-                        </>
-                    }
-                />
-
-                {isFormOpen && (
-                    <ListForm
-                        list={editingList}
-                        onSave={handleSave}
-                        onCancel={() => { setIsFormOpen(false); setEditingList(null); }}
-                    />
+            <PageHeader
+                title={t.priceLists.title}
+                subtitle={t.priceLists.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.sales,
+                    t.priceLists.title,
+                    'sales',
                 )}
+                actions={(
+                    <>
+                        <button type="button" onClick={() => setImportOpen(true)} className={buttonClassName({ variant: 'secondary' })}>
+                            <Upload className="w-4 h-4" />
+                            {t.common.import}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setEditingList(null); setIsFormOpen(true); }}
+                            className={buttonClassName()}
+                        >
+                            <Plus className="w-4 h-4" />
+                            {t.priceLists.newList}
+                        </button>
+                    </>
+                )}
+            />
 
-                <DataTable<PriceList>
-                    tableId="price-lists"
-                    columns={columns}
-                    data={lists}
-                    title={t.priceLists.title}
-                    isLoading={loading}
-                    emptyMessage={t.priceLists.emptyMessage}
-                    emptyIcon={<Tag className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.priceLists.searchPlaceholder}
+            {isFormOpen && (
+                <ListForm
+                    list={editingList}
+                    onSave={handleSave}
+                    onCancel={() => { setIsFormOpen(false); setEditingList(null); }}
                 />
+            )}
 
-                <ImportDialog
-                    open={importOpen}
-                    onClose={() => setImportOpen(false)}
-                    entityLabel="Price Lists"
-                    fields={IMPORT_FIELDS}
-                    importFn={(rows, mode) => api.importPriceLists(rows, mode)}
-                    onSuccess={() => void loadLists()}
-                />
-            
+            <DataTable<PriceList>
+                tableId="price-lists"
+                columns={columns}
+                data={filtered}
+                title={t.priceLists.title}
+                isLoading={loading}
+                emptyMessage={t.priceLists.emptyMessage}
+                emptyIcon={<Tag className="w-16 h-16 text-gray-200" />}
+                searchPlaceholder={t.priceLists.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+            />
+
+            <ConfirmDialog
+                open={deleteTarget !== null}
+                title={fmt(copy.deleteTitle, { name: deleteTarget?.name ?? '' })}
+                prompt={copy.deletePrompt}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                loading={deleting}
+                danger
+                onConfirm={() => void confirmDelete()}
+                onCancel={() => { if (!deleting) setDeleteTarget(null); }}
+            />
+
+            <ImportDialog
+                open={importOpen}
+                onClose={() => setImportOpen(false)}
+                entityLabel={t.priceLists.title}
+                fields={IMPORT_FIELDS}
+                importFn={(rows, mode) => api.importPriceLists(rows, mode)}
+                onSuccess={() => void loadLists()}
+            />
         </PageShell>
     );
 }

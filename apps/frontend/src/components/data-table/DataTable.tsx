@@ -68,7 +68,7 @@ import {
     PINNED_FIRST_COLUMN_ID,
     PINNED_LAST_COLUMN_ID,
 } from './column-order';
-import { exportToCSV, exportToExcel, exportToPDF, printTable, buildExportMatrix, exportableColumnLabel, isExportableColumnId, valueFromColumn } from './export-utils';
+import { exportToCSV, exportToExcel, exportToPDF, printTable, buildExportMatrix, exportableColumnLabel, isExportableColumnId, valueFromColumn, type PrintTableFooter } from './export-utils';
 import { renderHeaderHtml, sheetPaper } from '@/lib/print';
 import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
@@ -131,6 +131,12 @@ export interface DataTableProps<T> {
     /** Show the built-in global search input in the toolbar (default: true). Set false when the caller renders its own search box. */
     showSearch?: boolean;
     /**
+     * Show the built-in Print button (default: true), which prints the rows as
+     * a plain table. Set false when the page has its own formatted print — a
+     * statement with its totals — so the toolbar does not offer a second one.
+     */
+    showPrint?: boolean;
+    /**
      * The toolbar search box reports each change here and does not filter the
      * rows on screen. A server-paginated list debounces this and sends it with
      * the query. Leave unset and the box filters the loaded rows.
@@ -192,6 +198,15 @@ export interface DataTableProps<T> {
      * toolbar folds the strip away, and this browser remembers it.
      */
     stats?: { items: ListStat[]; loading?: boolean; label: string };
+    /**
+     * Names the totals row. The row itself comes from the columns: a column
+     * with a TanStack `footer` (`footer: ({ table }) => formatBDT(sum)`) gets a
+     * cell under it, which follows the column's visibility, order, width and
+     * `meta.align`. The label spans the leading columns that have no footer of
+     * their own, so hiding or moving the first column does not lose it. The
+     * built-in Print adds the row under the printed rows.
+     */
+    footerLabel?: string;
     /** Opt-in server-side pagination + sorting. When set, the table drives page/size/sort
      *  through these callbacks and uses `total` for the footer count instead of the
      *  client row count. Pages using this pass `onSearchChange` so the toolbar box
@@ -452,6 +467,7 @@ export default function DataTable<T>({
     toolbarActions,
     searchPlaceholder,
     showSearch = true,
+    showPrint = true,
     onSearchChange,
     searchValue: searchValueProp,
     filterPresets,
@@ -466,6 +482,7 @@ export default function DataTable<T>({
     filters,
     filterLayout = 'wrap',
     stats,
+    footerLabel,
 }: DataTableProps<T>) {
     const { t } = useI18n();
     // Lazy: every list page renders this table, but printing is a rare click.
@@ -936,6 +953,20 @@ export default function DataTable<T>({
     );
 
     const toolbarBtnBase = `${d.toolbarBtn} ${d.toolbarBtnIdle}`;
+    /** A totals row, from the columns that define a `footer`. */
+    const hasFooter = table.getAllLeafColumns().some((column) => column.columnDef.footer != null);
+
+    /** The totals row as drawn — label and each column's text — for the printed copy. */
+    const footerForPrint = (): PrintTableFooter | undefined => {
+        const element = tableRef.current;
+        if (!hasFooter || !element) return undefined;
+        const cells: Record<string, string> = {};
+        element.querySelectorAll<HTMLElement>('tfoot td[data-column-id]').forEach((cell) => {
+            const text = cell.textContent?.trim();
+            if (text) cells[cell.dataset.columnId!] = text;
+        });
+        return { label: footerLabel, cells };
+    };
     /** The one-row toolbar, on a screen wide enough to hold it. */
     const rowLayout = filterLayout === 'row' && isMdUp;
     const iconOnlyToolbar = isCompact || rowLayout;
@@ -1208,6 +1239,7 @@ export default function DataTable<T>({
                         </button>
 
                         {/* Print */}
+                        {showPrint && (
                         <button
                             onClick={async () => {
                                 // The branch the page is filtered to; company
@@ -1227,7 +1259,7 @@ export default function DataTable<T>({
                                     html: renderHeaderHtml(header.headerConfig, headerContext, printPaper),
                                     config: header.headerConfig,
                                     context: headerContext,
-                                }, printPaper);
+                                }, printPaper, footerForPrint());
                             }}
                             className={toolbarBtnBase}
                             title={t.common.dataTable.print}
@@ -1235,6 +1267,7 @@ export default function DataTable<T>({
                             <Printer className="w-3.5 h-3.5" />
                             <span className={iconOnlyToolbar ? 'sr-only' : undefined}>{t.common.dataTable.print}</span>
                         </button>
+                        )}
 
                         {/* Custom toolbar actions */}
                         {toolbarActions}
@@ -1440,24 +1473,42 @@ export default function DataTable<T>({
                                     </tr>
                                 ))}
                             </tbody>
-                            {table.getAllLeafColumns().some((column) => column.columnDef.footer != null) ? (
+                            {hasFooter ? (
                                 <tfoot>
-                                    {table.getFooterGroups().map((footerGroup) => (
-                                        <tr key={footerGroup.id} className="border-t border-gray-200 bg-gray-50">
-                                            {footerGroup.headers.map((header) => (
-                                                <td
-                                                    key={header.id}
-                                                    data-column-id={header.column.id}
-                                                    className={`${bodyCellClass} font-semibold ${TEXT_ALIGN_CLASS[columnAlign(header.column)]}`}
-                                                    style={{ width: columnWidthStyle(header.column).width }}
-                                                >
-                                                    {header.isPlaceholder
-                                                        ? null
-                                                        : flexRender(header.column.columnDef.footer, header.getContext())}
-                                                </td>
-                                            ))}
-                                        </tr>
-                                    ))}
+                                    {table.getFooterGroups().map((footerGroup, groupIndex) => {
+                                        // The label takes the leading cells with nothing of their own,
+                                        // on the leaf row (the first footer group).
+                                        const leading = footerLabel && groupIndex === 0
+                                            ? footerGroup.headers.findIndex((header) => header.column.columnDef.footer != null)
+                                            : 0;
+                                        const labelSpan = leading < 0 ? footerGroup.headers.length : leading;
+                                        return (
+                                            <tr key={footerGroup.id} className="border-t border-gray-200 bg-gray-50">
+                                                {labelSpan > 0 ? (
+                                                    <th
+                                                        scope="row"
+                                                        colSpan={labelSpan}
+                                                        data-footer-label
+                                                        className={`${bodyCellClass} text-start font-semibold text-gray-700`}
+                                                    >
+                                                        {footerLabel}
+                                                    </th>
+                                                ) : null}
+                                                {footerGroup.headers.slice(labelSpan).map((header) => (
+                                                    <td
+                                                        key={header.id}
+                                                        data-column-id={header.column.id}
+                                                        className={`${bodyCellClass} font-semibold text-gray-900 ${TEXT_ALIGN_CLASS[columnAlign(header.column)]}`}
+                                                        style={{ width: columnWidthStyle(header.column).width }}
+                                                    >
+                                                        {header.isPlaceholder
+                                                            ? null
+                                                            : flexRender(header.column.columnDef.footer, header.getContext())}
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        );
+                                    })}
                                 </tfoot>
                             ) : null}
                         </table>

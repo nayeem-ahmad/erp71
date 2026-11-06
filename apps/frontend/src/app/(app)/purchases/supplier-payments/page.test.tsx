@@ -121,11 +121,13 @@ describe('SupplierPaymentsPage — summary', () => {
         render(<SupplierPaymentsPage />);
         await screen.findByText('SP-00007');
 
-        const tile = (label: string) => screen.getByText(label, { selector: 'p' }).parentElement as HTMLElement;
-        expect(tile('Paid')).toHaveTextContent('250.00');
-        expect(tile('Paid')).toHaveTextContent('Bank');
-        expect(tile('Refunds received')).toHaveTextContent('40.00');
-        expect(tile('Net paid')).toHaveTextContent('210.00');
+        const strip = screen.getByRole('region', { name: 'Payments summary' });
+        const tile = (label: string) => within(strip).getByText(label, { selector: 'p' }).parentElement as HTMLElement;
+        expect(tile('Paid')).toHaveTextContent('250');
+        expect(tile('Refunds received')).toHaveTextContent('40');
+        expect(tile('Net paid')).toHaveTextContent('210');
+        // What was paid out, by its biggest method.
+        expect(tile('Top method')).toHaveTextContent('Bank');
     });
 });
 

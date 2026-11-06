@@ -211,7 +211,9 @@ export default function HrLeaveBalanceReportPage() {
             type: 'select',
             label: c.year,
             value: String(year),
-            // A balance is always for some year: All goes back to this one.
+            // A balance is always for some year; Clear all goes back to this one.
+            required: true,
+            defaultValue: String(new Date().getFullYear()),
             onChange: (next) => setYear(next ? Number(next) : new Date().getFullYear()),
             options: yearOptions().map((option) => ({ value: String(option), label: String(option) })),
         },

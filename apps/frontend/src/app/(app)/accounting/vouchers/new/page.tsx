@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ChevronLeft, CircleCheck, Copy, Plus, Trash2 } from 'lucide-react';
 import { AccountCategory, VoucherType } from '@erp71/shared-types';
 import { api } from '@/lib/api';
+import { tenantDateOnly } from '@/lib/created-range';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import {
@@ -102,7 +103,7 @@ function AccountingVouchersPageContent() {
     const searchParams = useSearchParams();
     const [voucherType, setVoucherType] = useState<VoucherType>(VoucherType.CASH_PAYMENT);
     const [voucherNumber, setVoucherNumber] = useState('');
-    const [voucherDate, setVoucherDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [voucherDate, setVoucherDate] = useState(() => tenantDateOnly());
     const [description, setDescription] = useState('');
     const [referenceNumber, setReferenceNumber] = useState('');
     const [accounts, setAccounts] = useState<VoucherAccount[]>([]);
@@ -231,7 +232,7 @@ function AccountingVouchersPageContent() {
                 // The duplicate link is reachable from the edit form, which keeps
                 // this component mounted — so the source's own date and files have
                 // to be dropped rather than merely left unset.
-                setVoucherDate(new Date().toISOString().slice(0, 10));
+                setVoucherDate(tenantDateOnly());
                 setAttachments([]);
                 setCreatedVoucher(null);
                 setSubmitError('');
@@ -521,7 +522,7 @@ function AccountingVouchersPageContent() {
     const resetForm = () => {
         setDescription('');
         setReferenceNumber('');
-        setVoucherDate(new Date().toISOString().slice(0, 10));
+        setVoucherDate(tenantDateOnly());
         setRows([createEmptyRow(), createEmptyRow()]);
         setAttachments([]);
     };

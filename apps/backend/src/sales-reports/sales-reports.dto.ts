@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { LineItemSearchDto } from '../common/line-item-search';
 import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
@@ -362,14 +362,48 @@ export class GetCostCoverageDto {
 export const SALES_LINE_ITEM_SORTS = ['date', 'invoice', 'customer', 'product', 'quantity', 'unitPrice'] as const;
 export type SalesLineItemSort = (typeof SALES_LINE_ITEM_SORTS)[number];
 
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+/** One id or a comma-separated set of them. */
+const UUID_LIST = new RegExp(`^${UUID}(,${UUID})*$`, 'i');
+/** The same, where `none` also stands for "no customer" — a walk-in sale. */
+const CUSTOMER_ID_LIST = new RegExp(`^(${UUID}|none)(,(${UUID}|none))*$`, 'i');
+
+/** Whether the lines asked for have had anything returned against them. */
+export const SALES_LINE_RETURNED = ['yes', 'no'] as const;
+export type SalesLineReturned = (typeof SALES_LINE_RETURNED)[number];
+
 /**
- * Every line of every completed sale, narrowed by any mix of period, customer,
- * product, branch and free text.
+ * Every line of every completed sale, narrowed by any mix of period, customers,
+ * products, branch, price, quantity, returns and free text — the filter row of
+ * the Sales Line Items report.
  */
 export class GetSalesLineItemsDto extends LineItemSearchDto {
+    /** One customer id or a comma-separated set; `none` is a walk-in sale. */
     @IsOptional()
-    @IsUUID()
+    @Matches(CUSTOMER_ID_LIST, { message: '$property must be customer ids or none, comma-separated' })
     customerId?: string;
+
+    /**
+     * One product id or a comma-separated set. Redeclared over the shared
+     * search's single id: class-validator keeps a subclass's own validator for a
+     * property in place of the one it inherits.
+     */
+    @IsOptional()
+    @Matches(UUID_LIST, { message: '$property must be product ids, comma-separated' })
+    productId?: string;
+
+    /** `gt:100`, `between:100,500` — see `readNumberConditionQuery`. */
+    @IsOptional()
+    @IsString()
+    unitPrice?: string;
+
+    @IsOptional()
+    @IsString()
+    quantity?: string;
+
+    @IsOptional()
+    @IsIn(SALES_LINE_RETURNED)
+    returned?: SalesLineReturned;
 
     @IsOptional()
     @IsIn(SALES_LINE_ITEM_SORTS)

@@ -49,6 +49,52 @@ export function findActiveAppKey(modules: ResolvedNavModule[], pathname: string)
     return best?.key ?? null;
 }
 
+/** A nav link's target: where it points, and whether it covers the pages under it. */
+export interface NavLinkTarget {
+    href: string;
+    exact?: boolean;
+}
+
+/** Every link the nav shows, query stripped — what a link's highlight competes with. */
+export function collectNavLinkTargets(modules: ResolvedNavModule[]): NavLinkTarget[] {
+    const targets: NavLinkTarget[] = [];
+    for (const navModule of modules) {
+        if (navModule.href) targets.push({ href: stripQuery(navModule.href) });
+        for (const child of navModule.children ?? []) {
+            if (isNavSubgroup(child)) {
+                for (const link of child.children) targets.push({ href: stripQuery(link.href), exact: link.exact });
+            } else if (!child.section) {
+                targets.push({ href: stripQuery(child.href), exact: child.exact });
+            }
+        }
+    }
+    return targets;
+}
+
+function linkOwns(href: string, pathname: string, exact = false): boolean {
+    if (exact) return pathname === href;
+    return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/**
+ * Whether a nav link is the current page's. A link covers the pages under it
+ * (unless `exact`), but when a longer link in the nav covers the page too, that
+ * one is the page's and this one stays dark — so Bank Reconciliation
+ * (`/accounting/reconciliation/bank`) lights alone, not with Posting Exceptions
+ * (`/accounting/reconciliation`) beside it.
+ */
+export function isNavLinkActive(
+    href: string,
+    pathname: string,
+    targets: readonly NavLinkTarget[],
+    exact = false,
+): boolean {
+    if (href === routes.home) return pathname === routes.home;
+    if (!linkOwns(href, pathname, exact)) return false;
+    const own = stripQuery(href);
+    return !targets.some((target) => target.href.length > own.length && linkOwns(target.href, pathname, target.exact));
+}
+
 function firstLink(children: ResolvedNavChild[]): string | null {
     for (const child of children) {
         if (isNavSubgroup(child)) {

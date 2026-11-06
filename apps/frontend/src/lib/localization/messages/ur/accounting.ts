@@ -461,9 +461,6 @@ export const accountingMessages = {
         loadAccountsFailed: 'لیجر اکاؤنٹ کے اختیارات لوڈ نہیں ہو سکے۔',
         openJournal: 'جرنل کھولیں',
         openVoucherDetail: 'تازہ ترین واؤچر کی تفصیل کھولیں',
-        accountAria: 'لیجر اکاؤنٹ',
-        fromDateAria: 'لیجر کی ابتدائی تاریخ',
-        toDateAria: 'لیجر کی اختتامی تاریخ',
         columns: {
             voucherNumber: 'واؤچر نمبر',
             date: 'تاریخ',
@@ -491,10 +488,6 @@ export const accountingMessages = {
         open: 'کھولیں',
         accountingJournal: 'اکاؤنٹنگ جرنل',
         emptyMessage: 'منتخب فلٹرز کے لیے کوئی واؤچر نہیں ملا',
-        searchPlaceholder: 'جرنل کی قطاریں واؤچر نمبر، تفصیل یا قسم سے تلاش کریں...',
-        voucherTypeAria: 'جرنل واؤچر کی قسم',
-        fromDateAria: 'جرنل کی ابتدائی تاریخ',
-        toDateAria: 'جرنل کی اختتامی تاریخ',
         detail: {
             loading: 'واؤچر کی تفصیل لوڈ ہو رہی ہے...',
             loadFailed: 'واؤچر کی تفصیل لوڈ نہیں ہو سکی۔',
@@ -545,7 +538,6 @@ export const accountingMessages = {
             editVoucher: 'واؤچر میں ترمیم',
             saveChanges: 'تبدیلیاں محفوظ کریں',
             emptyMessage: 'منتخب فلٹرز کے لیے کوئی واؤچر نہیں ملا',
-            searchPlaceholder: 'واؤچر نمبر، حوالہ یا قسم سے تلاش کریں...',
             deleteConfirm: 'واؤچر {voucherNumber} حذف کریں؟',
             deleteSuccess: 'واؤچر حذف ہو گیا۔',
             deleteFailed: 'واؤچر حذف نہیں ہو سکا۔',
