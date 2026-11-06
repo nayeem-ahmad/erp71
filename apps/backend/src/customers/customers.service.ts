@@ -82,6 +82,15 @@ const CUSTOMER_FILTERABLE: FilterableMap<Prisma.CustomerWhereInput> = {
 };
 
 /** Amounts below this are rounding dust, not money. Matches customer-credit.utils. */
+/** A customer's most recent sale, as the customer list shows it. */
+export interface CustomerLastSale {
+    id: string;
+    serial_number: string;
+    reference_number: string | null;
+    sale_date: Date;
+    total_amount: number;
+}
+
 const AMOUNT_EPSILON = 0.005;
 
 const DISCOUNT_LEG = CUSTOMER_PAYMENT_DISCOUNT_LEG;
@@ -501,7 +510,58 @@ export class CustomersService {
             this.db.customer.count({ where: filtered }),
         ]);
 
-        return paginate(items.map(c => this.decryptCustomer(c)), total, page, limit);
+        const lastSales = await this.lastSalesFor(tenantId, items.map(c => c.id), opts?.scope ?? null);
+        return paginate(
+            items.map(c => ({ ...this.decryptCustomer(c), last_sale: lastSales.get(c.id) ?? null })),
+            total,
+            page,
+            limit,
+        );
+    }
+
+    /**
+     * Each customer's most recent sale — the list's "Last sale" column. One
+     * query for the whole page (DISTINCT ON over the `(tenant_id, customer_id)`
+     * index) rather than a nested `take: 1` include, which Prisma 5 resolves by
+     * loading every sale of every customer on the page. Drafts and cancelled
+     * entries are not sales the customer made; a limited member sees only the
+     * sales at their own branches, as on the customer's detail page.
+     */
+    private async lastSalesFor(
+        tenantId: string,
+        customerIds: string[],
+        scope: CustomerScope,
+    ): Promise<Map<string, CustomerLastSale>> {
+        const result = new Map<string, CustomerLastSale>();
+        if (customerIds.length === 0) return result;
+        const branchFilter = scope
+            ? scope.length === 0
+                ? Prisma.sql`AND FALSE`
+                : Prisma.sql`AND store_id IN (${Prisma.join([...scope])})`
+            : Prisma.empty;
+        const rows = await this.db.$queryRaw<
+            { id: string; customer_id: string; serial_number: string; reference_number: string | null; sale_date: Date; total_amount: Prisma.Decimal }[]
+        >`
+            SELECT DISTINCT ON (customer_id)
+                id, customer_id, serial_number, reference_number, sale_date, total_amount
+            FROM "Sale"
+            WHERE tenant_id = ${tenantId}
+              AND customer_id IN (${Prisma.join(customerIds)})
+              AND status NOT IN ('CANCELLED', 'DRAFT')
+              ${branchFilter}
+            ORDER BY customer_id, sale_date DESC, created_at DESC, id DESC
+        `;
+        for (const row of rows ?? []) {
+            if (!row?.customer_id) continue;
+            result.set(row.customer_id, {
+                id: row.id,
+                serial_number: row.serial_number,
+                reference_number: row.reference_number,
+                sale_date: row.sale_date,
+                total_amount: Number(row.total_amount),
+            });
+        }
+        return result;
     }
 
     /** A limited member sees the customer's sales at their own branches only. */
