@@ -1,4 +1,62 @@
 /** Accounting list UI (Sales list pattern) — books pages. */
 export const accountingBooksUiMessages = {
-    accountingBooksUi: {},
+    accountingBooksUi: {
+        common: {
+            voucherType: 'Jenis baucar',
+            side: 'Pihak',
+            entries: 'Entri',
+            openingBalance: 'Baki pembukaan',
+            closingBalance: 'Baki penutupan',
+            totalDebit: 'Jumlah debit',
+            totalCredit: 'Jumlah kredit',
+            neutral: 'Neutral',
+        },
+        ledger: {
+            subtitle: 'Semak satu akaun pada satu masa dengan baki pembukaan, pergerakan tempoh, kedudukan penutupan dan butiran baucar.',
+            loadFailed: 'Gagal memuatkan laporan lejar.',
+            statsLabel: 'Ringkasan lejar',
+        },
+        cashbook: {
+            loadFailed: 'Gagal memuatkan buku tunai',
+            statsLabel: 'Ringkasan buku tunai',
+            flow: 'Penerimaan atau bayaran',
+            totalReceipts: 'Jumlah penerimaan',
+            totalPayments: 'Jumlah bayaran',
+        },
+        bankbook: {
+            loadFailed: 'Gagal memuatkan buku bank',
+            statsLabel: 'Ringkasan buku bank',
+            bankAccount: 'Akaun bank',
+            flow: 'Deposit atau pengeluaran',
+            totalDeposits: 'Jumlah deposit',
+            totalWithdrawals: 'Jumlah pengeluaran',
+        },
+        expenseReports: {
+            statsLabel: 'Ringkasan laporan perbelanjaan',
+            months: 'Bulan',
+            periods: 'Tempoh',
+            highestMonth: 'Bulan tertinggi',
+            highestPeriod: 'Tempoh tertinggi',
+            topHead: 'Kepala teratas',
+        },
+        trialBalance: {
+            statsLabel: 'Ringkasan imbangan duga',
+            accountType: 'Jenis akaun',
+            accounts: 'Akaun',
+            rows: 'Baris',
+            branches: 'Cawangan',
+            searchPlaceholder: 'Cari mengikut kod, akaun atau kumpulan…',
+        },
+        cashFlow: {
+            statsLabel: 'Ringkasan aliran tunai',
+            operating: 'Operasi',
+            investing: 'Pelaburan',
+            financing: 'Pembiayaan',
+            netSection: '{label} bersih',
+            openingCash: 'Baki tunai pembukaan',
+            closingCash: 'Baki tunai penutupan',
+            searchPlaceholder: 'Cari aktiviti…',
+            noMatches: 'Tiada aktiviti sepadan dengan carian',
+        },
+    },
 } as const;

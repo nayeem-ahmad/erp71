@@ -1,4 +1,62 @@
 /** Accounting list UI (Sales list pattern) — books pages. */
 export const accountingBooksUiMessages = {
-    accountingBooksUi: {},
+    accountingBooksUi: {
+        common: {
+            voucherType: 'واؤچر کی قسم',
+            side: 'جانب',
+            entries: 'اندراجات',
+            openingBalance: 'ابتدائی بیلنس',
+            closingBalance: 'اختتامی بیلنس',
+            totalDebit: 'کل ڈیبٹ',
+            totalCredit: 'کل کریڈٹ',
+            neutral: 'غیر جانبدار',
+        },
+        ledger: {
+            subtitle: 'ایک وقت میں ایک اکاؤنٹ کا جائزہ لیں — ابتدائی بیلنس، مدت کی تبدیلی، اختتامی پوزیشن اور واؤچر کی تفصیل کے ساتھ۔',
+            loadFailed: 'لیجر رپورٹ لوڈ نہیں ہو سکی۔',
+            statsLabel: 'لیجر کا خلاصہ',
+        },
+        cashbook: {
+            loadFailed: 'کیش بک لوڈ نہیں ہو سکی',
+            statsLabel: 'کیش بک کا خلاصہ',
+            flow: 'وصولی یا ادائیگی',
+            totalReceipts: 'کل وصولیاں',
+            totalPayments: 'کل ادائیگیاں',
+        },
+        bankbook: {
+            loadFailed: 'بینک بک لوڈ نہیں ہو سکی',
+            statsLabel: 'بینک بک کا خلاصہ',
+            bankAccount: 'بینک اکاؤنٹ',
+            flow: 'جمع یا نکاسی',
+            totalDeposits: 'کل جمع',
+            totalWithdrawals: 'کل نکاسی',
+        },
+        expenseReports: {
+            statsLabel: 'اخراجات رپورٹ کا خلاصہ',
+            months: 'مہینے',
+            periods: 'مدتیں',
+            highestMonth: 'سب سے زیادہ مہینہ',
+            highestPeriod: 'سب سے زیادہ مدت',
+            topHead: 'سرفہرست مد',
+        },
+        trialBalance: {
+            statsLabel: 'ٹرائل بیلنس کا خلاصہ',
+            accountType: 'اکاؤنٹ کی قسم',
+            accounts: 'اکاؤنٹس',
+            rows: 'قطاریں',
+            branches: 'شاخیں',
+            searchPlaceholder: 'کوڈ، اکاؤنٹ یا گروپ سے تلاش کریں…',
+        },
+        cashFlow: {
+            statsLabel: 'نقد بہاؤ کا خلاصہ',
+            operating: 'آپریٹنگ',
+            investing: 'سرمایہ کاری',
+            financing: 'مالیات',
+            netSection: 'خالص {label}',
+            openingCash: 'ابتدائی نقد بیلنس',
+            closingCash: 'اختتامی نقد بیلنس',
+            searchPlaceholder: 'سرگرمیاں تلاش کریں…',
+            noMatches: 'کوئی سرگرمی تلاش سے مطابقت نہیں رکھتی',
+        },
+    },
 } as const;

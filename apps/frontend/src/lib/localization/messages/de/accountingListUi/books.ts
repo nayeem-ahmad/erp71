@@ -1,4 +1,62 @@
 /** Accounting list UI (Sales list pattern) — books pages. */
 export const accountingBooksUiMessages = {
-    accountingBooksUi: {},
+    accountingBooksUi: {
+        common: {
+            voucherType: 'Belegart',
+            side: 'Seite',
+            entries: 'Buchungen',
+            openingBalance: 'Anfangssaldo',
+            closingBalance: 'Endsaldo',
+            totalDebit: 'Soll gesamt',
+            totalCredit: 'Haben gesamt',
+            neutral: 'Ausgeglichen',
+        },
+        ledger: {
+            subtitle: 'Prüfen Sie jeweils ein Konto mit Anfangssaldo, Periodenbewegung, Endstand und Belegdetails.',
+            loadFailed: 'Kontoblatt konnte nicht geladen werden.',
+            statsLabel: 'Kontoblatt-Übersicht',
+        },
+        cashbook: {
+            loadFailed: 'Kassenbuch konnte nicht geladen werden',
+            statsLabel: 'Kassenbuch-Übersicht',
+            flow: 'Einnahme oder Ausgabe',
+            totalReceipts: 'Einnahmen gesamt',
+            totalPayments: 'Ausgaben gesamt',
+        },
+        bankbook: {
+            loadFailed: 'Bankbuch konnte nicht geladen werden',
+            statsLabel: 'Bankbuch-Übersicht',
+            bankAccount: 'Bankkonto',
+            flow: 'Einzahlung oder Abhebung',
+            totalDeposits: 'Einzahlungen gesamt',
+            totalWithdrawals: 'Abhebungen gesamt',
+        },
+        expenseReports: {
+            statsLabel: 'Ausgabenbericht-Übersicht',
+            months: 'Monate',
+            periods: 'Zeiträume',
+            highestMonth: 'Höchster Monat',
+            highestPeriod: 'Höchster Zeitraum',
+            topHead: 'Größte Ausgabenart',
+        },
+        trialBalance: {
+            statsLabel: 'Summen- und Saldenliste – Übersicht',
+            accountType: 'Kontoart',
+            accounts: 'Konten',
+            rows: 'Zeilen',
+            branches: 'Filialen',
+            searchPlaceholder: 'Nach Code, Konto oder Gruppe suchen…',
+        },
+        cashFlow: {
+            statsLabel: 'Kapitalfluss-Übersicht',
+            operating: 'Betrieb',
+            investing: 'Investition',
+            financing: 'Finanzierung',
+            netSection: 'Netto {label}',
+            openingCash: 'Anfangsbestand Zahlungsmittel',
+            closingCash: 'Endbestand Zahlungsmittel',
+            searchPlaceholder: 'Aktivitäten suchen…',
+            noMatches: 'Keine Aktivität passt zur Suche',
+        },
+    },
 } as const;

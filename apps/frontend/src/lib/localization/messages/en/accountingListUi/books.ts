@@ -1,4 +1,62 @@
 /** Accounting list UI (Sales list pattern) — books pages. */
 export const accountingBooksUiMessages = {
-    accountingBooksUi: {},
+    accountingBooksUi: {
+        common: {
+            voucherType: 'Voucher type',
+            side: 'Side',
+            entries: 'Entries',
+            openingBalance: 'Opening balance',
+            closingBalance: 'Closing balance',
+            totalDebit: 'Total debit',
+            totalCredit: 'Total credit',
+            neutral: 'Neutral',
+        },
+        ledger: {
+            subtitle: 'Review one account at a time with opening balance, period movement, closing position, and voucher drill-down.',
+            loadFailed: 'Failed to load ledger report.',
+            statsLabel: 'Ledger summary',
+        },
+        cashbook: {
+            loadFailed: 'Failed to load cashbook',
+            statsLabel: 'Cashbook summary',
+            flow: 'Receipt or payment',
+            totalReceipts: 'Total receipts',
+            totalPayments: 'Total payments',
+        },
+        bankbook: {
+            loadFailed: 'Failed to load bankbook',
+            statsLabel: 'Bankbook summary',
+            bankAccount: 'Bank account',
+            flow: 'Deposit or withdrawal',
+            totalDeposits: 'Total deposits',
+            totalWithdrawals: 'Total withdrawals',
+        },
+        expenseReports: {
+            statsLabel: 'Expense report summary',
+            months: 'Months',
+            periods: 'Periods',
+            highestMonth: 'Highest month',
+            highestPeriod: 'Highest period',
+            topHead: 'Top head',
+        },
+        trialBalance: {
+            statsLabel: 'Trial balance summary',
+            accountType: 'Account type',
+            accounts: 'Accounts',
+            rows: 'Rows',
+            branches: 'Branches',
+            searchPlaceholder: 'Search by code, account, or group…',
+        },
+        cashFlow: {
+            statsLabel: 'Cash flow summary',
+            operating: 'Operating',
+            investing: 'Investing',
+            financing: 'Financing',
+            netSection: 'Net {label}',
+            openingCash: 'Opening cash balance',
+            closingCash: 'Closing cash balance',
+            searchPlaceholder: 'Search activities…',
+            noMatches: 'No activity matches the search',
+        },
+    },
 } as const;

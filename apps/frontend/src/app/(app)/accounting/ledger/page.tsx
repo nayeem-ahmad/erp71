@@ -3,25 +3,23 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ReceiptText, Wallet } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Hash, ReceiptText, Scale, Wallet, Waypoints } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
-import {
-    AccountingPageShell,
-    CompactSection,
-    CompactStat,
-} from '@/components/accounting/compact';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { AccountingPageShell } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { BranchFilter } from '@/components/ui';
+import { BranchFilter, buttonClassName } from '@/components/ui';
 import { useBranchScope } from '@/lib/branch-scope';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
-import { useI18n, formatMessage } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { useApprovedOnly } from '@/lib/accounting-report-scope';
-import { ApprovedOnlyToggle } from '@/components/accounting/ApprovedOnlyToggle';
-import AccountSelect from '@/components/accounting/AccountSelect';
-import { compactDensity } from '@/lib/ui/compact-density';
+import { accountLabel, sortAccountsByCode } from '@/components/accounting/AccountSelect';
+import { createdRangeFromPreset, type CreatedRange } from '@/lib/created-range';
+import type { NumberCondition } from '@/lib/number-condition';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
+import { MONTH_RANGE_PRESETS } from '@/components/hr/month-range';
 
 type LedgerAccount = {
     id: string;
@@ -32,6 +30,8 @@ type LedgerAccount = {
     group?: { name: string };
     subgroup?: { name: string } | null;
 };
+
+type BalanceSide = 'debit' | 'credit' | 'neutral';
 
 type LedgerRow = {
     id: string;
@@ -45,7 +45,7 @@ type LedgerRow = {
     debit_amount: number;
     credit_amount: number;
     running_balance: number;
-    running_balance_side: 'debit' | 'credit' | 'neutral';
+    running_balance_side: BalanceSide;
 };
 
 type LedgerResponse = {
@@ -56,9 +56,9 @@ type LedgerResponse = {
     };
     normal_balance_side: 'debit' | 'credit';
     opening_balance: number;
-    opening_balance_side: 'debit' | 'credit' | 'neutral';
+    opening_balance_side: BalanceSide;
     closing_balance: number;
-    closing_balance_side: 'debit' | 'credit' | 'neutral';
+    closing_balance_side: BalanceSide;
     totals: {
         debit: number;
         credit: number;
@@ -66,7 +66,22 @@ type LedgerResponse = {
     data: LedgerRow[];
 };
 
+/** The voucher types a ledger line can come from, as the server spells them. */
+const VOUCHER_TYPES = ['cash_payment', 'cash_receive', 'bank_payment', 'bank_receive', 'fund_transfer', 'journal'] as const;
+const SIDES = ['debit', 'credit'] as const;
+
 const columnHelper = createColumnHelper<LedgerRow>();
+
+/** A ledger always covers some period: cleared, it goes back to this month. */
+const defaultPeriod = (): CreatedRange => createdRangeFromPreset('thisMonth');
+
+function rowSide(row: LedgerRow): 'debit' | 'credit' {
+    return Number(row.debit_amount) > 0 ? 'debit' : 'credit';
+}
+
+function rowAmount(row: LedgerRow): number {
+    return Number(row.debit_amount) > 0 ? Number(row.debit_amount) : Number(row.credit_amount);
+}
 
 function LedgerLoadingFallback() {
     const { t } = useI18n();
@@ -83,20 +98,33 @@ export default function AccountingLedgerPage() {
 
 function AccountingLedgerPageContent() {
     const { t, locale } = useI18n();
+    const ui = t.accountingBooksUi;
     const branch = useBranchScope();
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const [accounts, setAccounts] = useState<LedgerAccount[]>([]);
     const [selectedAccountId, setSelectedAccountId] = useState(searchParams.get('accountId') || '');
-    const [from, setFrom] = useState(searchParams.get('from') || '');
-    const [to, setTo] = useState(searchParams.get('to') || '');
+    // The period opens on the one in the link, else this month.
+    const [period, setPeriod] = useState<CreatedRange>(() => {
+        const from = searchParams.get('from');
+        const to = searchParams.get('to');
+        if (!from && !to) return defaultPeriod();
+        return { ...(from ? { from } : {}), ...(to ? { to } : {}) };
+    });
+    const from = period.from ?? '';
+    const to = period.to ?? '';
     const [ledger, setLedger] = useState<LedgerResponse | null>(null);
     const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
     const [isLoadingLedger, setIsLoadingLedger] = useState(false);
     const { approvedOnly, setApprovedOnly, approvalEnabled, ready: approvalReady } = useApprovedOnly();
     const [accountError, setAccountError] = useState('');
     const [ledgerError, setLedgerError] = useState('');
+    const [search, setSearch] = useState('');
+    const [voucherTypes, setVoucherTypes] = useState<string[]>([]);
+    const [excludeVoucherTypes, setExcludeVoucherTypes] = useState(false);
+    const [sides, setSides] = useState<string[]>([]);
+    const [amountFilter, setAmountFilter] = useState<NumberCondition | null>(null);
 
     useEffect(() => {
         let active = true;
@@ -113,13 +141,13 @@ function AccountingLedgerPageContent() {
                     return;
                 }
 
-                setAccounts(data);
+                setAccounts(Array.isArray(data) ? data : []);
             } catch (error) {
                 if (!active) {
                     return;
                 }
 
-                setAccountError(error instanceof Error ? error.message : 'Failed to load ledger account options.');
+                setAccountError(error instanceof Error ? error.message : t.ledger.loadAccountsFailed);
             } finally {
                 if (active) {
                     setIsLoadingAccounts(false);
@@ -132,6 +160,7 @@ function AccountingLedgerPageContent() {
         return () => {
             active = false;
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [branch.ready, branch.apiStoreId]);
 
     useEffect(() => {
@@ -189,7 +218,7 @@ function AccountingLedgerPageContent() {
                 }
 
                 setLedger(null);
-                setLedgerError(error instanceof Error ? error.message : 'Failed to load ledger report.');
+                setLedgerError(error instanceof Error ? error.message : ui.ledger.loadFailed);
             } finally {
                 if (active) {
                     setIsLoadingLedger(false);
@@ -202,30 +231,48 @@ function AccountingLedgerPageContent() {
         return () => {
             active = false;
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedAccountId, from, to, approvedOnly, approvalReady, branch.ready, branch.apiStoreId]);
 
-    const selectedAccount = accounts.find((account) => account.id === selectedAccountId) || ledger?.account || null;
-    const periodMovement = ledger
-        ? getPeriodMovement(
-            ledger.opening_balance,
-            ledger.opening_balance_side,
-            ledger.closing_balance,
-            ledger.closing_balance_side,
-            ledger.normal_balance_side,
-        )
-        : { amount: 0, side: 'neutral' as const };
+    const voucherTypeLabel = (type: string) => {
+        const labels = t.accountingShared.voucherTypes as Record<string, string>;
+        return labels[type.toUpperCase()] ?? type.replaceAll('_', ' ');
+    };
+    const sideLabel = (side: BalanceSide) => (
+        side === 'debit' ? t.accountingShared.debit : side === 'credit' ? t.accountingShared.credit : ui.common.neutral
+    );
+
+    // The account and period are asked of the server; the other chips and the
+    // search narrow the lines it sent, and the strip sums the same lines.
+    const filteredRows = useMemo(
+        () => (ledger?.data ?? []).filter((row) => (
+            matchesAnyOf(voucherTypes, row.voucher_type, excludeVoucherTypes)
+            && matchesAnyOf(sides, rowSide(row))
+            && matchesNumberCondition(rowAmount(row), amountFilter)
+            && matchesSearch(
+                search,
+                row.voucher_number,
+                row.narration,
+                row.description,
+                row.reference_number,
+                voucherTypeLabel(row.voucher_type),
+            )
+        )),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [ledger, voucherTypes, excludeVoucherTypes, sides, amountFilter, search, t],
+    );
 
     const columns: ColumnDef<LedgerRow, any>[] = useMemo(
         () => [
             columnHelper.accessor('date', {
                 header: t.accountingShared.date,
-                cell: (info) => <span className="text-sm font-bold text-gray-700">{formatDate(info.getValue(), locale)}</span>,
+                cell: (info) => <span className="text-sm text-gray-700">{formatDate(info.getValue(), locale)}</span>,
                 size: 120,
             }),
             columnHelper.accessor('voucher_number', {
                 header: t.journal.columns.voucherNumber,
                 cell: (info) => (
-                    <Link href={`/accounting/vouchers/${info.row.original.voucher_id}`} className="text-sm font-bold text-blue-600 hover:text-blue-800">
+                    <Link href={`/accounting/vouchers/${info.row.original.voucher_id}`} className="text-sm font-medium text-blue-600 hover:text-blue-800">
                         {info.getValue()}
                     </Link>
                 ),
@@ -233,52 +280,172 @@ function AccountingLedgerPageContent() {
             }),
             columnHelper.accessor('voucher_type', {
                 header: t.accountingShared.type,
-                cell: (info) => <span className="text-xs font-semibold text-primary">{info.getValue().replaceAll('_', ' ')}</span>,
+                cell: (info) => <span className="text-xs text-gray-600">{voucherTypeLabel(info.getValue())}</span>,
+                meta: { hideOnMobile: true },
                 size: 150,
             }),
             columnHelper.accessor((row) => row.narration || row.description, {
                 id: 'narration',
                 header: t.accountingShared.narration,
                 cell: (info) => <span className="text-sm text-gray-600">{info.getValue() || t.accountingShared.noNarration}</span>,
+                meta: { hideOnMobile: true },
                 size: 320,
             }),
             columnHelper.accessor('debit_amount', {
                 header: t.accountingShared.debit,
-                cell: (info) => <span className="text-sm font-bold text-amber-700">{formatBDT(info.getValue(), { locale })}</span>,
+                cell: (info) => <span className="text-sm text-gray-800">{formatBDT(info.getValue(), { locale })}</span>,
+                meta: { align: 'end' },
                 size: 120,
             }),
             columnHelper.accessor('credit_amount', {
                 header: t.accountingShared.credit,
-                cell: (info) => <span className="text-sm font-bold text-sky-700">{formatBDT(info.getValue(), { locale })}</span>,
+                cell: (info) => <span className="text-sm text-gray-800">{formatBDT(info.getValue(), { locale })}</span>,
+                meta: { align: 'end' },
                 size: 120,
             }),
             columnHelper.accessor('running_balance', {
                 header: t.ledger.columns.runningBalance,
                 cell: (info) => (
-                    <div className="flex flex-col">
-                        <span className="text-sm font-bold text-gray-900">{formatBDT(info.getValue(), { locale })}</span>
-                        <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-400">{info.row.original.running_balance_side}</span>
-                    </div>
+                    <span className="text-sm font-medium text-gray-900">
+                        {formatBDT(info.getValue(), { locale })}
+                        <span className="ms-1 text-xs font-normal text-gray-400">{sideLabel(info.row.original.running_balance_side)}</span>
+                    </span>
                 ),
-                size: 150,
+                meta: { align: 'end' },
+                size: 170,
             }),
         ],
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         [t, locale],
     );
 
-    const handleResetFilters = () => {
-        setSelectedAccountId('');
-        setFrom('');
-        setTo('');
-        setLedger(null);
-        setLedgerError('');
-    };
+    const accountOptions = useMemo(
+        () => sortAccountsByCode(accounts).map((account) => ({ value: account.id, label: accountLabel(account) })),
+        [accounts],
+    );
+
+    const filters = useMemo<ListFilter[]>(() => {
+        const list: ListFilter[] = [
+            {
+                // The report reads one account; ticking another moves to it.
+                id: 'account',
+                type: 'multi-select',
+                label: t.accountingShared.account,
+                value: selectedAccountId ? [selectedAccountId] : [],
+                onChange: (next) => {
+                    const picked = next.filter((id) => id !== selectedAccountId);
+                    // "Select all" names no one account.
+                    if (picked.length > 1) return;
+                    setSelectedAccountId(picked[0] ?? (next.includes(selectedAccountId) ? selectedAccountId : ''));
+                },
+                options: accountOptions,
+                searchable: true,
+            },
+            {
+                id: 'period',
+                type: 'date-range',
+                label: t.accountingShared.period,
+                value: period,
+                onChange: (next) => setPeriod(next ?? defaultPeriod()),
+                presets: MONTH_RANGE_PRESETS,
+                operators: true,
+            },
+            {
+                id: 'voucherType',
+                type: 'multi-select',
+                label: ui.common.voucherType,
+                value: voucherTypes,
+                onChange: setVoucherTypes,
+                exclude: { value: excludeVoucherTypes, onChange: setExcludeVoucherTypes },
+                options: VOUCHER_TYPES.map((type) => ({ value: type, label: voucherTypeLabel(type) })),
+            },
+            {
+                id: 'side',
+                type: 'multi-select',
+                label: ui.common.side,
+                value: sides,
+                onChange: setSides,
+                options: SIDES.map((side) => ({ value: side, label: sideLabel(side) })),
+            },
+            {
+                id: 'amount',
+                type: 'number',
+                label: t.accountingShared.amount,
+                value: amountFilter,
+                onChange: setAmountFilter,
+                money: true,
+            },
+        ];
+        if (approvalEnabled) {
+            list.push({
+                id: 'approvedOnly',
+                type: 'toggle',
+                label: t.accountingShared.approvedOnly,
+                pressed: approvedOnly,
+                onChange: setApprovedOnly,
+                control: 'checkbox',
+                more: true,
+            });
+        }
+        return list;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [t, ui, selectedAccountId, accountOptions, period, voucherTypes, excludeVoucherTypes, sides, amountFilter, approvalEnabled, approvedOnly]);
+
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const debit = filteredRows.reduce((sum, row) => sum + Number(row.debit_amount || 0), 0);
+        const credit = filteredRows.reduce((sum, row) => sum + Number(row.credit_amount || 0), 0);
+        const movement = ledger
+            ? getPeriodMovement(
+                ledger.opening_balance,
+                ledger.opening_balance_side,
+                ledger.closing_balance,
+                ledger.closing_balance_side,
+                ledger.normal_balance_side,
+            )
+            : null;
+        const balance = (amount: number, side: BalanceSide) => ({
+            value: money(side === 'neutral' ? 0 : amount),
+            hint: sideLabel(side),
+        });
+        const empty = { value: '—' };
+        const items: ListStat[] = [
+            {
+                id: 'opening',
+                icon: <Wallet aria-hidden />,
+                label: ui.common.openingBalance,
+                ...(ledger ? balance(ledger.opening_balance, ledger.opening_balance_side) : empty),
+            },
+            { id: 'debit', icon: <ArrowDownLeft aria-hidden />, label: ui.common.totalDebit, value: ledger ? money(debit) : '—' },
+            { id: 'credit', icon: <ArrowUpRight aria-hidden />, label: ui.common.totalCredit, value: ledger ? money(credit) : '—' },
+            {
+                id: 'movement',
+                icon: <Waypoints aria-hidden />,
+                label: t.ledger.periodMovement,
+                ...(movement ? balance(movement.amount, movement.side) : empty),
+            },
+            {
+                id: 'closing',
+                icon: <Scale aria-hidden />,
+                label: ui.common.closingBalance,
+                ...(ledger ? balance(ledger.closing_balance, ledger.closing_balance_side) : empty),
+            },
+            {
+                id: 'entries',
+                icon: <Hash aria-hidden />,
+                label: ui.common.entries,
+                value: ledger ? filteredRows.length.toLocaleString(locale) : '—',
+            },
+        ];
+        return { items, loading: isLoadingLedger, label: ui.ledger.statsLabel };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filteredRows, ledger, isLoadingLedger, locale, t, ui]);
 
     return (
         <AccountingPageShell>
             <PageHeader
                 title={t.ledger.title}
-                subtitle="Review one account at a time with opening balance, period movement, closing position, and voucher drill-down."
+                subtitle={ui.ledger.subtitle}
                 breadcrumbs={modulePageBreadcrumbs(
                     t.dashboardHome.breadcrumbHome,
                     t.sidebar.modules.accounting,
@@ -288,165 +455,68 @@ function AccountingLedgerPageContent() {
                 actions={<BranchFilter scope={branch} />}
             />
 
-            <CompactSection title={t.ledger.title}>
-                <div className={`${compactDensity.filterBar} mb-3`}>
-                    <label className="block flex-1 min-w-[200px]">
-                        <span className={`${compactDensity.formLabel} block mb-1`}>{t.accountingShared.account}</span>
-                        <AccountSelect
-                            accounts={accounts}
-                            value={selectedAccountId}
-                            onChange={setSelectedAccountId}
-                            ariaLabel={t.ledger.accountAria}
-                            placeholder={t.accountingShared.selectAccount}
-                            className={compactDensity.formField}
-                        />
-                    </label>
+            {accountError ? <ErrorPanel message={accountError} /> : null}
+            {ledgerError ? <ErrorPanel message={ledgerError} /> : null}
 
-                    <div className="flex items-end">
-                        <ApprovedOnlyToggle
-                            checked={approvedOnly}
-                            onChange={setApprovedOnly}
-                            enabled={approvalEnabled}
-                        />
-                    </div>
-
-                    <label className="block">
-                        <span className={`${compactDensity.formLabel} block mb-1`}>{t.accountingShared.from}</span>
-                        <input
-                            aria-label={t.ledger.fromDateAria}
-                            type="date"
-                            value={from}
-                            onChange={(event) => setFrom(event.target.value)}
-                            className={compactDensity.formField}
-                        />
-                    </label>
-
-                    <label className="block">
-                        <span className={`${compactDensity.formLabel} block mb-1`}>{t.accountingShared.to}</span>
-                        <input
-                            aria-label={t.ledger.toDateAria}
-                            type="date"
-                            value={to}
-                            onChange={(event) => setTo(event.target.value)}
-                            className={compactDensity.formField}
-                        />
-                    </label>
-
-                    <div className="flex items-end">
-                        <button type="button" onClick={handleResetFilters} className={compactDensity.btnSecondary}>
-                            Reset filters
-                        </button>
-                    </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <CompactStat
-                        label="Selected account"
-                        value={(
-                            <>
-                                <span className="block text-base">{selectedAccount ? selectedAccount.name : 'None selected'}</span>
-                                {selectedAccount ? (
-                                    <span className="block text-xs font-normal text-gray-500 mt-0.5">
-                                        {selectedAccount.code || t.accountingShared.noCode} • {selectedAccount.type}
-                                    </span>
-                                ) : null}
-                            </>
-                        )}
-                    />
-                    <CompactStat label={t.ledger.openingBalance} value={ledger ? formatBalance(ledger.opening_balance, ledger.opening_balance_side, locale) : t.accountingShared.awaitingSelection} tone="warning" />
-                    <CompactStat label={t.ledger.periodMovement} value={ledger ? formatBalance(periodMovement.amount, periodMovement.side, locale) : t.accountingShared.awaitingSelection} tone="info" />
-                    <CompactStat label={t.accountingShared.closingBalance} value={ledger ? formatBalance(ledger.closing_balance, ledger.closing_balance_side, locale) : t.accountingShared.awaitingSelection} tone="positive" />
-                </div>
-            </CompactSection>
-
-                {isLoadingAccounts ? <InfoPanel tone="neutral" message={t.accountingShared.loadingAccountOptions} /> : null}
-                {accountError ? <InfoPanel tone="error" message={accountError} /> : null}
-                {isLoadingLedger ? <InfoPanel tone="neutral" message={t.accountingShared.loadingLedgerReport} /> : null}
-                {ledgerError ? <InfoPanel tone="error" message={ledgerError} /> : null}
-
-                {!selectedAccountId && !isLoadingAccounts ? (
-                    <CompactSection className="border-dashed text-center py-8">
-                        <Wallet className="mx-auto h-8 w-8 text-gray-300" />
-                        <p className="mt-3 text-sm font-semibold text-gray-900">{t.ledger.selectAccountHint}</p>
-                        <p className="mt-1 text-xs text-gray-500">
-                            The screen keeps one account in focus so running balance math stays readable during audit work.
-                        </p>
-                    </CompactSection>
-                ) : null}
-
-                {selectedAccountId && !ledgerError ? (
-                    <CompactSection title="Ledger activity">
-                        <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
-                            <p className="text-xs text-gray-500">
-                                {ledger
-                                    ? `Debit movement ${formatBDT(ledger.totals.debit, { locale })} • Credit movement ${formatBDT(ledger.totals.credit, { locale })}`
-                                    : 'Waiting for report data.'}
-                            </p>
-                            {ledger ? (
-                                <Link href={ledger.data[0] ? `/accounting/vouchers/${ledger.data[0].voucher_id}` : '/accounting/vouchers'} className={compactDensity.btnSecondary}>
-                                    <ReceiptText className="h-3.5 w-3.5" />
-                                    {ledger.data[0] ? 'Open latest voucher detail' : 'Open journal'}
-                                </Link>
-                            ) : null}
-                        </div>
-
-                        <DataTable<LedgerRow>
-                            tableId="accounting-ledger"
-                            columns={columns}
-                            data={ledger?.data || []}
-                            title={t.accountingShared.generalLedger}
-                            isLoading={isLoadingLedger}
-                            emptyMessage={t.ledger.emptyMessage}
-                            emptyIcon={<Wallet className="w-10 h-10 text-gray-200" />}
-                            searchPlaceholder={t.ledger.searchPlaceholder}
-                        />
-                    </CompactSection>
-                ) : null}
+            <DataTable<LedgerRow>
+                tableId="accounting-ledger"
+                columns={columns}
+                data={filteredRows}
+                title={t.accountingShared.generalLedger}
+                isLoading={isLoadingLedger || (isLoadingAccounts && Boolean(selectedAccountId) && !ledger)}
+                emptyMessage={selectedAccountId ? t.ledger.emptyMessage : t.ledger.selectAccountHint}
+                emptyIcon={<Wallet className="w-10 h-10 text-gray-200" />}
+                searchPlaceholder={t.ledger.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+                toolbarActions={ledger ? (
+                    <Link
+                        href={ledger.data[0] ? `/accounting/vouchers/${ledger.data[0].voucher_id}` : '/accounting/vouchers'}
+                        className={buttonClassName({ variant: 'secondary' })}
+                    >
+                        <ReceiptText className="h-3.5 w-3.5" aria-hidden />
+                        {ledger.data[0] ? t.ledger.openVoucherDetail : t.ledger.openJournal}
+                    </Link>
+                ) : undefined}
+            />
         </AccountingPageShell>
     );
 }
 
-function InfoPanel({ tone, message }: { tone: 'neutral' | 'error'; message: string }) {
-    const classes = tone === 'error'
-        ? 'border-red-200 bg-red-50 text-red-700'
-        : 'border-gray-200 bg-white text-gray-500';
-
-    return <div className={`rounded-lg border p-3 text-sm ${classes}`}>{message}</div>;
-}
-
-function formatBalance(amount: number, side: 'debit' | 'credit' | 'neutral', locale: string) {
-    if (side === 'neutral') {
-        return `${formatBDT(0, { locale })} neutral`;
-    }
-
-    return `${formatBDT(amount, { locale })} ${side}`;
+function ErrorPanel({ message }: { message: string }) {
+    return <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{message}</div>;
 }
 
 function getPeriodMovement(
     openingAmount: number,
-    openingSide: 'debit' | 'credit' | 'neutral',
+    openingSide: BalanceSide,
     closingAmount: number,
-    closingSide: 'debit' | 'credit' | 'neutral',
+    closingSide: BalanceSide,
     normalSide: 'debit' | 'credit',
-) {
+): { amount: number; side: BalanceSide } {
     const openingSigned = toSignedBalance(openingAmount, openingSide, normalSide);
     const closingSigned = toSignedBalance(closingAmount, closingSide, normalSide);
     const delta = Math.round((closingSigned - openingSigned) * 100) / 100;
 
     if (Math.abs(delta) < 0.0001) {
-        return { amount: 0, side: 'neutral' as const };
+        return { amount: 0, side: 'neutral' };
     }
 
     if (delta > 0) {
         return { amount: delta, side: normalSide };
     }
 
-    return { amount: Math.abs(delta), side: normalSide === 'debit' ? 'credit' as const : 'debit' as const };
+    return { amount: Math.abs(delta), side: normalSide === 'debit' ? 'credit' : 'debit' };
 }
 
 function toSignedBalance(
     amount: number,
-    side: 'debit' | 'credit' | 'neutral',
+    side: BalanceSide,
     normalSide: 'debit' | 'credit',
 ) {
     if (side === 'neutral') {

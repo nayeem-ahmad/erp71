@@ -1,4 +1,62 @@
 /** Accounting list UI (Sales list pattern) — books pages. */
 export const accountingBooksUiMessages = {
-    accountingBooksUi: {},
+    accountingBooksUi: {
+        common: {
+            voucherType: 'वाउचर प्रकार',
+            side: 'पक्ष',
+            entries: 'प्रविष्टियाँ',
+            openingBalance: 'प्रारंभिक शेष',
+            closingBalance: 'अंतिम शेष',
+            totalDebit: 'कुल डेबिट',
+            totalCredit: 'कुल क्रेडिट',
+            neutral: 'तटस्थ',
+        },
+        ledger: {
+            subtitle: 'एक समय में एक खाते की समीक्षा करें — प्रारंभिक शेष, अवधि का बदलाव, अंतिम स्थिति और वाउचर विवरण के साथ।',
+            loadFailed: 'लेजर रिपोर्ट लोड नहीं हो सकी।',
+            statsLabel: 'लेजर सारांश',
+        },
+        cashbook: {
+            loadFailed: 'कैशबुक लोड नहीं हो सकी',
+            statsLabel: 'कैशबुक सारांश',
+            flow: 'प्राप्ति या भुगतान',
+            totalReceipts: 'कुल प्राप्तियाँ',
+            totalPayments: 'कुल भुगतान',
+        },
+        bankbook: {
+            loadFailed: 'बैंकबुक लोड नहीं हो सकी',
+            statsLabel: 'बैंकबुक सारांश',
+            bankAccount: 'बैंक खाता',
+            flow: 'जमा या निकासी',
+            totalDeposits: 'कुल जमा',
+            totalWithdrawals: 'कुल निकासी',
+        },
+        expenseReports: {
+            statsLabel: 'व्यय रिपोर्ट सारांश',
+            months: 'महीने',
+            periods: 'अवधियाँ',
+            highestMonth: 'सबसे अधिक महीना',
+            highestPeriod: 'सबसे अधिक अवधि',
+            topHead: 'शीर्ष मद',
+        },
+        trialBalance: {
+            statsLabel: 'ट्रायल बैलेंस सारांश',
+            accountType: 'खाते का प्रकार',
+            accounts: 'खाते',
+            rows: 'पंक्तियाँ',
+            branches: 'शाखाएँ',
+            searchPlaceholder: 'कोड, खाता या समूह से खोजें…',
+        },
+        cashFlow: {
+            statsLabel: 'नकदी प्रवाह सारांश',
+            operating: 'परिचालन',
+            investing: 'निवेश',
+            financing: 'वित्तपोषण',
+            netSection: 'शुद्ध {label}',
+            openingCash: 'प्रारंभिक नकद शेष',
+            closingCash: 'अंतिम नकद शेष',
+            searchPlaceholder: 'गतिविधियाँ खोजें…',
+            noMatches: 'खोज से कोई गतिविधि मेल नहीं खाती',
+        },
+    },
 } as const;

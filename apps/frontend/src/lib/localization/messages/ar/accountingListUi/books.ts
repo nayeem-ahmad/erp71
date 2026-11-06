@@ -1,4 +1,62 @@
 /** Accounting list UI (Sales list pattern) — books pages. */
 export const accountingBooksUiMessages = {
-    accountingBooksUi: {},
+    accountingBooksUi: {
+        common: {
+            voucherType: 'نوع السند',
+            side: 'الجانب',
+            entries: 'القيود',
+            openingBalance: 'الرصيد الافتتاحي',
+            closingBalance: 'الرصيد الختامي',
+            totalDebit: 'إجمالي المدين',
+            totalCredit: 'إجمالي الدائن',
+            neutral: 'متوازن',
+        },
+        ledger: {
+            subtitle: 'راجع حسابًا واحدًا في كل مرة مع الرصيد الافتتاحي وحركة الفترة والمركز الختامي وتفاصيل السندات.',
+            loadFailed: 'تعذّر تحميل تقرير دفتر الأستاذ.',
+            statsLabel: 'ملخص دفتر الأستاذ',
+        },
+        cashbook: {
+            loadFailed: 'تعذّر تحميل دفتر الصندوق',
+            statsLabel: 'ملخص دفتر الصندوق',
+            flow: 'مقبوضات أو مدفوعات',
+            totalReceipts: 'إجمالي المقبوضات',
+            totalPayments: 'إجمالي المدفوعات',
+        },
+        bankbook: {
+            loadFailed: 'تعذّر تحميل دفتر البنك',
+            statsLabel: 'ملخص دفتر البنك',
+            bankAccount: 'الحساب البنكي',
+            flow: 'إيداع أو سحب',
+            totalDeposits: 'إجمالي الإيداعات',
+            totalWithdrawals: 'إجمالي السحوبات',
+        },
+        expenseReports: {
+            statsLabel: 'ملخص تقرير المصروفات',
+            months: 'الأشهر',
+            periods: 'الفترات',
+            highestMonth: 'أعلى شهر',
+            highestPeriod: 'أعلى فترة',
+            topHead: 'أعلى بند',
+        },
+        trialBalance: {
+            statsLabel: 'ملخص ميزان المراجعة',
+            accountType: 'نوع الحساب',
+            accounts: 'الحسابات',
+            rows: 'الصفوف',
+            branches: 'الفروع',
+            searchPlaceholder: 'ابحث بالرمز أو الحساب أو المجموعة…',
+        },
+        cashFlow: {
+            statsLabel: 'ملخص التدفق النقدي',
+            operating: 'التشغيل',
+            investing: 'الاستثمار',
+            financing: 'التمويل',
+            netSection: 'صافي {label}',
+            openingCash: 'الرصيد النقدي الافتتاحي',
+            closingCash: 'الرصيد النقدي الختامي',
+            searchPlaceholder: 'ابحث في الأنشطة…',
+            noMatches: 'لا يوجد نشاط يطابق البحث',
+        },
+    },
 } as const;

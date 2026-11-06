@@ -1,14 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Banknote, Calculator, Hash, Percent, Trophy } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
-import {
-    AccountingPageShell,
-    CompactSection,
-    CompactStat,
-} from '@/components/accounting/compact';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { AccountingPageShell, CompactSection } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { BranchFilter } from '@/components/ui';
@@ -18,7 +14,10 @@ import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { formatBDT } from '@/lib/format';
-import { compactDensity } from '@/lib/ui/compact-density';
+import { createdRangeFromPreset, type CreatedRange } from '@/lib/created-range';
+import type { NumberCondition } from '@/lib/number-condition';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
+import { MONTH_RANGE_PRESETS } from '@/components/hr/month-range';
 
 interface HeadBreakdown {
     headId: string;
@@ -36,6 +35,7 @@ interface CategoryBreakdown {
 }
 
 interface HeadRow extends HeadBreakdown {
+    categoryId: string;
     categoryName: string;
 }
 
@@ -57,6 +57,11 @@ interface ExpenseSummary {
     expenseToRevenueRatio: number;
 }
 
+interface PeriodRow {
+    key: string;
+    amount: number;
+}
+
 type ReportView = 'trend' | 'category' | 'head' | 'period';
 type PeriodGrain = 'month' | 'week' | 'day';
 
@@ -69,7 +74,7 @@ function weekStart(isoDate: string): string {
     return date.toISOString().slice(0, 10);
 }
 
-function periodBuckets(summary: ExpenseSummary, grain: PeriodGrain): { key: string; amount: number }[] {
+function periodBuckets(summary: ExpenseSummary, grain: PeriodGrain): PeriodRow[] {
     if (grain === 'month') {
         return summary.monthlyTrend.map((row) => ({ key: row.month, amount: row.amount }));
     }
@@ -87,30 +92,41 @@ const categoryHelper = createColumnHelper<CategoryBreakdown>();
 const headHelper = createColumnHelper<HeadRow>();
 const trendHelper = createColumnHelper<MonthlyTrend>();
 
-function defaultFrom() {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 5);
-    d.setDate(1);
-    return d.toISOString().slice(0, 10);
-}
+/** The report always covers some period: cleared, it goes back to the last six months. */
+const defaultPeriod = (): CreatedRange => createdRangeFromPreset('last6Months');
 
-function defaultTo() {
-    return new Date().toISOString().slice(0, 10);
-}
+const amountCell = (value: number, locale: string) => (
+    <span className="text-sm font-medium text-gray-900">{formatBDT(Number(value), { locale })}</span>
+);
 
 export default function ExpenseReportsPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
+    const ui = t.accountingBooksUi.expenseReports;
     const branch = useBranchScope();
     const [summary, setSummary] = useState<ExpenseSummary | null>(null);
-    const [fromDate, setFromDate] = useState(defaultFrom());
-    const [toDate, setToDate] = useState(defaultTo());
+    const [period, setPeriod] = useState<CreatedRange>(defaultPeriod);
+    const fromDate = period.from ?? '';
+    const toDate = period.to ?? '';
     const [loading, setLoading] = useState(true);
     const [view, setView] = useState<ReportView>('trend');
     const [grain, setGrain] = useState<PeriodGrain>('month');
 
+    // Chips over the rows each report already holds.
+    const [categoryIds, setCategoryIds] = useState<string[]>([]);
+    const [headIds, setHeadIds] = useState<string[]>([]);
+    const [trendAmount, setTrendAmount] = useState<NumberCondition | null>(null);
+    const [categoryAmount, setCategoryAmount] = useState<NumberCondition | null>(null);
+    const [headAmount, setHeadAmount] = useState<NumberCondition | null>(null);
+    const [periodAmount, setPeriodAmount] = useState<NumberCondition | null>(null);
+    const [categoryShare, setCategoryShare] = useState<NumberCondition | null>(null);
+    const [headShare, setHeadShare] = useState<NumberCondition | null>(null);
+    const [categorySearch, setCategorySearch] = useState('');
+    const [headSearch, setHeadSearch] = useState('');
+
     useEffect(() => {
         if (!branch.ready) return;
         void loadSummary();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [branch.ready, branch.apiStoreId, fromDate, toDate]);
 
     const loadSummary = async () => {
@@ -131,16 +147,56 @@ export default function ExpenseReportsPage() {
         }
     };
 
+    const headRows: HeadRow[] = useMemo(
+        () => (summary?.byCategory ?? []).flatMap((category) =>
+            (category.heads ?? []).map((head) => ({ ...head, categoryId: category.categoryId, categoryName: category.name })),
+        ),
+        [summary],
+    );
+
+    const trendRows = useMemo(
+        () => (summary?.monthlyTrend ?? []).filter((row) => matchesNumberCondition(Number(row.amount), trendAmount)),
+        [summary, trendAmount],
+    );
+
+    const categoryRows = useMemo(
+        () => (summary?.byCategory ?? []).filter((row) => (
+            matchesAnyOf(categoryIds, row.categoryId)
+            && matchesNumberCondition(Number(row.amount), categoryAmount)
+            && matchesNumberCondition(Number(row.sharePct), categoryShare)
+            && matchesSearch(categorySearch, row.name)
+        )),
+        [summary, categoryIds, categoryAmount, categoryShare, categorySearch],
+    );
+
+    const filteredHeadRows = useMemo(
+        () => headRows.filter((row) => (
+            matchesAnyOf(categoryIds, row.categoryId)
+            && matchesAnyOf(headIds, row.headId)
+            && matchesNumberCondition(Number(row.amount), headAmount)
+            && matchesNumberCondition(Number(row.sharePct), headShare)
+            && matchesSearch(headSearch, row.name, row.categoryName)
+        )),
+        [headRows, categoryIds, headIds, headAmount, headShare, headSearch],
+    );
+
+    const periods = useMemo(
+        () => (summary ? periodBuckets(summary, grain) : [])
+            .filter((row) => matchesNumberCondition(Number(row.amount), periodAmount)),
+        [summary, grain, periodAmount],
+    );
+
     const categoryColumns: ColumnDef<CategoryBreakdown, any>[] = useMemo(
         () => [
             categoryHelper.accessor('name', {
                 header: t.expenses.category,
-                cell: (info) => <span className="text-sm font-bold text-gray-800">{info.getValue()}</span>,
+                cell: (info) => <span className="text-sm font-medium text-gray-800">{info.getValue()}</span>,
                 size: 200,
             }),
             categoryHelper.accessor('amount', {
                 header: t.common.amount,
-                cell: (info) => <span className="text-sm font-bold text-danger">{formatBDT(Number(info.getValue()))}</span>,
+                cell: (info) => amountCell(info.getValue(), locale),
+                meta: { align: 'end' },
                 size: 140,
             }),
             categoryHelper.accessor('sharePct', {
@@ -148,22 +204,16 @@ export default function ExpenseReportsPage() {
                 cell: (info) => (
                     <div className="flex items-center gap-2">
                         <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden max-w-[120px]">
-                            <div className="h-full bg-danger rounded-full" style={{ width: `${Math.min(100, info.getValue())}%` }} />
+                            <div className="h-full bg-blue-600 rounded-full" style={{ width: `${Math.min(100, info.getValue())}%` }} />
                         </div>
-                        <span className="text-xs font-bold text-gray-500">{Number(info.getValue()).toFixed(1)}%</span>
+                        <span className="text-xs text-gray-500 tabular-nums">{Number(info.getValue()).toFixed(1)}%</span>
                     </div>
                 ),
+                meta: { hideOnMobile: true },
                 size: 180,
             }),
         ],
-        [t],
-    );
-
-    const headRows: HeadRow[] = useMemo(
-        () => (summary?.byCategory ?? []).flatMap((category) =>
-            (category.heads ?? []).map((head) => ({ ...head, categoryName: category.name })),
-        ),
-        [summary],
+        [t, locale],
     );
 
     const headColumns: ColumnDef<HeadRow, any>[] = useMemo(
@@ -171,78 +221,197 @@ export default function ExpenseReportsPage() {
             headHelper.accessor('categoryName', {
                 header: t.expenses.category,
                 cell: (info) => <span className="text-sm text-gray-600">{info.getValue()}</span>,
+                meta: { hideOnMobile: true },
                 size: 160,
             }),
             headHelper.accessor('name', {
                 header: t.expenses.head,
-                cell: (info) => <span className="text-sm font-bold text-gray-800">{info.getValue()}</span>,
+                cell: (info) => <span className="text-sm font-medium text-gray-800">{info.getValue()}</span>,
                 size: 200,
             }),
             headHelper.accessor('amount', {
                 header: t.common.amount,
-                cell: (info) => <span className="text-sm font-bold text-danger">{formatBDT(Number(info.getValue()))}</span>,
+                cell: (info) => amountCell(info.getValue(), locale),
+                meta: { align: 'end' },
                 size: 140,
             }),
             headHelper.accessor('sharePct', {
                 header: t.expenses.share,
-                cell: (info) => <span className="text-xs font-bold text-gray-500">{Number(info.getValue()).toFixed(1)}%</span>,
+                cell: (info) => <span className="text-xs text-gray-500">{Number(info.getValue()).toFixed(1)}%</span>,
+                meta: { align: 'end', hideOnMobile: true },
                 size: 100,
             }),
         ],
-        [t],
+        [t, locale],
     );
 
     const trendColumns: ColumnDef<MonthlyTrend, any>[] = useMemo(
         () => [
             trendHelper.accessor('month', {
                 header: t.expenses.month,
-                cell: (info) => <span className="text-sm font-bold text-gray-700">{info.getValue()}</span>,
+                cell: (info) => <span className="text-sm text-gray-700">{info.getValue()}</span>,
                 size: 120,
             }),
             trendHelper.accessor('amount', {
                 header: t.common.amount,
-                cell: (info) => <span className="text-sm font-bold text-danger">{formatBDT(Number(info.getValue()))}</span>,
+                cell: (info) => amountCell(info.getValue(), locale),
+                meta: { align: 'end' },
                 size: 140,
             }),
         ],
-        [t],
+        [t, locale],
     );
 
-    const maxTrend = Math.max(...(summary?.monthlyTrend.map((row) => row.amount) ?? [1]), 1);
-
-    const periods = useMemo(
-        () => (summary ? periodBuckets(summary, grain) : []),
-        [summary, grain],
-    );
-
-    const periodColumns: ColumnDef<{ key: string; amount: number }, any>[] = useMemo(
+    const periodColumns: ColumnDef<PeriodRow, any>[] = useMemo(
         () => [
             {
                 id: 'key',
                 accessorKey: 'key',
                 header: t.expenses.period,
-                cell: (info: { getValue: () => string }) => <span className="text-sm font-medium text-gray-700">{info.getValue()}</span>,
+                cell: (info: { getValue: () => string }) => <span className="text-sm text-gray-700">{info.getValue()}</span>,
                 size: 140,
             },
             {
                 id: 'amount',
                 accessorKey: 'amount',
                 header: t.common.amount,
-                cell: (info: { getValue: () => number }) => <span className="text-sm font-medium text-danger">{formatBDT(Number(info.getValue()))}</span>,
+                cell: (info: { getValue: () => number }) => amountCell(info.getValue(), locale),
+                meta: { align: 'end' },
                 size: 140,
             },
             {
                 id: 'share',
                 header: t.expenses.share,
-                cell: ({ row }: { row: { original: { amount: number } } }) => {
+                cell: ({ row }: { row: { original: PeriodRow } }) => {
                     const share = summary && summary.total > 0 ? (row.original.amount / summary.total) * 100 : 0;
-                    return <span className="text-xs font-medium text-gray-500">{share.toFixed(1)}%</span>;
+                    return <span className="text-xs text-gray-500">{share.toFixed(1)}%</span>;
                 },
+                meta: { align: 'end', hideOnMobile: true },
                 size: 100,
             },
         ],
-        [t, summary],
+        [t, summary, locale],
     );
+
+    const periodFilter = useMemo<ListFilter>(() => ({
+        id: 'period',
+        type: 'date-range',
+        label: t.expenses.period,
+        value: period,
+        onChange: (next) => setPeriod(next ?? defaultPeriod()),
+        presets: MONTH_RANGE_PRESETS,
+        operators: true,
+    }), [t, period]);
+
+    const amountChip = (value: NumberCondition | null, onChange: (next: NumberCondition | null) => void): ListFilter => ({
+        id: 'amount',
+        type: 'number',
+        label: t.common.amount,
+        value,
+        onChange,
+        money: true,
+    });
+
+    const shareChip = (value: NumberCondition | null, onChange: (next: NumberCondition | null) => void): ListFilter => ({
+        id: 'share',
+        type: 'number',
+        label: t.expenses.share,
+        value,
+        onChange,
+        more: true,
+    });
+
+    const categoryChip: ListFilter = {
+        id: 'category',
+        type: 'multi-select',
+        label: t.expenses.category,
+        value: categoryIds,
+        onChange: (next) => {
+            setCategoryIds(next);
+            if (!next.length) return;
+            const allowed = new Set(headRows.filter((head) => next.includes(head.categoryId)).map((head) => head.headId));
+            setHeadIds((current) => current.filter((id) => allowed.has(id)));
+        },
+        options: (summary?.byCategory ?? []).map((category) => ({ value: category.categoryId, label: category.name })),
+    };
+
+    const headChoices = categoryIds.length ? headRows.filter((head) => categoryIds.includes(head.categoryId)) : headRows;
+
+    const trendFilters: ListFilter[] = [periodFilter, amountChip(trendAmount, setTrendAmount)];
+    const categoryFilters: ListFilter[] = [
+        periodFilter,
+        categoryChip,
+        amountChip(categoryAmount, setCategoryAmount),
+        shareChip(categoryShare, setCategoryShare),
+    ];
+    const headFilters: ListFilter[] = [
+        periodFilter,
+        categoryChip,
+        {
+            id: 'head',
+            type: 'multi-select',
+            label: t.expenses.head,
+            value: headIds,
+            onChange: setHeadIds,
+            options: headChoices.map((head) => ({
+                value: head.headId,
+                label: categoryIds.length === 1 ? head.name : `${head.categoryName} — ${head.name}`,
+            })),
+        },
+        amountChip(headAmount, setHeadAmount),
+        shareChip(headShare, setHeadShare),
+    ];
+    const periodFilters: ListFilter[] = [periodFilter, amountChip(periodAmount, setPeriodAmount)];
+
+    /**
+     * One report's strip, over the rows its chips leave: their total, how many,
+     * the average, the largest, and the period's expense-to-revenue ratio.
+     */
+    const reportStats = (
+        rows: { label: string; amount: number }[],
+        countLabel: string,
+        topLabel: string,
+        countIcon: ReactNode,
+    ) => {
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const total = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+        const top = rows.reduce<{ label: string; amount: number } | null>(
+            (best, row) => (!best || Number(row.amount) > Number(best.amount) ? row : best),
+            null,
+        );
+        const items: ListStat[] = [
+            {
+                id: 'total',
+                icon: <Banknote aria-hidden />,
+                label: t.expenses.totalExpenses,
+                value: money(total),
+                tone: total > 0 ? 'danger' : 'default',
+            },
+            { id: 'count', icon: countIcon, label: countLabel, value: rows.length.toLocaleString(locale) },
+            {
+                id: 'average',
+                icon: <Calculator aria-hidden />,
+                label: t.expenses.average,
+                value: money(rows.length ? total / rows.length : 0),
+            },
+            {
+                id: 'top',
+                icon: <Trophy aria-hidden />,
+                label: topLabel,
+                value: top?.label ?? '—',
+                hint: top ? money(Number(top.amount)) : undefined,
+            },
+            {
+                id: 'ratio',
+                icon: <Percent aria-hidden />,
+                label: t.expenses.expenseRatio,
+                value: summary ? `${(summary.expenseToRevenueRatio * 100).toFixed(1)}%` : '—',
+            },
+        ];
+        return { items, loading: loading && !summary, label: ui.statsLabel };
+    };
+
+    const maxTrend = Math.max(...trendRows.map((row) => row.amount), 1);
 
     const reportTabs = [
         { key: 'trend' as const, label: t.expenses.monthlyTrend },
@@ -272,127 +441,133 @@ export default function ExpenseReportsPage() {
                 actions={<BranchFilter scope={branch} />}
             />
 
-            <CompactSection flat>
-                <div className={`${compactDensity.filterBar} !p-0 !border-0 !bg-transparent max-w-lg`}>
-                    <label className="block">
-                        <span className={`${compactDensity.formLabel} block mb-1`}>{t.common.date} (from)</span>
-                        <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className={compactDensity.formField} />
-                    </label>
-                    <label className="block">
-                        <span className={`${compactDensity.formLabel} block mb-1`}>{t.common.date} (to)</span>
-                        <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className={compactDensity.formField} />
-                    </label>
-                </div>
-            </CompactSection>
+            <Tabs
+                tabs={reportTabs}
+                value={view}
+                onChange={(next) => { if (next) setView(next); }}
+                idPrefix="expense-report"
+                label={t.expenses.reports}
+            />
 
-            {loading ? (
-                <div className="flex items-center justify-center py-12 text-gray-400">
-                    <Loader2 className="w-5 h-5 animate-spin me-2" />
-                    {t.common.loading}
-                </div>
-            ) : summary ? (
-                <>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <CompactStat label={t.expenses.totalExpenses} value={formatBDT(summary.total)} tone="negative" />
-                        <CompactStat
-                            label={t.expenses.expenseRatio}
-                            value={(
-                                <>
-                                    <span>{(summary.expenseToRevenueRatio * 100).toFixed(1)}%</span>
-                                    <span className="block text-xs font-normal text-gray-500 mt-0.5">{t.expenses.expenseRatioHelp}</span>
-                                </>
-                            )}
-                        />
-                        <CompactStat
-                            label={t.expenses.topCategory}
-                            value={(
-                                <>
-                                    <span className="text-base">{summary.byCategory[0]?.name ?? '—'}</span>
-                                    {summary.byCategory[0] ? (
-                                        <span className="block text-sm font-semibold text-danger mt-0.5">{formatBDT(summary.byCategory[0].amount)}</span>
-                                    ) : null}
-                                </>
-                            )}
-                        />
-                    </div>
-
-                    <Tabs
-                        tabs={reportTabs}
-                        value={view}
-                        onChange={(next) => { if (next) setView(next); }}
-                        idPrefix="expense-report"
-                        label={t.expenses.reports}
-                    />
-
-                    <TabPanel tabKey="trend" value={view} idPrefix="expense-report">
-                        {summary.monthlyTrend.length > 0 && (
-                            <CompactSection title={t.expenses.monthlyTrend}>
-                                <div className="flex items-end gap-2 h-32">
-                                    {summary.monthlyTrend.map((row) => (
-                                        <div key={row.month} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
-                                            <div
-                                                className="w-full bg-danger rounded-t-md transition-all"
-                                                style={{ height: `${Math.max(8, (row.amount / maxTrend) * 100)}%` }}
-                                                title={formatBDT(row.amount)}
-                                            />
-                                            <span className="text-[10px] font-medium text-gray-500 truncate w-full text-center">{row.month.slice(5)}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </CompactSection>
+            <TabPanel tabKey="trend" value={view} idPrefix="expense-report">
+                <div className="space-y-4">
+                    {trendRows.length > 0 && (
+                        <CompactSection title={t.expenses.monthlyTrend}>
+                            <div className="flex items-end gap-2 h-32">
+                                {trendRows.map((row) => (
+                                    <div key={row.month} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
+                                        <div
+                                            className="w-full bg-danger rounded-t-md transition-all"
+                                            style={{ height: `${Math.max(8, (row.amount / maxTrend) * 100)}%` }}
+                                            title={formatBDT(row.amount, { locale })}
+                                        />
+                                        <span className="text-[10px] font-medium text-gray-500 truncate w-full text-center">{row.month.slice(5)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </CompactSection>
+                    )}
+                    <DataTable
+                        tableId="expense-reports-monthly"
+                        title={t.expenses.monthlyTrend}
+                        data={trendRows}
+                        columns={trendColumns}
+                        isLoading={loading}
+                        emptyMessage={t.common.noData}
+                        showSearch={false}
+                        filters={trendFilters}
+                        filterLayout="row"
+                        stats={reportStats(
+                            trendRows.map((row) => ({ label: row.month, amount: row.amount })),
+                            ui.months,
+                            ui.highestMonth,
+                            <Hash aria-hidden />,
                         )}
-                        <DataTable
-                            tableId="expense-reports-monthly"
-                            title={t.expenses.monthlyTrend}
-                            data={summary.monthlyTrend}
-                            columns={trendColumns}
-                            emptyMessage={t.common.noData}
-                        />
-                    </TabPanel>
+                        enableColumnFilters={false}
+                        viewOptions
+                    />
+                </div>
+            </TabPanel>
 
-                    <TabPanel tabKey="category" value={view} idPrefix="expense-report">
-                        <DataTable
-                            tableId="expense-reports-by-category"
-                            title={t.expenses.byCategory}
-                            data={summary.byCategory}
-                            columns={categoryColumns}
-                            searchPlaceholder={t.expenses.searchCategories}
-                            emptyMessage={t.common.noData}
-                        />
-                    </TabPanel>
+            <TabPanel tabKey="category" value={view} idPrefix="expense-report">
+                <DataTable
+                    tableId="expense-reports-by-category"
+                    title={t.expenses.byCategory}
+                    data={categoryRows}
+                    columns={categoryColumns}
+                    isLoading={loading}
+                    searchPlaceholder={t.expenses.searchCategories}
+                    searchValue={categorySearch}
+                    onSearchChange={setCategorySearch}
+                    emptyMessage={t.common.noData}
+                    filters={categoryFilters}
+                    filterLayout="row"
+                    stats={reportStats(
+                        categoryRows.map((row) => ({ label: row.name, amount: row.amount })),
+                        t.expenses.categoryCount,
+                        t.expenses.topCategory,
+                        <Hash aria-hidden />,
+                    )}
+                    enableColumnFilters={false}
+                    viewOptions
+                />
+            </TabPanel>
 
-                    <TabPanel tabKey="head" value={view} idPrefix="expense-report">
-                        <DataTable
-                            tableId="expense-reports-by-head"
-                            title={t.expenses.byHead}
-                            data={headRows}
-                            columns={headColumns}
-                            searchPlaceholder={t.expenses.searchHeads}
-                            emptyMessage={t.common.noData}
-                        />
-                    </TabPanel>
+            <TabPanel tabKey="head" value={view} idPrefix="expense-report">
+                <DataTable
+                    tableId="expense-reports-by-head"
+                    title={t.expenses.byHead}
+                    data={filteredHeadRows}
+                    columns={headColumns}
+                    isLoading={loading}
+                    searchPlaceholder={t.expenses.searchHeads}
+                    searchValue={headSearch}
+                    onSearchChange={setHeadSearch}
+                    emptyMessage={t.common.noData}
+                    filters={headFilters}
+                    filterLayout="row"
+                    stats={reportStats(
+                        filteredHeadRows.map((row) => ({ label: row.name, amount: row.amount })),
+                        t.expenses.heads,
+                        ui.topHead,
+                        <Hash aria-hidden />,
+                    )}
+                    enableColumnFilters={false}
+                    viewOptions
+                />
+            </TabPanel>
 
-                    <TabPanel tabKey="period" value={view} idPrefix="expense-report">
-                        <Tabs
-                            tabs={grainTabs}
-                            value={grain}
-                            onChange={(next) => { if (next) setGrain(next); }}
-                            idPrefix="expense-period"
-                            label={t.expenses.byPeriod}
-                            bordered={false}
-                        />
-                        <DataTable
-                            tableId="expense-reports-by-period"
-                            title={t.expenses.byPeriod}
-                            data={periods}
-                            columns={periodColumns}
-                            emptyMessage={t.common.noData}
-                        />
-                    </TabPanel>
-                </>
-            ) : (
-                <p className="text-center text-gray-500 py-8 text-sm">{t.common.noData}</p>
-            )}
+            <TabPanel tabKey="period" value={view} idPrefix="expense-report">
+                <div className="space-y-3">
+                    <Tabs
+                        tabs={grainTabs}
+                        value={grain}
+                        onChange={(next) => { if (next) setGrain(next); }}
+                        idPrefix="expense-period"
+                        label={t.expenses.byPeriod}
+                        bordered={false}
+                    />
+                    <DataTable
+                        tableId="expense-reports-by-period"
+                        title={t.expenses.byPeriod}
+                        data={periods}
+                        columns={periodColumns}
+                        isLoading={loading}
+                        emptyMessage={t.common.noData}
+                        showSearch={false}
+                        filters={periodFilters}
+                        filterLayout="row"
+                        stats={reportStats(
+                            periods.map((row) => ({ label: row.key, amount: row.amount })),
+                            ui.periods,
+                            ui.highestPeriod,
+                            <Hash aria-hidden />,
+                        )}
+                        enableColumnFilters={false}
+                        viewOptions
+                    />
+                </div>
+            </TabPanel>
         </AccountingPageShell>
     );
 }
