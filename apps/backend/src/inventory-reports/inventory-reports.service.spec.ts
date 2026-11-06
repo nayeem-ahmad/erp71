@@ -508,6 +508,51 @@ describe('InventoryReportsService', () => {
             expect(purchaseSql).toContain('created_at DESC');
             expect(purchaseSql).toContain('p1');
             expect(purchaseSql).toContain('p2');
+            // A later bill entered at 0 (KH Tradind PUR-02015) must not become
+            // the "last purchase price" and blank out the paid one behind it.
+            expect(purchaseSql).toMatch(/unit_cost\s*>\s*0/);
+        });
+
+        it('treats a zero-cost latest bill as no last purchase price', async () => {
+            db.product.findMany.mockResolvedValue([
+                product('p1', 'Rice', [{ warehouse_id: 'wh-1', quantity: 4 }]),
+            ]);
+            db.$queryRaw.mockImplementation((strings: readonly string[], ...values: unknown[]) => {
+                const text = sqlText([strings, ...values]);
+                if (text.includes('PurchaseItem')) {
+                    return Promise.resolve([{ product_id: 'p1', unit_cost: 0 }]);
+                }
+                return Promise.resolve([]);
+            });
+
+            const result = await service.getStockOnHand('tenant-1', {});
+
+            expect(result.rows[0].lastPurchasePrice).toBeNull();
+        });
+
+        it('fills a zero catalogue sales price from the last sold price', async () => {
+            db.product.findMany.mockResolvedValue([
+                { ...product('p1', 'Rice', [{ warehouse_id: 'wh-1', quantity: 4 }]), price: 0 },
+            ]);
+            db.$queryRaw.mockImplementation((strings: readonly string[], ...values: unknown[]) => {
+                const text = sqlText([strings, ...values]);
+                if (text.includes('SaleItem')) {
+                    return Promise.resolve([{ product_id: 'p1', price_at_sale: 180 }]);
+                }
+                return Promise.resolve([]);
+            });
+
+            const result = await service.getStockOnHand('tenant-1', {});
+
+            expect(result.rows[0].product.sellingPrice).toBe(180);
+            const saleSql = db.$queryRaw.mock.calls
+                .map((call: unknown[]) => sqlText(call))
+                .find((text: string) => text.includes('SaleItem'));
+            expect(saleSql).toBeDefined();
+            expect(saleSql).toContain('CANCELLED');
+            expect(saleSql).toContain('DRAFT');
+            expect(saleSql).toMatch(/price_at_sale\s*>\s*0/);
+            expect(saleSql).toContain('sale_date DESC');
         });
 
         it('scopes the last purchase price to the branch and warehouse being reported', async () => {
