@@ -22,6 +22,7 @@ import { publicApiBase } from '@/lib/api-base';
 export type StorefrontMeta = {
     name: string;
     slug: string;
+    storefront_banner?: string | null;
     storefront_hero_image: string | null;
     storefront_hero_headline: string | null;
     storefront_logo: string | null;

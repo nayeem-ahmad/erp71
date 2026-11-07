@@ -328,7 +328,15 @@ describe('StorefrontPagesService', () => {
         });
 
         it('reads only published, undeleted pages of that shop', async () => {
-            db.tenant.findFirst.mockResolvedValue({ id: TENANT, name: 'Demo', blogSettings: null });
+            db.tenant.findFirst.mockResolvedValue({
+                id: TENANT,
+                name: 'Demo',
+                storefront_banner: 'Winter fitting in Dhaka',
+                storefront_logo: 'https://cdn.example/logo.png',
+                storefront_logo_show_name: false,
+                brand_primary_color: '#f6691e',
+                blogSettings: null,
+            });
             db.storefrontPage.findFirst.mockResolvedValue(publishedPage());
 
             const result = await service.getPublicPage(SLUG, 'about');
@@ -343,7 +351,14 @@ describe('StorefrontPagesService', () => {
                     }),
                 }),
             );
-            expect(result.shop).toEqual({ name: 'Demo', slug: SLUG });
+            expect(result.shop).toEqual({
+                name: 'Demo',
+                slug: SLUG,
+                storefront_banner: 'Winter fitting in Dhaka',
+                storefront_logo: 'https://cdn.example/logo.png',
+                storefront_logo_show_name: false,
+                brand_primary_color: '#f6691e',
+            });
         });
 
         it('404s a draft rather than serving it to a shopper', async () => {

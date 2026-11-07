@@ -50,6 +50,14 @@ describe('StorefrontHeader branding', () => {
         expect(screen.getByAltText('Rahim Traders')).toBeInTheDocument();
     });
 
+    it('renders the logo large enough to read as a wordmark', () => {
+        renderHeader({ logoUrl: 'https://cdn.example/logo.png', showStoreName: false });
+
+        const logo = document.querySelector('header img');
+        expect(logo?.className).toMatch(/sm:h-16/);
+        expect(logo?.className).toMatch(/sm:max-w-\[280px\]/);
+    });
+
     it('keeps the name when the preference says hide it but no logo was uploaded', () => {
         renderHeader({ logoUrl: null, showStoreName: false });
 

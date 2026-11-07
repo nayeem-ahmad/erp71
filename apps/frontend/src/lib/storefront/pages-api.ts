@@ -1,4 +1,5 @@
 import { publicApiBase } from '@/lib/api-base';
+import type { StorefrontMeta } from '@/lib/storefront/storefront-meta';
 
 /**
  * Server-side reads for a shop's standing storefront pages.
@@ -15,6 +16,15 @@ export type StorefrontPageMenuLink = {
     href: string;
     external: boolean;
     open_in_new_tab: boolean;
+};
+
+export type StorefrontPageShop = {
+    name: string;
+    slug: string;
+    storefront_banner: string | null;
+    storefront_logo: string | null;
+    storefront_logo_show_name: boolean;
+    brand_primary_color: string | null;
 };
 
 export type StorefrontPageContent = {
@@ -46,7 +56,7 @@ export async function fetchStorefrontPage(
     shopSlug: string,
     pageSlug: string,
 ): Promise<{
-    shop: { name: string; slug: string } | null;
+    shop: StorefrontPageShop | null;
     page: StorefrontPageContent | null;
     menu: StorefrontPageMenuLink[];
 }> {
@@ -55,4 +65,22 @@ export async function fetchStorefrontPage(
     );
     if (!data?.page) return { shop: null, page: null, menu: [] };
     return { shop: data.shop ?? null, page: data.page, menu: data.menu ?? [] };
+}
+
+/** Identity for document chrome: the page payload, with `/meta` filling any gaps. */
+export function storefrontDocumentShop(
+    slug: string,
+    shop: StorefrontPageShop | null,
+    meta: StorefrontMeta | null,
+): StorefrontPageShop | null {
+    const name = shop?.name ?? meta?.name;
+    if (!name) return null;
+    return {
+        name,
+        slug,
+        storefront_banner: shop?.storefront_banner ?? meta?.storefront_banner ?? null,
+        storefront_logo: shop?.storefront_logo ?? meta?.storefront_logo ?? null,
+        storefront_logo_show_name: shop?.storefront_logo_show_name ?? meta?.storefront_logo_show_name ?? true,
+        brand_primary_color: shop?.brand_primary_color ?? meta?.brand_primary_color ?? null,
+    };
 }
