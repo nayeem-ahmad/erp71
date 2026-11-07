@@ -2348,6 +2348,14 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    updateWarehouseTransfer: (id: string, data: any) => fetchWithAuth(`/warehouse-transfers/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteWarehouseTransfer: (id: string) => fetchWithAuth(`/warehouse-transfers/${id}`, {
+        method: 'DELETE',
+    }),
     sendWarehouseTransfer: (id: string) => fetchWithAuth(`/warehouse-transfers/${id}/send`, {
         method: 'POST',
     }),

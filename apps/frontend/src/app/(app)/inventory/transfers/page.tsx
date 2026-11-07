@@ -1,14 +1,16 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { ArrowRightLeft, CheckCircle2, Clock, Hash, Plus, ShieldCheck, Truck } from 'lucide-react';
+import { ArrowRightLeft, CheckCircle2, Clock, Eye, Hash, Pencil, Plus, ShieldCheck, Trash2, Truck } from 'lucide-react';
 import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { matchesAnyOf } from '@/lib/list-filter';
 import { api } from '@/lib/api';
-import { BranchFilter, StatusBadge, type StatusBadgeTone } from '@/components/ui';
+import { toast } from '@/lib/toast';
+import { RowActions, RowActionButton } from '@/components/table';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
+import { BranchFilter, Button, ConfirmDialog, Field, Input, Select, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { handleBranchForbidden, useBranchBoundState, useBranchScope } from '@/lib/branch-scope';
 import { PostingBadge } from '@/components/PostingBadge';
 import PageShell from '@/components/ui/compact/PageShell';
@@ -33,7 +35,32 @@ interface WarehouseTransfer {
     items: Array<{ id: string; product_id: string; quantity_sent: number; quantity_received: number; product?: { name: string } | null }>;
     posting_status?: string | null;
     voucher_number?: string | null;
+    notes?: string | null;
 }
+
+interface FormLine {
+    productId: string;
+    quantity: string | number;
+}
+
+interface TransferForm {
+    sourceWarehouseId: string;
+    destinationWarehouseId: string;
+    status: 'SENT' | 'DRAFT';
+    notes: string;
+    items: FormLine[];
+}
+
+const EMPTY_FORM: TransferForm = {
+    sourceWarehouseId: '',
+    destinationWarehouseId: '',
+    status: 'SENT',
+    notes: '',
+    items: [{ productId: '', quantity: 1 }],
+};
+
+/** Stock has not left the source — safe to remove from the list. */
+const DELETABLE_STATUSES = new Set(['DRAFT', 'PENDING_APPROVAL', 'REJECTED']);
 
 const columnHelper = createColumnHelper<WarehouseTransfer>();
 
@@ -69,6 +96,7 @@ export default function InventoryTransfersPage() {
     const [stores, setStores] = useState<any[]>([]);
     const [products, setProducts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const [statusFilter, setStatusFilter] = useState<string[]>([]);
     // A transfer belongs to both its branches, so either end may sit in a branch
     // other than the filter's: the pickers keep every warehouse, but a choice is
@@ -78,14 +106,12 @@ export default function InventoryTransfersPage() {
     const [productId, setProductId] = useState('');
     const [scopeFilter, setScopeFilter] = useState('');
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
-    const [form, setForm] = useState<any>({
-        sourceWarehouseId: '',
-        destinationWarehouseId: '',
-        status: 'SENT',
-        notes: '',
-        items: [{ productId: '', quantity: 1 }],
-    });
-    const [message, setMessage] = useState('');
+    const [formOpen, setFormOpen] = useState(false);
+    const [editing, setEditing] = useState<WarehouseTransfer | null>(null);
+    const [form, setForm] = useState<TransferForm>(EMPTY_FORM);
+    const [formError, setFormError] = useState('');
+    const [pendingDelete, setPendingDelete] = useState<WarehouseTransfer | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
         void loadOptions();
@@ -142,33 +168,89 @@ export default function InventoryTransfersPage() {
         }
     };
 
-    const handleCreate = async (event: React.FormEvent) => {
+    const blankForm = (): TransferForm => ({
+        ...EMPTY_FORM,
+        items: [{ productId: '', quantity: 1 }],
+    });
+
+    const openCreate = () => {
+        setEditing(null);
+        setForm(blankForm());
+        setFormError('');
+        setFormOpen(true);
+    };
+
+    const openEdit = (transfer: WarehouseTransfer) => {
+        setEditing(transfer);
+        setForm({
+            sourceWarehouseId: transfer.sourceWarehouse?.id ?? '',
+            destinationWarehouseId: transfer.destinationWarehouse?.id ?? '',
+            // A draft reopen defaults to draft so Save does not accidentally send.
+            status: 'DRAFT',
+            notes: transfer.notes ?? '',
+            items: transfer.items.length
+                ? transfer.items.map((item) => ({
+                    productId: item.product_id,
+                    quantity: item.quantity_sent,
+                }))
+                : [{ productId: '', quantity: 1 }],
+        });
+        setFormError('');
+        setFormOpen(true);
+    };
+
+    const closeForm = () => {
+        setFormOpen(false);
+        setEditing(null);
+        setFormError('');
+    };
+
+    const handleSave = async (event: React.FormEvent) => {
         event.preventDefault();
+        setFormError('');
+        setSaving(true);
         try {
-            await api.createWarehouseTransfer({
+            const payload = {
                 sourceWarehouseId: form.sourceWarehouseId,
                 destinationWarehouseId: form.destinationWarehouseId,
                 status: form.status,
                 notes: form.notes || undefined,
-                items: form.items.map((item: any) => ({
+                items: form.items.map((item) => ({
                     productId: item.productId,
                     quantity: Number(item.quantity),
                 })),
-            });
-            setMessage(t.inventoryTransfers.transferCreated);
+            };
+            if (editing) {
+                await api.updateWarehouseTransfer(editing.id, payload);
+                toast.success(t.inventoryTransfers.transferUpdated);
+            } else {
+                await api.createWarehouseTransfer(payload);
+                toast.success(t.inventoryTransfers.transferCreated);
+            }
             // A sent transfer has moved stock out of the source, so the on-hand
             // figures shown against each line are stale until reloaded.
             void loadOptions();
-            setForm({
-                sourceWarehouseId: '',
-                destinationWarehouseId: '',
-                status: 'SENT',
-                notes: '',
-                items: [{ productId: '', quantity: 1 }],
-            });
+            closeForm();
             await loadTransfers();
         } catch (error: any) {
-            setMessage(error.message || t.inventoryTransfers.createFailed);
+            setFormError(error.message || (editing ? t.inventoryTransfers.updateFailed : t.inventoryTransfers.createFailed));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!pendingDelete) return;
+        setDeleting(true);
+        try {
+            await api.deleteWarehouseTransfer(pendingDelete.id);
+            toast.success(t.inventoryTransfers.transferDeleted);
+            setPendingDelete(null);
+            await loadTransfers();
+        } catch (error: any) {
+            toast.error(error.message || t.inventoryTransfers.deleteFailed);
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -333,12 +415,39 @@ export default function InventoryTransfersPage() {
             columnHelper.display({
                 id: 'actions',
                 header: t.common.actions,
-                cell: (info) => (
-                    <Link href={`/inventory/transfers/${info.row.original.id}`} className="text-sm font-bold text-blue-700 hover:text-blue-900">
-                        {t.common.view}
-                    </Link>
-                ),
-                size: 100,
+                cell: ({ row }) => {
+                    const transfer = row.original;
+                    const canEdit = transfer.status === 'DRAFT';
+                    const canDelete = DELETABLE_STATUSES.has(transfer.status);
+                    return (
+                        <RowActions>
+                            <RowActionButton
+                                icon={<Eye />}
+                                label={t.common.view}
+                                href={`/inventory/transfers/${transfer.id}`}
+                            />
+                            {canEdit ? (
+                                <RowActionButton
+                                    icon={<Pencil />}
+                                    label={t.common.edit}
+                                    onClick={() => openEdit(transfer)}
+                                />
+                            ) : null}
+                            {canDelete ? (
+                                <RowActionButton
+                                    icon={<Trash2 />}
+                                    label={t.common.delete}
+                                    intent="danger"
+                                    onClick={() => setPendingDelete(transfer)}
+                                />
+                            ) : null}
+                        </RowActions>
+                    );
+                },
+                enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
+                size: 120,
             }),
         ],
         [t, statusLabels, storeNames],
@@ -459,130 +568,227 @@ export default function InventoryTransfersPage() {
         return { items, loading, label: listUi.statsLabel };
     }, [filteredTransfers, loading, locale, listUi]);
 
+    const deletePrompt = pendingDelete
+        ? t.inventoryTransfers.deleteDescription.replace('{number}', pendingDelete.transfer_number)
+        : '';
+
     return (
         <PageShell>
-                <PageHeader
-                    title={t.inventoryTransfers.title}
-                    subtitle={t.inventoryTransfers.subtitle}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.inventory,
-                        t.inventoryTransfers.title,
-                        'inventory',
-                    )}
-                    actions={<BranchFilter scope={branch} />}
-                />
+            <PageHeader
+                title={t.inventoryTransfers.title}
+                subtitle={t.inventoryTransfers.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.inventory,
+                    t.inventoryTransfers.title,
+                    'inventory',
+                )}
+                actions={(
+                    <>
+                        <BranchFilter scope={branch} />
+                        <Button onClick={openCreate} icon={<Plus className="h-4 w-4" />}>
+                            {t.inventoryTransfers.newTransfer}
+                        </Button>
+                    </>
+                )}
+            />
 
-                <form onSubmit={handleCreate} className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
-                    <div className="flex items-center gap-2">
-                        <Truck className="w-5 h-5 text-blue-600" />
-                        <h2 className="font-bold text-lg">{t.inventoryTransfers.newTransfer}</h2>
-                    </div>
-                    {message ? <div className="text-sm font-bold text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{message}</div> : null}
-                    <div className="grid md:grid-cols-4 gap-4">
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventoryTransfers.sourceWarehouse}</label>
-                            <select required value={form.sourceWarehouseId} onChange={(e) => setForm((current: any) => ({ ...current, sourceWarehouseId: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                                <option value="">{t.inventoryTransfers.selectSource}</option>
-                                {warehouseOptions}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventoryTransfers.destinationWarehouse}</label>
-                            <select required value={form.destinationWarehouseId} onChange={(e) => setForm((current: any) => ({ ...current, destinationWarehouseId: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                                <option value="">{t.inventoryTransfers.selectDestination}</option>
-                                {warehouseOptions}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventoryTransfers.initialStatus}</label>
-                            <select value={form.status} onChange={(e) => setForm((current: any) => ({ ...current, status: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                                <option value="SENT">{t.inventoryTransfers.sendNow}</option>
-                                <option value="DRAFT">{t.inventoryTransfers.saveAsDraft}</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.common.notes}</label>
-                            <input value={form.notes} onChange={(e) => setForm((current: any) => ({ ...current, notes: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.common.optional} />
-                        </div>
-                    </div>
+            <DataTable<WarehouseTransfer>
+                tableId="inventory-transfers"
+                columns={columns}
+                data={filteredTransfers}
+                title={t.inventoryTransfers.title}
+                isLoading={loading}
+                emptyMessage={t.inventoryTransfers.emptyMessage}
+                emptyIcon={<Truck className="w-16 h-16 text-gray-200" />}
+                searchPlaceholder={t.inventoryTransfers.searchPlaceholder}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+            />
 
-                    {formCrossesBranches ? (
-                        <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-                            <span>{t.inventoryTransfers.crossBranchNotice}</span>
-                        </div>
-                    ) : null}
+            {formOpen ? (
+                <ModalShell size="lg" onBackdropClick={closeForm}>
+                    <form onSubmit={handleSave} className="flex min-h-0 flex-1 flex-col">
+                        <ModalHeader
+                            title={(
+                                <span className="inline-flex items-center gap-2">
+                                    <Truck className="h-5 w-5 text-blue-600" />
+                                    {editing ? t.inventoryTransfers.editTransfer : t.inventoryTransfers.newTransfer}
+                                </span>
+                            )}
+                            onClose={closeForm}
+                            closeLabel={t.common.close}
+                        />
 
-                    <div className="space-y-3">
-                        {form.items.map((item: any, index: number) => {
-                            const product = productsById.get(item.productId);
-                            const sourceQty = product && form.sourceWarehouseId ? availableQtyOf(product, form.sourceWarehouseId) : null;
-                            const overStock = sourceQty !== null && Number(item.quantity) > sourceQty;
-                            return (
-                                <div key={index} className="space-y-1">
-                                <div className="grid md:grid-cols-[1fr_160px_120px] gap-3 items-end">
-                                    <div>
-                                        <IdSearchSelect
-                                            items={products}
-                                            value={item.productId}
-                                            onChange={(id) => setForm((current: any) => ({ ...current, items: current.items.map((line: any, lineIndex: number) => lineIndex === index ? { ...line, productId: id } : line) }))}
-                                            label={t.common.product}
-                                            placeholder={t.inventoryTransfers.selectProduct}
-                                            emptyLabel={t.pos.searchPlaceholder}
-                                            noMatchLabel={t.common.noData}
-                                            subtitle={(option) => [option.sku, stockHint(option)].filter(Boolean).join(' · ')}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.common.quantity}</label>
-                                        <input type="number" min="1" value={item.quantity} onChange={(e) => setForm((current: any) => ({ ...current, items: current.items.map((line: any, lineIndex: number) => lineIndex === index ? { ...line, quantity: e.target.value } : line) }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
-                                    </div>
-                                    <button type="button" onClick={() => setForm((current: any) => ({ ...current, items: current.items.length === 1 ? current.items : current.items.filter((_: any, lineIndex: number) => lineIndex !== index) }))} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-xl text-sm font-bold">
-                                        {t.inventoryShrinkage.remove}
-                                    </button>
+                        <div className="flex-1 space-y-4 overflow-y-auto p-4">
+                            {formError ? (
+                                <div className="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                                    {formError}
                                 </div>
-                                {product ? (
-                                    <p className="ms-1 text-xs text-gray-500" data-testid={`transfer-line-stock-${index}`}>
-                                        {stockHint(product)}
-                                        {form.destinationWarehouseId ? (
-                                            <> · {t.inventoryTransfers.atDestination.replace('{qty}', String(availableQtyOf(product, form.destinationWarehouseId)))}</>
-                                        ) : null}
-                                        {overStock ? (
-                                            <span className="text-amber-700"> · {t.inventoryTransfers.exceedsSourceStock}</span>
-                                        ) : null}
-                                    </p>
-                                ) : null}
+                            ) : null}
+
+                            <div className="grid gap-3 md:grid-cols-2">
+                                <Field label={t.inventoryTransfers.sourceWarehouse} required htmlFor="transfer-source">
+                                    <Select
+                                        id="transfer-source"
+                                        required
+                                        value={form.sourceWarehouseId}
+                                        onChange={(e) => setForm((current) => ({ ...current, sourceWarehouseId: e.target.value }))}
+                                    >
+                                        <option value="">{t.inventoryTransfers.selectSource}</option>
+                                        {warehouseOptions}
+                                    </Select>
+                                </Field>
+                                <Field label={t.inventoryTransfers.destinationWarehouse} required htmlFor="transfer-destination">
+                                    <Select
+                                        id="transfer-destination"
+                                        required
+                                        value={form.destinationWarehouseId}
+                                        onChange={(e) => setForm((current) => ({ ...current, destinationWarehouseId: e.target.value }))}
+                                    >
+                                        <option value="">{t.inventoryTransfers.selectDestination}</option>
+                                        {warehouseOptions}
+                                    </Select>
+                                </Field>
+                                <Field label={t.inventoryTransfers.initialStatus} htmlFor="transfer-status">
+                                    <Select
+                                        id="transfer-status"
+                                        value={form.status}
+                                        onChange={(e) => setForm((current) => ({
+                                            ...current,
+                                            status: e.target.value as 'SENT' | 'DRAFT',
+                                        }))}
+                                    >
+                                        <option value="SENT">{t.inventoryTransfers.sendNow}</option>
+                                        <option value="DRAFT">{t.inventoryTransfers.saveAsDraft}</option>
+                                    </Select>
+                                </Field>
+                                <Field label={t.common.notes} htmlFor="transfer-notes">
+                                    <Input
+                                        id="transfer-notes"
+                                        value={form.notes}
+                                        onChange={(e) => setForm((current) => ({ ...current, notes: e.target.value }))}
+                                        placeholder={t.common.optional}
+                                    />
+                                </Field>
+                            </div>
+
+                            {formCrossesBranches ? (
+                                <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <span>{t.inventoryTransfers.crossBranchNotice}</span>
                                 </div>
-                            );
-                        })}
-                    </div>
+                            ) : null}
 
-                    <div className="flex items-center justify-between">
-                        <button type="button" onClick={() => setForm((current: any) => ({ ...current, items: [...current.items, { productId: '', quantity: 1 }] }))} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center">
-                            <Plus className="w-4 h-4 me-2" /> {t.inventoryTransfers.addLine}
-                        </button>
-                        <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-sm">
-                            <ArrowRightLeft className="w-4 h-4 me-2" /> {t.inventoryTransfers.createTransfer}
-                        </button>
-                    </div>
-                </form>
+                            <div className="space-y-3">
+                                {form.items.map((item, index) => {
+                                    const product = productsById.get(item.productId);
+                                    const sourceQty = product && form.sourceWarehouseId
+                                        ? availableQtyOf(product, form.sourceWarehouseId)
+                                        : null;
+                                    const overStock = sourceQty !== null && Number(item.quantity) > sourceQty;
+                                    return (
+                                        <div key={index} className="space-y-1">
+                                            <div className="grid items-end gap-3 md:grid-cols-[1fr_160px_120px]">
+                                                <div>
+                                                    <IdSearchSelect
+                                                        items={products}
+                                                        value={item.productId}
+                                                        onChange={(id) => setForm((current) => ({
+                                                            ...current,
+                                                            items: current.items.map((line, lineIndex) => (
+                                                                lineIndex === index ? { ...line, productId: id } : line
+                                                            )),
+                                                        }))}
+                                                        label={t.common.product}
+                                                        placeholder={t.inventoryTransfers.selectProduct}
+                                                        emptyLabel={t.pos.searchPlaceholder}
+                                                        noMatchLabel={t.common.noData}
+                                                        subtitle={(option) => [option.sku, stockHint(option)].filter(Boolean).join(' · ')}
+                                                    />
+                                                </div>
+                                                <Field label={t.common.quantity} htmlFor={`transfer-qty-${index}`}>
+                                                    <Input
+                                                        id={`transfer-qty-${index}`}
+                                                        type="number"
+                                                        min="1"
+                                                        value={item.quantity}
+                                                        onChange={(e) => setForm((current) => ({
+                                                            ...current,
+                                                            items: current.items.map((line, lineIndex) => (
+                                                                lineIndex === index ? { ...line, quantity: e.target.value } : line
+                                                            )),
+                                                        }))}
+                                                    />
+                                                </Field>
+                                                <Button
+                                                    type="button"
+                                                    variant="secondary"
+                                                    onClick={() => setForm((current) => ({
+                                                        ...current,
+                                                        items: current.items.length === 1
+                                                            ? current.items
+                                                            : current.items.filter((_, lineIndex) => lineIndex !== index),
+                                                    }))}
+                                                >
+                                                    {t.inventoryShrinkage.remove}
+                                                </Button>
+                                            </div>
+                                            {product ? (
+                                                <p className="ms-1 text-xs text-gray-500" data-testid={`transfer-line-stock-${index}`}>
+                                                    {stockHint(product)}
+                                                    {form.destinationWarehouseId ? (
+                                                        <> · {t.inventoryTransfers.atDestination.replace('{qty}', String(availableQtyOf(product, form.destinationWarehouseId)))}</>
+                                                    ) : null}
+                                                    {overStock ? (
+                                                        <span className="text-amber-700"> · {t.inventoryTransfers.exceedsSourceStock}</span>
+                                                    ) : null}
+                                                </p>
+                                            ) : null}
+                                        </div>
+                                    );
+                                })}
+                            </div>
 
-                <DataTable<WarehouseTransfer>
-                    tableId="inventory-transfers"
-                    columns={columns}
-                    data={filteredTransfers}
-                    title={t.inventoryTransfers.title}
-                    isLoading={loading}
-                    emptyMessage={t.inventoryTransfers.emptyMessage}
-                    emptyIcon={<Truck className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.inventoryTransfers.searchPlaceholder}
-                    filters={filters}
-                    filterLayout="row"
-                    stats={stats}
-                    enableColumnFilters={false}
-                    viewOptions
-                />
-    </PageShell>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                icon={<Plus className="h-4 w-4" />}
+                                onClick={() => setForm((current) => ({
+                                    ...current,
+                                    items: [...current.items, { productId: '', quantity: 1 }],
+                                }))}
+                            >
+                                {t.inventoryTransfers.addLine}
+                            </Button>
+                        </div>
+
+                        <ModalFooter>
+                            <Button type="button" variant="secondary" onClick={closeForm} disabled={saving}>
+                                {t.common.cancel}
+                            </Button>
+                            <Button type="submit" loading={saving} icon={<ArrowRightLeft className="h-4 w-4" />}>
+                                {editing ? t.inventoryTransfers.saveTransfer : t.inventoryTransfers.createTransfer}
+                            </Button>
+                        </ModalFooter>
+                    </form>
+                </ModalShell>
+            ) : null}
+
+            <ConfirmDialog
+                open={Boolean(pendingDelete)}
+                title={t.inventoryTransfers.deleteTitle}
+                prompt={deletePrompt}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                danger
+                loading={deleting}
+                onConfirm={() => void handleDelete()}
+                onCancel={() => setPendingDelete(null)}
+            />
+        </PageShell>
     );
 }

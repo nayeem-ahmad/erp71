@@ -46,6 +46,8 @@ describe('WarehouseTransfersService', () => {
             },
             warehouseTransferItem: {
                 update: jest.fn(),
+                deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+                createMany: jest.fn().mockResolvedValue({ count: 0 }),
             },
             product: {
                 count: jest.fn(),
@@ -57,6 +59,7 @@ describe('WarehouseTransfersService', () => {
             warehouseTransfer: {
                 findMany: jest.fn(),
                 findFirst: jest.fn(),
+                deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
             },
         };
 
@@ -653,5 +656,61 @@ describe('WarehouseTransfersService', () => {
                 }),
             );
         });
+    });
+
+    describe('update and remove', () => {
+        const draftDto = {
+            sourceWarehouseId: 'wh-source',
+            destinationWarehouseId: 'wh-dest',
+            status: 'DRAFT' as const,
+            items: [{ productId: 'prod-1', quantity: 4 }],
+        };
+
+        it('rewrites a draft without moving stock', async () => {
+            tx.product.count.mockResolvedValue(1);
+            tx.warehouseTransfer.findFirst
+                .mockResolvedValueOnce(createdTransfer({ status: 'DRAFT' }))
+                .mockResolvedValueOnce(createdTransfer({ status: 'DRAFT' }));
+            tx.warehouseTransfer.update.mockResolvedValue({});
+
+            await service.update('tenant-1', 'transfer-1', draftDto);
+
+            expect(tx.warehouseTransferItem.deleteMany).toHaveBeenCalledWith({ where: { transfer_id: 'transfer-1' } });
+            expect(tx.warehouseTransferItem.createMany).toHaveBeenCalled();
+            expect(applyInventoryMovement).not.toHaveBeenCalled();
+            expect(tx.warehouseTransfer.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { id: 'transfer-1' },
+                    data: expect.objectContaining({ status: 'DRAFT', sent_at: null }),
+                }),
+            );
+        });
+
+        it('refuses to edit a transfer that is no longer a draft', async () => {
+            tx.warehouseTransfer.findFirst.mockResolvedValue(createdTransfer({ status: 'SENT' }));
+
+            await expect(service.update('tenant-1', 'transfer-1', draftDto)).rejects.toThrow(BadRequestException);
+            expect(tx.warehouseTransferItem.deleteMany).not.toHaveBeenCalled();
+        });
+
+        it('deletes a draft that never moved stock', async () => {
+            db.warehouseTransfer.findFirst.mockResolvedValue({ id: 'transfer-1', status: 'DRAFT' });
+
+            await service.remove('tenant-1', 'transfer-1');
+
+            expect(db.warehouseTransfer.deleteMany).toHaveBeenCalledWith({
+                where: { id: 'transfer-1', tenant_id: 'tenant-1' },
+            });
+        });
+
+        it.each(['SENT', 'PARTIALLY_RECEIVED', 'RECEIVED'])(
+            'refuses to delete a transfer in %s',
+            async (status) => {
+                db.warehouseTransfer.findFirst.mockResolvedValue({ id: 'transfer-1', status });
+
+                await expect(service.remove('tenant-1', 'transfer-1')).rejects.toThrow(BadRequestException);
+                expect(db.warehouseTransfer.deleteMany).not.toHaveBeenCalled();
+            },
+        );
     });
 });

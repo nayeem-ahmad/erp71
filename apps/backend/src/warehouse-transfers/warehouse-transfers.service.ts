@@ -8,6 +8,7 @@ import {
     ListWarehouseTransfersQueryDto,
     ReceiveWarehouseTransferDto,
     RejectWarehouseTransferDto,
+    UpdateWarehouseTransferDto,
 } from './warehouse-transfer.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { autoPostFromRules } from '../accounting/posting.utils';
@@ -166,6 +167,122 @@ export class WarehouseTransfersService {
         }
 
         return transfer;
+    }
+
+    /**
+     * Rewrite a draft. Stock has not moved yet, so the lines and warehouses can
+     * be replaced wholesale — the same rules `create` applies, including parking
+     * a cross-branch "Send now" at PENDING_APPROVAL.
+     *
+     * Later statuses are refused here: a sent transfer has already depleted the
+     * source, and an approval-held one is what the approver is looking at.
+     */
+    async update(tenantId: string, id: string, dto: UpdateWarehouseTransferDto) {
+        this.assertDistinctWarehouses(dto.sourceWarehouseId, dto.destinationWarehouseId);
+        this.assertUniqueLines(dto.items.map((item) => item.productId));
+
+        return this.announceIfHeld(tenantId, await this.db.$transaction(async (tx) => {
+            const existing = await tx.warehouseTransfer.findFirst({
+                where: { id, tenant_id: tenantId },
+                include: this.transferInclude(),
+            });
+
+            if (!existing) {
+                throw new NotFoundException('Warehouse transfer not found.');
+            }
+
+            if (existing.status !== 'DRAFT') {
+                throw new BadRequestException('Only draft transfers can be edited.');
+            }
+
+            const sourceWarehouse = await assertWarehouseBelongsToTenant(tx, tenantId, dto.sourceWarehouseId);
+            const destinationWarehouse = await assertWarehouseBelongsToTenant(tx, tenantId, dto.destinationWarehouseId);
+            await this.assertProductsBelongToTenant(tx, tenantId, dto.items.map((item) => item.productId));
+
+            const branch = branchColumns(sourceWarehouse, destinationWarehouse);
+            const requiresApproval = branch.is_cross_branch;
+            const requestedStatus = dto.status === 'DRAFT' ? 'DRAFT' : 'SENT';
+            const status = requestedStatus === 'SENT' && requiresApproval
+                ? TRANSFER_PENDING_APPROVAL
+                : requestedStatus;
+
+            await tx.warehouseTransferItem.deleteMany({ where: { transfer_id: id } });
+            await tx.warehouseTransferItem.createMany({
+                data: dto.items.map((item) => ({
+                    transfer_id: id,
+                    product_id: item.productId,
+                    quantity_sent: item.quantity,
+                    note: item.note,
+                })),
+            });
+
+            await tx.warehouseTransfer.update({
+                where: { id },
+                data: {
+                    source_warehouse_id: dto.sourceWarehouseId,
+                    destination_warehouse_id: dto.destinationWarehouseId,
+                    ...branch,
+                    requires_approval: requiresApproval,
+                    status,
+                    notes: dto.notes,
+                    sent_at: status === 'SENT' ? new Date() : null,
+                },
+            });
+
+            let posting: AutoPostOutcome = EMPTY_POSTING;
+
+            if (status === 'SENT') {
+                for (const item of dto.items) {
+                    await applyInventoryMovement(tx, {
+                        tenantId,
+                        productId: item.productId,
+                        warehouseId: dto.sourceWarehouseId,
+                        quantityDelta: -item.quantity,
+                        movementType: 'TRANSFER_OUT',
+                        referenceType: 'WAREHOUSE_TRANSFER',
+                        referenceId: id,
+                        note: item.note,
+                    });
+                }
+
+                const forPosting = await tx.warehouseTransfer.findFirst({
+                    where: { id, tenant_id: tenantId },
+                    include: this.transferInclude(),
+                });
+                posting = await this.postTransfer(tx, tenantId, forPosting);
+            }
+
+            const updated = await tx.warehouseTransfer.findFirst({
+                where: { id, tenant_id: tenantId },
+                include: this.transferInclude(),
+            });
+
+            return { ...updated, ...posting };
+        }));
+    }
+
+    /**
+     * Drop a transfer that never moved stock. DRAFT, PENDING_APPROVAL and
+     * REJECTED are safe; anything past that has already depleted the source
+     * (or booked a receipt) and must be reversed through receive / accounting,
+     * not deleted.
+     */
+    async remove(tenantId: string, id: string) {
+        const transfer = await this.db.warehouseTransfer.findFirst({
+            where: { id, tenant_id: tenantId },
+        });
+
+        if (!transfer) {
+            throw new NotFoundException('Warehouse transfer not found.');
+        }
+
+        if (!['DRAFT', TRANSFER_PENDING_APPROVAL, TRANSFER_REJECTED].includes(transfer.status)) {
+            throw new BadRequestException('Only transfers that have not moved stock can be deleted.');
+        }
+
+        await this.db.warehouseTransfer.deleteMany({
+            where: { id, tenant_id: tenantId },
+        });
     }
 
     /**
