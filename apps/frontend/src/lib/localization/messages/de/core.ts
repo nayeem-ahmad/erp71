@@ -1716,6 +1716,7 @@ export const coreMessages = {
     },
     supplierLedger: {
         title: "Lieferantenkonto",
+        statsLabel: "Kontoübersicht",
         ledgerTitle: "Kontobewegungen",
         subtitle: "Offene Verbindlichkeiten und den Verlauf der Kredittransaktionen ansehen.",
         currentDue: "Aktuell offen",

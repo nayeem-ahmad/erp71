@@ -118,7 +118,14 @@ export const inventoryExtrasMessages = {
             "duplicateProduct": "Le même produit figure deux fois. Fusionnez les lignes.",
             "saveFailed": "Impossible d'enregistrer la demande.",
             "actionFailed": "Cette action n'a pas pu aboutir."
-        }
+        },
+    "listUi": {
+        "statsLabel": "Synthèse des demandes",
+        "total": "Demandes",
+        "submitted": "Soumises",
+        "approved": "Approuvées",
+        "open": "Ouvertes",
+    }
     },
     "inventoryTransfers": {
         "title": "Transferts entre entrepôts",
@@ -168,7 +175,14 @@ export const inventoryExtrasMessages = {
             "received": "Reçu",
             "pendingApproval": "En attente d’approbation",
             "rejected": "Refusé"
-        }
+        },
+    "listUi": {
+        "statsLabel": "Synthèse des transferts",
+        "total": "Transferts",
+        "pendingApproval": "En attente d'approbation",
+        "inTransit": "En transit",
+        "received": "Reçus",
+    }
     },
     "inventoryShrinkage": {
         "title": "Démarque de stock",
@@ -209,7 +223,12 @@ export const inventoryExtrasMessages = {
         "addLine": "Ajouter une ligne",
         "remove": "Supprimer",
         "notes": "Notes",
-        "selectProduct": "Sélectionner un produit"
+        "selectProduct": "Sélectionner un produit",
+    "listUi": {
+        "statsLabel": "Synthèse des pertes",
+        "total": "Écritures",
+        "totalQty": "Qté totale",
+    }
     },
     "inventoryStockTakes": {
         "title": "Inventaires physiques",
@@ -234,7 +253,20 @@ export const inventoryExtrasMessages = {
             "created": "Créée le",
             "actions": "Actions",
             "open": "Ouvrir"
-        }
+        },
+    "statuses": {
+        "draft": "Brouillon",
+        "counting": "Comptage",
+        "review": "En revue",
+        "posted": "Comptabilisé",
+        "cancelled": "Annulé",
+    },
+    "listUi": {
+        "statsLabel": "Synthèse des inventaires",
+        "sessions": "Sessions",
+        "open": "Ouvertes",
+        "discrepant": "Écarts",
+    }
     },
     "inventoryLedger": {
         "title": "Grand livre des stocks",
@@ -352,6 +384,13 @@ export const inventoryExtrasMessages = {
         "reasonUpdateFailed": "Impossible de mettre à jour le motif de stock."
     },
     "inventoryReports": {
+        "listUi": {
+            "statsLabel": "Chiffres du rapport",
+            "suggestionCount": "Suggestions",
+            "suggestedUnits": "Unités suggérées",
+            "outOfStock": "Rupture de stock",
+            "movementCount": "Mouvements"
+        },
         "reorder": {
             "title": "Suggestions de réapprovisionnement",
             "subtitle": "Produits sous leur seuil de réapprovisionnement, avec les quantités d'achat suggérées",

@@ -118,6 +118,13 @@ export const inventoryExtrasMessages = {
             "duplicateProduct": "The same product is listed twice. Combine the lines.",
             "saveFailed": "Failed to save the demand.",
             "actionFailed": "That action could not be completed."
+        },
+        "listUi": {
+            "statsLabel": "Demand summary",
+            "total": "Demands",
+            "submitted": "Submitted",
+            "approved": "Approved",
+            "open": "Open"
         }
     },
     "inventoryTransfers": {
@@ -168,6 +175,13 @@ export const inventoryExtrasMessages = {
             "received": "Received",
             "pendingApproval": "Pending Approval",
             "rejected": "Rejected"
+        },
+        "listUi": {
+            "statsLabel": "Transfer summary",
+            "total": "Transfers",
+            "pendingApproval": "Pending approval",
+            "inTransit": "In transit",
+            "received": "Received"
         }
     },
     "inventoryShrinkage": {
@@ -209,7 +223,12 @@ export const inventoryExtrasMessages = {
         "addLine": "Add Line",
         "remove": "Remove",
         "notes": "Notes",
-        "selectProduct": "Select product"
+        "selectProduct": "Select product",
+        "listUi": {
+            "statsLabel": "Shrinkage summary",
+            "total": "Entries",
+            "totalQty": "Total qty"
+        }
     },
     "inventoryStockTakes": {
         "title": "Stock Takes",
@@ -234,6 +253,19 @@ export const inventoryExtrasMessages = {
             "created": "Created",
             "actions": "Actions",
             "open": "Open"
+        },
+        "statuses": {
+            "draft": "Draft",
+            "counting": "Counting",
+            "review": "In review",
+            "posted": "Posted",
+            "cancelled": "Cancelled"
+        },
+        "listUi": {
+            "statsLabel": "Stock-take summary",
+            "sessions": "Sessions",
+            "open": "Open",
+            "discrepant": "Discrepant"
         }
     },
     "inventoryLedger": {
@@ -352,6 +384,13 @@ export const inventoryExtrasMessages = {
         "reasonUpdateFailed": "Failed to update inventory reason."
     },
     "inventoryReports": {
+        "listUi": {
+            "statsLabel": "Report figures",
+            "suggestionCount": "Suggestions",
+            "suggestedUnits": "Suggested units",
+            "outOfStock": "Out of stock",
+            "movementCount": "Movements"
+        },
         "reorder": {
             "title": "Reorder Suggestions",
             "subtitle": "Products below reorder thresholds with suggested purchase quantities",

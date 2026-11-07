@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ExpenseHeadsPage from './page';
 import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
 
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
@@ -14,27 +15,45 @@ jest.mock('next/link', () => {
     );
 });
 
+jest.mock('@/lib/toast', () => ({
+    toast: { success: jest.fn(), error: jest.fn() },
+}));
+
+let mockTableProps: any = null;
 jest.mock('@/components/data-table', () => ({
-    DataTable: (props: {
-        filterLayout?: string;
-        viewOptions?: boolean;
-        data?: Array<{ id: string; name: string }>;
-        filters?: Array<{ id: string; onChange?: (next: string[]) => void }>;
-    }) => (
-        <div data-testid="data-table" data-filter-layout={props.filterLayout} data-view-options={String(Boolean(props.viewOptions))}>
-            <span data-testid="row-count">{props.data?.length ?? 0}</span>
-            <button type="button" onClick={() => props.filters?.find((filter) => filter.id === 'category')?.onChange?.(['cat-rent'])}>
-                Rent only
-            </button>
-            {(props.data ?? []).map((row) => <span key={row.id}>{row.name}</span>)}
-        </div>
-    ),
+    DataTable: (props: any) => {
+        mockTableProps = props;
+        const actions = props.columns?.find((column: any) => column.id === 'actions');
+        return (
+            <div
+                data-testid="data-table"
+                data-filter-layout={props.filterLayout}
+                data-view-options={String(Boolean(props.viewOptions))}
+            >
+                <span data-testid="row-count">{props.data?.length ?? 0}</span>
+                <button
+                    type="button"
+                    onClick={() => props.filters?.find((filter: any) => filter.id === 'category')?.onChange?.(['cat-rent'])}
+                >
+                    Rent only
+                </button>
+                {(props.data ?? []).map((row: { id: string; name: string }) => (
+                    <div key={row.id}>
+                        <span>{row.name}</span>
+                        {actions?.cell?.({ row: { original: row } })}
+                    </div>
+                ))}
+            </div>
+        );
+    },
 }));
 
 jest.mock('@/lib/api', () => ({
     api: {
         getExpenseCategories: jest.fn(),
         createExpenseHead: jest.fn(),
+        updateExpenseHead: jest.fn(),
+        deleteExpenseHead: jest.fn(),
         getAccounts: jest.fn(),
     },
 }));
@@ -60,19 +79,27 @@ const rent = {
 describe('ExpenseHeadsPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockTableProps = null;
         (api.getExpenseCategories as jest.Mock).mockResolvedValue([salary, rent]);
         (api.getAccounts as jest.Mock).mockResolvedValue([
             { id: 'acct-salary', name: 'Salary & Wages', code: '510202', type: 'expense' },
         ]);
         (api.createExpenseHead as jest.Mock).mockResolvedValue({ id: 'head-new' });
+        (api.deleteExpenseHead as jest.Mock).mockResolvedValue({});
     });
 
-    it('uses the expenses list layout and narrows by category', async () => {
+    it('uses the sales list layout, strip and category chip', async () => {
         render(<ExpenseHeadsPage />);
 
         const table = await screen.findByTestId('data-table');
         expect(table).toHaveAttribute('data-filter-layout', 'row');
         expect(table).toHaveAttribute('data-view-options', 'true');
+        expect(mockTableProps.enableColumnFilters).toBe(false);
+        expect(mockTableProps.stats.items.map((item: any) => item.id)).toEqual(['count', 'categories', 'entries']);
+        expect(mockTableProps.filters).toEqual([
+            expect.objectContaining({ id: 'category', type: 'multi-select' }),
+            expect.objectContaining({ id: 'entries', type: 'number', more: true }),
+        ]);
         expect(await screen.findByTestId('row-count')).toHaveTextContent('2');
 
         fireEvent.click(screen.getByRole('button', { name: /rent only/i }));
@@ -103,5 +130,26 @@ describe('ExpenseHeadsPage', () => {
                 }),
             ),
         );
+        expect(toast.success).toHaveBeenCalled();
+    });
+
+    it('deletes through ConfirmDialog and the global toaster', async () => {
+        render(<ExpenseHeadsPage />);
+        await screen.findByText('Salary - Karim');
+
+        fireEvent.click(screen.getAllByRole('button', { name: /^delete$/i })[0]);
+        expect(await screen.findByText('Delete this expense head?')).toBeInTheDocument();
+        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^delete$/i }));
+
+        await waitFor(() => expect(api.deleteExpenseHead).toHaveBeenCalledWith('head-karim'));
+        expect(toast.success).toHaveBeenCalled();
+    });
+
+    it('keeps row actions from forcing 44px row height on desktop', async () => {
+        render(<ExpenseHeadsPage />);
+        const edit = await screen.findAllByRole('button', { name: /edit head/i });
+        expect(edit[0]).toHaveClass('h-7');
+        expect(edit[0].className.split(/\s+/)).toContain('max-md:min-h-touch');
+        expect(edit[0].className.split(/\s+/)).not.toContain('min-h-touch');
     });
 });

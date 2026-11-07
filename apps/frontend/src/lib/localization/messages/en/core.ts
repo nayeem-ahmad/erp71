@@ -1716,6 +1716,7 @@ export const coreMessages = {
     },
     supplierLedger: {
         title: 'Supplier Ledger',
+        statsLabel: 'Ledger summary',
         ledgerTitle: 'Ledger entries',
         subtitle: 'View payable balances and credit transaction history.',
         currentDue: 'Current payable',

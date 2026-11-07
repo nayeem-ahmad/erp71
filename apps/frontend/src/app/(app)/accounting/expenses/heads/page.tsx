@@ -6,14 +6,17 @@ import Link from 'next/link';
 import { FolderTree, Pencil, Plus, Receipt, Settings2, Tags, Trash2 } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
 import { AccountingPageShell } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { compactDensity } from '@/lib/ui/compact-density';
-import { Button } from '@/components/ui';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
+import type { NumberCondition } from '@/lib/number-condition';
+import { toast } from '@/lib/toast';
+import { Button, ConfirmDialog, Field, Input, Textarea, buttonClassName } from '@/components/ui';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import AccountSelect, { type AccountOption } from '@/components/accounting/AccountSelect';
 
@@ -56,6 +59,8 @@ function ExpenseHeadsPageContent() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [categoryIds, setCategoryIds] = useState<string[]>(initialCategory ? [initialCategory] : []);
+    const [categoryExclude, setCategoryExclude] = useState(false);
+    const [entriesFilter, setEntriesFilter] = useState<NumberCondition | null>(null);
     const [showForm, setShowForm] = useState(false);
     const [editing, setEditing] = useState<HeadRow | null>(null);
     const [categoryId, setCategoryId] = useState('');
@@ -64,15 +69,16 @@ function ExpenseHeadsPageContent() {
     const [accountId, setAccountId] = useState('');
     const [accounts, setAccounts] = useState<AccountOption[]>([]);
     const [saving, setSaving] = useState(false);
-    const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [pendingDelete, setPendingDelete] = useState<HeadRow | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const loadCategories = async () => {
         setLoading(true);
         try {
             const data = await api.getExpenseCategories();
             setCategories(Array.isArray(data) ? data : []);
-        } catch (error) {
-            console.error('Failed to load expense heads', error);
+        } catch (error: any) {
+            toast.error(error?.message || t.common.error);
         } finally {
             setLoading(false);
         }
@@ -80,6 +86,8 @@ function ExpenseHeadsPageContent() {
 
     useEffect(() => {
         void loadCategories();
+        // Loaded once; the loader reads only the copy.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const loadAccounts = async () => {
@@ -138,7 +146,7 @@ function ExpenseHeadsPageContent() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!name.trim() || (!editing && !categoryId)) {
-            setToast({ type: 'error', message: !categoryId && !editing ? t.expenses.selectCategory : t.expenses.headNameRequired });
+            toast.error(!categoryId && !editing ? t.expenses.selectCategory : t.expenses.headNameRequired);
             return;
         }
         setSaving(true);
@@ -150,55 +158,58 @@ function ExpenseHeadsPageContent() {
             };
             if (editing) {
                 await api.updateExpenseHead(editing.id, payload);
-                setToast({ type: 'success', message: t.expenses.headUpdated });
+                toast.success(t.expenses.headUpdated);
             } else {
                 await api.createExpenseHead({ categoryId, ...payload });
-                setToast({ type: 'success', message: t.expenses.headCreated });
+                toast.success(t.expenses.headCreated);
             }
             setShowForm(false);
             await loadCategories();
         } catch (error: any) {
-            setToast({ type: 'error', message: error?.message || t.common.error });
+            toast.error(error?.message || t.common.error);
         } finally {
             setSaving(false);
         }
     };
 
-    const handleDelete = async (head: HeadRow) => {
-        if (!globalThis.confirm(t.expenses.deleteHeadConfirm)) return;
+    const handleDelete = async () => {
+        if (!pendingDelete) return;
+        setDeleting(true);
         try {
-            await api.deleteExpenseHead(head.id);
-            setToast({ type: 'success', message: t.expenses.headDeleted });
+            await api.deleteExpenseHead(pendingDelete.id);
+            toast.success(t.expenses.headDeleted);
+            setPendingDelete(null);
             await loadCategories();
         } catch (error: any) {
-            setToast({ type: 'error', message: error?.message || t.common.error });
+            toast.error(error?.message || t.common.error);
+        } finally {
+            setDeleting(false);
         }
     };
 
-    const filtered = useMemo(() => {
-        const needle = search.trim().toLowerCase();
-        const selected = new Set(categoryIds);
-        return heads.filter((head) => {
-            if (selected.size && !selected.has(head.category_id)) return false;
-            if (!needle) return true;
-            const account = (head.account ? accountLabel(head.account) : categoryAccountChoice(head.category)).toLowerCase();
-            return head.name.toLowerCase().includes(needle)
-                || head.categoryName.toLowerCase().includes(needle)
-                || (head.description ?? '').toLowerCase().includes(needle)
-                || account.includes(needle);
-        });
-    }, [heads, categoryIds, search, t]);
+    const filtered = useMemo(
+        () =>
+            heads.filter((head) => {
+                if (!matchesAnyOf(categoryIds, head.category_id, categoryExclude)) return false;
+                if (!matchesNumberCondition(head._count?.entries ?? 0, entriesFilter)) return false;
+                const account = head.account ? accountLabel(head.account) : categoryAccountChoice(head.category);
+                return matchesSearch(search, head.name, head.categoryName, head.description, account);
+            }),
+        // accountLabel / categoryAccountChoice read only `t`.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [heads, categoryIds, categoryExclude, entriesFilter, search, t],
+    );
 
     const columns: ColumnDef<HeadRow, any>[] = useMemo(
         () => [
             columnHelper.accessor('name', {
                 header: t.expenses.head,
-                cell: (info) => <span className="text-sm font-medium text-gray-900">{info.getValue()}</span>,
+                cell: (info) => <span className="font-medium text-gray-900">{info.getValue()}</span>,
                 size: 200,
             }),
             columnHelper.accessor('categoryName', {
                 header: t.expenses.category,
-                cell: (info) => <span className="text-sm text-gray-600">{info.getValue()}</span>,
+                cell: (info) => info.getValue(),
                 size: 160,
             }),
             columnHelper.display({
@@ -206,44 +217,52 @@ function ExpenseHeadsPageContent() {
                 header: t.expenses.expenseAccount,
                 meta: { hideOnMobile: true },
                 cell: ({ row }) => (
-                    <span className="text-sm text-gray-600">
-                        {row.original.account
-                            ? accountLabel(row.original.account)
-                            : categoryAccountChoice(row.original.category)}
-                    </span>
+                    row.original.account
+                        ? accountLabel(row.original.account)
+                        : categoryAccountChoice(row.original.category)
                 ),
                 size: 220,
             }),
             columnHelper.accessor('description', {
                 header: t.expenses.notes,
                 meta: { hideOnMobile: true },
-                cell: (info) => <span className="text-sm text-gray-500">{info.getValue() || '—'}</span>,
+                cell: (info) => info.getValue() || t.shared.dash,
                 size: 200,
             }),
             columnHelper.accessor((row) => row._count?.entries ?? 0, {
                 id: 'entries',
                 header: t.expenses.entryCount,
                 meta: { align: 'end' },
-                cell: (info) => <span className="text-sm text-gray-600">{info.getValue()}</span>,
+                cell: (info) => <span className="tabular-nums">{info.getValue().toLocaleString(locale)}</span>,
                 size: 100,
             }),
             columnHelper.display({
                 id: 'actions',
                 header: t.common.actions,
                 cell: ({ row }) => (
-                    <div className="flex items-center gap-1">
-                        <button type="button" onClick={() => openEdit(row.original)} className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-lg text-gray-400 hover:bg-blue-50 hover:text-blue-600" title={t.expenses.editHead}>
-                            <Pencil className="w-4 h-4" />
-                        </button>
-                        <button type="button" onClick={() => handleDelete(row.original)} className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-danger" title={t.common.delete}>
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    </div>
+                    <RowActions>
+                        <RowActionButton
+                            icon={<Pencil />}
+                            label={t.expenses.editHead}
+                            onClick={() => openEdit(row.original)}
+                        />
+                        <RowActionButton
+                            icon={<Trash2 />}
+                            label={t.common.delete}
+                            intent="danger"
+                            onClick={() => setPendingDelete(row.original)}
+                        />
+                    </RowActions>
                 ),
+                enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
                 size: 90,
             }),
         ],
-        [t],
+        // openEdit is stable enough for the table; it closes over current state setters.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [t, locale],
     );
 
     const filters = useMemo<ListFilter[]>(
@@ -254,10 +273,19 @@ function ExpenseHeadsPageContent() {
                 label: t.expenses.category,
                 value: categoryIds,
                 onChange: setCategoryIds,
+                exclude: { value: categoryExclude, onChange: setCategoryExclude },
                 options: categories.map((category) => ({ value: category.id, label: category.name })),
             },
+            {
+                id: 'entries',
+                type: 'number',
+                label: t.expenses.entryCount,
+                value: entriesFilter,
+                onChange: setEntriesFilter,
+                more: true,
+            },
         ],
-        [t, categoryIds, categories],
+        [t, categoryIds, categoryExclude, entriesFilter, categories],
     );
 
     const stats = useMemo(() => {
@@ -287,23 +315,16 @@ function ExpenseHeadsPageContent() {
                 )}
                 actions={(
                     <>
-                        <Link href={routes.accounting.expenseCategories} className={compactDensity.btnSecondary}>
-                            <Settings2 className="w-3.5 h-3.5" />
+                        <Link href={routes.accounting.expenseCategories} className={buttonClassName({ variant: 'secondary' })}>
+                            <Settings2 className="h-4 w-4" />
                             {t.expenses.manageCategories}
                         </Link>
-                        <button type="button" onClick={openCreate} className={`${compactDensity.btnPrimary} bg-primary text-white hover:bg-primary-hover`}>
-                            <Plus className="w-3.5 h-3.5" />
+                        <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={openCreate}>
                             {t.expenses.addHead}
-                        </button>
+                        </Button>
                     </>
                 )}
             />
-
-            {toast && (
-                <div className={`rounded-lg px-3 py-2 text-sm ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-danger-light text-danger-text border border-red-200'}`}>
-                    {toast.message}
-                </div>
-            )}
 
             <DataTable
                 tableId="expense-heads"
@@ -320,6 +341,8 @@ function ExpenseHeadsPageContent() {
                 enableColumnFilters={false}
                 viewOptions
                 emptyMessage={categories.length === 0 ? t.expenses.noCategoriesHint : t.expenses.noHeads}
+                emptyIcon={<Tags className="h-16 w-16 text-gray-200" />}
+                getRowId={(row) => row.id}
             />
 
             {showForm && (
@@ -330,26 +353,34 @@ function ExpenseHeadsPageContent() {
                             subtitle={editing?.categoryName}
                             onClose={() => setShowForm(false)}
                         />
-                        <div className={`${compactDensity.modalPadding} ${compactDensity.formStack} overflow-y-auto`}>
-                            <label className="block">
-                                <span className={`${compactDensity.formLabel} block mb-1`}>{t.expenses.category}</span>
+                        <div className="space-y-3 overflow-y-auto p-3 md:p-4">
+                            <Field label={t.expenses.category}>
                                 {editing ? (
                                     <p className="text-sm text-gray-800">{editing.categoryName}</p>
                                 ) : (
-                                    <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={compactDensity.formField} required>
+                                    <select
+                                        value={categoryId}
+                                        onChange={(e) => setCategoryId(e.target.value)}
+                                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm min-h-touch"
+                                        required
+                                        aria-label={t.expenses.category}
+                                    >
                                         <option value="">{t.expenses.selectCategory}</option>
                                         {categories.map((category) => (
                                             <option key={category.id} value={category.id}>{category.name}</option>
                                         ))}
                                     </select>
                                 )}
-                            </label>
-                            <label className="block">
-                                <span className={`${compactDensity.formLabel} block mb-1`}>{t.expenses.head}</span>
-                                <input type="text" value={name} onChange={(e) => setName(e.target.value)} className={compactDensity.formField} required />
-                            </label>
-                            <div className="block">
-                                <span className={`${compactDensity.formLabel} block mb-1`}>{t.expenses.expenseAccount}</span>
+                            </Field>
+                            <Field label={t.expenses.head}>
+                                <Input
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    required
+                                    aria-label={t.expenses.head}
+                                />
+                            </Field>
+                            <Field label={t.expenses.expenseAccount} hint={t.expenses.headAccountHint}>
                                 <AccountSelect
                                     accounts={accounts}
                                     value={accountId}
@@ -358,14 +389,17 @@ function ExpenseHeadsPageContent() {
                                     placeholder={categoryAccountChoice(formCategory)}
                                     allowClear
                                     clearLabel={categoryAccountChoice(formCategory)}
-                                    className={`${compactDensity.formField} min-h-touch`}
+                                    className="min-h-touch w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
                                 />
-                                <p className="mt-1 text-xs text-gray-500">{t.expenses.headAccountHint}</p>
-                            </div>
-                            <label className="block">
-                                <span className={`${compactDensity.formLabel} block mb-1`}>{t.expenses.notes}</span>
-                                <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={compactDensity.formField} />
-                            </label>
+                            </Field>
+                            <Field label={t.expenses.notes}>
+                                <Textarea
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    rows={2}
+                                    aria-label={t.expenses.notes}
+                                />
+                            </Field>
                         </div>
                         <ModalFooter>
                             <Button variant="secondary" type="button" onClick={() => setShowForm(false)}>{t.common.cancel}</Button>
@@ -376,6 +410,18 @@ function ExpenseHeadsPageContent() {
                     </form>
                 </ModalShell>
             )}
+
+            <ConfirmDialog
+                open={pendingDelete !== null}
+                title={t.common.delete}
+                prompt={t.expenses.deleteHeadConfirm}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                loading={deleting}
+                danger
+                onConfirm={() => void handleDelete()}
+                onCancel={() => { if (!deleting) setPendingDelete(null); }}
+            />
         </AccountingPageShell>
     );
 }

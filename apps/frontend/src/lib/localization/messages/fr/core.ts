@@ -1716,6 +1716,7 @@ export const coreMessages = {
     },
     supplierLedger: {
         title: "Grand livre fournisseurs",
+        statsLabel: "Synthèse du compte",
         ledgerTitle: "Écritures du grand livre",
         subtitle: "Consultez les soldes à payer et l'historique des transactions à crédit.",
         currentDue: "À payer actuellement",

@@ -1717,6 +1717,7 @@ export const coreMessages = {
         },
         supplierLedger: {
             title: "Lejar Pembekal",
+            statsLabel: "Ringkasan lejar",
             ledgerTitle: "Entri lejar",
             subtitle: "Lihat baki hutang dan sejarah transaksi kredit.",
             currentDue: "Hutang semasa",

@@ -2222,6 +2222,12 @@ describe('api.getSuppliers', () => {
         await api.getSuppliers();
         expect(lastUrl()).toContain('/suppliers');
     });
+
+    it('passes storeId param', async () => {
+        mockOk({ data: [] });
+        await api.getSuppliers({ storeId: 'store-1' });
+        expect(lastUrl()).toContain('storeId=store-1');
+    });
 });
 
 describe('api.createSupplier', () => {

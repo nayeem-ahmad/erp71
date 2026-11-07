@@ -23,22 +23,30 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@/components/data-table', () => ({
-    DataTable: ({
-        title,
-        emptyMessage,
-        isLoading,
-        data,
-    }: {
-        title: string;
-        emptyMessage: string;
-        isLoading: boolean;
-        data: any[];
-    }) => (
+    DataTable: ({ title, emptyMessage, isLoading, data, filters, stats, filterLayout, viewOptions }: any) => (
         <div>
             <div data-testid="data-table-title">{title}</div>
             {isLoading && <div data-testid="loading-indicator">Loading</div>}
             <div data-testid="empty-message">{emptyMessage}</div>
-            <div data-testid="row-count">{data.length}</div>
+            <div data-testid="row-count">{data?.length ?? 0}</div>
+            <div data-testid="filter-layout">{filterLayout ?? ''}</div>
+            <div data-testid="has-view-options">{viewOptions ? 'yes' : 'no'}</div>
+            <div data-testid="stats-label">{stats?.label ?? ''}</div>
+            <div data-testid="stats-count">{stats?.items?.length ?? 0}</div>
+            {(filters ?? []).map((filter: any) => (
+                <div key={filter.id} data-testid={`filter-${filter.id}`}>
+                    <span data-testid={`filter-${filter.id}-label`}>{filter.label ?? filter.id}</span>
+                    {(filter.options ?? []).map((opt: any) => (
+                        <span key={opt.value} data-testid={`filter-${filter.id}-option-${opt.value}`}>{opt.label}</span>
+                    ))}
+                    {filter.type === 'toggle' ? (
+                        <span data-testid={`filter-${filter.id}-pressed`}>{String(Boolean(filter.pressed))}</span>
+                    ) : null}
+                    {filter.type === 'date-range' ? <span data-testid={`filter-${filter.id}-type`}>date-range</span> : null}
+                    {filter.required ? <span data-testid={`filter-${filter.id}-required`}>required</span> : null}
+                    {filter.loadOptions ? <span data-testid={`filter-${filter.id}-searchable`}>searchable</span> : null}
+                </div>
+            ))}
         </div>
     ),
 }));
@@ -145,33 +153,40 @@ describe('ReorderSuggestionsPage', () => {
         });
     });
 
-    it('renders warehouse filter dropdown', async () => {
+    it('renders warehouse filter chip options', async () => {
         render(<ReorderSuggestionsPage />);
         await waitFor(() => {
-            expect(screen.getByText('All Warehouses')).toBeInTheDocument();
+            expect(screen.getByTestId('filter-warehouse')).toBeInTheDocument();
+        });
+        expect(screen.getByTestId('filter-layout')).toHaveTextContent('row');
+        expect(screen.getByTestId('has-view-options')).toHaveTextContent('yes');
+        expect(screen.getByTestId('stats-label')).toHaveTextContent('Report figures');
+        expect(Number(screen.getByTestId('stats-count').textContent)).toBeGreaterThan(0);
+    });
+
+    it('renders group filter chip options', async () => {
+        render(<ReorderSuggestionsPage />);
+        await waitFor(() => {
+            expect(screen.getByTestId('filter-group')).toBeInTheDocument();
+            expect(screen.getByTestId('filter-group-option-grp-1')).toHaveTextContent('Electronics');
         });
     });
 
-    it('renders group filter dropdown', async () => {
+    it('renders subgroup filter chip options', async () => {
         render(<ReorderSuggestionsPage />);
         await waitFor(() => {
-            expect(screen.getByText('All Groups')).toBeInTheDocument();
+            expect(screen.getByTestId('filter-subgroup')).toBeInTheDocument();
+            expect(screen.getByTestId('filter-subgroup-option-sub-1')).toHaveTextContent('Gadgets');
         });
     });
 
-    it('renders subgroup filter dropdown', async () => {
+    it('only shows active warehouses in the filter', async () => {
         render(<ReorderSuggestionsPage />);
         await waitFor(() => {
-            expect(screen.getByText('All Subgroups')).toBeInTheDocument();
+            expect(screen.getByTestId('filter-warehouse-option-wh-1')).toHaveTextContent('Main Warehouse');
         });
-    });
-
-    it('only shows active warehouses in the dropdown', async () => {
-        render(<ReorderSuggestionsPage />);
-        await waitFor(() => {
-            expect(screen.getByText('Main Warehouse')).toBeInTheDocument();
-            expect(screen.queryByText('Inactive WH')).not.toBeInTheDocument();
-        });
+        expect(screen.queryByTestId('filter-warehouse-option-wh-2')).not.toBeInTheDocument();
+        expect(screen.queryByText('Inactive WH')).not.toBeInTheDocument();
     });
 
     it('shows correct empty state message', async () => {
