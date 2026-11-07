@@ -473,6 +473,10 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
     'VIEW_FINANCIAL_REPORTS',
     'CREATE_SALE',
   ],
+  // The register is gated on WRITE_OFF_CUSTOMER_DEBT — listing and reversing
+  // a write-off are the same permission, so a member who cannot forgive a
+  // debt is not offered the page that would only 403.
+  'sales.receivables.bad-debts': ['WRITE_OFF_CUSTOMER_DEBT'],
 
   storefront: [
     'MANAGE_STOREFRONT_PAGES',
