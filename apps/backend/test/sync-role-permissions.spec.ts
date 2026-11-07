@@ -2,13 +2,19 @@ import {
     syncRolePermissions,
     PERMISSION_BACKFILL_GROUPS,
 } from '../../../packages/database/prisma/sync-role-permissions';
-import { ROLE_DEFAULT_PERMISSIONS, StorePermission, UserRole } from '@erp71/shared-types';
+import {
+    ROLE_DEFAULT_PERMISSIONS,
+    StorePermission,
+    TENANT_ROLE_TEMPLATE_BY_KEY,
+    UserRole,
+} from '@erp71/shared-types';
 
 const PROJECT_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'projects')!.permissions;
 const SHORT_LINKS_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'short-links')!.permissions;
 const HR_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'hr')!.permissions;
 const DEMAND_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'product-demands')!.permissions;
 const TRANSFER_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'goods-transfers')!.permissions;
+const WRITE_OFF_GROUP = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'customer-write-off')!;
 /** The subset of a group that MANAGER actually carries in the matrix. */
 const managerShare = (perms: StorePermission[]) =>
     perms.filter((perm) => ROLE_DEFAULT_PERMISSIONS[UserRole.MANAGER].includes(perm));
@@ -56,9 +62,9 @@ const ROLE_IDS = { manager: 'r-manager', cashier: 'r-cashier', accountant: 'r-ac
 function seedTenant(overrides: Partial<Record<string, Row[]>> = {}) {
     return fakePrisma({
         // `template_key: null` marks these as the legacy system roles — the ones
-        // reconciled against ROLE_DEFAULT_PERMISSIONS. Roles seeded from
-        // TENANT_ROLE_TEMPLATES carry a key and are skipped, since their permissions
-        // come from their template.
+        // reconciled against ROLE_DEFAULT_PERMISSIONS. Template roles carry a
+        // key and reconcile against TENANT_ROLE_TEMPLATES instead; they are
+        // seeded in the nested "template roles" block below.
         tenantRole: [
             { id: ROLE_IDS.manager, tenant_id: 't1', name: 'Manager', is_system: true, template_key: null },
             { id: ROLE_IDS.cashier, tenant_id: 't1', name: 'Cashier', is_system: true, template_key: null },
@@ -288,5 +294,89 @@ describe('syncRolePermissions', () => {
 
         expect(tables.userStorePermission.every((r) => r.tenant_id === 't1')).toBe(true);
         expect(tables.userStorePermission.map((r) => r.store_id)).not.toContain('s-other');
+    });
+
+    describe('template roles', () => {
+        const WRITE_OFF = StorePermission.WRITE_OFF_CUSTOMER_DEBT;
+        const ROLE_IDS_TPL = {
+            admin: 'r-admin',
+            salesMgr: 'r-sales-mgr',
+            salesUser: 'r-sales-user',
+            acctMgr: 'r-acct-mgr',
+        };
+
+        function seedTemplates(overrides: Partial<Record<string, Row[]>> = {}) {
+            return fakePrisma({
+                tenantRole: [
+                    { id: ROLE_IDS_TPL.admin, tenant_id: 't1', name: 'Workspace Admin', is_system: true, template_key: 'tenant_admin' },
+                    { id: ROLE_IDS_TPL.salesMgr, tenant_id: 't1', name: 'Sales Manager', is_system: true, template_key: 'sales_manager' },
+                    { id: ROLE_IDS_TPL.salesUser, tenant_id: 't1', name: 'Sales User', is_system: true, template_key: 'sales_user' },
+                    { id: ROLE_IDS_TPL.acctMgr, tenant_id: 't1', name: 'Accounting Manager', is_system: true, template_key: 'accounting_manager' },
+                ],
+                tenantUserRole: [
+                    { tenant_role_id: ROLE_IDS_TPL.admin, tenantUser: { user_id: 'u-admin', tenant_id: 't1' } },
+                    { tenant_role_id: ROLE_IDS_TPL.salesMgr, tenantUser: { user_id: 'u-sales', tenant_id: 't1' } },
+                    { tenant_role_id: ROLE_IDS_TPL.salesUser, tenantUser: { user_id: 'u-sales-user', tenant_id: 't1' } },
+                ],
+                userStoreAccess: [
+                    { user_id: 'u-admin', store_id: 's1', tenant_id: 't1' },
+                    { user_id: 'u-admin', store_id: 's2', tenant_id: 't1' },
+                    { user_id: 'u-sales', store_id: 's1', tenant_id: 't1' },
+                    { user_id: 'u-sales-user', store_id: 's1', tenant_id: 't1' },
+                ],
+                ...overrides,
+            } as Record<string, Row[]>);
+        }
+
+        const writeOffOnly = { groups: [WRITE_OFF_GROUP] };
+
+        it('carries WRITE_OFF_CUSTOMER_DEBT to the templates that already list it', () => {
+            expect(TENANT_ROLE_TEMPLATE_BY_KEY.tenant_admin.permissions).toContain(WRITE_OFF);
+            expect(TENANT_ROLE_TEMPLATE_BY_KEY.sales_manager.permissions).toContain(WRITE_OFF);
+            expect(TENANT_ROLE_TEMPLATE_BY_KEY.accounting_manager.permissions).toContain(WRITE_OFF);
+            expect(TENANT_ROLE_TEMPLATE_BY_KEY.sales_user.permissions).not.toContain(WRITE_OFF);
+        });
+
+        it('grants the write-off to Tenant Admin, Sales Manager and Accounting Manager, and to their members', async () => {
+            const { client, tables } = seedTemplates();
+
+            const [result] = await syncRolePermissions(client, writeOffOnly);
+
+            expect(result.rolesTouched).toBe(3);
+            expect(result.roleGrants).toBe(3);
+            expect(
+                tables.tenantRolePermission.map((row) => row.tenant_role_id).sort(),
+            ).toEqual([ROLE_IDS_TPL.acctMgr, ROLE_IDS_TPL.salesMgr, ROLE_IDS_TPL.admin].sort());
+            expect(tables.tenantRolePermission.every((row) => row.permission === WRITE_OFF)).toBe(true);
+
+            const memberKeys = tables.userStorePermission.map((row) => `${row.user_id}:${row.store_id}`).sort();
+            expect(memberKeys).toEqual(['u-admin:s1', 'u-admin:s2', 'u-sales:s1'].sort());
+            expect(tables.userStorePermission.map((row) => row.user_id)).not.toContain('u-sales-user');
+        });
+
+        it('leaves a Sales User alone, because the template does not include the permission', async () => {
+            const { client, tables } = seedTemplates();
+
+            await syncRolePermissions(client, writeOffOnly);
+
+            expect(tables.tenantRolePermission.map((row) => row.tenant_role_id)).not.toContain(ROLE_IDS_TPL.salesUser);
+        });
+
+        it('is a no-op on a template that already holds the permission', async () => {
+            const { client, tables } = seedTemplates({
+                tenantRolePermission: [
+                    { tenant_role_id: ROLE_IDS_TPL.admin, permission: WRITE_OFF },
+                    { tenant_role_id: ROLE_IDS_TPL.salesMgr, permission: WRITE_OFF },
+                    { tenant_role_id: ROLE_IDS_TPL.acctMgr, permission: WRITE_OFF },
+                ],
+            });
+
+            const [result] = await syncRolePermissions(client, writeOffOnly);
+
+            expect(result.roleGrants).toBe(0);
+            expect(result.rolesAlreadyReconciled).toBe(3);
+            expect(tables.tenantRolePermission).toHaveLength(3);
+            expect(tables.userStorePermission).toHaveLength(0);
+        });
     });
 });

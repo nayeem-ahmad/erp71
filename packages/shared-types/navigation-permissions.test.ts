@@ -57,6 +57,19 @@ describe('NAV_PERMISSIONS', () => {
             expect(NAV_PERMISSIONS.projects).toBeUndefined();
         });
 
+        it('hides Bad Debts from anyone who cannot write a debt off', () => {
+            const needed = NAV_PERMISSIONS['sales.receivables.bad-debts'];
+            expect(needed).toEqual(['WRITE_OFF_CUSTOMER_DEBT']);
+            expect(TENANT_ROLE_TEMPLATES.find((tpl) => tpl.key === 'sales_manager')!
+                .permissions.some((perm) => needed.includes(perm))).toBe(true);
+            expect(TENANT_ROLE_TEMPLATES.find((tpl) => tpl.key === 'accounting_manager')!
+                .permissions.some((perm) => needed.includes(perm))).toBe(true);
+            expect(TENANT_ROLE_TEMPLATES.find((tpl) => tpl.key === 'tenant_admin')!
+                .permissions.some((perm) => needed.includes(perm))).toBe(true);
+            expect(TENANT_ROLE_TEMPLATES.find((tpl) => tpl.key === 'sales_user')!
+                .permissions.some((perm) => needed.includes(perm))).toBe(false);
+        });
+
         it('keeps the tenant configuration screens open to the administration roles', () => {
             const admin = TENANT_ROLE_TEMPLATES.find((tpl) => tpl.key === 'administration_manager');
             expect(admin).toBeDefined();
