@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { StorePermission } from '@erp71/shared-types';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
@@ -11,6 +11,7 @@ import {
     ListWarehouseTransfersQueryDto,
     ReceiveWarehouseTransferDto,
     RejectWarehouseTransferDto,
+    UpdateWarehouseTransferDto,
 } from './warehouse-transfer.dto';
 import { WarehouseTransfersService } from './warehouse-transfers.service';
 
@@ -52,6 +53,23 @@ export class WarehouseTransfersController {
     @Get(':id')
     findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.service.findOne(tenant.tenantId, id);
+    }
+
+    @Patch(':id')
+    @RequireStorePermission(StorePermission.CREATE_GOODS_TRANSFER)
+    update(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: UpdateWarehouseTransferDto,
+    ) {
+        return this.service.update(tenant.tenantId, id, dto);
+    }
+
+    @Delete(':id')
+    @RequireStorePermission(StorePermission.CREATE_GOODS_TRANSFER)
+    @HttpCode(HttpStatus.NO_CONTENT)
+    remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.service.remove(tenant.tenantId, id);
     }
 
     @Post(':id/send')

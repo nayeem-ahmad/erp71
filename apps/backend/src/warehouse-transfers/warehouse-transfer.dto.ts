@@ -37,6 +37,34 @@ export class CreateWarehouseTransferDto {
     status?: 'DRAFT' | 'SENT';
 }
 
+/**
+ * A draft rewrite. Same shape as create: the list modal replaces the whole
+ * form, so optional partial patches would leave stale lines the user thought
+ * they removed. Status is still only DRAFT | SENT — every later status is
+ * reached through its own endpoint.
+ */
+export class UpdateWarehouseTransferDto {
+    @IsUUID()
+    sourceWarehouseId: string;
+
+    @IsUUID()
+    destinationWarehouseId: string;
+
+    @IsArray()
+    @ArrayMinSize(1)
+    @ValidateNested({ each: true })
+    @Type(() => WarehouseTransferItemDto)
+    items: WarehouseTransferItemDto[];
+
+    @IsOptional()
+    @IsString()
+    notes?: string;
+
+    @IsOptional()
+    @IsString()
+    status?: 'DRAFT' | 'SENT';
+}
+
 export class ReceiveWarehouseTransferItemDto {
     @IsUUID()
     productId: string;

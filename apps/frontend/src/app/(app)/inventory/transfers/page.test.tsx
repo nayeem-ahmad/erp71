@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import InventoryTransfersPage from './page';
 import { pickSearchOption } from '@/test-utils/id-search-select';
 
@@ -12,19 +12,27 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('next/link', () => ({
     __esModule: true,
-    default: ({ href, children, className }: any) => (
-        <a href={href} className={className}>{children}</a>
+    default: ({ href, children, className, ...rest }: any) => (
+        <a href={href} className={className} {...rest}>{children}</a>
     ),
 }));
 
 jest.mock('@/components/data-table', () => ({
-    DataTable: ({ data, filters, stats, filterLayout, viewOptions }: any) => (
+    DataTable: ({ data, columns, filters, stats, filterLayout, viewOptions }: any) => (
         <div data-testid="data-table">
             <span>{data?.length} rows</span>
             <div data-testid="filter-layout">{filterLayout ?? ''}</div>
             <div data-testid="has-view-options">{viewOptions ? 'yes' : 'no'}</div>
             <div data-testid="stats-label">{stats?.label ?? ''}</div>
             <div data-testid="stats-count">{stats?.items?.length ?? 0}</div>
+            {(data ?? []).map((row: any) => {
+                const actionsCol = (columns ?? []).find((column: any) => column.id === 'actions');
+                return (
+                    <div key={row.id} data-testid={`row-actions-${row.id}`}>
+                        {actionsCol?.cell?.({ row: { original: row } })}
+                    </div>
+                );
+            })}
             {(filters ?? []).map((filter: any) => {
                 if (filter.type === 'date-range') {
                     return (
@@ -91,6 +99,14 @@ jest.mock('@/components/PostingBadge', () => ({
     PostingBadge: ({ status }: any) => <span>{status}</span>,
 }));
 
+jest.mock('@/lib/toast', () => ({
+    toast: {
+        success: jest.fn(),
+        error: jest.fn(),
+        info: jest.fn(),
+    },
+}));
+
 jest.mock('@/lib/api', () => ({
     api: {
         getWarehouseTransfers: jest.fn(),
@@ -98,15 +114,19 @@ jest.mock('@/lib/api', () => ({
         getProducts: jest.fn(),
         getStores: jest.fn(),
         createWarehouseTransfer: jest.fn(),
+        updateWarehouseTransfer: jest.fn(),
+        deleteWarehouseTransfer: jest.fn(),
     },
 }));
 
 import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { mockBranchScope } from '@/test-utils/branch-scope';
 
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 const mockApi = api as jest.Mocked<typeof api>;
+const mockToast = toast as jest.Mocked<typeof toast>;
 
 const sampleTransfers = [
     {
@@ -132,6 +152,7 @@ const sampleTransfers = [
         created_at: '2024-01-02T10:00:00Z',
         sent_at: null,
         received_at: null,
+        notes: 'Draft notes',
         sourceWarehouse: { id: 'w2', name: 'Branch Warehouse' },
         destinationWarehouse: { id: 'w1', name: 'Main Warehouse' },
         items: [{ id: 'i2', product_id: 'p2', quantity_sent: 5, quantity_received: 5, product: { name: 'Widget B' } }],
@@ -155,6 +176,14 @@ const sampleProducts = [
     { id: 'p1', name: 'Widget A' },
     { id: 'p2', name: 'Widget B' },
 ];
+
+async function openNewTransferForm() {
+    await waitFor(() => expect(screen.getByRole('button', { name: /New Transfer/ })).toBeInTheDocument());
+    await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /New Transfer/ }));
+    });
+    await waitFor(() => expect(screen.getByText('Source Warehouse')).toBeInTheDocument());
+}
 
 function setupDefaultMocks() {
     mockApi.getWarehouseTransfers.mockResolvedValue(sampleTransfers);
@@ -199,18 +228,13 @@ describe('InventoryTransfersPage', () => {
         });
     });
 
-    it('renders the New Transfer form', async () => {
+    it('keeps the create form in a modal until New Transfer is clicked', async () => {
         render(<InventoryTransfersPage />);
-        await waitFor(() => {
-            expect(screen.getByText('New Transfer')).toBeInTheDocument();
-        });
-    });
-
-    it('renders Create Transfer button', async () => {
-        render(<InventoryTransfersPage />);
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /Create Transfer/ })).toBeInTheDocument();
-        });
+        await waitFor(() => expect(screen.getByRole('button', { name: /New Transfer/ })).toBeInTheDocument());
+        expect(screen.queryByText('Source Warehouse')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Create Transfer/ })).not.toBeInTheDocument();
+        await openNewTransferForm();
+        expect(screen.getByRole('button', { name: /Create Transfer/ })).toBeInTheDocument();
     });
 
     it('renders status filter chip', async () => {
@@ -334,14 +358,13 @@ describe('InventoryTransfersPage', () => {
 
     it('renders Add Line button in the form', async () => {
         render(<InventoryTransfersPage />);
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /Add Line/ })).toBeInTheDocument();
-        });
+        await openNewTransferForm();
+        expect(screen.getByRole('button', { name: /Add Line/ })).toBeInTheDocument();
     });
 
     it('adds a new item line when Add Line is clicked', async () => {
         render(<InventoryTransfersPage />);
-        await waitFor(() => expect(screen.getByRole('button', { name: /Add Line/ })).toBeInTheDocument());
+        await openNewTransferForm();
         const addLineBtn = screen.getByRole('button', { name: /Add Line/ });
         const initialRemoveButtons = screen.getAllByText('Remove');
         expect(initialRemoveButtons.length).toBe(1);
@@ -353,9 +376,8 @@ describe('InventoryTransfersPage', () => {
 
     it('does not remove the last item line when Remove is clicked', async () => {
         render(<InventoryTransfersPage />);
-        await waitFor(() => expect(screen.getByText('Remove')).toBeInTheDocument());
+        await openNewTransferForm();
         fireEvent.click(screen.getByText('Remove'));
-        // Should still have 1 line (can't go below 1)
         await waitFor(() => {
             expect(screen.getAllByText('Remove').length).toBe(1);
         });
@@ -363,7 +385,7 @@ describe('InventoryTransfersPage', () => {
 
     it('removes an item line when there are multiple lines', async () => {
         render(<InventoryTransfersPage />);
-        await waitFor(() => expect(screen.getByRole('button', { name: /Add Line/ })).toBeInTheDocument());
+        await openNewTransferForm();
         fireEvent.click(screen.getByRole('button', { name: /Add Line/ }));
         await waitFor(() => expect(screen.getAllByText('Remove').length).toBe(2));
         fireEvent.click(screen.getAllByText('Remove')[0]);
@@ -372,29 +394,16 @@ describe('InventoryTransfersPage', () => {
         });
     });
 
-    it('submits the new transfer form and shows success message', async () => {
+    it('submits the new transfer form and shows a success toast', async () => {
         mockApi.createWarehouseTransfer.mockResolvedValue({ id: 'tnew' });
         mockApi.getWarehouseTransfers
             .mockResolvedValueOnce(sampleTransfers)
             .mockResolvedValueOnce(sampleTransfers);
         render(<InventoryTransfersPage />);
-        await waitFor(() => expect(screen.getByText('New Transfer')).toBeInTheDocument());
+        await openNewTransferForm();
 
-        // Select source warehouse
-        const sourceSelect = screen.getAllByRole('combobox').find(
-            (el) => el.querySelector?.('option[value=""]')?.textContent === 'Select source'
-        );
-        // Use form selects directly by their option text
-        const allSelects = screen.getAllByRole('combobox');
-        // Source warehouse select is labeled "Source Warehouse"
-        const sourceLabel = screen.getByText('Source Warehouse');
-        const sourceSelectEl = sourceLabel.closest('div')!.querySelector('select')!;
-        fireEvent.change(sourceSelectEl, { target: { value: 'w1' } });
-
-        const destLabel = screen.getByText('Destination Warehouse');
-        const destSelectEl = destLabel.closest('div')!.querySelector('select')!;
-        fireEvent.change(destSelectEl, { target: { value: 'w2' } });
-
+        fireEvent.change(screen.getByLabelText(/Source Warehouse/), { target: { value: 'w1' } });
+        fireEvent.change(screen.getByLabelText(/Destination Warehouse/), { target: { value: 'w2' } });
         pickSearchOption('Product', 'Widget A');
 
         await act(async () => {
@@ -403,7 +412,7 @@ describe('InventoryTransfersPage', () => {
 
         await waitFor(() => {
             expect(mockApi.createWarehouseTransfer).toHaveBeenCalled();
-            expect(screen.getByText('Transfer created.')).toBeInTheDocument();
+            expect(mockToast.success).toHaveBeenCalledWith('Transfer created.');
         });
     });
 
@@ -420,33 +429,27 @@ describe('InventoryTransfersPage', () => {
             { id: 'p2', name: 'Widget B', stocks: [] },
         ]);
         render(<InventoryTransfersPage />);
-        await waitFor(() => expect(screen.getByText('New Transfer')).toBeInTheDocument());
+        await openNewTransferForm();
 
         pickSearchOption('Product', 'Widget A');
-        // No source picked yet: the total across every warehouse.
         expect(screen.getByTestId('transfer-line-stock-0')).toHaveTextContent('In stock (all warehouses): 15');
 
-        fireEvent.change(screen.getByText('Source Warehouse').closest('div')!.querySelector('select')!, { target: { value: 'w1' } });
-        fireEvent.change(screen.getByText('Destination Warehouse').closest('div')!.querySelector('select')!, { target: { value: 'w2' } });
+        fireEvent.change(screen.getByLabelText(/Source Warehouse/), { target: { value: 'w1' } });
+        fireEvent.change(screen.getByLabelText(/Destination Warehouse/), { target: { value: 'w2' } });
         expect(screen.getByTestId('transfer-line-stock-0')).toHaveTextContent('Available at source: 12 · At destination: 3');
         expect(screen.queryByText(/More than the source holds/)).not.toBeInTheDocument();
 
-        fireEvent.change(screen.getByText('Quantity').closest('div')!.querySelector('input')!, { target: { value: '20' } });
+        fireEvent.change(screen.getByLabelText(/Quantity/), { target: { value: '20' } });
         expect(screen.getByText(/More than the source holds/)).toBeInTheDocument();
     });
 
     it('shows error message when create transfer fails', async () => {
         mockApi.createWarehouseTransfer.mockRejectedValue(new Error('Transfer failed'));
         render(<InventoryTransfersPage />);
-        await waitFor(() => expect(screen.getByText('New Transfer')).toBeInTheDocument());
+        await openNewTransferForm();
 
-        const sourceLabel = screen.getByText('Source Warehouse');
-        const sourceSelectEl = sourceLabel.closest('div')!.querySelector('select')!;
-        fireEvent.change(sourceSelectEl, { target: { value: 'w1' } });
-
-        const destLabel = screen.getByText('Destination Warehouse');
-        const destSelectEl = destLabel.closest('div')!.querySelector('select')!;
-        fireEvent.change(destSelectEl, { target: { value: 'w2' } });
+        fireEvent.change(screen.getByLabelText(/Source Warehouse/), { target: { value: 'w1' } });
+        fireEvent.change(screen.getByLabelText(/Destination Warehouse/), { target: { value: 'w2' } });
 
         await act(async () => {
             fireEvent.submit(screen.getByRole('button', { name: /Create Transfer/ }).closest('form')!);
@@ -459,7 +462,6 @@ describe('InventoryTransfersPage', () => {
 
     it('handles API error for getWarehouseTransfers gracefully', async () => {
         mockApi.getWarehouseTransfers.mockRejectedValue(new Error('Network error'));
-        // Should not throw
         render(<InventoryTransfersPage />);
         await waitFor(() => {
             expect(screen.getByTestId('data-table')).toBeInTheDocument();
@@ -468,9 +470,9 @@ describe('InventoryTransfersPage', () => {
 
     it('changes source warehouse filter', async () => {
         render(<InventoryTransfersPage />);
-        await waitFor(() => expect(screen.getByTestId('filter-source')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('filter-source-option-w1')).toBeInTheDocument());
         await act(async () => {
-            fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'w1' } });
+            fireEvent.change(screen.getByTestId('filter-source').querySelector('select')!, { target: { value: 'w1' } });
         });
         await waitFor(() => {
             expect(mockApi.getWarehouseTransfers).toHaveBeenCalledWith(
@@ -481,9 +483,9 @@ describe('InventoryTransfersPage', () => {
 
     it('changes destination warehouse filter', async () => {
         render(<InventoryTransfersPage />);
-        await waitFor(() => expect(screen.getByTestId('filter-destination')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('filter-destination-option-w2')).toBeInTheDocument());
         await act(async () => {
-            fireEvent.change(screen.getByLabelText('Destination'), { target: { value: 'w2' } });
+            fireEvent.change(screen.getByTestId('filter-destination').querySelector('select')!, { target: { value: 'w2' } });
         });
         await waitFor(() => {
             expect(mockApi.getWarehouseTransfers).toHaveBeenCalledWith(
@@ -507,25 +509,90 @@ describe('InventoryTransfersPage', () => {
 
     it('renders form initial status as Send Now', async () => {
         render(<InventoryTransfersPage />);
-        await waitFor(() => {
-            expect(screen.getByRole('option', { name: 'Send Now' })).toBeInTheDocument();
-            expect(screen.getByRole('option', { name: 'Save as Draft' })).toBeInTheDocument();
-        });
+        await openNewTransferForm();
+        expect(screen.getByRole('option', { name: 'Send Now' })).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: 'Save as Draft' })).toBeInTheDocument();
     });
 
     it('updates notes field in the form', async () => {
         render(<InventoryTransfersPage />);
-        await waitFor(() => expect(screen.getByPlaceholderText('Optional')).toBeInTheDocument());
+        await openNewTransferForm();
         const notesInput = screen.getByPlaceholderText('Optional') as HTMLInputElement;
         fireEvent.change(notesInput, { target: { value: 'Test notes' } });
         expect(notesInput.value).toBe('Test notes');
     });
+
+    it('offers Edit and Delete on a draft, but not Edit on a sent transfer', async () => {
+        render(<InventoryTransfersPage />);
+        await waitFor(() => expect(screen.getByTestId('row-actions-t2')).toBeInTheDocument());
+
+        const draftActions = within(screen.getByTestId('row-actions-t2'));
+        expect(draftActions.getByLabelText('Edit')).toBeInTheDocument();
+        expect(draftActions.getByLabelText('Delete')).toBeInTheDocument();
+        expect(draftActions.getByLabelText('View')).toHaveAttribute('href', '/inventory/transfers/t2');
+
+        const sentActions = within(screen.getByTestId('row-actions-t1'));
+        expect(sentActions.getByLabelText('View')).toBeInTheDocument();
+        expect(sentActions.queryByLabelText('Edit')).not.toBeInTheDocument();
+        expect(sentActions.queryByLabelText('Delete')).not.toBeInTheDocument();
+    });
+
+    it('opens the edit modal from a draft row and saves via update', async () => {
+        mockApi.updateWarehouseTransfer.mockResolvedValue({ id: 't2' });
+        render(<InventoryTransfersPage />);
+        await waitFor(() => expect(screen.getByTestId('row-actions-t2')).toBeInTheDocument());
+
+        await act(async () => {
+            fireEvent.click(within(screen.getByTestId('row-actions-t2')).getByLabelText('Edit'));
+        });
+
+        await waitFor(() => expect(screen.getByText('Edit Transfer')).toBeInTheDocument());
+        expect(screen.getByDisplayValue('Draft notes')).toBeInTheDocument();
+
+        await act(async () => {
+            fireEvent.submit(screen.getByRole('button', { name: /Save Transfer/ }).closest('form')!);
+        });
+
+        await waitFor(() => {
+            expect(mockApi.updateWarehouseTransfer).toHaveBeenCalledWith(
+                't2',
+                expect.objectContaining({
+                    sourceWarehouseId: 'w2',
+                    destinationWarehouseId: 'w1',
+                    status: 'DRAFT',
+                }),
+            );
+            expect(mockToast.success).toHaveBeenCalledWith('Transfer updated.');
+        });
+    });
+
+    it('deletes a draft after confirm', async () => {
+        mockApi.deleteWarehouseTransfer.mockResolvedValue(undefined);
+        render(<InventoryTransfersPage />);
+        await waitFor(() => expect(screen.getByTestId('row-actions-t2')).toBeInTheDocument());
+
+        await act(async () => {
+            fireEvent.click(within(screen.getByTestId('row-actions-t2')).getByLabelText('Delete'));
+        });
+
+        await waitFor(() => expect(screen.getByText('Delete transfer?')).toBeInTheDocument());
+        await act(async () => {
+            // Row action keeps an aria-labelled Delete; the confirm is the last one.
+            const deleteButtons = screen.getAllByRole('button', { name: /^Delete$/ });
+            fireEvent.click(deleteButtons[deleteButtons.length - 1]);
+        });
+
+        await waitFor(() => {
+            expect(mockApi.deleteWarehouseTransfer).toHaveBeenCalledWith('t2');
+            expect(mockToast.success).toHaveBeenCalledWith('Transfer deleted.');
+        });
+    });
+
     describe('cross-branch transfers', () => {
         it('groups the warehouse pickers by branch so a cross-branch pick is visible', async () => {
             render(<InventoryTransfersPage />);
-            await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
+            await openNewTransferForm();
 
-            // Form pickers still group by branch; list filters are flat chips.
             expect(screen.getAllByRole('group', { name: 'Dhaka Main' }).length).toBe(2);
             expect(screen.getAllByRole('group', { name: 'Chattogram' }).length).toBe(2);
         });
@@ -558,15 +625,13 @@ describe('InventoryTransfersPage', () => {
 
         it('warns that a cross-branch pick will wait for approval', async () => {
             render(<InventoryTransfersPage />);
-            await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
+            await openNewTransferForm();
 
             expect(screen.queryByText(/waits for approval/)).not.toBeInTheDocument();
 
-            const source = screen.getByRole('option', { name: 'Select source' }).closest('select')!;
-            const destination = screen.getByRole('option', { name: 'Select destination' }).closest('select')!;
             await act(async () => {
-                fireEvent.change(source, { target: { value: 'w1' } });
-                fireEvent.change(destination, { target: { value: 'w2' } });
+                fireEvent.change(screen.getByLabelText(/Source Warehouse/), { target: { value: 'w1' } });
+                fireEvent.change(screen.getByLabelText(/Destination Warehouse/), { target: { value: 'w2' } });
             });
 
             expect(screen.getByText(/waits for approval/)).toBeInTheDocument();
@@ -578,13 +643,11 @@ describe('InventoryTransfersPage', () => {
                 { id: 'w4', name: 'Overflow Warehouse', is_active: true, store_id: 's1' },
             ]);
             render(<InventoryTransfersPage />);
-            await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
+            await openNewTransferForm();
 
-            const source = screen.getByRole('option', { name: 'Select source' }).closest('select')!;
-            const destination = screen.getByRole('option', { name: 'Select destination' }).closest('select')!;
             await act(async () => {
-                fireEvent.change(source, { target: { value: 'w1' } });
-                fireEvent.change(destination, { target: { value: 'w4' } });
+                fireEvent.change(screen.getByLabelText(/Source Warehouse/), { target: { value: 'w1' } });
+                fireEvent.change(screen.getByLabelText(/Destination Warehouse/), { target: { value: 'w4' } });
             });
 
             expect(screen.queryByText(/waits for approval/)).not.toBeInTheDocument();
@@ -596,7 +659,7 @@ describe('InventoryTransfersPage', () => {
                 { id: 'w4', name: 'Overflow Warehouse', is_active: true, store_id: 's1' },
             ]);
             render(<InventoryTransfersPage />);
-            await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
+            await openNewTransferForm();
 
             expect(screen.queryAllByRole('group')).toHaveLength(0);
             expect(screen.queryByTestId('filter-scope')).not.toBeInTheDocument();
