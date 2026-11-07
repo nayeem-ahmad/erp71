@@ -311,7 +311,7 @@ export const salesMessages = {
                 customerDuesSummary: { title: "Customer Dues Summary", description: "Every customer with what they owe now, by branch and sales rep." },
                 badDebts: { title: 'Bad Debts', description: 'Every customer debt written off, with who approved it and why.' },
                 quotes: { title: 'Sales Quotations', description: 'Prepare estimates and track quote status.' },
-                orders: { title: 'Sales Orders', description: 'In-store orders and online storefront orders in one place.' },
+                orders: { title: 'Sales Orders', description: 'Customer orders taken in the shop — confirm, process, and convert to a sale.' },
                 delivery: { title: 'Delivery', description: 'Schedule and track outbound deliveries.' },
                 returns: { title: 'Sales Returns', description: 'Process refunds and restore stock from returns.' },
                 warrantyClaims: { title: 'Warranty Claims', description: 'Track customer warranty submissions and resolutions.' },
@@ -665,10 +665,6 @@ export const salesMessages = {
     orders: {
         title: 'Sales Orders',
         subtitle: 'Manage fulfillment and deposits',
-        tabs: {
-            salesOrders: 'Sales Orders',
-            onlineOrders: 'Online Orders',
-        },
         newOrder: 'New Order',
         statsLabel: 'Sales orders summary',
         stats: {

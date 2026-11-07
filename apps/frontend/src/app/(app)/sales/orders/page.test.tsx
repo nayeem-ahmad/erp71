@@ -36,11 +36,6 @@ jest.mock('next/navigation', () => ({
     useParams: () => ({}),
 }));
 
-jest.mock('./StorefrontOrdersPanel', () => ({
-    __esModule: true,
-    default: () => <div data-testid="storefront-orders-panel">Online Orders</div>,
-}));
-
 jest.mock('next/link', () => ({
     __esModule: true,
     // Forwards the rest of the props: an icon-only action carries its label in
@@ -171,6 +166,7 @@ describe('OrdersPage', () => {
 
     afterEach(() => {
         jest.clearAllMocks();
+        jest.restoreAllMocks();
     });
 
     it('shows loading state initially', () => {
@@ -266,15 +262,29 @@ describe('OrdersPage', () => {
         expect(within(strip).getByText('Overdue: 2')).toBeInTheDocument();
     });
 
-    it('loads nothing behind the online orders tab', async () => {
+    it('does not mix online orders into this list', async () => {
+        render(<OrdersPage />);
+        await screen.findByRole('heading', { name: 'Sales Orders' });
+        expect(screen.queryByRole('tab', { name: 'Online Orders' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: 'Sales Orders' })).not.toBeInTheDocument();
+    });
+
+    it('sends an old online-tab bookmark to Storefront', () => {
         const { api } = require('@/lib/api');
         const navigation = require('next/navigation');
-        const spy = jest.spyOn(navigation, 'useSearchParams').mockReturnValue(new URLSearchParams('tab=online'));
+        const replace = jest.fn();
+        const routerSpy = jest.spyOn(navigation, 'useRouter').mockReturnValue({
+            push: jest.fn(),
+            back: jest.fn(),
+            replace,
+        });
+        const paramsSpy = jest.spyOn(navigation, 'useSearchParams').mockReturnValue(new URLSearchParams('tab=online'));
         render(<OrdersPage />);
-        expect(await screen.findByTestId('storefront-orders-panel')).toBeInTheDocument();
+        expect(replace).toHaveBeenCalledWith('/storefront');
+        expect(screen.queryByTestId('data-table')).not.toBeInTheDocument();
         expect(api.getOrdersList).not.toHaveBeenCalled();
-        expect(api.getOrdersListSummary).not.toHaveBeenCalled();
-        spy.mockRestore();
+        routerSpy.mockRestore();
+        paramsSpy.mockRestore();
     });
 
     it('handles API error gracefully', async () => {

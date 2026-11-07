@@ -311,7 +311,7 @@ export const salesMessages = {
                 customerDuesSummary: { title: "ग्राहक बकाया सारांश", description: "शाखा और बिक्री प्रतिनिधि के अनुसार हर ग्राहक का वर्तमान बकाया।" },
                 badDebts: { title: "डूबत ऋण", description: "बट्टे खाते डाला गया हर ग्राहक ऋण, किसने और क्यों सहित।" },
                 quotes: { title: "बिक्री कोटेशन", description: "अनुमान तैयार करें और कोट की स्थिति ट्रैक करें।" },
-                orders: { title: "बिक्री ऑर्डर", description: "स्टोर और ऑनलाइन स्टोरफ़्रंट ऑर्डर एक जगह।" },
+                orders: { title: "बिक्री ऑर्डर", description: "दुकान पर लिए गए ऑर्डर — पुष्टि करें, प्रोसेस करें और बिक्री में बदलें।" },
                 delivery: { title: "डिलीवरी", description: "बाहर जाने वाली डिलीवरी निर्धारित करें और ट्रैक करें।" },
                 returns: { title: "बिक्री वापसी", description: "रिफंड संसाधित करें और वापसी से स्टॉक बहाल करें।" },
                 warrantyClaims: { title: "वारंटी दावे", description: "ग्राहक वारंटी प्रस्तुतियाँ और समाधान ट्रैक करें।" },
@@ -661,10 +661,6 @@ export const salesMessages = {
     orders: {
         title: "बिक्री ऑर्डर",
         subtitle: "पूर्ति और जमा प्रबंधित करें",
-        tabs: {
-            salesOrders: "बिक्री ऑर्डर",
-            onlineOrders: "ऑनलाइन ऑर्डर",
-        },
         newOrder: "नया ऑर्डर",
         statsLabel: "बिक्री ऑर्डर सारांश",
         stats: {

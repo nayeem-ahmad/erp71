@@ -153,7 +153,7 @@ export const storefrontMessages = {
     },
     dashboard: {
         orders: {
-            title: "Commandes de la boutique",
+            title: "Commandes en ligne",
             description: "Commandes en ligne passées sur votre boutique publique",
             storeSettings: "Paramètres de la boutique",
             loading: "Chargement des commandes…",
