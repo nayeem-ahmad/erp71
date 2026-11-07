@@ -118,7 +118,14 @@ export const inventoryExtrasMessages = {
             "duplicateProduct": "المنتج نفسه مدرج مرتين. ادمج السطرين.",
             "saveFailed": "تعذّر حفظ الطلب.",
             "actionFailed": "تعذّر إتمام ذلك الإجراء."
-        }
+        },
+    "listUi": {
+        "statsLabel": "ملخص الطلبات",
+        "total": "الطلبات",
+        "submitted": "مُقدَّمة",
+        "approved": "موافَق عليها",
+        "open": "مفتوحة",
+    }
     },
     "inventoryTransfers": {
         "title": "تحويلات المستودعات",
@@ -168,7 +175,14 @@ export const inventoryExtrasMessages = {
             "received": "مستلَم",
             "pendingApproval": "في انتظار الموافقة",
             "rejected": "مرفوض"
-        }
+        },
+    "listUi": {
+        "statsLabel": "ملخص التحويلات",
+        "total": "التحويلات",
+        "pendingApproval": "بانتظار الموافقة",
+        "inTransit": "قيد النقل",
+        "received": "مستلَمة",
+    }
     },
     "inventoryShrinkage": {
         "title": "فاقد المخزون",
@@ -209,7 +223,12 @@ export const inventoryExtrasMessages = {
         "addLine": "إضافة سطر",
         "remove": "إزالة",
         "notes": "ملاحظات",
-        "selectProduct": "اختر منتجًا"
+        "selectProduct": "اختر منتجًا",
+    "listUi": {
+        "statsLabel": "ملخص الفاقد",
+        "total": "القيود",
+        "totalQty": "إجمالي الكمية",
+    }
     },
     "inventoryStockTakes": {
         "title": "عمليات الجرد",
@@ -234,7 +253,20 @@ export const inventoryExtrasMessages = {
             "created": "تاريخ الإنشاء",
             "actions": "إجراءات",
             "open": "فتح"
-        }
+        },
+    "statuses": {
+        "draft": "مسودة",
+        "counting": "جرد",
+        "review": "قيد المراجعة",
+        "posted": "مرحَّل",
+        "cancelled": "ملغى",
+    },
+    "listUi": {
+        "statsLabel": "ملخص الجرد",
+        "sessions": "الجلسات",
+        "open": "مفتوحة",
+        "discrepant": "باختلافات",
+    }
     },
     "inventoryLedger": {
         "title": "دفتر أستاذ المخزون",
@@ -352,6 +384,13 @@ export const inventoryExtrasMessages = {
         "reasonUpdateFailed": "تعذّر تحديث سبب المخزون."
     },
     "inventoryReports": {
+        "listUi": {
+            "statsLabel": "أرقام التقرير",
+            "suggestionCount": "الاقتراحات",
+            "suggestedUnits": "الوحدات المقترحة",
+            "outOfStock": "نفاد المخزون",
+            "movementCount": "الحركات"
+        },
         "reorder": {
             "title": "اقتراحات إعادة الطلب",
             "subtitle": "المنتجات دون حدود إعادة الطلب مع كميات شراء مقترحة",

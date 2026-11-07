@@ -118,7 +118,14 @@ export const inventoryExtrasMessages = {
             "duplicateProduct": "वही उत्पाद दो बार सूचीबद्ध है। लाइनें मिलाएँ।",
             "saveFailed": "माँग सहेजी नहीं जा सकी।",
             "actionFailed": "वह कार्रवाई पूरी नहीं हो सकी।"
-        }
+        },
+    "listUi": {
+        "statsLabel": "माँग सारांश",
+        "total": "माँगें",
+        "submitted": "जमा",
+        "approved": "अनुमोदित",
+        "open": "खुली",
+    }
     },
     "inventoryTransfers": {
         "title": "गोदाम स्थानांतरण",
@@ -168,7 +175,14 @@ export const inventoryExtrasMessages = {
             "received": "प्राप्त",
             "pendingApproval": "अनुमोदन प्रतीक्षित",
             "rejected": "अस्वीकृत"
-        }
+        },
+    "listUi": {
+        "statsLabel": "स्थानांतरण सारांश",
+        "total": "स्थानांतरण",
+        "pendingApproval": "अनुमोदन लंबित",
+        "inTransit": "रास्ते में",
+        "received": "प्राप्त",
+    }
     },
     "inventoryShrinkage": {
         "title": "इन्वेंट्री क्षति",
@@ -209,7 +223,12 @@ export const inventoryExtrasMessages = {
         "addLine": "लाइन जोड़ें",
         "remove": "हटाएँ",
         "notes": "नोट्स",
-        "selectProduct": "उत्पाद चुनें"
+        "selectProduct": "उत्पाद चुनें",
+    "listUi": {
+        "statsLabel": "सिकुड़न सारांश",
+        "total": "प्रविष्टियाँ",
+        "totalQty": "कुल मात्रा",
+    }
     },
     "inventoryStockTakes": {
         "title": "स्टॉक टेक",
@@ -234,7 +253,20 @@ export const inventoryExtrasMessages = {
             "created": "बनाया गया",
             "actions": "कार्रवाइयाँ",
             "open": "खोलें"
-        }
+        },
+    "statuses": {
+        "draft": "ड्राफ़्ट",
+        "counting": "गिनती",
+        "review": "समीक्षा में",
+        "posted": "पोस्टेड",
+        "cancelled": "रद्द",
+    },
+    "listUi": {
+        "statsLabel": "स्टॉक टेक सारांश",
+        "sessions": "सत्र",
+        "open": "खुले",
+        "discrepant": "अंतर वाले",
+    }
     },
     "inventoryLedger": {
         "title": "इन्वेंट्री खाता-बही",
@@ -352,6 +384,13 @@ export const inventoryExtrasMessages = {
         "reasonUpdateFailed": "इन्वेंट्री कारण अपडेट नहीं हो सका।"
     },
     "inventoryReports": {
+        "listUi": {
+            "statsLabel": "रिपोर्ट आंकड़े",
+            "suggestionCount": "सुझाव",
+            "suggestedUnits": "सुझाई गई इकाइयाँ",
+            "outOfStock": "स्टॉक समाप्त",
+            "movementCount": "मुवमेंट"
+        },
         "reorder": {
             "title": "पुनःऑर्डर सुझाव",
             "subtitle": "पुनःऑर्डर सीमा से नीचे के उत्पाद, सुझाई गई खरीद मात्रा के साथ",

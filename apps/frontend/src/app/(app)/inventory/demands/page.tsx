@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { ClipboardList, Plus, Trash2 } from 'lucide-react';
-import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { CheckCircle2, ClipboardList, FolderOpen, Hash, Inbox, Plus, Trash2 } from 'lucide-react';
+import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
+import { matchesAnyOf } from '@/lib/list-filter';
 import { warehouseLabel } from '@/lib/warehouse-label';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
@@ -67,6 +68,8 @@ const PRIORITY_TONE: Record<string, StatusBadgeTone> = {
 
 const blankLine = (): FormLine => ({ productId: '', quantity: '1', note: '' });
 
+const OPEN_DEMAND_STATUSES = new Set(['DRAFT', 'SUBMITTED', 'APPROVED']);
+
 const columnHelper = createColumnHelper<ProductDemand>();
 
 /**
@@ -79,6 +82,7 @@ export default function ProductDemandsPage() {
     const { t, locale } = useI18n();
     const branch = useBranchScope();
     const copy = t.inventoryDemands;
+    const listUi = copy.listUi;
     const toast = useToastStore((state) => state.show);
     const { permissions, role, ready: permissionsReady } = useTenantPlanFeatures();
 
@@ -91,8 +95,8 @@ export default function ProductDemandsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
-    const [statusFilter, setStatusFilter] = useState('');
-    const [priorityFilter, setPriorityFilter] = useState('');
+    const [statusFilter, setStatusFilter] = useState<string[]>([]);
+    const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
     // A warehouse belongs to one branch: the filter offers the chosen branch's
     // own (every one under "All branches") and is cleared when the branch changes.
     const [warehouseFilter, setWarehouseFilter] = useBranchBoundState(branch.apiStoreId);
@@ -122,9 +126,11 @@ export default function ProductDemandsPage() {
         setLoading(true);
         setError('');
         try {
+            // The API takes one status/priority; multi-select chips filter the
+            // loaded window client-side when more than one value is chosen.
             const data = await api.getProductDemands({
-                status: statusFilter || undefined,
-                priority: priorityFilter || undefined,
+                status: statusFilter.length === 1 ? statusFilter[0] : undefined,
+                priority: priorityFilter.length === 1 ? priorityFilter[0] : undefined,
                 warehouseId: warehouseFilter || undefined,
                 mine: mineOnly || undefined,
                 from: applyCreatedRangeQuery(createdRange).createdFrom,
@@ -341,14 +347,16 @@ export default function ProductDemandsPage() {
         columnHelper.accessor((row) => row.items.map(productName).join(', '), {
             id: 'products',
             header: t.nav.products,
-            cell: (info) => <span className="line-clamp-2 text-sm text-gray-600">{info.getValue() || '—'}</span>,
+            cell: (info) => <span className="truncate text-sm text-gray-600">{info.getValue() || '—'}</span>,
             size: 240,
             meta: { hideOnMobile: true },
         }),
         columnHelper.accessor((row) => row.items.reduce((sum, item) => sum + item.quantity_requested, 0), {
             id: 'requested',
             header: copy.columns.requested,
+            cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
             size: 110,
+            meta: { align: 'end' },
         }),
         columnHelper.accessor(
             (row) => (row.items.some((item) => item.quantity_approved !== null)
@@ -357,9 +365,9 @@ export default function ProductDemandsPage() {
             {
                 id: 'approved',
                 header: copy.columns.approved,
-                cell: (info) => <span className="text-sm">{info.getValue() ?? '—'}</span>,
+                cell: (info) => <span className="tabular-nums text-sm">{info.getValue() ?? '—'}</span>,
                 size: 110,
-                meta: { hideOnMobile: true },
+                meta: { align: 'end', hideOnMobile: true },
             },
         ),
         columnHelper.accessor('needed_by', {
@@ -384,6 +392,74 @@ export default function ProductDemandsPage() {
             size: 90,
         }),
     ], [copy, t, locale, productName, statusLabel, priorityLabel]);
+
+    const filteredDemands = useMemo(
+        () => demands.filter((demand) => (
+            matchesAnyOf(statusFilter, demand.status)
+            && matchesAnyOf(priorityFilter, demand.priority)
+        )),
+        [demands, statusFilter, priorityFilter],
+    );
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'status',
+            type: 'multi-select',
+            label: t.common.status,
+            value: statusFilter,
+            onChange: setStatusFilter,
+            options: STATUSES.map((status) => ({ value: status, label: statusLabel(status) })),
+        },
+        {
+            id: 'priority',
+            type: 'multi-select',
+            label: copy.columns.priority,
+            value: priorityFilter,
+            onChange: setPriorityFilter,
+            options: PRIORITIES.map((priority) => ({ value: priority, label: priorityLabel(priority) })),
+        },
+        {
+            id: 'warehouse',
+            type: 'select',
+            label: copy.columns.warehouse,
+            value: warehouseFilter || null,
+            onChange: (next) => setWarehouseFilter(next ?? ''),
+            options: filterWarehouses.map((warehouse: any) => ({
+                value: warehouse.id,
+                label: warehouseLabel(warehouse, filterWarehouses),
+            })),
+            searchable: true,
+        },
+        {
+            id: 'mine',
+            type: 'toggle',
+            label: copy.filters.mineOnly,
+            pressed: mineOnly,
+            onChange: setMineOnly,
+            control: 'button',
+        },
+        { id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange, operators: true },
+    ], [t, copy, statusFilter, statusLabel, priorityFilter, priorityLabel, warehouseFilter, filterWarehouses, mineOnly, createdRange]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const submitted = filteredDemands.filter((demand) => demand.status === 'SUBMITTED').length;
+        const approved = filteredDemands.filter((demand) => demand.status === 'APPROVED').length;
+        const open = filteredDemands.filter((demand) => OPEN_DEMAND_STATUSES.has(demand.status)).length;
+        const items: ListStat[] = [
+            { id: 'total', icon: <Hash aria-hidden />, label: listUi.total, value: n(filteredDemands.length) },
+            {
+                id: 'submitted',
+                icon: <Inbox aria-hidden />,
+                label: listUi.submitted,
+                value: n(submitted),
+                tone: submitted > 0 ? 'warning' : 'default',
+            },
+            { id: 'approved', icon: <CheckCircle2 aria-hidden />, label: listUi.approved, value: n(approved) },
+            { id: 'open', icon: <FolderOpen aria-hidden />, label: listUi.open, value: n(open) },
+        ];
+        return { items, loading, label: listUi.statsLabel };
+    }, [filteredDemands, loading, locale, listUi]);
 
     return (
         <PageShell>
@@ -410,41 +486,20 @@ export default function ProductDemandsPage() {
 
             {error ? <Alert tone="danger">{error}</Alert> : null}
 
-            <div className="grid gap-3 rounded-lg border border-gray-100 bg-white p-3 md:grid-cols-4">
-                <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label={t.common.status}>
-                    <option value="">{copy.filters.allStatuses}</option>
-                    {STATUSES.map((status) => (
-                        <option key={status} value={status}>{statusLabel(status)}</option>
-                    ))}
-                </Select>
-                <Select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} aria-label={copy.columns.priority}>
-                    <option value="">{copy.filters.allPriorities}</option>
-                    {PRIORITIES.map((priority) => (
-                        <option key={priority} value={priority}>{priorityLabel(priority)}</option>
-                    ))}
-                </Select>
-                <Select value={warehouseFilter} onChange={(e) => setWarehouseFilter(e.target.value)} aria-label={copy.columns.warehouse}>
-                    <option value="">{copy.filters.allWarehouses}</option>
-                    {filterWarehouses.map((warehouse: any) => (
-                        <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, filterWarehouses)}</option>
-                    ))}
-                </Select>
-                <label className="flex min-h-touch items-center gap-2 text-sm text-gray-700">
-                    <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} />
-                    {copy.filters.mineOnly}
-                </label>
-                <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
-            </div>
-
             <DataTable<ProductDemand>
                 tableId="inventory-demands"
                 columns={columns}
-                data={demands}
+                data={filteredDemands}
                 title={copy.title}
                 isLoading={loading}
                 emptyMessage={copy.empty}
                 emptyIcon={<ClipboardList className="h-16 w-16 text-gray-200" />}
                 searchPlaceholder={copy.searchPlaceholder}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
             />
 
             {formOpen ? (

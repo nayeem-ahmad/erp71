@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { BookOpen, RefreshCw } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { BranchFilter } from '@/components/ui';
 import { branchOrEmpty, useBranchBoundState, useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
@@ -27,10 +27,51 @@ interface LedgerRow {
     warehouse?: { id: string; name: string } | null;
 }
 
+/**
+ * Known movement types written by the backend. The ledger filter is a select of
+ * these rather than free text — new types still appear in the table; they just
+ * are not in the chip until listed here.
+ */
+const MOVEMENT_TYPES = [
+    'PURCHASE',
+    'PURCHASE_RECEIPT',
+    'PURCHASE_RETURN',
+    'PURCHASE_CANCELLED',
+    'PURCHASE_EDIT',
+    'SALE',
+    'SALE_EDIT',
+    'SALE_CANCELLED',
+    'SALES_RETURN',
+    'SALES_ORDER_DELIVERY',
+    'EXCHANGE_IN',
+    'EXCHANGE_OUT',
+    'TRANSFER_IN',
+    'TRANSFER_OUT',
+    'WAREHOUSE_TRANSFER',
+    'INITIAL_STOCK',
+    'STOCK_TAKE',
+    'STOCK_TAKE_ADJUSTMENT',
+    'SHRINKAGE',
+    'STOCK_FOUND',
+    'MANUFACTURING_OUTPUT',
+    'MANUFACTURING_CONSUMPTION',
+    'MANUFACTURING_WASTAGE',
+] as const;
+
+/** `PURCHASE_RECEIPT` → `Purchase Receipt`. */
+function humanizeMovementType(value: string): string {
+    return value
+        .split('_')
+        .filter(Boolean)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
+}
+
 const columnHelper = createColumnHelper<LedgerRow>();
 
 export default function InventoryLedgerPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
+    const listUi = t.inventoryReports.listUi;
     const branch = useBranchScope();
     const [warehouses, setWarehouses] = useState<any[]>([]);
     // A warehouse belongs to one branch: the picker offers the chosen branch's
@@ -54,7 +95,7 @@ export default function InventoryLedgerPage() {
         }),
         deps: [warehouseId, movementType, branch.apiStoreId],
         enabled: branch.ready,
-        columnFilters: true,
+        columnFilters: false,
     });
     useBranchForbiddenReset(ledgerError, branch, t.dashboardLayout.branchFilterForbidden);
 
@@ -98,20 +139,27 @@ export default function InventoryLedgerPage() {
             }),
             columnHelper.accessor('movement_type', {
                 header: t.inventoryLedger.columns.movement,
+                cell: (info) => humanizeMovementType(String(info.getValue() || '')),
                 size: 160,
             }),
             columnHelper.accessor('quantity_delta', {
                 header: t.inventoryLedger.columns.delta,
                 cell: (info) => {
                     const value = Number(info.getValue() || 0);
-                    return <span className={value >= 0 ? 'text-emerald-600 font-bold' : 'text-danger font-bold'}>{value}</span>;
+                    return (
+                        <span className={`tabular-nums ${value >= 0 ? 'text-emerald-600 font-bold' : 'text-danger font-bold'}`}>
+                            {value}
+                        </span>
+                    );
                 },
                 size: 80,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('balance_after', {
                 header: t.inventoryLedger.columns.balance,
-                cell: (info) => <span className="font-bold">{info.getValue() ?? '-'}</span>,
+                cell: (info) => <span className="tabular-nums font-bold">{info.getValue() ?? '-'}</span>,
                 size: 90,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor((row) => row.reference_type && row.reference_id ? `${row.reference_type} • ${row.reference_id}` : '-', {
                 id: 'reference',
@@ -122,54 +170,84 @@ export default function InventoryLedgerPage() {
         [t],
     );
 
+    const filters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'warehouse',
+                type: 'select',
+                label: t.inventoryLedger.warehouseLabel,
+                value: warehouseId || null,
+                onChange: (v) => setWarehouseId(v ?? ''),
+                options: filterWarehouses.map((warehouse) => ({
+                    value: warehouse.id,
+                    label: warehouseLabel(warehouse, filterWarehouses),
+                })),
+            },
+            {
+                id: 'movementType',
+                type: 'select',
+                label: t.inventoryLedger.movementType,
+                value: movementType || null,
+                onChange: (v) => setMovementType(v ?? ''),
+                options: MOVEMENT_TYPES.map((value) => ({
+                    value,
+                    label: humanizeMovementType(value),
+                })),
+                searchable: true,
+            },
+        ],
+        [t, warehouseId, filterWarehouses, movementType],
+    );
+
+    const stats = useMemo(() => {
+        const items: ListStat[] = [
+            {
+                id: 'movements',
+                icon: <BookOpen aria-hidden />,
+                label: listUi.movementCount,
+                value: Number(serverPagination?.total ?? 0).toLocaleString(locale),
+            },
+        ];
+        return { items, loading, label: listUi.statsLabel };
+    }, [serverPagination?.total, loading, locale, listUi]);
+
     return (
         <PageShell>
-                <PageHeader
-                    title={t.inventoryLedger.title}
-                    subtitle={t.inventoryLedger.subtitle}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.inventory,
-                        t.inventoryLedger.title,
-                        'inventory',
-                    )}
-                    actions={(
-                        <>
-                            <BranchFilter scope={branch} />
-                            <button onClick={() => void loadLedger()} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center">
-                                <RefreshCw className="w-4 h-4 me-2" /> {t.common.refresh}
-                            </button>
-                        </>
-                    )}
-                />
+            <PageHeader
+                title={t.inventoryLedger.title}
+                subtitle={t.inventoryLedger.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.inventory,
+                    t.inventoryLedger.title,
+                    'inventory',
+                )}
+                actions={(
+                    <>
+                        <BranchFilter scope={branch} />
+                        <button onClick={() => void loadLedger()} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center">
+                            <RefreshCw className="w-4 h-4 me-2" /> {t.common.refresh}
+                        </button>
+                    </>
+                )}
+            />
 
-                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
-                    <div className="min-w-[220px]">
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventoryLedger.warehouseLabel}</label>
-                        <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                            <option value="">{t.inventoryLedger.allWarehouses}</option>
-                            {filterWarehouses.map((warehouse) => (
-                                <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, filterWarehouses)}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="min-w-[220px]">
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventoryLedger.movementType}</label>
-                        <input value={movementType} onChange={(e) => setMovementType(e.target.value)} placeholder={t.inventoryLedger.movementPlaceholder} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
-                    </div>
-                </div>
-
-                <DataTable<LedgerRow>
-                    tableId="inventory-ledger"
-                    columns={columns}
-                    data={rows}
-                    title={t.inventoryLedger.stockLedger}
-                    isLoading={loading}
-                    emptyMessage={t.inventoryLedger.emptyMessage}
-                    emptyIcon={<BookOpen className="w-16 h-16 text-gray-200" />}
-                    showSearch={false}
-                    serverPagination={serverPagination}
-                />
-    </PageShell>
+            <DataTable<LedgerRow>
+                tableId="inventory-ledger"
+                columns={columns}
+                data={rows}
+                title={t.inventoryLedger.stockLedger}
+                isLoading={loading}
+                emptyMessage={t.inventoryLedger.emptyMessage}
+                emptyIcon={<BookOpen className="w-16 h-16 text-gray-200" />}
+                showSearch={false}
+                serverPagination={serverPagination}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+            />
+        </PageShell>
     );
 }

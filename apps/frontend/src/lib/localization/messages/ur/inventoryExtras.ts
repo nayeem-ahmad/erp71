@@ -118,7 +118,14 @@ export const inventoryExtrasMessages = {
             "duplicateProduct": "ایک ہی پروڈکٹ دو بار درج ہے۔ سطریں یکجا کریں۔",
             "saveFailed": "طلب محفوظ کرنے میں ناکامی۔",
             "actionFailed": "وہ عمل مکمل نہیں ہو سکا۔"
-        }
+        },
+    "listUi": {
+        "statsLabel": "طلب کا خلاصہ",
+        "total": "طلبات",
+        "submitted": "جمع کرائی گئیں",
+        "approved": "منظور شدہ",
+        "open": "کھلی",
+    }
     },
     "inventoryTransfers": {
         "title": "گوداموں کے درمیان منتقلی",
@@ -168,7 +175,14 @@ export const inventoryExtrasMessages = {
             "received": "وصول شدہ",
             "pendingApproval": "منظوری کا منتظر",
             "rejected": "مسترد"
-        }
+        },
+    "listUi": {
+        "statsLabel": "منتقلی کا خلاصہ",
+        "total": "منتقلیاں",
+        "pendingApproval": "منظوری در التوا",
+        "inTransit": "راستے میں",
+        "received": "موصول",
+    }
     },
     "inventoryShrinkage": {
         "title": "انوینٹری کی کمی",
@@ -209,7 +223,12 @@ export const inventoryExtrasMessages = {
         "addLine": "سطر شامل کریں",
         "remove": "ہٹائیں",
         "notes": "نوٹس",
-        "selectProduct": "پروڈکٹ منتخب کریں"
+        "selectProduct": "پروڈکٹ منتخب کریں",
+    "listUi": {
+        "statsLabel": "نقصان کا خلاصہ",
+        "total": "اندراجات",
+        "totalQty": "کل مقدار",
+    }
     },
     "inventoryStockTakes": {
         "title": "اسٹاک گنتی",
@@ -234,7 +253,20 @@ export const inventoryExtrasMessages = {
             "created": "بنایا گیا",
             "actions": "اعمال",
             "open": "کھولیں"
-        }
+        },
+    "statuses": {
+        "draft": "ڈرافٹ",
+        "counting": "گنتی",
+        "review": "جائزے میں",
+        "posted": "پوسٹ شدہ",
+        "cancelled": "منسوخ",
+    },
+    "listUi": {
+        "statsLabel": "اسٹاک ٹیک کا خلاصہ",
+        "sessions": "سیشنز",
+        "open": "کھلے",
+        "discrepant": "فرق والے",
+    }
     },
     "inventoryLedger": {
         "title": "انوینٹری کھاتہ",
@@ -352,6 +384,13 @@ export const inventoryExtrasMessages = {
         "reasonUpdateFailed": "انوینٹری کی وجہ اپ ڈیٹ کرنے میں ناکامی۔"
     },
     "inventoryReports": {
+        "listUi": {
+            "statsLabel": "رپورٹ کے اعداد",
+            "suggestionCount": "تجاویز",
+            "suggestedUnits": "تجویز کردہ یونٹس",
+            "outOfStock": "اسٹاک ختم",
+            "movementCount": "حرکتیں"
+        },
         "reorder": {
             "title": "دوبارہ آرڈر کی تجاویز",
             "subtitle": "دوبارہ آرڈر کی حد سے نیچے پروڈکٹس، تجویز کردہ خریداری مقدار کے ساتھ",

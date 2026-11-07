@@ -118,7 +118,14 @@ export const inventoryExtrasMessages = {
             "duplicateProduct": "El mismo producto aparece dos veces. Combine las líneas.",
             "saveFailed": "No se pudo guardar la solicitud.",
             "actionFailed": "Esa acción no se pudo completar."
-        }
+        },
+    "listUi": {
+        "statsLabel": "Resumen de demandas",
+        "total": "Demandas",
+        "submitted": "Enviadas",
+        "approved": "Aprobadas",
+        "open": "Abiertas",
+    }
     },
     "inventoryTransfers": {
         "title": "Traslados entre almacenes",
@@ -168,7 +175,14 @@ export const inventoryExtrasMessages = {
             "received": "Recibido",
             "pendingApproval": "Pendiente de aprobación",
             "rejected": "Rechazado"
-        }
+        },
+    "listUi": {
+        "statsLabel": "Resumen de transferencias",
+        "total": "Transferencias",
+        "pendingApproval": "Pendiente de aprobación",
+        "inTransit": "En tránsito",
+        "received": "Recibidas",
+    }
     },
     "inventoryShrinkage": {
         "title": "Mermas de inventario",
@@ -209,7 +223,12 @@ export const inventoryExtrasMessages = {
         "addLine": "Añadir línea",
         "remove": "Quitar",
         "notes": "Notas",
-        "selectProduct": "Seleccione un producto"
+        "selectProduct": "Seleccione un producto",
+    "listUi": {
+        "statsLabel": "Resumen de merma",
+        "total": "Registros",
+        "totalQty": "Cantidad total",
+    }
     },
     "inventoryStockTakes": {
         "title": "Recuentos de existencias",
@@ -234,7 +253,20 @@ export const inventoryExtrasMessages = {
             "created": "Creada",
             "actions": "Acciones",
             "open": "Abrir"
-        }
+        },
+    "statuses": {
+        "draft": "Borrador",
+        "counting": "Contando",
+        "review": "En revisión",
+        "posted": "Contabilizado",
+        "cancelled": "Cancelado",
+    },
+    "listUi": {
+        "statsLabel": "Resumen de inventarios",
+        "sessions": "Sesiones",
+        "open": "Abiertas",
+        "discrepant": "Con diferencias",
+    }
     },
     "inventoryLedger": {
         "title": "Libro mayor de inventario",
@@ -352,6 +384,13 @@ export const inventoryExtrasMessages = {
         "reasonUpdateFailed": "No se pudo actualizar el motivo de inventario."
     },
     "inventoryReports": {
+        "listUi": {
+            "statsLabel": "Cifras del informe",
+            "suggestionCount": "Sugerencias",
+            "suggestedUnits": "Unidades sugeridas",
+            "outOfStock": "Sin existencias",
+            "movementCount": "Movimientos"
+        },
         "reorder": {
             "title": "Sugerencias de reposición",
             "subtitle": "Productos por debajo de su nivel de reposición con las cantidades de compra sugeridas",

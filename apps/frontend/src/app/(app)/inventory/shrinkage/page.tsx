@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, PackagePlus, Plus } from 'lucide-react';
-import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { AlertTriangle, Hash, PackagePlus, Plus, Scale } from 'lucide-react';
+import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { warehouseLabel } from '@/lib/warehouse-label';
 import { api } from '@/lib/api';
@@ -65,8 +65,9 @@ const EMPTY_FORM = {
 const columnHelper = createColumnHelper<ShrinkageRecord>();
 
 export default function InventoryShrinkagePage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const branch = useBranchScope();
+    const listUi = t.inventoryShrinkage.listUi;
     const [records, setRecords] = useState<ShrinkageRecord[]>([]);
     const [warehouses, setWarehouses] = useState<any[]>([]);
     const [reasons, setReasons] = useState<any[]>([]);
@@ -230,7 +231,13 @@ export default function InventoryShrinkagePage() {
             }),
             columnHelper.accessor((row) => row.warehouse?.name || '-', { id: 'warehouse', header: t.inventoryShrinkage.columns.warehouse, size: 180 }),
             columnHelper.accessor((row) => row.reason?.label || '-', { id: 'reason', header: t.inventoryShrinkage.columns.reason, size: 170 }),
-            columnHelper.accessor((row) => row.items.reduce((sum, item) => sum + item.quantity, 0), { id: 'quantity', header: t.inventoryShrinkage.columns.totalQty, size: 110 }),
+            columnHelper.accessor((row) => row.items.reduce((sum, item) => sum + item.quantity, 0), {
+                id: 'quantity',
+                header: t.inventoryShrinkage.columns.totalQty,
+                cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
+                size: 110,
+                meta: { align: 'end' },
+            }),
             createdAtColumn(columnHelper, { header: t.common.createdAt }),
             columnHelper.display({
                 id: 'posting',
@@ -246,6 +253,38 @@ export default function InventoryShrinkagePage() {
         ],
         [t],
     );
+
+    const filters = useMemo<ListFilter[]>(() => [
+        { id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange, operators: true },
+        {
+            id: 'direction',
+            type: 'select',
+            label: t.inventoryShrinkage.filterLabel,
+            value: directionFilter || null,
+            onChange: (next) => setDirectionFilter((next as Direction | null) ?? ''),
+            options: [
+                { value: 'LOSS', label: t.inventoryShrinkage.directionLoss },
+                { value: 'FOUND', label: t.inventoryShrinkage.directionFound },
+            ],
+        },
+    ], [createdRange, directionFilter, t]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const loss = records.filter((row) => row.direction !== 'FOUND').length;
+        const found = records.filter((row) => row.direction === 'FOUND').length;
+        const totalQty = records.reduce(
+            (sum, row) => sum + row.items.reduce((lineSum, item) => lineSum + item.quantity, 0),
+            0,
+        );
+        const items: ListStat[] = [
+            { id: 'total', icon: <Hash aria-hidden />, label: listUi.total, value: n(records.length) },
+            { id: 'loss', icon: <AlertTriangle aria-hidden />, label: t.inventoryShrinkage.directionLoss, value: n(loss) },
+            { id: 'found', icon: <PackagePlus aria-hidden />, label: t.inventoryShrinkage.directionFound, value: n(found) },
+            { id: 'qty', icon: <Scale aria-hidden />, label: listUi.totalQty, value: n(totalQty) },
+        ];
+        return { items, loading, label: listUi.statsLabel };
+    }, [records, loading, locale, listUi, t]);
 
     return (
         <PageShell>
@@ -268,21 +307,6 @@ export default function InventoryShrinkagePage() {
                     )}
                 />
 
-                <div className="flex flex-wrap items-center gap-2">
-                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
-                    <Select
-                        // Named apart from the form's own entry-type control:
-                        // two selects sharing an accessible name leave a screen
-                        // reader with no way to tell the filter from the field.
-                        aria-label={t.inventoryShrinkage.filterLabel}
-                        value={directionFilter}
-                        onChange={(event) => setDirectionFilter(event.target.value as '' | Direction)}
-                    >
-                        <option value="">{t.inventoryShrinkage.filterAll}</option>
-                        <option value="LOSS">{t.inventoryShrinkage.directionLoss}</option>
-                        <option value="FOUND">{t.inventoryShrinkage.directionFound}</option>
-                    </Select>
-                </div>
                 <DataTable<ShrinkageRecord>
                     tableId="inventory-shrinkage"
                     columns={columns}
@@ -292,6 +316,11 @@ export default function InventoryShrinkagePage() {
                     emptyMessage={t.inventoryShrinkage.emptyMessage}
                     emptyIcon={<AlertTriangle className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.inventoryShrinkage.searchPlaceholder}
+                    filters={filters}
+                    filterLayout="row"
+                    stats={stats}
+                    enableColumnFilters={false}
+                    viewOptions
                 />
 
                 {formOpen ? (

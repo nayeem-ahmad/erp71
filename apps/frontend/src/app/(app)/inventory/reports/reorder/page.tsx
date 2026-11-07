@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { TrendingUp } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { Package, PackageX, TrendingUp } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { warehouseLabel } from '@/lib/warehouse-label';
 import PageShell from '@/components/ui/compact/PageShell';
@@ -27,7 +27,9 @@ interface ReorderRow {
 const columnHelper = createColumnHelper<ReorderRow>();
 
 export default function ReorderSuggestionsPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
+    const copy = t.inventoryReports.reorder;
+    const listUi = t.inventoryReports.listUi;
     const branch = useBranchScope();
     const [rows, setRows] = useState<ReorderRow[]>([]);
     const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -97,61 +99,131 @@ export default function ReorderSuggestionsPage() {
 
     const columns: ColumnDef<ReorderRow, any>[] = useMemo(
         () => [
-            columnHelper.accessor((row) => row.product.name, { id: 'product', header: t.inventoryReports.reorder.columns.product, size: 220 }),
-            columnHelper.accessor((row) => row.product.group?.name || t.inventoryReports.reorder.uncategorized, { id: 'group', header: t.inventoryReports.reorder.columns.group, size: 150 }),
-            columnHelper.accessor('onHand', { header: t.inventoryReports.reorder.columns.onHand, size: 90 }),
-            columnHelper.accessor('inTransit', { header: t.inventoryReports.reorder.columns.inTransit, size: 90 }),
-            columnHelper.accessor((row) => row.targetStock ?? '-', { id: 'targetStock', header: t.inventoryReports.reorder.columns.target, size: 90 }),
-            columnHelper.accessor('suggestedQuantity', {
-                header: t.inventoryReports.reorder.columns.suggestedQty,
-                cell: (info) => <span className="text-sm font-bold text-danger">{info.getValue()}</span>,
-                size: 120,
+            columnHelper.accessor((row) => row.product.name, { id: 'product', header: copy.columns.product, size: 220 }),
+            columnHelper.accessor((row) => row.product.group?.name || copy.uncategorized, { id: 'group', header: copy.columns.group, size: 150 }),
+            columnHelper.accessor('onHand', {
+                header: copy.columns.onHand,
+                cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
+                size: 90,
+                meta: { align: 'end' },
             }),
-            columnHelper.accessor('shortageReason', { header: t.inventoryReports.reorder.columns.explanation, size: 320 }),
-            columnHelper.accessor('configSource', { header: t.inventoryReports.reorder.columns.policySource, size: 120 }),
+            columnHelper.accessor('inTransit', {
+                header: copy.columns.inTransit,
+                cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
+                size: 90,
+                meta: { align: 'end' },
+            }),
+            columnHelper.accessor((row) => row.targetStock ?? '-', {
+                id: 'targetStock',
+                header: copy.columns.target,
+                cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
+                size: 90,
+                meta: { align: 'end' },
+            }),
+            columnHelper.accessor('suggestedQuantity', {
+                header: copy.columns.suggestedQty,
+                cell: (info) => <span className="tabular-nums text-sm font-bold text-danger">{info.getValue()}</span>,
+                size: 120,
+                meta: { align: 'end' },
+            }),
+            columnHelper.accessor('shortageReason', { header: copy.columns.explanation, size: 320 }),
+            columnHelper.accessor('configSource', { header: copy.columns.policySource, size: 120 }),
         ],
-        [t],
+        [copy],
     );
+
+    const filters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'warehouse',
+                type: 'select',
+                label: t.inventoryLedger.warehouseLabel,
+                value: warehouseId || null,
+                onChange: (v) => setWarehouseId(v ?? ''),
+                options: visibleWarehouses.map((warehouse: any) => ({
+                    value: warehouse.id,
+                    label: warehouseLabel(warehouse, visibleWarehouses),
+                })),
+            },
+            {
+                id: 'group',
+                type: 'select',
+                label: copy.columns.group,
+                value: groupId || null,
+                onChange: (v) => {
+                    setGroupId(v ?? '');
+                    setSubgroupId('');
+                },
+                options: groups.map((group: any) => ({ value: group.id, label: group.name })),
+            },
+            {
+                id: 'subgroup',
+                type: 'select',
+                label: t.inventory.columns.subgroup,
+                value: subgroupId || null,
+                onChange: (v) => setSubgroupId(v ?? ''),
+                options: filteredSubgroups.map((subgroup: any) => ({ value: subgroup.id, label: subgroup.name })),
+                more: true,
+            },
+        ],
+        [t, copy, warehouseId, visibleWarehouses, groupId, groups, subgroupId, filteredSubgroups],
+    );
+
+    const stats = useMemo(() => {
+        const suggestedUnits = rows.reduce((sum, row) => sum + Number(row.suggestedQuantity || 0), 0);
+        const outOfStock = rows.filter((row) => Number(row.onHand || 0) === 0).length;
+        const items: ListStat[] = [
+            {
+                id: 'suggestions',
+                icon: <TrendingUp aria-hidden />,
+                label: listUi.suggestionCount,
+                value: rows.length.toLocaleString(locale),
+            },
+            {
+                id: 'units',
+                icon: <Package aria-hidden />,
+                label: listUi.suggestedUnits,
+                value: suggestedUnits.toLocaleString(locale),
+            },
+            {
+                id: 'outOfStock',
+                icon: <PackageX aria-hidden />,
+                label: listUi.outOfStock,
+                value: outOfStock.toLocaleString(locale),
+            },
+        ];
+        return { items, loading, label: listUi.statsLabel };
+    }, [rows, loading, locale, listUi]);
 
     return (
         <PageShell>
-                <PageHeader
-                    title={t.inventoryReports.reorder.title}
-                    subtitle={t.inventoryReports.reorder.subtitlePrioritize}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.inventory,
-                        t.inventoryReports.reorder.title,
-                        'inventory',
-                    )}
-                    actions={<BranchFilter scope={branch} />}
-                />
+            <PageHeader
+                title={copy.title}
+                subtitle={copy.subtitlePrioritize}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.inventory,
+                    copy.title,
+                    'inventory',
+                )}
+                actions={<BranchFilter scope={branch} />}
+            />
 
-                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
-                    <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[220px]">
-                        <option value="">{t.inventoryReports.reorder.allWarehouses}</option>
-                        {visibleWarehouses.map((warehouse: any) => <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, visibleWarehouses)}</option>)}
-                    </select>
-                    <select value={groupId} onChange={(e) => { setGroupId(e.target.value); setSubgroupId(''); }} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[220px]">
-                        <option value="">{t.inventoryReports.reorder.allGroups}</option>
-                        {groups.map((group: any) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                    </select>
-                    <select value={subgroupId} onChange={(e) => setSubgroupId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[220px]">
-                        <option value="">{t.inventoryReports.reorder.allSubgroups}</option>
-                        {filteredSubgroups.map((subgroup: any) => <option key={subgroup.id} value={subgroup.id}>{subgroup.name}</option>)}
-                    </select>
-                </div>
-
-                <DataTable<ReorderRow>
-                    tableId="inventory-reorder-suggestions"
-                    columns={columns}
-                    data={rows}
-                    title={t.inventoryReports.reorder.title}
-                    isLoading={loading}
-                    emptyMessage={t.inventoryReports.reorder.emptyMessage}
-                    emptyIcon={<TrendingUp className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.common.search + "..."}
-                />
-    </PageShell>
+            <DataTable<ReorderRow>
+                tableId="inventory-reorder-suggestions"
+                columns={columns}
+                data={rows}
+                title={copy.title}
+                isLoading={loading}
+                emptyMessage={copy.emptyMessage}
+                emptyIcon={<TrendingUp className="w-16 h-16 text-gray-200" />}
+                searchPlaceholder={t.common.search + '...'}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+            />
+        </PageShell>
     );
 }
