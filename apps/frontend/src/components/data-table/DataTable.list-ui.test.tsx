@@ -1,11 +1,12 @@
 'use client';
 
-import { act, render, screen, fireEvent, within } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import DataTable from './DataTable';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useTableViewStore } from '@/components/table';
 import { useTablePreferences } from './useTablePreferences';
 import { naturalColumnWidth } from './column-autofit';
+import { printTable } from './export-utils';
 import type { ListFilter } from './FilterBar';
 import type { ListStat } from './ListStats';
 
@@ -186,5 +187,74 @@ describe('DataTable one-row toolbar', () => {
         render(<DataTable {...props} filters={filters} filterLayout="row" />);
         expect(screen.getByRole('button', { name: /Filters/ })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument();
+    });
+});
+
+describe('DataTable totals row', () => {
+    interface Line {
+        id: string;
+        account: string;
+        type: string;
+        debit: number;
+        credit: number;
+    }
+    const lines: Line[] = [
+        { id: '1', account: 'Cash', type: 'asset', debit: 300, credit: 0 },
+        { id: '2', account: 'Sales', type: 'revenue', debit: 0, credit: 300 },
+    ];
+    const lineColumns: ColumnDef<Line, any>[] = [
+        { accessorKey: 'account', header: 'Account', id: 'account' },
+        { accessorKey: 'type', header: 'Type', id: 'type', meta: { hideOnMobile: true } },
+        { accessorKey: 'debit', header: 'Debit', id: 'debit', meta: { align: 'end' }, footer: () => '৳300' },
+        { accessorKey: 'credit', header: 'Credit', id: 'credit', meta: { align: 'end', hideOnMobile: true }, footer: () => '৳300.00' },
+    ];
+    const lineProps = { tableId: 'totals-test', columns: lineColumns, data: lines, title: 'Totals test', footerLabel: 'Totals' };
+    const footerRow = () => screen.getByRole('rowheader', { name: 'Totals' }).closest('tr') as HTMLElement;
+
+    it('labels the row across the leading columns and lines the figures up under theirs', () => {
+        render(<DataTable {...lineProps} viewOptions />);
+        const label = screen.getByRole('rowheader', { name: 'Totals' });
+        // Account and Type have no footer of their own: the label spans both.
+        expect(label).toHaveAttribute('colspan', '2');
+        expect(label.closest('tfoot')).not.toBeNull();
+        const debit = footerRow().querySelector('[data-column-id="debit"]') as HTMLElement;
+        expect(debit).toHaveTextContent('৳300');
+        expect(debit).toHaveClass('text-end', 'tabular-nums');
+    });
+
+    it('drops the footer cell of a hidden column, and the label keeps its place', () => {
+        mockMdUp = false;
+        render(<DataTable {...lineProps} />);
+        // Type and Credit hide on a phone.
+        expect(footerRow().querySelector('[data-column-id="credit"]')).toBeNull();
+        expect(footerRow().querySelector('[data-column-id="debit"]')).toHaveTextContent('৳300');
+        expect(screen.getByRole('rowheader', { name: 'Totals' })).toHaveAttribute('colspan', '1');
+    });
+
+    it('keeps the label when the first column is hidden', () => {
+        useTablePreferences.setState({ tables: { 'totals-test': { columnVisibility: { account: false } } } as never });
+        render(<DataTable {...lineProps} />);
+        expect(screen.getByRole('rowheader', { name: 'Totals' })).toHaveAttribute('colspan', '1');
+        expect(footerRow().querySelectorAll('td[data-column-id]')).toHaveLength(2);
+    });
+
+    it('follows the columns\' order', () => {
+        useTablePreferences.setState({ tables: { 'totals-test': { columnOrder: ['account', 'type', 'credit', 'debit'] } } as never });
+        render(<DataTable {...lineProps} />);
+        const ids = Array.from(footerRow().querySelectorAll('td[data-column-id]')).map((cell) => cell.getAttribute('data-column-id'));
+        expect(ids).toEqual(['credit', 'debit']);
+    });
+
+    it('prints the row under the printed rows', async () => {
+        render(<DataTable {...lineProps} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Print' }));
+        await waitFor(() => expect(printTable).toHaveBeenCalled());
+        const footer = (printTable as jest.Mock).mock.calls.at(-1)[4];
+        expect(footer).toEqual({ label: 'Totals', cells: { debit: '৳300', credit: '৳300.00' } });
+    });
+
+    it('draws no totals row when no column has a footer', () => {
+        render(<DataTable {...props} footerLabel="Totals" />);
+        expect(document.querySelector('tfoot')).toBeNull();
     });
 });

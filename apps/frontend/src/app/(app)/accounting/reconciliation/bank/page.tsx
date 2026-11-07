@@ -1,17 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { CheckCircle, Circle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
+import { Check, CircleCheck, CircleDashed, Landmark, Scale, Sparkles, Wallet } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { tenantDateOnly, type CreatedRange } from '@/lib/created-range';
+import type { NumberCondition } from '@/lib/number-condition';
+import { inDateRange, matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
 import {
     AccountingPageShell,
     CompactSection,
-    CompactStat,
 } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { Alert, Button, StatusBadge } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
-import { useI18n, formatMessage } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import AccountSelect from '@/components/accounting/AccountSelect';
 import { compactDensity } from '@/lib/ui/compact-density';
 
@@ -35,17 +40,32 @@ interface ReconciliationReport {
     entries: StatementEntry[];
 }
 
+const STEPS = ['setup', 'import', 'match'] as const;
+const ENTRY_TYPES = ['DEBIT', 'CREDIT'] as const;
+const MATCH_STATES = ['matched', 'unmatched'] as const;
+
+const columnHelper = createColumnHelper<StatementEntry>();
+
+const matchStateOf = (entry: StatementEntry) => (entry.is_matched ? 'matched' : 'unmatched');
+
 export default function BankReconciliationPage() {
     const { t, locale } = useI18n();
+    const ui = t.accountingFinanceUi.bankReconciliation;
     const [accounts, setAccounts] = useState<BankAccount[]>([]);
     const [step, setStep] = useState<'setup' | 'import' | 'match' | 'done'>('setup');
     const [reconId, setReconId] = useState<string | null>(null);
     const [report, setReport] = useState<ReconciliationReport | null>(null);
-    const [form, setForm] = useState({ accountId: '', statementDate: new Date().toISOString().slice(0, 10), statementClosingBalance: '' });
+    const [form, setForm] = useState({ accountId: '', statementDate: tenantDateOnly(), statementClosingBalance: '' });
     const [csvText, setCsvText] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [working, setWorking] = useState(false);
     const [autoMatched, setAutoMatched] = useState(false);
+
+    const [search, setSearch] = useState('');
+    const [matchStates, setMatchStates] = useState<string[]>([]);
+    const [entryTypes, setEntryTypes] = useState<string[]>([]);
+    const [dateRange, setDateRange] = useState<CreatedRange | null>(null);
+    const [amountFilter, setAmountFilter] = useState<NumberCondition | null>(null);
 
     useEffect(() => {
         api.getAccounts({ category: 'bank' }).then((d: any) => {
@@ -83,7 +103,7 @@ export default function BankReconciliationPage() {
             setReconId(result.id);
             setStep('import');
         } catch (e: any) {
-            setError(e?.message ?? 'Failed to create reconciliation');
+            setError(e?.message ?? ui.createFailed);
         } finally {
             setWorking(false);
         }
@@ -107,7 +127,7 @@ export default function BankReconciliationPage() {
             await loadReport(reconId);
             setStep('match');
         } catch (e: any) {
-            setError(e?.message ?? 'Failed to import entries');
+            setError(e?.message ?? ui.importFailed);
         } finally {
             setWorking(false);
         }
@@ -121,11 +141,144 @@ export default function BankReconciliationPage() {
             await loadReport(reconId);
             setAutoMatched(true);
         } catch (e: any) {
-            setError(e?.message ?? 'Auto-match failed');
+            setError(e?.message ?? ui.autoMatchFailed);
         } finally {
             setWorking(false);
         }
     };
+
+    const entryTypeLabel = (type: string) => (type === 'CREDIT' ? t.accountingShared.credit : t.accountingShared.debit);
+    const matchStateLabel = (state: string) => (state === 'matched' ? t.reconciliation.matched : t.reconciliation.unmatched);
+
+    const entries = report?.entries ?? [];
+
+    const filtered = useMemo(
+        () => entries.filter((entry) => {
+            if (!matchesAnyOf(matchStates, matchStateOf(entry))) return false;
+            if (!matchesAnyOf(entryTypes, entry.entry_type)) return false;
+            if (!inDateRange(entry.entry_date, dateRange)) return false;
+            if (!matchesNumberCondition(Number(entry.amount || 0), amountFilter)) return false;
+            return matchesSearch(search, entry.description, String(entry.amount ?? ''), entryTypeLabel(entry.entry_type));
+        }),
+        [entries, matchStates, entryTypes, dateRange, amountFilter, search, t],
+    );
+
+    const filters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'match',
+                type: 'multi-select',
+                label: t.common.status,
+                value: matchStates,
+                onChange: setMatchStates,
+                options: MATCH_STATES.map((value) => ({ value, label: matchStateLabel(value) })),
+            },
+            {
+                id: 'type',
+                type: 'multi-select',
+                label: t.accountingShared.type,
+                value: entryTypes,
+                onChange: setEntryTypes,
+                options: ENTRY_TYPES.map((value) => ({ value, label: entryTypeLabel(value) })),
+            },
+            {
+                id: 'date',
+                type: 'date-range',
+                label: t.accountingShared.date,
+                value: dateRange,
+                onChange: setDateRange,
+                operators: true,
+            },
+            {
+                id: 'amount',
+                type: 'number',
+                label: t.accountingShared.amount,
+                value: amountFilter,
+                onChange: setAmountFilter,
+                money: true,
+            },
+        ],
+        [t, matchStates, entryTypes, dateRange, amountFilter],
+    );
+
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const n = (value: number) => value.toLocaleString(locale);
+        const matched = filtered.filter((entry) => entry.is_matched);
+        const unmatched = filtered.filter((entry) => !entry.is_matched);
+        const sum = (rows: StatementEntry[]) => rows.reduce((total, entry) => total + Number(entry.amount || 0), 0);
+        const difference = report?.difference ?? 0;
+        const items: ListStat[] = [
+            { id: 'book', icon: <Wallet aria-hidden />, label: ui.bookBalance, value: money(report?.book_balance ?? 0) },
+            { id: 'statement', icon: <Landmark aria-hidden />, label: ui.statementBalance, value: money(report?.statement_balance ?? 0) },
+            {
+                id: 'difference',
+                icon: <Scale aria-hidden />,
+                label: t.accountingShared.difference,
+                value: money(difference),
+                tone: Math.abs(difference) < 0.01 ? 'default' : 'danger',
+            },
+            {
+                id: 'matched',
+                icon: <CircleCheck aria-hidden />,
+                label: t.reconciliation.matched,
+                value: n(matched.length),
+                hint: money(sum(matched)),
+            },
+            {
+                id: 'unmatched',
+                icon: <CircleDashed aria-hidden />,
+                label: t.reconciliation.unmatched,
+                value: n(unmatched.length),
+                hint: money(sum(unmatched)),
+                tone: unmatched.length > 0 ? 'warning' : 'default',
+            },
+        ];
+        return { items, loading: working, label: ui.statsLabel };
+    }, [filtered, report, working, locale, t, ui]);
+
+    const columns: ColumnDef<StatementEntry, any>[] = useMemo(
+        () => [
+            columnHelper.accessor('entry_date', {
+                header: t.accountingShared.date,
+                cell: (info) => formatDate(info.getValue(), locale),
+                sortingFn: 'datetime',
+                size: 110,
+            }),
+            columnHelper.accessor((row) => row.description ?? '', {
+                id: 'description',
+                header: t.accountingShared.description,
+                cell: (info) => info.getValue() || '—',
+                size: 260,
+            }),
+            columnHelper.accessor((row) => Number(row.amount || 0), {
+                id: 'amount',
+                header: t.accountingShared.amount,
+                cell: (info) => formatBDT(info.getValue(), { locale }),
+                meta: { align: 'end' },
+                size: 120,
+            }),
+            columnHelper.accessor('entry_type', {
+                header: t.accountingShared.type,
+                cell: (info) => entryTypeLabel(info.getValue()),
+                meta: { hideOnMobile: true },
+                size: 90,
+            }),
+            columnHelper.accessor(matchStateOf, {
+                id: 'match',
+                header: t.common.status,
+                cell: (info) => (
+                    info.getValue() === 'matched'
+                        ? <StatusBadge tone="success">{t.reconciliation.matched}</StatusBadge>
+                        : <StatusBadge tone="warning">{t.reconciliation.unmatched}</StatusBadge>
+                ),
+                size: 110,
+            }),
+        ],
+        [t, locale],
+    );
+
+    const stepIndex = STEPS.indexOf(step as (typeof STEPS)[number]);
 
     return (
         <AccountingPageShell>
@@ -140,123 +293,96 @@ export default function BankReconciliationPage() {
                 )}
             />
 
-            <div className="flex items-center gap-2 text-xs">
-                    {(['setup', 'import', 'match'] as const).map((s, i) => (
-                        <div key={s} className="flex items-center gap-2">
-                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step === s ? 'bg-gray-900 text-white' : ['setup','import','match'].indexOf(step) > i ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
-                                {['setup','import','match'].indexOf(step) > i ? '✓' : i + 1}
-                            </div>
-                            <span className={`font-bold capitalize ${step === s ? 'text-gray-900' : 'text-gray-400'}`}>{s}</span>
-                            {i < 2 && <div className="w-8 h-px bg-gray-200" />}
-                        </div>
-                    ))}
-                </div>
+            <ol className="flex items-center gap-2 text-xs">
+                {STEPS.map((s, i) => {
+                    const done = stepIndex > i;
+                    const current = step === s;
+                    return (
+                        <li key={s} className="flex items-center gap-2" aria-current={current ? 'step' : undefined}>
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${current ? 'bg-blue-600 text-white' : done ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                                {done ? <Check className="w-3.5 h-3.5" aria-hidden /> : i + 1}
+                            </span>
+                            <span className={`font-semibold ${current ? 'text-gray-900' : 'text-gray-400'}`}>{ui.steps[s]}</span>
+                            {i < STEPS.length - 1 && <span className="w-8 h-px bg-gray-200" />}
+                        </li>
+                    );
+                })}
+            </ol>
 
-                {error && <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-sm text-red-700">{error}</div>}
+            {error && <Alert tone="danger">{error}</Alert>}
 
-                {step === 'setup' && (
-                    <CompactSection title="1. Set up reconciliation">
-                        <div className={`${compactDensity.formStack} max-w-xl`}>
+            {step === 'setup' && (
+                <CompactSection title={ui.setupTitle}>
+                    <div className={`${compactDensity.formStack} max-w-xl`}>
+                        <label className="block">
+                            <span className={`${compactDensity.formLabel} block mb-1`}>{t.reconciliation.bankAccount}</span>
+                            <AccountSelect
+                                accounts={accounts}
+                                value={form.accountId}
+                                onChange={(accountId) => setForm((f) => ({ ...f, accountId }))}
+                                ariaLabel={t.reconciliation.bankAccount}
+                                placeholder={ui.selectBankAccount}
+                                className={compactDensity.formField}
+                            />
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
                             <label className="block">
-                                <span className={`${compactDensity.formLabel} block mb-1`}>Bank Account</span>
-                                <AccountSelect
-                                    accounts={accounts}
-                                    value={form.accountId}
-                                    onChange={(accountId) => setForm((f) => ({ ...f, accountId }))}
-                                    ariaLabel="Bank account"
-                                    placeholder="Select bank account…"
-                                    className={compactDensity.formField}
-                                />
+                                <span className={`${compactDensity.formLabel} block mb-1`}>{ui.statementDate}</span>
+                                <input type="date" value={form.statementDate} onChange={(e) => setForm((f) => ({ ...f, statementDate: e.target.value }))} className={compactDensity.formField} />
                             </label>
-                            <div className="grid grid-cols-2 gap-2">
-                                <label className="block">
-                                    <span className={`${compactDensity.formLabel} block mb-1`}>Statement Date</span>
-                                    <input type="date" value={form.statementDate} onChange={(e) => setForm((f) => ({ ...f, statementDate: e.target.value }))} className={compactDensity.formField} />
-                                </label>
-                                <label className="block">
-                                    <span className={`${compactDensity.formLabel} block mb-1`}>Statement Closing Balance</span>
-                                    <input type="number" step="0.01" value={form.statementClosingBalance} onChange={(e) => setForm((f) => ({ ...f, statementClosingBalance: e.target.value }))} placeholder="0.00" className={compactDensity.formField} />
-                                </label>
-                            </div>
-                            <button onClick={handleSetup} disabled={working || !form.accountId || !form.statementClosingBalance} className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-50`}>
-                                {working ? 'Creating…' : 'Next: Import Statement'}
-                            </button>
+                            <label className="block">
+                                <span className={`${compactDensity.formLabel} block mb-1`}>{ui.closingBalance}</span>
+                                <input type="number" step="0.01" value={form.statementClosingBalance} onChange={(e) => setForm((f) => ({ ...f, statementClosingBalance: e.target.value }))} placeholder="0.00" className={compactDensity.formField} />
+                            </label>
                         </div>
-                    </CompactSection>
-                )}
-
-                {step === 'import' && (
-                    <CompactSection title="2. Paste bank statement entries">
-                        <p className="text-xs text-gray-500 mb-2">One row per line: <code className="bg-gray-100 px-1 rounded text-xs">YYYY-MM-DD, Description, Amount, DEBIT|CREDIT</code></p>
-                        <textarea rows={8} value={csvText} onChange={(e) => setCsvText(e.target.value)}
-                            placeholder={`2026-06-01, Salary payment, 50000, DEBIT\n2026-06-02, Customer deposit, 30000, CREDIT`}
-                            className={`${compactDensity.formField} font-mono resize-none mb-3`} />
-                        <div className="flex gap-2">
-                            <button onClick={() => setStep('setup')} className={compactDensity.btnSecondary}>Back</button>
-                            <button onClick={handleImport} disabled={working || !csvText.trim()} className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-50`}>
-                                {working ? 'Importing…' : 'Import & Continue'}
-                            </button>
+                        <div>
+                            <Button variant="primary" onClick={handleSetup} loading={working} disabled={!form.accountId || !form.statementClosingBalance}>
+                                {working ? ui.creating : ui.nextImport}
+                            </Button>
                         </div>
-                    </CompactSection>
-                )}
-
-                {step === 'match' && report && (
-                    <div className="space-y-3">
-                        <div className="grid grid-cols-3 gap-3">
-                            <CompactStat label="Book Balance" value={formatBDT(report.book_balance, { locale })} />
-                            <CompactStat label="Statement Balance" value={formatBDT(report.statement_balance, { locale })} />
-                            <CompactStat label="Difference" value={formatBDT(report.difference, { locale })} tone={Math.abs(report.difference) < 0.01 ? 'positive' : 'negative'} />
-                        </div>
-
-                        <CompactSection>
-                            <div className="flex items-center justify-between gap-3">
-                                <div className="text-xs text-gray-600">
-                                    <span className="font-semibold text-emerald-600">{report.matched_count} matched</span>
-                                    {' · '}
-                                    <span className="font-semibold text-amber-600">{report.unmatched_count} unmatched</span>
-                                </div>
-                                {!autoMatched && (
-                                    <button onClick={handleAutoMatch} disabled={working} className={`${compactDensity.btnSecondary} text-blue-700 border-blue-100 bg-blue-50 hover:bg-blue-100 disabled:opacity-50`}>
-                                        {working ? 'Matching…' : 'Auto-Match by Date & Amount'}
-                                    </button>
-                                )}
-                            </div>
-                        </CompactSection>
-
-                        <CompactSection className="!p-0 overflow-hidden">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-gray-100">
-                                        <th className="text-start px-4 py-3 text-xs font-semibold text-gray-400">Date</th>
-                                        <th className="text-start px-4 py-3 text-xs font-semibold text-gray-400">Description</th>
-                                        <th className="text-end px-4 py-3 text-xs font-semibold text-gray-400">Amount</th>
-                                        <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400">Type</th>
-                                        <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {report.entries.map((e) => (
-                                        <tr key={e.id} className={`border-b border-gray-50 ${e.is_matched ? 'opacity-60' : ''}`}>
-                                            <td className="px-4 py-3 text-gray-500">{formatDate(e.entry_date, locale)}</td>
-                                            <td className="px-4 py-3 text-gray-700">{e.description ?? '—'}</td>
-                                            <td className="px-4 py-3 text-end font-medium">{formatBDT(Number(e.amount), { locale })}</td>
-                                            <td className="px-4 py-3 text-center">
-                                                <span className={`text-xs font-bold ${e.entry_type === 'CREDIT' ? 'text-emerald-600' : 'text-danger'}`}>
-                                                    {e.entry_type}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                {e.is_matched
-                                                    ? <CheckCircle className="w-4 h-4 text-emerald-500 mx-auto" />
-                                                    : <Circle className="w-4 h-4 text-gray-300 mx-auto" />}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </CompactSection>
                     </div>
-                )}
+                </CompactSection>
+            )}
+
+            {step === 'import' && (
+                <CompactSection title={ui.importTitle}>
+                    <p className="text-xs text-gray-500 mb-2">{ui.importHint} <code className="bg-gray-100 px-1 rounded text-xs">YYYY-MM-DD, Description, Amount, DEBIT|CREDIT</code></p>
+                    <textarea rows={8} value={csvText} onChange={(e) => setCsvText(e.target.value)}
+                        placeholder={`2026-06-01, Salary payment, 50000, DEBIT\n2026-06-02, Customer deposit, 30000, CREDIT`}
+                        aria-label={ui.importTitle}
+                        className={`${compactDensity.formField} font-mono resize-none mb-3`} />
+                    <div className="flex gap-2">
+                        <Button variant="secondary" onClick={() => setStep('setup')}>{t.common.back}</Button>
+                        <Button variant="primary" onClick={handleImport} loading={working} disabled={!csvText.trim()}>
+                            {working ? ui.importing : ui.importContinue}
+                        </Button>
+                    </div>
+                </CompactSection>
+            )}
+
+            {step === 'match' && report && (
+                <DataTable
+                    tableId="bank-reconciliation-entries"
+                    title={t.reconciliation.matchEntries}
+                    data={filtered}
+                    columns={columns}
+                    searchPlaceholder={ui.search}
+                    searchValue={search}
+                    onSearchChange={setSearch}
+                    filters={filters}
+                    filterLayout="row"
+                    stats={stats}
+                    enableColumnFilters={false}
+                    viewOptions
+                    rowClassName={(entry) => (entry.is_matched ? 'opacity-60' : undefined)}
+                    emptyMessage={t.common.noData}
+                    toolbarActions={!autoMatched ? (
+                        <Button variant="secondary" icon={<Sparkles className="w-3.5 h-3.5" />} onClick={handleAutoMatch} loading={working}>
+                            {working ? ui.matching : ui.autoMatch}
+                        </Button>
+                    ) : undefined}
+                />
+            )}
         </AccountingPageShell>
     );
 }

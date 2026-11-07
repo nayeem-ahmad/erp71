@@ -1,16 +1,34 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Truck, Plus, RefreshCw } from 'lucide-react';
-import { fetchWithAuth } from '@/lib/api';
-import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
-import { formatDate } from '@/lib/format';
-import { useI18n } from '@/lib/i18n';
-import { CreatedRangeFilter } from '@/components/data-table';
-import PageHeader from '@/components/ui/compact/PageHeader';
-import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell, Button } from '@/components/ui';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
+import { AlarmClock, Ban, CheckCircle2, Clock, Pencil, Plus, Truck, XCircle } from 'lucide-react';
+import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
+import {
+    Button,
+    ConfirmDialog,
+    Field,
+    Input,
+    PageShell,
+    Select,
+    StatusBadge,
+    Textarea,
+    buttonClassName,
+    type StatusBadgeTone,
+} from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import PageHeader from '@/components/ui/compact/PageHeader';
+import { api, type DeliveryListFilterParams, type DeliveryListSummary } from '@/lib/api';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
+import { formatDateTime } from '@/lib/format';
+import { formatMessage, useI18n } from '@/lib/i18n';
+import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { routes } from '@/lib/routes';
+import { toast } from '@/lib/toast';
+import { useServerList } from '@/hooks/useServerList';
+import { useListSummary } from '@/hooks/useListSummary';
 
 interface DeliveryOrder {
     id: string;
@@ -21,20 +39,29 @@ interface DeliveryOrder {
     driverName: string | null;
     driverPhone: string | null;
     status: string;
+    notes?: string | null;
     scheduledAt: string | null;
     deliveredAt: string | null;
     created_at: string;
+    sale?: { id: string; serial_number: string } | null;
 }
 
-const STATUS_OPTIONS = ['PENDING', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'CANCELLED'];
+const STATUSES = ['PENDING', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'CANCELLED'] as const;
+type DeliveryStatus = (typeof STATUSES)[number];
 
-const STATUS_COLORS: Record<string, string> = {
-    PENDING: 'bg-yellow-100 text-yellow-800',
-    IN_TRANSIT: 'bg-blue-100 text-blue-800',
-    DELIVERED: 'bg-green-100 text-green-800',
-    FAILED: 'bg-red-100 text-red-800',
-    CANCELLED: 'bg-gray-100 text-gray-700',
+/** Still on its way: can be marked delivered or called off. */
+const OPEN_STATUSES = new Set<string>(['PENDING', 'IN_TRANSIT']);
+
+const STATUS_TONE: Record<DeliveryStatus, StatusBadgeTone> = {
+    PENDING: 'warning',
+    IN_TRANSIT: 'info',
+    DELIVERED: 'success',
+    FAILED: 'danger',
+    CANCELLED: 'neutral',
 };
+
+/** The Driver chip's value for a delivery with nobody on it, as the server reads it. */
+const NO_DRIVER = 'none';
 
 const EMPTY_FORM = {
     saleId: '',
@@ -48,49 +75,94 @@ const EMPTY_FORM = {
     status: 'PENDING',
 };
 
+const columnHelper = createColumnHelper<DeliveryOrder>();
+
+function isOverdue(order: DeliveryOrder, now: number): boolean {
+    return OPEN_STATUSES.has(order.status) && !!order.scheduledAt && new Date(order.scheduledAt).getTime() < now;
+}
+
 export default function DeliveryPage() {
-    const { t } = useI18n();
-    const [orders, setOrders] = useState<DeliveryOrder[]>([]);
-    const [total, setTotal] = useState(0);
-    const [page, setPage] = useState(1);
-    const [pages, setPages] = useState(1);
-    const [statusFilter, setStatusFilter] = useState('');
+    const { t, locale } = useI18n();
+    const copy = t.delivery;
+    const ui = copy.listUi;
+
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [statuses, setStatuses] = useState<string[]>([]);
+    const [statusExclude, setStatusExclude] = useState(false);
+    const [drivers, setDrivers] = useState<string[]>([]);
+    const [scheduledRange, setScheduledRange] = useState<CreatedRange | null>(null);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
+    const [driverNames, setDriverNames] = useState<string[]>([]);
 
     const [showModal, setShowModal] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [form, setForm] = useState(EMPTY_FORM);
     const [saving, setSaving] = useState(false);
-    const [saveError, setSaveError] = useState('');
+    const [formError, setFormError] = useState('');
+    const [pendingCancel, setPendingCancel] = useState<DeliveryOrder | null>(null);
+    const [cancelling, setCancelling] = useState(false);
 
-    const load = useCallback(async () => {
-        setLoading(true);
-        setError('');
-        try {
-            const params = new URLSearchParams({ page: String(page), limit: '20' });
-            if (statusFilter) params.set('status', statusFilter);
-            const created = applyCreatedRangeQuery(createdRange);
-            if (created.createdFrom) params.set('createdFrom', created.createdFrom);
-            if (created.createdTo) params.set('createdTo', created.createdTo);
-            const data = await fetchWithAuth(`/delivery?${params}`);
-            setOrders(data.items ?? []);
-            setTotal(data.total ?? 0);
-            setPages(data.pages ?? 1);
-        } catch {
-            setError('Failed to load deliveries');
-        } finally {
-            setLoading(false);
-        }
-    }, [page, statusFilter, createdRange]);
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => {
+        api.getDeliveryDrivers()
+            .then((names) => setDriverNames(Array.isArray(names) ? names : []))
+            .catch(() => setDriverNames([]));
+    }, []);
+
+    const filterParams = useMemo<DeliveryListFilterParams>(() => {
+        const scheduled = applyCreatedRangeQuery(scheduledRange);
+        return {
+            search: debouncedSearch || undefined,
+            status: statuses.length ? statuses.join(',') : undefined,
+            statusExclude,
+            drivers,
+            dateFrom: scheduled.createdFrom,
+            dateTo: scheduled.createdTo,
+            ...applyCreatedRangeQuery(createdRange),
+        };
+    }, [debouncedSearch, statuses, statusExclude, drivers, scheduledRange, createdRange]);
+
+    const { items: orders, loading, error: listError, serverPagination, reload } = useServerList<DeliveryOrder>({
+        tableId: 'delivery-orders',
+        initialSort: { id: 'created_at', desc: true },
+        deps: [filterParams],
+        fetch: (params) => api.getDeliveriesList({ ...params, ...filterParams }),
+    });
+
+    useEffect(() => {
+        if (listError) toast.error(copy.loadFailed);
+    }, [listError, copy.loadFailed]);
+
+    const { summary, loading: summaryLoading, reload: reloadSummary } = useListSummary<
+        DeliveryListFilterParams,
+        DeliveryListSummary
+    >({ fetch: api.getDeliveriesListSummary, params: filterParams });
+
+    const refresh = () => {
+        void reload();
+        reloadSummary();
+    };
+
+    const statusLabel = (status: string) => {
+        const key = ({
+            PENDING: 'pending',
+            IN_TRANSIT: 'inTransit',
+            DELIVERED: 'delivered',
+            FAILED: 'failed',
+            CANCELLED: 'cancelled',
+        } as const)[status as DeliveryStatus];
+        return key ? copy.statuses[key] : status;
+    };
 
     function openCreate() {
         setEditingId(null);
         setForm(EMPTY_FORM);
-        setSaveError('');
+        setFormError('');
         setShowModal(true);
     }
 
@@ -103,23 +175,23 @@ export default function DeliveryPage() {
             deliveryAddress: order.deliveryAddress,
             driverName: order.driverName ?? '',
             driverPhone: order.driverPhone ?? '',
-            notes: '',
+            notes: order.notes ?? '',
             scheduledAt: order.scheduledAt ? order.scheduledAt.slice(0, 16) : '',
             status: order.status,
         });
-        setSaveError('');
+        setFormError('');
         setShowModal(true);
     }
 
     async function handleSave() {
         if (!form.customerName.trim() || !form.deliveryAddress.trim()) {
-            setSaveError('Customer name and delivery address are required.');
+            setFormError(ui.form.required);
             return;
         }
         setSaving(true);
-        setSaveError('');
+        setFormError('');
         try {
-            const body: any = {
+            const body = {
                 customerName: form.customerName,
                 customerPhone: form.customerPhone || undefined,
                 deliveryAddress: form.deliveryAddress,
@@ -127,338 +199,418 @@ export default function DeliveryPage() {
                 driverPhone: form.driverPhone || undefined,
                 notes: form.notes || undefined,
                 scheduledAt: form.scheduledAt || undefined,
+                ...(!editingId && form.saleId ? { saleId: form.saleId } : {}),
+                ...(editingId ? { status: form.status } : {}),
             };
-            if (!editingId && form.saleId) body.saleId = form.saleId;
-            if (editingId) body.status = form.status;
-
-            const url = editingId ? `/delivery/${editingId}` : '/delivery';
-            const method = editingId ? 'PATCH' : 'POST';
-            await fetchWithAuth(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
+            if (editingId) await api.updateDelivery(editingId, body);
+            else await api.createDelivery(body);
             setShowModal(false);
-            load();
+            toast.success(ui.saved);
+            refresh();
         } catch (e: any) {
-            setSaveError(e.message ?? 'Failed to save');
+            setFormError(e?.message || ui.saveFailed);
         } finally {
             setSaving(false);
         }
     }
 
-    async function handleCancel(id: string) {
-        if (!confirm('Cancel this delivery?')) return;
+    async function markDelivered(order: DeliveryOrder) {
         try {
-            await fetchWithAuth(`/delivery/${id}`, { method: 'DELETE' });
-            load();
-        } catch {
-            alert('Failed to cancel delivery');
+            await api.updateDelivery(order.id, { status: 'DELIVERED' });
+            toast.success(formatMessage(ui.markedDelivered, { customer: order.customerName }));
+            refresh();
+        } catch (e: any) {
+            toast.error(e?.message || ui.saveFailed);
         }
     }
 
-    const filterTabs = [
-        { label: 'All', value: '' },
-        { label: 'Pending', value: 'PENDING' },
-        { label: 'In Transit', value: 'IN_TRANSIT' },
-        { label: 'Delivered', value: 'DELIVERED' },
-        { label: 'Failed / Cancelled', value: 'FAILED' },
-    ];
+    async function confirmCancel() {
+        if (!pendingCancel) return;
+        setCancelling(true);
+        try {
+            await api.cancelDelivery(pendingCancel.id);
+            setPendingCancel(null);
+            toast.success(ui.cancelled);
+            refresh();
+        } catch (e: any) {
+            toast.error(e?.message || copy.cancelFailed);
+        } finally {
+            setCancelling(false);
+        }
+    }
+
+    const columns: ColumnDef<DeliveryOrder, any>[] = useMemo(() => {
+        const now = Date.now();
+        return [
+            columnHelper.accessor('customerName', {
+                header: copy.columns.customer,
+                cell: (info) => {
+                    const order = info.row.original;
+                    return (
+                        <div className="min-w-0">
+                            <span className="block truncate font-medium text-gray-900">{order.customerName}</span>
+                            {order.customerPhone ? <span className="block text-xs text-gray-500">{order.customerPhone}</span> : null}
+                        </div>
+                    );
+                },
+                size: 180,
+            }),
+            columnHelper.accessor('deliveryAddress', {
+                header: copy.columns.address,
+                enableSorting: false,
+                cell: (info) => (
+                    <span className="block truncate" title={info.getValue()}>
+                        {info.getValue()}
+                    </span>
+                ),
+                size: 220,
+                meta: { hideOnMobile: true },
+            }),
+            columnHelper.accessor((row) => row.driverName ?? '', {
+                id: 'driver',
+                header: copy.columns.driver,
+                cell: (info) => {
+                    const order = info.row.original;
+                    if (!order.driverName) return <span className="text-gray-400">{ui.unassigned}</span>;
+                    return (
+                        <div className="min-w-0">
+                            <span className="block truncate">{order.driverName}</span>
+                            {order.driverPhone ? <span className="block text-xs text-gray-500">{order.driverPhone}</span> : null}
+                        </div>
+                    );
+                },
+                size: 150,
+            }),
+            columnHelper.accessor('status', {
+                header: t.common.status,
+                cell: (info) => (
+                    <StatusBadge tone={STATUS_TONE[info.getValue() as DeliveryStatus] ?? 'neutral'}>
+                        {statusLabel(info.getValue())}
+                    </StatusBadge>
+                ),
+                size: 120,
+            }),
+            columnHelper.accessor('scheduledAt', {
+                header: copy.columns.scheduled,
+                cell: (info) => {
+                    const order = info.row.original;
+                    if (!order.scheduledAt) return <span className="text-gray-400">—</span>;
+                    return isOverdue(order, now) ? (
+                        <span className="text-amber-700" title={ui.overdueHint}>{formatDateTime(order.scheduledAt, locale)}</span>
+                    ) : (
+                        formatDateTime(order.scheduledAt, locale)
+                    );
+                },
+                size: 160,
+            }),
+            columnHelper.accessor((row) => row.sale?.serial_number ?? '', {
+                id: 'sale',
+                header: ui.sale,
+                enableSorting: false,
+                cell: (info) => {
+                    const sale = info.row.original.sale;
+                    return sale ? (
+                        <Link href={routes.sales.detail(sale.id)} className="text-blue-600 hover:underline">
+                            {sale.serial_number}
+                        </Link>
+                    ) : (
+                        <span className="text-gray-400">—</span>
+                    );
+                },
+                size: 140,
+                meta: { hideOnMobile: true },
+            }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale, enableColumnFilter: false }),
+            columnHelper.display({
+                id: 'actions',
+                header: t.common.actions,
+                cell: ({ row }) => {
+                    const order = row.original;
+                    const open = OPEN_STATUSES.has(order.status);
+                    return (
+                        <RowActions>
+                            <RowActionButton icon={<Pencil />} label={t.common.edit} onClick={() => openEdit(order)} />
+                            {open ? (
+                                <RowActionButton
+                                    icon={<CheckCircle2 />}
+                                    label={ui.markDelivered}
+                                    intent="success"
+                                    onClick={() => void markDelivered(order)}
+                                />
+                            ) : null}
+                            {open ? (
+                                <RowActionButton
+                                    icon={<Ban />}
+                                    label={ui.cancelDelivery}
+                                    intent="danger"
+                                    onClick={() => setPendingCancel(order)}
+                                />
+                            ) : null}
+                        </RowActions>
+                    );
+                },
+                enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
+                size: 120,
+            }),
+        ];
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [t, locale]);
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'scheduled',
+            type: 'date-range',
+            label: copy.columns.scheduled,
+            value: scheduledRange,
+            onChange: setScheduledRange,
+            operators: true,
+        },
+        {
+            id: 'status',
+            type: 'multi-select',
+            label: t.common.status,
+            value: statuses,
+            onChange: setStatuses,
+            options: STATUSES.map((status) => ({ value: status, label: statusLabel(status) })),
+            exclude: { value: statusExclude, onChange: setStatusExclude },
+        },
+        {
+            id: 'driver',
+            type: 'multi-select',
+            label: copy.columns.driver,
+            value: drivers,
+            onChange: setDrivers,
+            options: [
+                { value: NO_DRIVER, label: ui.unassigned },
+                ...driverNames.map((name) => ({ value: name, label: name })),
+            ],
+        },
+        {
+            id: 'created',
+            type: 'date-range',
+            label: t.common.createdAt,
+            value: createdRange,
+            onChange: setCreatedRange,
+            operators: true,
+            more: true,
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    ], [t, scheduledRange, statuses, statusExclude, drivers, driverNames, createdRange]);
+
+    const stats = useMemo(() => {
+        const s = ui.stats;
+        const dash = '—';
+        const count = (value: number | undefined) => (summary && value !== undefined ? value.toLocaleString(locale) : dash);
+        const closedBadly = summary ? summary.failed + summary.cancelled : 0;
+        const items: ListStat[] = [
+            { id: 'count', icon: <Truck aria-hidden />, label: s.deliveries, value: count(summary?.count) },
+            {
+                id: 'pending',
+                icon: <Clock aria-hidden />,
+                label: s.pending,
+                value: count(summary?.pending),
+                hint: summary && summary.unassigned > 0 ? formatMessage(s.unassigned, { count: summary.unassigned }) : undefined,
+            },
+            { id: 'inTransit', icon: <Truck aria-hidden />, label: s.inTransit, value: count(summary?.inTransit) },
+            {
+                id: 'delivered',
+                icon: <CheckCircle2 aria-hidden />,
+                label: s.delivered,
+                value: count(summary?.delivered),
+                hint: summary && summary.count > 0
+                    ? new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(summary.delivered / summary.count)
+                    : undefined,
+            },
+            {
+                id: 'overdue',
+                icon: <AlarmClock aria-hidden />,
+                label: s.overdue,
+                value: count(summary?.overdue),
+                tone: summary && summary.overdue > 0 ? 'warning' : 'default',
+            },
+            {
+                id: 'failed',
+                icon: <XCircle aria-hidden />,
+                label: s.failed,
+                value: summary ? closedBadly.toLocaleString(locale) : dash,
+                hint: summary && summary.cancelled > 0 ? formatMessage(s.cancelledHint, { count: summary.cancelled }) : undefined,
+                tone: summary && summary.failed > 0 ? 'danger' : 'default',
+            },
+        ];
+        return { items, loading: summaryLoading && !summary, label: ui.statsLabel };
+    }, [summary, summaryLoading, locale, ui]);
 
     return (
         <PageShell>
             <PageHeader
-                title={
-                    <span className="inline-flex items-center gap-2">
-                        <Truck className="h-6 w-6 text-gray-600" />
-                        {t.delivery.title}
-                        <span className="text-sm text-gray-500 font-normal">({total} total)</span>
-                    </span>
-                }
-                subtitle={t.delivery.subtitle}
+                title={copy.title}
+                subtitle={copy.subtitle}
                 breadcrumbs={modulePageBreadcrumbs(
                     t.dashboardHome.breadcrumbHome,
                     t.sidebar.modules.sales,
-                    t.delivery.title,
+                    copy.title,
                     'sales',
                 )}
-                actions={
-                    <>
-                        <button onClick={load} className="p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100">
-                            <RefreshCw className="h-4 w-4" />
-                        </button>
-                        <button
-                            onClick={openCreate}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                        >
-                            <Plus className="h-4 w-4" />
-                            {t.delivery.newDelivery}
-                        </button>
-                    </>
-                }
+                actions={(
+                    <button type="button" onClick={openCreate} className={buttonClassName()}>
+                        <Plus className="h-4 w-4" />
+                        {copy.newDelivery}
+                    </button>
+                )}
             />
 
-            <div className="mb-3">
-                <CreatedRangeFilter
-                    value={createdRange}
-                    onChange={(next) => { setCreatedRange(next); setPage(1); }}
-                />
-            </div>
+            <DataTable<DeliveryOrder>
+                tableId="delivery-orders"
+                columns={columns}
+                data={orders}
+                title={copy.title}
+                isLoading={loading}
+                emptyMessage={copy.emptyMessage}
+                emptyIcon={<Truck className="h-16 w-16 text-gray-200" />}
+                searchPlaceholder={ui.searchPlaceholder}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+                serverPagination={serverPagination}
+            />
 
-            {/* Status filter tabs */}
-            <div className="flex gap-1 border-b border-gray-200">
-                {filterTabs.map(tab => (
-                    <button
-                        key={tab.value}
-                        onClick={() => { setStatusFilter(tab.value); setPage(1); }}
-                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                            statusFilter === tab.value
-                                ? 'border-blue-600 text-blue-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700'
-                        }`}
-                    >
-                        {tab.label}
-                    </button>
-                ))}
-            </div>
+            <ConfirmDialog
+                open={pendingCancel !== null}
+                title={ui.cancelDelivery}
+                prompt={copy.cancelConfirm}
+                confirmLabel={ui.cancelDelivery}
+                cancelLabel={t.common.close}
+                loading={cancelling}
+                danger
+                onConfirm={() => void confirmCancel()}
+                onCancel={() => { if (!cancelling) setPendingCancel(null); }}
+            />
 
-            {/* Table */}
-            {error && <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{error}</div>}
-            {loading ? (
-                <div className="text-center py-12 text-gray-500">Loading...</div>
-            ) : orders.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                    <Truck className="h-12 w-12 mx-auto mb-3 opacity-40" />
-                    <p>No delivery orders yet</p>
-                </div>
-            ) : (
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
-                            <tr>
-                                <th className="px-4 py-3 text-start">Customer</th>
-                                <th className="px-4 py-3 text-start">Address</th>
-                                <th className="px-4 py-3 text-start">Driver</th>
-                                <th className="px-4 py-3 text-start">Status</th>
-                                <th className="px-4 py-3 text-start">Scheduled</th>
-                                <th className="px-4 py-3 text-start">Created</th>
-                                <th className="px-4 py-3 text-start">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {orders.map(order => (
-                                <tr key={order.id} className="hover:bg-gray-50">
-                                    <td className="px-4 py-3">
-                                        <div className="font-medium text-gray-900">{order.customerName}</div>
-                                        {order.customerPhone && <div className="text-gray-500">{order.customerPhone}</div>}
-                                    </td>
-                                    <td className="px-4 py-3 max-w-xs">
-                                        <span className="truncate block" title={order.deliveryAddress}>
-                                            {order.deliveryAddress.length > 40
-                                                ? order.deliveryAddress.slice(0, 40) + '…'
-                                                : order.deliveryAddress}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        {order.driverName ? (
-                                            <>
-                                                <div>{order.driverName}</div>
-                                                {order.driverPhone && <div className="text-gray-500">{order.driverPhone}</div>}
-                                            </>
-                                        ) : (
-                                            <span className="text-gray-400 italic">Unassigned</span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[order.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                                            {order.status.replace('_', ' ')}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-600">
-                                        {order.scheduledAt ? formatDate(order.scheduledAt) : '—'}
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-600">
-                                        {formatDate(order.created_at)}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => openEdit(order)}
-                                                className="text-blue-600 hover:text-blue-800 text-xs font-medium"
-                                            >
-                                                Edit
-                                            </button>
-                                            {order.status !== 'CANCELLED' && order.status !== 'DELIVERED' && (
-                                                <button
-                                                    onClick={() => handleCancel(order.id)}
-                                                    className="text-red-500 hover:text-red-700 text-xs font-medium"
-                                                >
-                                                    Cancel
-                                                </button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-
-            {/* Pagination */}
-            {pages > 1 && (
-                <div className="flex justify-center gap-2">
-                    <button
-                        onClick={() => setPage(p => Math.max(1, p - 1))}
-                        disabled={page === 1}
-                        className="px-3 py-1 text-sm border rounded disabled:opacity-50"
-                    >
-                        Previous
-                    </button>
-                    <span className="px-3 py-1 text-sm text-gray-600">Page {page} of {pages}</span>
-                    <button
-                        onClick={() => setPage(p => Math.min(pages, p + 1))}
-                        disabled={page === pages}
-                        className="px-3 py-1 text-sm border rounded disabled:opacity-50"
-                    >
-                        Next
-                    </button>
-                </div>
-            )}
-
-            {/* Create/Edit Modal */}
             {showModal && (
                 <ModalShell size="md" onBackdropClick={() => setShowModal(false)}>
-                        <ModalHeader
-                            title={editingId ? 'Edit Delivery' : 'New Delivery Order'}
-                            onClose={() => setShowModal(false)}
-                        />
-                        <div className="p-6 space-y-4 overflow-y-auto">
-                            {saveError && (
-                                <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{saveError}</div>
-                            )}
+                    <ModalHeader
+                        title={editingId ? copy.editDelivery : copy.newDelivery}
+                        onClose={() => setShowModal(false)}
+                    />
+                    <div className="space-y-4 overflow-y-auto p-4">
+                        {formError ? <p role="alert" className="text-sm text-red-600">{formError}</p> : null}
 
-                            {!editingId && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Sale ID (optional)</label>
-                                    <input
-                                        type="text"
-                                        value={form.saleId}
-                                        onChange={e => setForm(f => ({ ...f, saleId: e.target.value }))}
-                                        placeholder={t.delivery.placeholders.saleId}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                    />
-                                </div>
-                            )}
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Customer Name *</label>
-                                <input
-                                    type="text"
-                                    value={form.customerName}
-                                    onChange={e => setForm(f => ({ ...f, customerName: e.target.value }))}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                        {!editingId && (
+                            <Field label={ui.form.saleId} htmlFor="delivery-sale">
+                                <Input
+                                    id="delivery-sale"
+                                    value={form.saleId}
+                                    onChange={(e) => setForm((f) => ({ ...f, saleId: e.target.value }))}
+                                    placeholder={copy.placeholders.saleId}
                                 />
-                            </div>
+                            </Field>
+                        )}
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Customer Phone</label>
-                                <input
-                                    type="text"
-                                    value={form.customerPhone}
-                                    onChange={e => setForm(f => ({ ...f, customerPhone: e.target.value }))}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                        <Field label={ui.form.customerName} required htmlFor="delivery-customer">
+                            <Input
+                                id="delivery-customer"
+                                value={form.customerName}
+                                onChange={(e) => setForm((f) => ({ ...f, customerName: e.target.value }))}
+                            />
+                        </Field>
+
+                        <Field label={ui.form.customerPhone} htmlFor="delivery-phone">
+                            <Input
+                                id="delivery-phone"
+                                value={form.customerPhone}
+                                onChange={(e) => setForm((f) => ({ ...f, customerPhone: e.target.value }))}
+                            />
+                        </Field>
+
+                        <Field label={ui.form.deliveryAddress} required htmlFor="delivery-address">
+                            <Textarea
+                                id="delivery-address"
+                                rows={2}
+                                value={form.deliveryAddress}
+                                onChange={(e) => setForm((f) => ({ ...f, deliveryAddress: e.target.value }))}
+                            />
+                        </Field>
+
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <Field label={ui.form.driverName} htmlFor="delivery-driver">
+                                <Input
+                                    id="delivery-driver"
+                                    value={form.driverName}
+                                    onChange={(e) => setForm((f) => ({ ...f, driverName: e.target.value }))}
                                 />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Address *</label>
-                                <textarea
-                                    rows={2}
-                                    value={form.deliveryAddress}
-                                    onChange={e => setForm(f => ({ ...f, deliveryAddress: e.target.value }))}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                            </Field>
+                            <Field label={ui.form.driverPhone} htmlFor="delivery-driver-phone">
+                                <Input
+                                    id="delivery-driver-phone"
+                                    value={form.driverPhone}
+                                    onChange={(e) => setForm((f) => ({ ...f, driverPhone: e.target.value }))}
                                 />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Driver Name</label>
-                                    <input
-                                        type="text"
-                                        value={form.driverName}
-                                        onChange={e => setForm(f => ({ ...f, driverName: e.target.value }))}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Driver Phone</label>
-                                    <input
-                                        type="text"
-                                        value={form.driverPhone}
-                                        onChange={e => setForm(f => ({ ...f, driverPhone: e.target.value }))}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Scheduled Date/Time</label>
-                                <input
-                                    type="datetime-local"
-                                    value={form.scheduledAt}
-                                    onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                />
-                            </div>
-
-                            {editingId && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                                    <select
-                                        value={form.status}
-                                        onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                    >
-                                        {STATUS_OPTIONS.map(s => (
-                                            <option key={s} value={s}>{s.replace('_', ' ')}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                                <textarea
-                                    rows={2}
-                                    value={form.notes}
-                                    onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                                />
-                            </div>
+                            </Field>
                         </div>
 
-                        <ModalFooter className="justify-between">
-                            {editingId ? (
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-danger hover:bg-red-50"
-                                    onClick={() => { setShowModal(false); handleCancel(editingId); }}
+                        <Field label={ui.form.scheduledAt} htmlFor="delivery-scheduled">
+                            <Input
+                                id="delivery-scheduled"
+                                type="datetime-local"
+                                value={form.scheduledAt}
+                                onChange={(e) => setForm((f) => ({ ...f, scheduledAt: e.target.value }))}
+                            />
+                        </Field>
+
+                        {editingId && (
+                            <Field label={t.common.status} htmlFor="delivery-status">
+                                <Select
+                                    id="delivery-status"
+                                    value={form.status}
+                                    onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
                                 >
-                                    Cancel Delivery
-                                </Button>
-                            ) : <span />}
-                            <div className="flex gap-3">
-                                <Button type="button" variant="secondary" size="md" onClick={() => setShowModal(false)}>
-                                    Close
-                                </Button>
-                                <Button type="button" variant="primary" size="md" onClick={handleSave} loading={saving}>
-                                    {saving ? 'Saving…' : editingId ? 'Update' : 'Create'}
-                                </Button>
-                            </div>
-                        </ModalFooter>
+                                    {STATUSES.map((status) => (
+                                        <option key={status} value={status}>{statusLabel(status)}</option>
+                                    ))}
+                                </Select>
+                            </Field>
+                        )}
+
+                        <Field label={t.common.notes} htmlFor="delivery-notes">
+                            <Textarea
+                                id="delivery-notes"
+                                rows={2}
+                                value={form.notes}
+                                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                            />
+                        </Field>
+                    </div>
+
+                    <ModalFooter className="justify-between">
+                        {editingId && OPEN_STATUSES.has(form.status) ? (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-danger hover:bg-red-50"
+                                onClick={() => {
+                                    const order = orders.find((o) => o.id === editingId);
+                                    setShowModal(false);
+                                    if (order) setPendingCancel(order);
+                                }}
+                            >
+                                {ui.cancelDelivery}
+                            </Button>
+                        ) : <span />}
+                        <div className="flex gap-3">
+                            <Button type="button" variant="secondary" size="md" onClick={() => setShowModal(false)}>
+                                {t.common.close}
+                            </Button>
+                            <Button type="button" variant="primary" size="md" onClick={() => void handleSave()} loading={saving}>
+                                {editingId ? t.common.update : t.common.create}
+                            </Button>
+                        </div>
+                    </ModalFooter>
                 </ModalShell>
             )}
         </PageShell>

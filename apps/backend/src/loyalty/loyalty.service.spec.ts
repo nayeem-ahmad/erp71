@@ -493,6 +493,7 @@ describe('LoyaltyService', () => {
   // ── listCustomersWithPoints ───────────────────────────────────────────────
 
   describe('listCustomersWithPoints', () => {
+    const TZ = 'Asia/Dhaka';
     const mockCustomers = [
       {
         id: 'c1',
@@ -510,36 +511,40 @@ describe('LoyaltyService', () => {
       },
     ];
 
-    it('returns customers with points ordered by points descending', async () => {
+    beforeEach(() => {
+      db.customer.count = jest.fn().mockResolvedValue(2);
+    });
+
+    it('returns one page of customers, highest balance first', async () => {
       db.customer.findMany.mockResolvedValue(mockCustomers);
 
-      const result = await service.listCustomersWithPoints('t1');
+      const result = await service.listCustomersWithPoints('t1', { timezone: TZ });
 
-      expect(result).toHaveLength(2);
-      expect(result[0].id).toBe('c1');
-      expect(result[0].loyalty_points).toBe(300);
+      expect(result).toMatchObject({ total: 2, page: 1, limit: 20, pages: 1 });
+      expect(result.items[0].id).toBe('c1');
+      expect(result.items[0].loyalty_points).toBe(300);
+      expect(db.customer.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ loyalty_points: 'desc' }, { name: 'asc' }],
+          skip: 0,
+          take: 20,
+        }),
+      );
     });
 
     it('maps last_transaction_at from most recent loyaltyTransaction', async () => {
       db.customer.findMany.mockResolvedValue(mockCustomers);
 
-      const result = await service.listCustomersWithPoints('t1');
+      const result = await service.listCustomersWithPoints('t1', { timezone: TZ });
 
-      expect(result[0].last_transaction_at).toEqual(new Date('2026-06-01'));
-    });
-
-    it('sets last_transaction_at to null when no transactions exist', async () => {
-      db.customer.findMany.mockResolvedValue(mockCustomers);
-
-      const result = await service.listCustomersWithPoints('t1');
-
-      expect(result[1].last_transaction_at).toBeNull();
+      expect(result.items[0].last_transaction_at).toEqual(new Date('2026-06-01'));
+      expect(result.items[1].last_transaction_at).toBeNull();
     });
 
     it('applies search filter for name and phone', async () => {
       db.customer.findMany.mockResolvedValue([]);
 
-      await service.listCustomersWithPoints('t1', 'rahim');
+      await service.listCustomersWithPoints('t1', { timezone: TZ, search: 'rahim' });
 
       expect(db.customer.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -556,28 +561,29 @@ describe('LoyaltyService', () => {
     it('does not apply OR filter when search is not provided', async () => {
       db.customer.findMany.mockResolvedValue([]);
 
-      await service.listCustomersWithPoints('t1');
+      await service.listCustomersWithPoints('t1', { timezone: TZ });
 
       const callArgs = db.customer.findMany.mock.calls[0][0];
       expect(callArgs.where).not.toHaveProperty('OR');
     });
 
-    it('returns empty array when no customers match', async () => {
+    it('pages, sorts by a known column and caps the page at 100', async () => {
       db.customer.findMany.mockResolvedValue([]);
 
-      const result = await service.listCustomersWithPoints('t1', 'nomatch');
-
-      expect(result).toEqual([]);
-    });
-
-    it('limits results to 100 customers', async () => {
-      db.customer.findMany.mockResolvedValue([]);
-
-      await service.listCustomersWithPoints('t1');
+      await service.listCustomersWithPoints('t1', { timezone: TZ }, { page: 3, limit: 500, sortBy: 'name', sortDir: 'asc' });
 
       expect(db.customer.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 100 }),
+        expect.objectContaining({ orderBy: { name: 'asc' }, skip: 200, take: 100 }),
       );
+    });
+
+    it('counts the same customers it lists', async () => {
+      db.customer.findMany.mockResolvedValue([]);
+
+      await service.listCustomersWithPoints('t1', { timezone: TZ, points: { op: 'gt', value: 0 }, scope: ['b1'] });
+
+      const where = db.customer.findMany.mock.calls[0][0].where;
+      expect(db.customer.count).toHaveBeenCalledWith({ where });
     });
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import BranchReportPage from './page';
 import { mockBranchScope, resetToHeaderSpy } from '@/test-utils/branch-scope';
 
@@ -13,9 +13,31 @@ jest.mock('@/lib/api', () => ({
 }));
 
 jest.mock('@/lib/format', () => ({
+    ...jest.requireActual('@/lib/format'),
     formatBDT: (n: number) => `৳${n}`,
     formatDate: (d: string) => d,
 }));
+
+// A wide screen, so the chips sit in the toolbar and every column is drawn.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
+}));
+
+/** A toolbar chip: a button that opens its own panel. */
+function chip(name: string | RegExp): HTMLElement {
+    const found = screen
+        .getAllByRole('button', { name })
+        .find((button) => button.getAttribute('aria-haspopup') === 'dialog');
+    if (!found) throw new Error(`No filter chip named ${String(name)}`);
+    return found;
+}
+
+/** The figure (and its hint) beside a label in the summary strip. */
+function stat(label: string): string {
+    const strip = screen.getByRole('region', { name: 'Branch summary' });
+    return within(strip).getByText(label).nextElementSibling?.textContent ?? '';
+}
 
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: jest.fn() }),
@@ -161,55 +183,102 @@ describe('BranchReportPage', () => {
         expect(screen.queryByText('Forbidden')).not.toBeInTheDocument();
     });
 
-    it('renders the Generate button', async () => {
+    it('opens on the last 30 days, and reloads when a period preset is picked', async () => {
+        const { api } = require('@/lib/api');
+        api.getBranchReport.mockResolvedValue(mockReport);
+
         render(<BranchReportPage />);
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /generate/i })).toBeInTheDocument();
-        });
+        await waitFor(() =>
+            expect(api.getBranchReport).toHaveBeenCalledWith(
+                expect.objectContaining({ from: expect.any(String), to: expect.any(String) }),
+            ),
+        );
+        const [{ from, to }] = api.getBranchReport.mock.calls[0];
+        expect((Date.parse(to) - Date.parse(from)) / 86_400_000).toBe(29);
+        api.getBranchReport.mockClear();
+
+        fireEvent.click(chip(/^Period/));
+        fireEvent.click(screen.getByRole('button', { name: 'This year' }));
+
+        await waitFor(() =>
+            expect(api.getBranchReport).toHaveBeenLastCalledWith(
+                expect.objectContaining({ storeId: 'store1', from: expect.stringMatching(/-01-01$/) }),
+            ),
+        );
     });
 
-    it('renders From and To date labels', async () => {
+    it('has no date boxes or Generate button of its own any more', async () => {
         render(<BranchReportPage />);
-        await waitFor(() => {
-            expect(screen.getByText('From')).toBeInTheDocument();
-            expect(screen.getByText('To')).toBeInTheDocument();
-        });
+        await waitFor(() => expect(chip(/^Period/)).toBeInTheDocument());
+
+        expect(screen.queryByRole('button', { name: /generate/i })).not.toBeInTheDocument();
+        expect(screen.queryByText('From')).not.toBeInTheDocument();
     });
 
-    it('shows KPI cards after loading report data', async () => {
+    it('shows the branch figures in the summary strip', async () => {
+        const { api } = require('@/lib/api');
+        api.getBranchReport.mockResolvedValue(mockReport);
+
+        render(<BranchReportPage />);
+
+        await waitFor(() => expect(stat('Branch Revenue')).toContain('৳90000'));
+        expect(stat('Branch Revenue')).toMatch(/60\.0% of company/);
+        expect(stat('Transactions')).toMatch(/200.*of 320 total/);
+        expect(stat('Avg Order Value')).toContain('৳450');
+        expect(stat('Returns')).toContain('৳5000');
+        expect(stat('Net Revenue')).toContain('৳85000');
+        expect(stat('Revenue Share')).toMatch(/60\.0%.*of ৳150000 total/);
+    });
+
+    it('lists each day with a total row', async () => {
         const { api } = require('@/lib/api');
         api.getBranchReport.mockResolvedValue(mockReport);
 
         render(<BranchReportPage />);
 
         await waitFor(() => {
-            expect(screen.getByText('Branch Revenue')).toBeInTheDocument();
-            expect(screen.getByText('Transactions')).toBeInTheDocument();
-            expect(screen.getByText('Avg Order Value')).toBeInTheDocument();
-            expect(screen.getByText('Returns')).toBeInTheDocument();
+            expect(screen.getByText('2026-06-01')).toBeInTheDocument();
+            expect(screen.getByText('2026-06-02')).toBeInTheDocument();
         });
+        const footer = screen.getAllByRole('rowgroup').find((group) => group.tagName === 'TFOOT')!;
+        expect(footer).toHaveTextContent('Total');
+        expect(footer).toHaveTextContent('18');
+        expect(footer).toHaveTextContent('৳7900');
     });
 
-    it('displays formatted branch revenue', async () => {
+    it('rolls the days up by month from the Group by chip', async () => {
         const { api } = require('@/lib/api');
         api.getBranchReport.mockResolvedValue(mockReport);
 
         render(<BranchReportPage />);
+        await screen.findByText('2026-06-01');
 
-        await waitFor(() => {
-            // revenue = 90000 → formatBDT returns ৳90000
-            expect(screen.getByText('৳90000')).toBeInTheDocument();
-        });
+        fireEvent.change(screen.getByRole('combobox', { name: 'Group by' }), { target: { value: 'month' } });
+
+        await waitFor(() => expect(screen.queryByText('2026-06-01')).not.toBeInTheDocument());
+        expect(screen.getByText('2026-06')).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: /Month/ })).toBeInTheDocument();
     });
 
-    it('shows revenue_share sub-label on Branch Revenue card', async () => {
+    it('rolls the days up into ISO weeks', async () => {
         const { api } = require('@/lib/api');
         api.getBranchReport.mockResolvedValue(mockReport);
 
         render(<BranchReportPage />);
+        await screen.findByText('2026-06-01');
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Group by' }), { target: { value: 'week' } });
+
+        // 1 and 2 June 2026 are a Monday and a Tuesday: one week, starting the 1st.
+        await waitFor(() => expect(screen.queryByText('2026-06-02')).not.toBeInTheDocument());
+        expect(screen.getByText('2026-06-01')).toBeInTheDocument();
+    });
+
+    it('shows the empty state when there are no daily rows', async () => {
+        render(<BranchReportPage />);
 
         await waitFor(() => {
-            expect(screen.getByText('60.0% of company')).toBeInTheDocument();
+            expect(screen.getByText('No daily data')).toBeInTheDocument();
         });
     });
 
@@ -220,72 +289,17 @@ describe('BranchReportPage', () => {
         render(<BranchReportPage />);
 
         await waitFor(() => {
-            expect(screen.getByText('Top Products')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Top Products' })).toBeInTheDocument();
             expect(screen.getByText('Widget A')).toBeInTheDocument();
             expect(screen.getByText('Gadget B')).toBeInTheDocument();
         });
     });
 
     it('shows empty state for Top Products when list is empty', async () => {
-        const { api } = require('@/lib/api');
-        api.getBranchReport.mockResolvedValue(mockEmptyReport);
-
         render(<BranchReportPage />);
 
         await waitFor(() => {
             expect(screen.getByText('No sales data')).toBeInTheDocument();
-        });
-    });
-
-    it('shows Daily Breakdown table with daily rows', async () => {
-        const { api } = require('@/lib/api');
-        api.getBranchReport.mockResolvedValue(mockReport);
-
-        render(<BranchReportPage />);
-
-        await waitFor(() => {
-            expect(screen.getByText('Daily Breakdown')).toBeInTheDocument();
-            expect(screen.getByText('2026-06-01')).toBeInTheDocument();
-            expect(screen.getByText('2026-06-02')).toBeInTheDocument();
-        });
-    });
-
-    it('shows empty state for Daily Breakdown when list is empty', async () => {
-        const { api } = require('@/lib/api');
-        api.getBranchReport.mockResolvedValue(mockEmptyReport);
-
-        render(<BranchReportPage />);
-
-        await waitFor(() => {
-            expect(screen.getByText('No daily data')).toBeInTheDocument();
-        });
-    });
-
-    it('shows Branch vs Company Revenue comparison section', async () => {
-        const { api } = require('@/lib/api');
-        api.getBranchReport.mockResolvedValue(mockReport);
-
-        render(<BranchReportPage />);
-
-        await waitFor(() => {
-            expect(screen.getByText('Branch vs Company Revenue')).toBeInTheDocument();
-            expect(screen.getByText('All Branches')).toBeInTheDocument();
-        });
-    });
-
-    it('calls getBranchReport with new dates when Generate is clicked', async () => {
-        const { api } = require('@/lib/api');
-        api.getBranchReport.mockResolvedValue(mockReport);
-
-        render(<BranchReportPage />);
-        // Wait for auto-fetch triggered by store selection
-        await waitFor(() => expect(api.getBranchReport).toHaveBeenCalled());
-        api.getBranchReport.mockClear();
-
-        fireEvent.click(screen.getByRole('button', { name: /generate/i }));
-
-        await waitFor(() => {
-            expect(api.getBranchReport).toHaveBeenCalledTimes(1);
         });
     });
 
@@ -307,44 +321,6 @@ describe('BranchReportPage', () => {
 
         await waitFor(() => {
             expect(screen.getByText('No stores found')).toBeInTheDocument();
-        });
-    });
-
-    it('disables Generate button while loading', async () => {
-        const { api } = require('@/lib/api');
-        // Never-resolving promise keeps loading state active
-        api.getBranchReport.mockReturnValue(new Promise(() => {}));
-
-        render(<BranchReportPage />);
-
-        await waitFor(() => {
-            const button = screen.getByRole('button', { name: /loading/i });
-            expect(button).toBeDisabled();
-        });
-    });
-
-    it('shows store name badge in report content area', async () => {
-        const { api } = require('@/lib/api');
-        api.getBranchReport.mockResolvedValue(mockReport);
-
-        render(<BranchReportPage />);
-
-        await waitFor(() => {
-            // The store badge shows the selected store name
-            const badges = screen.getAllByText('Main Store');
-            expect(badges.length).toBeGreaterThan(0);
-        });
-    });
-
-    it('shows total transactions sub-label on Transactions card', async () => {
-        const { api } = require('@/lib/api');
-        api.getBranchReport.mockResolvedValue(mockReport);
-
-        render(<BranchReportPage />);
-
-        await waitFor(() => {
-            // company_transactions = 320
-            expect(screen.getByText('of 320 total')).toBeInTheDocument();
         });
     });
 });

@@ -1,6 +1,9 @@
 export const reportsMessages = {
         consolidated: {
             title: "কনসোলিডেটেড রিপোর্ট",
+            period: "সময়কাল",
+            statsLabel: "একত্রিত সারসংক্ষেপ",
+            branches: "শাখা",
             description: "শাখা-অতিক্রম আয় ও লেনদেনের সারসংক্ষেপ",
             fromLabel: "থেকে",
             toLabel: "পর্যন্ত",
@@ -31,6 +34,10 @@ export const reportsMessages = {
         },
         branch: {
             title: "শাখা রিপোর্ট",
+            period: "সময়কাল",
+            statsLabel: "শাখার সারসংক্ষেপ",
+            groupBy: "যেভাবে গ্রুপ হবে",
+            groups: { day: "দিন", week: "সপ্তাহ", month: "মাস" },
             description: "একটি শাখার বিস্তারিত বিক্রয় পারফরম্যান্স",
             storeLabel: "স্টোর",
             fromLabel: "থেকে",

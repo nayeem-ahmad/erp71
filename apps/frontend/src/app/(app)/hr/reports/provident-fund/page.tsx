@@ -132,7 +132,9 @@ export default function ProvidentFundPage() {
             type: 'select',
             label: r.taxDeduction.incomeYear,
             value: String(startYear),
-            // A register is always for some income year: All goes back to the current one.
+            // A register is always for some income year; Clear all goes back to the current one.
+            required: true,
+            defaultValue: String(currentStartYear()),
             onChange: (next) => setStartYear(next ? Number(next) : currentStartYear()),
             options: startYearOptions().map((year) => ({ value: String(year), label: fiscalLabel(year) })),
         },

@@ -2,11 +2,61 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
+import {
+    idsOrNoneClause,
+    searchClause,
+    statusSetClause,
+    type SalesDocumentListFilters,
+} from '../common/sales-document-list-filters';
+import { numberConditionFilter } from '../common/number-condition.util';
+import { resolveOrderBy, type SortableMap } from '../common/sort.util';
+import { startOfZonedToday, zonedDayRange } from '../common/tenant-time.util';
+import { roundMoney } from '@erp71/shared-types';
+import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
-import { CreateSalesOrderDto, UpdateSalesOrderDto, UpdateOrderStatusDto, AddDepositDto } from './sales-orders.dto';
+import {
+    CreateSalesOrderDto,
+    UpdateSalesOrderDto,
+    UpdateOrderStatusDto,
+    AddDepositDto,
+    type SalesOrderPaymentStatus,
+} from './sales-orders.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { resolveInlineCustomer } from '../customers/resolve-inline-customer.util';
+
+const SALES_ORDER_SORTABLE: SortableMap = {
+    order_number: (dir) => ({ order_number: dir }),
+    status: (dir) => ({ status: dir }),
+    payment_status: (dir) => ({ payment_status: dir }),
+    total_amount: (dir) => ({ total_amount: dir }),
+    delivery_date: (dir) => ({ delivery_date: dir }),
+    created_at: (dir) => ({ created_at: dir }),
+    customer: (dir) => ({ customer: { name: dir } }),
+};
+
+/** An order still to be delivered — the ones a delivery date can make late. */
+const OPEN_ORDER_STATUSES = ['DRAFT', 'CONFIRMED', 'PROCESSING'];
+
+/** What narrows the sales-orders list — and, alike, its stats strip. */
+export interface SalesOrderListFilters extends Partial<Omit<SalesDocumentListFilters, 'timezone'>> {
+    timezone: string;
+    paymentStatus?: SalesOrderPaymentStatus[];
+}
+
+/** `GET /sales-orders/summary` — see `SalesOrdersService.summary`. */
+export interface SalesOrderListSummary {
+    count: number;
+    cancelledCount: number;
+    /** Order totals, cancelled orders left out. */
+    value: number;
+    /** Deposits taken against those orders. */
+    advance: number;
+    open: { count: number; amount: number };
+    delivered: { count: number; amount: number };
+    /** Open orders whose delivery date has passed. */
+    overdue: number;
+}
 
 @Injectable()
 export class SalesOrdersService {
@@ -149,13 +199,38 @@ export class SalesOrdersService {
         });
     }
 
+    /**
+     * The `where` behind the list and its stats strip, so the two always
+     * describe the same documents. The date filter is the order's own
+     * `delivery_date`; the created date has a filter of its own.
+     */
+    private listWhere(tenantId: string, opts?: SalesOrderListFilters): Prisma.SalesOrderWhereInput {
+        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
+        const delivery = zonedDayRange(opts?.dateFrom, opts?.dateTo, opts?.timezone);
+        const where: Prisma.SalesOrderWhereInput = {
+            tenant_id: tenantId,
+            ...(opts?.storeId ? { store_id: opts.storeId } : {}),
+            ...(created ? { created_at: created } : {}),
+            ...(delivery ? { delivery_date: delivery } : {}),
+            ...(statusSetClause(opts?.statuses, opts?.statusExclude) as Prisma.SalesOrderWhereInput),
+            ...(opts?.total ? { total_amount: numberConditionFilter(opts.total) } : {}),
+            ...(opts?.paymentStatus?.length ? { payment_status: { in: opts.paymentStatus } } : {}),
+        };
+        const and: Prisma.SalesOrderWhereInput[] = [];
+        const search = searchClause(opts?.search, ['order_number', 'customer.name', 'customer.phone']);
+        if (search) and.push(search as Prisma.SalesOrderWhereInput);
+        const customer = idsOrNoneClause('customer_id', opts?.customerIds);
+        if (customer) and.push(customer as Prisma.SalesOrderWhereInput);
+        if (and.length) where.AND = and;
+        return where;
+    }
+
     async findAll(
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string; timezone: string; storeId?: string },
+        opts?: SalesOrderListFilters & { sortBy?: string; sortDir?: string },
     ): Promise<PaginatedResult<unknown>> {
-        const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         return paginatedFindMany({
             findMany: (args) =>
                 this.db.salesOrder.findMany({
@@ -163,11 +238,55 @@ export class SalesOrdersService {
                     include: { customer: true, items: { include: { product: true } }, deposits: true },
                 }),
             count: (args) => this.db.salesOrder.count(args as any),
-            where: { tenant_id: tenantId, ...(opts?.storeId ? { store_id: opts.storeId } : {}), ...(created ? { created_at: created } : {}) },
-            orderBy: { created_at: 'desc' },
+            where: this.listWhere(tenantId, opts) as Record<string, unknown>,
+            orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, SALES_ORDER_SORTABLE, { created_at: 'desc' }),
             page,
             limit,
         });
+    }
+
+    /**
+     * The stats strip above the sales-orders list, over exactly the rows it
+     * shows: what is on order and how much of it was paid up front, what is
+     * still to deliver (and late), and what has gone out. Cancelled orders
+     * are counted but carry no value.
+     */
+    async summary(tenantId: string, opts: SalesOrderListFilters): Promise<SalesOrderListSummary> {
+        const where = this.listWhere(tenantId, opts);
+        const within = (extra: Prisma.SalesOrderWhereInput): Prisma.SalesOrderWhereInput => ({ AND: [where, extra] });
+        const [count, cancelledCount, live, open, delivered, overdue] = await Promise.all([
+            this.db.salesOrder.count({ where }),
+            this.db.salesOrder.count({ where: within({ status: 'CANCELLED' }) }),
+            this.db.salesOrder.aggregate({
+                where: within({ status: { not: 'CANCELLED' } }),
+                _sum: { total_amount: true, amount_paid: true },
+            }),
+            this.db.salesOrder.aggregate({
+                where: within({ status: { in: OPEN_ORDER_STATUSES } }),
+                _count: { _all: true },
+                _sum: { total_amount: true },
+            }),
+            this.db.salesOrder.aggregate({
+                where: within({ status: 'DELIVERED' }),
+                _count: { _all: true },
+                _sum: { total_amount: true },
+            }),
+            this.db.salesOrder.count({
+                where: within({
+                    status: { in: OPEN_ORDER_STATUSES },
+                    delivery_date: { lt: startOfZonedToday(opts.timezone) },
+                }),
+            }),
+        ]);
+        return {
+            count,
+            cancelledCount,
+            value: roundMoney(Number(live._sum.total_amount ?? 0)),
+            advance: roundMoney(Number(live._sum.amount_paid ?? 0)),
+            open: { count: open._count._all, amount: roundMoney(Number(open._sum.total_amount ?? 0)) },
+            delivered: { count: delivered._count._all, amount: roundMoney(Number(delivered._sum.total_amount ?? 0)) },
+            overdue,
+        };
     }
 
     async findOne(tenantId: string, id: string) {

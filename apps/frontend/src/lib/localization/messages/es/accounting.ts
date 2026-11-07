@@ -461,9 +461,6 @@ export const accountingMessages = {
         loadAccountsFailed: "No se pudieron cargar las cuentas del libro mayor.",
         openJournal: "Abrir el diario",
         openVoucherDetail: "Abrir el detalle del último asiento",
-        accountAria: "Cuenta del libro mayor",
-        fromDateAria: "Libro mayor: fecha de inicio",
-        toDateAria: "Libro mayor: fecha de fin",
         columns: {
             voucherNumber: "N.º de asiento",
             date: "Fecha",
@@ -491,10 +488,6 @@ export const accountingMessages = {
         open: "Abrir",
         accountingJournal: "Diario contable",
         emptyMessage: "No se encontraron asientos para los filtros seleccionados",
-        searchPlaceholder: "Buscar líneas del diario por número, descripción o tipo...",
-        voucherTypeAria: "Tipo de asiento del diario",
-        fromDateAria: "Diario: fecha de inicio",
-        toDateAria: "Diario: fecha de fin",
         detail: {
             loading: "Cargando el detalle del asiento...",
             loadFailed: "No se pudo cargar el detalle del asiento.",
@@ -545,7 +538,6 @@ export const accountingMessages = {
             editVoucher: "Editar asiento",
             saveChanges: "Guardar cambios",
             emptyMessage: "No se encontraron asientos para los filtros seleccionados",
-            searchPlaceholder: "Buscar por número de asiento, referencia o tipo...",
             deleteConfirm: "¿Eliminar el asiento {voucherNumber}?",
             deleteSuccess: "Asiento eliminado.",
             deleteFailed: "No se pudo eliminar el asiento.",

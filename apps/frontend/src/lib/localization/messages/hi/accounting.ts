@@ -461,9 +461,6 @@ export const accountingMessages = {
         loadAccountsFailed: "खाता-बही के खाता विकल्प लोड नहीं हो सके।",
         openJournal: "जर्नल खोलें",
         openVoucherDetail: "नवीनतम वाउचर विवरण खोलें",
-        accountAria: "खाता-बही खाता",
-        fromDateAria: "खाता-बही आरंभ तिथि",
-        toDateAria: "खाता-बही समाप्ति तिथि",
         columns: {
             voucherNumber: "वाउचर #",
             date: "तिथि",
@@ -491,10 +488,6 @@ export const accountingMessages = {
         open: "खोलें",
         accountingJournal: "लेखांकन जर्नल",
         emptyMessage: "चयनित फ़िल्टरों के लिए कोई वाउचर नहीं मिला",
-        searchPlaceholder: "वाउचर संख्या, विवरण या प्रकार से जर्नल पंक्तियाँ खोजें...",
-        voucherTypeAria: "जर्नल वाउचर प्रकार",
-        fromDateAria: "जर्नल आरंभ तिथि",
-        toDateAria: "जर्नल समाप्ति तिथि",
         detail: {
             loading: "वाउचर विवरण लोड हो रहा है...",
             loadFailed: "वाउचर विवरण लोड नहीं हो सका।",
@@ -545,7 +538,6 @@ export const accountingMessages = {
             editVoucher: "वाउचर संपादित करें",
             saveChanges: "परिवर्तन सहेजें",
             emptyMessage: "चयनित फ़िल्टरों के लिए कोई वाउचर नहीं मिला",
-            searchPlaceholder: "वाउचर संख्या, संदर्भ या प्रकार से खोजें...",
             deleteConfirm: "वाउचर {voucherNumber} हटाएँ?",
             deleteSuccess: "वाउचर हटा दिया गया।",
             deleteFailed: "वाउचर हटाया नहीं जा सका।",

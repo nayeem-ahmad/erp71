@@ -10,7 +10,7 @@ import { useNavLayouts } from '@/contexts/NavLayoutContext';
 import { useDrawerFocusTrap } from '@/hooks/useDrawerFocusTrap';
 import { useIsMdUp } from '@/hooks/useMediaQuery';
 import { usePendingVoucherCount } from '@/hooks/usePendingVoucherCount';
-import { appHomeHref, buildRail, findActiveAppKey, railKeyFor, type RailEntry } from '@/lib/app-shell';
+import { appHomeHref, buildRail, collectNavLinkTargets, findActiveAppKey, isNavLinkActive, railKeyFor, type RailEntry } from '@/lib/app-shell';
 import { BRAND_NAME } from '@/lib/brand';
 import { useBranding } from '@/lib/branding';
 import { useI18n } from '@/lib/i18n';
@@ -175,11 +175,15 @@ export default function AppShellSidebar({
 
     /* ---- Links, badges ---- */
 
-    const isActive = useCallback((href: string, exact = false) => {
-        if (href === routes.home) return pathname === routes.home;
-        if (exact) return pathname === href;
-        return pathname === href || pathname.startsWith(`${href}/`);
-    }, [pathname]);
+    // The longest link holding the page is the one lit — see `isNavLinkActive`.
+    const navTargets = collectNavLinkTargets(modules);
+    const navTargetsKey = navTargets.map((target) => `${target.href}${target.exact ? '!' : ''}`).join('|');
+    const isActive = useCallback(
+        (href: string, exact = false) => isNavLinkActive(href, pathname, navTargets, exact),
+        // `modules` is rebuilt every render; the links it holds are what matter.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [pathname, navTargetsKey],
+    );
 
     // The approval queue is the voucher list filtered to PENDING, so its count
     // hangs off the Vouchers link, and Accounting's rail icon carries a dot.

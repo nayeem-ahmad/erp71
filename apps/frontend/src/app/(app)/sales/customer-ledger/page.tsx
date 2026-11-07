@@ -3,9 +3,9 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { BookOpen } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, BookOpen, Flag, FlagTriangleRight, ShoppingBag, Wallet } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, type ListFilter } from '@/components/data-table';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -15,6 +15,7 @@ import { BranchFilter, PageShell, StatusBadge, buttonClassName, type StatusBadge
 import PartySearchSelect from '@/components/document-entry/PartySearchSelect';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { createdRangeFromPreset, type CreatedRange } from '@/lib/created-range';
+import { matchesAnyOf, matchesSearch } from '@/lib/list-filter';
 
 type CustomerOption = {
     id: string;
@@ -68,15 +69,22 @@ function formatOpeningDate(value: string, locale: string) {
     });
 }
 
+/** The Direction chip's values: a sale (on credit or paid), money in, money out. */
+type Direction = 'sale' | 'receive' | 'pay';
+const DIRECTIONS: Direction[] = ['sale', 'receive', 'pay'];
+
+function directionOf(type: string | undefined): Direction | null {
+    if (type === 'SALE' || type === 'CREDIT_SALE') return 'sale';
+    if (type === 'PAYMENT') return 'receive';
+    if (type === 'PAYOUT') return 'pay';
+    return null;
+}
+
 function directionLabel(type: string | undefined, copy: { directionReceive: string; directionPay: string; directionSale: string }) {
     if (type === 'PAYOUT') return copy.directionPay;
     if (type === 'PAYMENT') return copy.directionReceive;
     if (type === 'SALE' || type === 'CREDIT_SALE') return copy.directionSale;
     return type?.replace(/_/g, ' ') ?? '—';
-}
-
-function transactionRowsFromTable(table: { getFilteredRowModel: () => { rows: { original: LedgerRow }[] } }): LedgerRow[] {
-    return table.getFilteredRowModel().rows.map((row) => row.original).filter((row) => row.rowType === 'transaction');
 }
 
 function sumField(rows: LedgerRow[], key: 'sale_total' | 'amount_paid' | 'debit' | 'credit'): number {
@@ -105,6 +113,11 @@ function balanceClass(value: number): string | undefined {
     return undefined;
 }
 
+/** The strip's tone for a balance: amber while the customer owes. */
+function balanceTone(value: number): ListStat['tone'] {
+    return value > 0 ? 'warning' : 'default';
+}
+
 function CustomerLedgerContent() {
     const { t, locale } = useI18n();
     const copy = t.customerLedger;
@@ -125,6 +138,9 @@ function CustomerLedgerContent() {
     const [openingBalance, setOpeningBalance] = useState(0);
     const [closingBalance, setClosingBalance] = useState(0);
     const [transactions, setTransactions] = useState<LedgerRow[]>([]);
+    const [directions, setDirections] = useState<string[]>([]);
+    const [directionsExclude, setDirectionsExclude] = useState(false);
+    const [search, setSearch] = useState('');
     // The ledger names its customer, so a linked customer of another branch
     // still reads in the picker though the branch's list does not hold them.
     const [ledgerCustomer, setLedgerCustomer] = useState<CustomerOption | null>(null);
@@ -205,6 +221,23 @@ function CustomerLedgerContent() {
         void loadLedger();
     }, [customerId, fromDate, toDate]);
 
+    // The direction and search chips narrow the entries here; the opening
+    // balance row stays, since every running balance below starts from it.
+    const visible = useMemo(
+        () => transactions.filter((tx) => (
+            matchesAnyOf(directions, directionOf(tx.type), directionsExclude)
+            && matchesSearch(search, tx.payment_number, tx.notes, tx.creator?.name, directionLabel(tx.type, copy))
+        )),
+        [transactions, directions, directionsExclude, search, copy],
+    );
+
+    const totals = useMemo(() => ({
+        sales: sumField(visible, 'sale_total'),
+        paid: sumField(visible, 'amount_paid'),
+        due: sumField(visible, 'debit'),
+        payment: sumField(visible, 'credit'),
+    }), [visible]);
+
     const tableData = useMemo<LedgerRow[]>(() => {
         if (!customerId) return [];
         const openingRow: LedgerRow = {
@@ -213,8 +246,8 @@ function CustomerLedgerContent() {
             created_at: fromDate,
             balance_after: openingBalance,
         };
-        return [openingRow, ...transactions];
-    }, [customerId, fromDate, openingBalance, transactions]);
+        return [openingRow, ...visible];
+    }, [customerId, fromDate, openingBalance, visible]);
 
     const columns = useMemo<ColumnDef<LedgerRow, unknown>[]>(() => [
         columnHelper.accessor('created_at', {
@@ -269,14 +302,14 @@ function CustomerLedgerContent() {
         columnHelper.accessor('sale_total', {
             header: copy.columns.saleTotal,
             cell: (info) => (info.row.original.rowType === 'opening' ? dash : moneyCell(info.getValue(), locale)),
-            footer: ({ table }) => moneyCell(sumField(transactionRowsFromTable(table), 'sale_total'), locale),
+            footer: () => moneyCell(totals.sales, locale),
             size: 120,
             meta: { align: 'end', hideOnMobile: true },
         }),
         columnHelper.accessor('amount_paid', {
             header: copy.columns.paid,
             cell: (info) => (info.row.original.rowType === 'opening' ? dash : moneyCell(info.getValue(), locale)),
-            footer: ({ table }) => moneyCell(sumField(transactionRowsFromTable(table), 'amount_paid'), locale),
+            footer: () => moneyCell(totals.paid, locale),
             size: 110,
             meta: { align: 'end', hideOnMobile: true },
         }),
@@ -284,7 +317,7 @@ function CustomerLedgerContent() {
             id: 'due',
             header: copy.columns.due,
             cell: (info) => (info.row.original.rowType === 'opening' ? dash : moneyCell(info.getValue(), locale, 'text-danger')),
-            footer: ({ table }) => moneyCell(sumField(transactionRowsFromTable(table), 'debit'), locale, 'text-danger'),
+            footer: () => moneyCell(totals.due, locale, 'text-danger'),
             size: 110,
             meta: { align: 'end' },
         }),
@@ -292,7 +325,7 @@ function CustomerLedgerContent() {
             id: 'payment',
             header: copy.columns.payment,
             cell: (info) => (info.row.original.rowType === 'opening' ? dash : moneyCell(info.getValue(), locale, 'text-emerald-600')),
-            footer: ({ table }) => moneyCell(sumField(transactionRowsFromTable(table), 'credit'), locale, 'text-emerald-600'),
+            footer: () => moneyCell(totals.payment, locale, 'text-emerald-600'),
             size: 110,
             meta: { align: 'end' },
         }),
@@ -312,7 +345,7 @@ function CustomerLedgerContent() {
             size: 120,
             meta: { align: 'end' },
         }),
-    ], [copy, locale, closingBalance]);
+    ], [copy, locale, closingBalance, totals]);
 
     // Page-owned: the range goes to the ledger query, and the opening balance
     // is read at its start.
@@ -324,13 +357,61 @@ function CustomerLedgerContent() {
                 label: t.common.date,
                 value: dateRange,
                 onChange: setDateRange,
+                operators: true,
+            },
+            {
+                id: 'direction',
+                type: 'multi-select',
+                label: copy.columns.direction,
+                value: directions,
+                onChange: setDirections,
+                exclude: { value: directionsExclude, onChange: setDirectionsExclude },
+                options: DIRECTIONS.map((value) => ({
+                    value,
+                    label: { sale: copy.directionSale, receive: copy.directionReceive, pay: copy.directionPay }[value],
+                })),
             },
         ],
-        [t, dateRange],
+        [t, copy, dateRange, directions, directionsExclude],
     );
 
     const selectedCustomer = customers.find((c) => c.id === customerId)
         ?? (ledgerCustomer?.id === customerId ? ledgerCustomer : null);
+
+    // Opening and closing are the ledger's over the date range; the sales,
+    // due and payment figures follow the direction and search chips, as the
+    // total row does.
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale });
+        const items: ListStat[] = [
+            {
+                id: 'opening',
+                icon: <Flag aria-hidden />,
+                label: copy.openingBalance,
+                value: money(openingBalance),
+                tone: balanceTone(openingBalance),
+            },
+            { id: 'sales', icon: <ShoppingBag aria-hidden />, label: copy.columns.saleTotal, value: money(totals.sales) },
+            { id: 'due', icon: <ArrowUpRight aria-hidden />, label: copy.columns.due, value: money(totals.due) },
+            { id: 'payment', icon: <ArrowDownLeft aria-hidden />, label: copy.columns.payment, value: money(totals.payment) },
+            {
+                id: 'closing',
+                icon: <FlagTriangleRight aria-hidden />,
+                label: copy.closingBalance,
+                value: money(closingBalance),
+                tone: balanceTone(closingBalance),
+            },
+            {
+                id: 'current',
+                icon: <Wallet aria-hidden />,
+                label: copy.currentDue,
+                value: money(dueBalance),
+                tone: balanceTone(dueBalance),
+                hint: selectedCustomer?.name,
+            },
+        ];
+        return { items, loading: ledgerLoading && transactions.length === 0, label: copy.statsLabel };
+    }, [copy, locale, openingBalance, closingBalance, dueBalance, totals, selectedCustomer, ledgerLoading, transactions.length]);
 
     return (
         <PageShell>
@@ -377,53 +458,28 @@ function CustomerLedgerContent() {
             </div>
 
             {customerId ? (
-                <>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <BalanceTile label={copy.openingBalance} value={openingBalance} locale={locale} />
-                        <BalanceTile label={copy.closingBalance} value={closingBalance} locale={locale} />
-                        <BalanceTile
-                            label={copy.currentDue}
-                            value={dueBalance}
-                            locale={locale}
-                            note={selectedCustomer?.name}
-                        />
-                    </div>
-
-                    <DataTable
-                        tableId="customer-ledger-entries"
-                        title={copy.ledgerTitle}
-                        data={tableData}
-                        columns={columns}
-                        isLoading={ledgerLoading}
-                        emptyMessage={copy.noTransactions}
-                        emptyIcon={<BookOpen className="w-16 h-16 text-gray-200" />}
-                        filters={filters}
-                        viewOptions
-                    />
-                </>
+                <DataTable
+                    tableId="customer-ledger-entries"
+                    title={copy.ledgerTitle}
+                    data={tableData}
+                    columns={columns}
+                    isLoading={ledgerLoading}
+                    emptyMessage={copy.noTransactions}
+                    emptyIcon={<BookOpen className="w-16 h-16 text-gray-200" />}
+                    searchValue={search}
+                    onSearchChange={setSearch}
+                    filters={filters}
+                    filterLayout="row"
+                    stats={stats}
+                    enableColumnFilters={false}
+                    viewOptions
+                />
             ) : (
                 <div className="rounded-lg border border-gray-100 bg-white py-16 text-center text-sm text-gray-500">
                     {copy.selectCustomer}
                 </div>
             )}
         </PageShell>
-    );
-}
-
-function BalanceTile({
-    label,
-    value,
-    locale,
-    note,
-}: Readonly<{ label: string; value: number; locale: string; note?: string }>) {
-    return (
-        <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
-            <p className="text-xs font-medium text-gray-500">{label}</p>
-            <p className={`mt-1 text-xl font-semibold tabular-nums ${balanceClass(value) ?? 'text-gray-900'}`}>
-                {formatBDT(value, { locale })}
-            </p>
-            {note ? <p className="mt-1 text-xs text-gray-400">{note}</p> : null}
-        </div>
     );
 }
 

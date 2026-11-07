@@ -13,6 +13,7 @@ import {
     ValidateNested,
     IsBoolean,
     IsUUID,
+    Matches,
     MaxLength,
     Min,
     Max,
@@ -307,16 +308,53 @@ export class CreateVoucherDto {
     attachments?: CreateVoucherAttachmentDto[];
 }
 
+/** Where a voucher came from: keyed in by hand, or posted by another module. */
+export const VOUCHER_SOURCES = ['manual', 'system'] as const;
+export type VoucherSource = (typeof VOUCHER_SOURCES)[number];
+
+/** Matches one of `values`, or a comma-separated set of them. */
+function oneOrSetOf(values: readonly string[]): RegExp {
+    const one = `(?:${values.map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`;
+    return new RegExp(`^${one}(?:,${one})*$`);
+}
+
 export class ListVouchersQueryDto {
     /** A branch's own vouchers, or `all` (company-level vouchers included). Resolved against the caller's access. */
     @IsOptional()
     @IsStoreIdOrAll()
     storeId?: string;
 
+    /** One voucher type, or a comma-separated set (`cash_payment,bank_payment`). */
     @IsOptional()
     @IsString()
-    @IsIn(Object.values(VoucherType))
-    voucherType?: VoucherType;
+    @Matches(oneOrSetOf(Object.values(VoucherType)), {
+        message: `voucherType must be one or a comma-separated set of: ${Object.values(VoucherType).join(', ')}`,
+    })
+    voucherType?: string;
+
+    /** Voucher number, reference or narration; case-insensitive. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    search?: string;
+
+    /** The voucher's total (its debits): `gt:100`, `between:100,500` — see `readNumberConditionQuery`. */
+    @IsOptional()
+    @IsString()
+    amount?: string;
+
+    /** `manual`: keyed in by hand; `system`: posted by another module (a sale, a purchase…). */
+    @IsOptional()
+    @IsIn(VOUCHER_SOURCES)
+    source?: VoucherSource;
+
+    @IsOptional()
+    @IsString()
+    sortBy?: string;
+
+    @IsOptional()
+    @IsIn(['asc', 'desc'])
+    sortDir?: 'asc' | 'desc';
 
     @IsOptional()
     @IsDateString()
@@ -334,11 +372,13 @@ export class ListVouchersQueryDto {
     @IsDateString()
     createdTo?: string;
 
-    /** Drives the approval queue: `?approvalStatus=PENDING`. */
+    /** Drives the approval queue: `?approvalStatus=PENDING`. One status or a comma-separated set. */
     @IsOptional()
     @IsString()
-    @IsIn(Object.values(VoucherApprovalStatus))
-    approvalStatus?: VoucherApprovalStatus;
+    @Matches(oneOrSetOf(Object.values(VoucherApprovalStatus)), {
+        message: `approvalStatus must be one or a comma-separated set of: ${Object.values(VoucherApprovalStatus).join(', ')}`,
+    })
+    approvalStatus?: string;
 
     @IsOptional()
     @Type(() => Number)
@@ -472,7 +512,7 @@ const POSTING_RULE_CONDITION_KEYS = [
     'none',
 ] as const;
 
-const POSTING_EVENT_STATUSES = ['pending', 'posted', 'failed', 'skipped'] as const;
+export const POSTING_EVENT_STATUSES = ['pending', 'posted', 'failed', 'skipped'] as const;
 
 export class ListPostingRulesQueryDto {
     @IsOptional()
@@ -515,15 +555,38 @@ export class UpdatePostingRuleDto {
     isActive?: boolean;
 }
 
+/**
+ * The posting-exceptions list and the stats strip above it. Every key is
+ * declared because the global ValidationPipe runs with `forbidNonWhitelisted`.
+ */
 export class ListPostingExceptionsQueryDto {
+    /** One status, or a comma-separated set (`pending,failed`). */
     @IsOptional()
     @IsString()
-    @IsIn(POSTING_EVENT_STATUSES)
-    status?: typeof POSTING_EVENT_STATUSES[number];
+    @Matches(oneOrSetOf(POSTING_EVENT_STATUSES), {
+        message: `status must be one or a comma-separated set of: ${POSTING_EVENT_STATUSES.join(', ')}`,
+    })
+    status?: string;
 
+    /** `true`: every status but those in `status`. */
+    @IsOptional()
+    @IsIn(['true', 'false', '1', '0'])
+    statusExclude?: string;
+
+    /** One source module, or a comma-separated set (`sales,purchases`). */
     @IsOptional()
     @IsString()
+    @MaxLength(500)
+    @Matches(/^[A-Za-z0-9_-]+(?:,[A-Za-z0-9_-]+)*$/, {
+        message: 'module must be one or a comma-separated set of module names',
+    })
     module?: string;
+
+    /** Source id/type/module, voucher number, error text or event type; case-insensitive. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    search?: string;
 
     @IsOptional()
     @IsDateString()
@@ -903,6 +966,14 @@ export class CostCenterPLQueryDto extends ApprovedOnlyQueryDto {
 }
 
 // Feature 12: Fixed Assets
+export const FIXED_ASSET_CATEGORY_MAX_LENGTH = 60;
+
+/** A trimmed string, with blank read as null (no value). */
+function trimToNull({ value }: { value: unknown }): unknown {
+    if (typeof value !== 'string') return value;
+    return value.trim() || null;
+}
+
 export class CreateFixedAssetDto {
     @IsString()
     @IsNotEmpty()
@@ -947,6 +1018,27 @@ export class CreateFixedAssetDto {
     @IsOptional()
     @IsString()
     paymentMethod?: string;
+
+    /** Free text (Furniture, Vehicles…). Trimmed; blank or null leaves the asset uncategorised. */
+    @IsOptional()
+    @Transform(trimToNull)
+    @IsString()
+    @MaxLength(FIXED_ASSET_CATEGORY_MAX_LENGTH)
+    category?: string | null;
+}
+
+/**
+ * What can change on an asset after it is recorded. Cost, dates and life feed
+ * the acquisition voucher and the depreciation runs, so only the category is
+ * editable here.
+ */
+export class UpdateFixedAssetDto {
+    /** Trimmed; blank or null clears it. */
+    @IsOptional()
+    @Transform(trimToNull)
+    @IsString()
+    @MaxLength(FIXED_ASSET_CATEGORY_MAX_LENGTH)
+    category?: string | null;
 }
 
 export class RunDepreciationDto {

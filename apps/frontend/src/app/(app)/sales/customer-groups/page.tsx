@@ -2,14 +2,18 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { api } from '@/lib/api';
-import { Plus, FolderTree, Pencil, Trash2, X, Upload } from 'lucide-react';
+import { Plus, FolderTree, Pencil, Trash2, X, Upload, Users, Tag, Percent } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
+import type { NumberCondition } from '@/lib/number-condition';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
 import { useI18n } from '@/lib/i18n';
+import { toast } from '@/lib/toast';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
-import { PageShell } from '@/components/ui';
+import { ConfirmDialog, PageShell, buttonClassName } from '@/components/ui';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
@@ -29,20 +33,37 @@ interface CustomerGroup {
 
 const columnHelper = createColumnHelper<CustomerGroup>();
 
+/** The price-list chip's value for a group that uses the default prices. */
+const NONE = '__none__';
+
+const customersOf = (group: CustomerGroup) => group._count?.customers ?? 0;
+const discountOf = (group: CustomerGroup) => Number(group.default_discount_pct || 0);
+
+/**
+ * The customer-group master. Every group is loaded — a shop has a handful — so
+ * the toolbar chips and the strip work on the rows in the browser.
+ */
 export default function CustomerGroupsPage() {
-    const { t } = useI18n();
+    const { t, fmt, locale } = useI18n();
+    const copy = t.salesMasterLists.groups;
     const [groups, setGroups] = useState<CustomerGroup[]>([]);
     const [loading, setLoading] = useState(true);
     const [editingGroup, setEditingGroup] = useState<CustomerGroup | null>(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<CustomerGroup | null>(null);
+    const [deleting, setDeleting] = useState(false);
+    const [search, setSearch] = useState('');
+    const [priceListFilter, setPriceListFilter] = useState<string[]>([]);
+    const [discountFilter, setDiscountFilter] = useState<NumberCondition | null>(null);
+    const [customerCount, setCustomerCount] = useState<NumberCondition | null>(null);
 
-    useEffect(() => { loadGroups(); }, []);
+    useEffect(() => { void loadGroups(); }, []);
 
     const loadGroups = async () => {
         try {
             const data = await api.getCustomerGroups();
-            setGroups(data);
+            setGroups(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Failed to load groups', error);
         } finally {
@@ -58,20 +79,25 @@ export default function CustomerGroupsPage() {
         }
         setIsFormOpen(false);
         setEditingGroup(null);
-        loadGroups();
+        void loadGroups();
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm(t.customerGroups.deleteConfirm)) return;
+    const confirmDelete = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
         try {
-            await api.deleteCustomerGroup(id);
-            loadGroups();
+            await api.deleteCustomerGroup(deleteTarget.id);
+            setDeleteTarget(null);
+            toast.success(copy.deleted);
+            void loadGroups();
         } catch (err: any) {
-            alert(err.message || t.customerGroups.deleteFailed);
+            toast.error(err?.message || t.customerGroups.deleteFailed);
+        } finally {
+            setDeleting(false);
         }
     };
 
-    const openEdit = (group: any) => {
+    const openEdit = (group: CustomerGroup) => {
         setEditingGroup(group);
         setIsFormOpen(true);
     };
@@ -81,6 +107,73 @@ export default function CustomerGroupsPage() {
         setIsFormOpen(true);
     };
 
+    const priceListOptions = useMemo(() => {
+        const named = new Map<string, string>();
+        groups.forEach((group) => { if (group.priceList) named.set(group.priceList.id, group.priceList.name); });
+        return [...named].sort((a, b) => a[1].localeCompare(b[1])).map(([value, label]) => ({ value, label }));
+    }, [groups]);
+
+    const filtered = useMemo(
+        () => groups.filter((group) => {
+            if (!matchesAnyOf(priceListFilter, group.priceList?.id ?? NONE)) return false;
+            if (!matchesNumberCondition(discountOf(group), discountFilter)) return false;
+            if (!matchesNumberCondition(customersOf(group), customerCount)) return false;
+            return matchesSearch(search, group.name, group.description, group.priceList?.name);
+        }),
+        [groups, priceListFilter, discountFilter, customerCount, search],
+    );
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'priceList',
+            type: 'multi-select',
+            label: t.customerGroups.priceList,
+            value: priceListFilter,
+            onChange: setPriceListFilter,
+            options: [{ value: NONE, label: copy.noPriceList }, ...priceListOptions],
+        },
+        {
+            id: 'discount',
+            type: 'number',
+            label: t.customerGroups.discountPct,
+            value: discountFilter,
+            onChange: setDiscountFilter,
+        },
+        {
+            id: 'customers',
+            type: 'number',
+            label: t.customerGroups.columns.customers,
+            value: customerCount,
+            onChange: setCustomerCount,
+        },
+    ], [t, copy, priceListFilter, priceListOptions, discountFilter, customerCount]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const items: ListStat[] = [
+            { id: 'count', icon: <FolderTree aria-hidden />, label: copy.stats.groups, value: n(filtered.length) },
+            {
+                id: 'customers',
+                icon: <Users aria-hidden />,
+                label: copy.stats.customers,
+                value: n(filtered.reduce((sum, group) => sum + customersOf(group), 0)),
+            },
+            {
+                id: 'priceList',
+                icon: <Tag aria-hidden />,
+                label: copy.stats.withPriceList,
+                value: n(filtered.filter((group) => group.priceList).length),
+            },
+            {
+                id: 'discount',
+                icon: <Percent aria-hidden />,
+                label: copy.stats.withDiscount,
+                value: n(filtered.filter((group) => discountOf(group) > 0).length),
+            },
+        ];
+        return { items, loading, label: copy.statsLabel };
+    }, [filtered, loading, locale, copy]);
+
     const columns: ColumnDef<CustomerGroup, any>[] = useMemo(
         () => [
             columnHelper.accessor('name', {
@@ -88,132 +181,133 @@ export default function CustomerGroupsPage() {
                 cell: (info) => {
                     const group = info.row.original;
                     return (
-                        <div>
-                            <span className="block text-sm font-bold text-gray-900">{group.name}</span>
-                            <span className="block text-xs text-gray-400">{group.description || t.customerGroups.noDescription}</span>
+                        <div className="min-w-0">
+                            <span className="block">{group.name}</span>
+                            <span className="block truncate text-gray-500">{group.description || t.customerGroups.noDescription}</span>
                         </div>
                     );
                 },
                 size: 240,
             }),
-            columnHelper.accessor((row) => row._count?.customers ?? 0, {
+            columnHelper.accessor(customersOf, {
                 id: 'customers',
                 header: t.customerGroups.columns.customers,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-gray-700">{info.getValue()}</span>
-                ),
-                sortingFn: (a, b) => Number(a.getValue('customers')) - Number(b.getValue('customers')),
+                cell: (info) => info.getValue().toLocaleString(locale),
                 size: 110,
+                meta: { align: 'end' },
             }),
-            columnHelper.display({
+            columnHelper.accessor((row) => row.priceList?.name ?? '', {
                 id: 'priceList',
                 header: t.customerGroups.priceList,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-gray-700">
-                        {info.row.original.priceList?.name || t.customerGroups.noPriceList}
-                    </span>
-                ),
-                size: 160,
+                cell: (info) => info.getValue() || <span className="text-gray-400">{t.customerGroups.noPriceList}</span>,
+                size: 180,
+                meta: { hideOnMobile: true },
             }),
-            columnHelper.accessor('default_discount_pct', {
+            columnHelper.accessor(discountOf, {
+                id: 'default_discount_pct',
                 header: t.customerGroups.defaultDiscount,
                 cell: (info) => {
-                    const value = Number(info.getValue() || 0);
-                    return value > 0 ? (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200">
-                            {value}%
-                        </span>
-                    ) : (
-                        <span className="text-sm text-gray-400">{t.common.none}</span>
-                    );
+                    const value = info.getValue();
+                    return value > 0 ? `${value}%` : <span className="text-gray-400">{t.common.none}</span>;
                 },
-                sortingFn: (a, b) => Number(a.getValue('default_discount_pct') || 0) - Number(b.getValue('default_discount_pct') || 0),
                 size: 140,
+                meta: { align: 'end' },
             }),
             columnHelper.display({
                 id: 'actions',
                 header: t.common.actions,
                 cell: (info) => {
                     const group = info.row.original;
+                    const inUse = customersOf(group) > 0;
                     return (
-                        <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
-                            <button
-                                onClick={() => openEdit(group)}
-                                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-                                title={t.common.edit}
-                            >
-                                <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={() => handleDelete(group.id)}
-                                className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
-                                title={t.common.delete}
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        </div>
+                        <RowActions>
+                            <RowActionButton icon={<Pencil />} label={t.common.edit} onClick={() => openEdit(group)} />
+                            <RowActionButton
+                                icon={<Trash2 />}
+                                label={inUse ? copy.inUse : t.common.delete}
+                                intent="danger"
+                                disabled={inUse}
+                                onClick={() => setDeleteTarget(group)}
+                            />
+                        </RowActions>
                     );
                 },
                 enableSorting: false,
                 enableColumnFilter: false,
                 enableResizing: false,
-                size: 110,
+                size: 100,
             }),
         ],
-        [t],
+        [t, copy, locale],
     );
 
     return (
         <PageShell>
-                <PageHeader
-                    title={t.customerGroups.title}
-                    subtitle={t.customerGroups.subtitle}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.sales,
-                        t.customerGroups.title,
-                        'sales',
-                    )}
-                    actions={
-                        <>
-                            <button
-                                onClick={() => setImportOpen(true)}
-                                className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
-                            >
-                                <Upload className="w-4 h-4 me-1.5" />
-                                Import
-                            </button>
-                            <button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-sm transition-all">
-                                <Plus className="w-4 h-4 me-2" /> {t.customerGroups.newGroup}
-                            </button>
-                        </>
-                    }
-                />
-
-                {isFormOpen && (
-                    <GroupForm
-                        group={editingGroup}
-                        onSave={handleSave}
-                        onCancel={() => { setIsFormOpen(false); setEditingGroup(null); }}
-                    />
+            <PageHeader
+                title={t.customerGroups.title}
+                subtitle={t.customerGroups.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.sales,
+                    t.customerGroups.title,
+                    'sales',
                 )}
+                actions={(
+                    <>
+                        <button type="button" onClick={() => setImportOpen(true)} className={buttonClassName({ variant: 'secondary' })}>
+                            <Upload className="w-4 h-4" />
+                            {t.common.import}
+                        </button>
+                        <button type="button" onClick={openCreate} className={buttonClassName()}>
+                            <Plus className="w-4 h-4" />
+                            {t.customerGroups.newGroup}
+                        </button>
+                    </>
+                )}
+            />
 
-                <DataTable<CustomerGroup>
-                    tableId="customer-groups"
-                    columns={columns}
-                    data={groups}
-                    title={t.customerGroups.title}
-                    isLoading={loading}
-                    emptyMessage={t.customerGroups.emptyMessage}
-                    emptyIcon={<FolderTree className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.customerGroups.searchPlaceholder}
+            {isFormOpen && (
+                <GroupForm
+                    group={editingGroup}
+                    onSave={handleSave}
+                    onCancel={() => { setIsFormOpen(false); setEditingGroup(null); }}
                 />
-            
+            )}
+
+            <DataTable<CustomerGroup>
+                tableId="customer-groups"
+                columns={columns}
+                data={filtered}
+                title={t.customerGroups.title}
+                isLoading={loading}
+                emptyMessage={t.customerGroups.emptyMessage}
+                emptyIcon={<FolderTree className="w-16 h-16 text-gray-200" />}
+                searchPlaceholder={t.customerGroups.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+            />
+
+            <ConfirmDialog
+                open={deleteTarget !== null}
+                title={fmt(copy.deleteTitle, { name: deleteTarget?.name ?? '' })}
+                prompt={copy.deletePrompt}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                loading={deleting}
+                danger
+                onConfirm={() => void confirmDelete()}
+                onCancel={() => { if (!deleting) setDeleteTarget(null); }}
+            />
 
             <ImportDialog
                 open={importOpen}
                 onClose={() => setImportOpen(false)}
-                entityLabel="Customer Groups"
+                entityLabel={t.customerGroups.title}
                 fields={IMPORT_FIELDS}
                 importFn={(rows, mode) => api.importCustomerGroups(rows, mode)}
                 onSuccess={() => void loadGroups()}

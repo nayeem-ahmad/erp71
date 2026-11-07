@@ -22,6 +22,15 @@ jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branc
 
 jest.mock('next/navigation', () => ({
     useSearchParams: () => ({ get: () => null }),
+    useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
+    usePathname: () => '/sales/customer-payments',
+}));
+
+// A tablet: the list's one-row filter toolbar, with the payment panel still a
+// sheet over it rather than docked beside it (that needs 1280px).
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: (query: string) => query === '(min-width: 768px)',
+    useIsMdUp: () => true,
 }));
 
 jest.mock('@/lib/branding', () => ({
@@ -90,6 +99,15 @@ const bob = { id: 'cust-2', name: 'Bob Traders', phone: '01700000002', due_balan
 
 const dialog = () => screen.getByRole('dialog');
 
+/** A filter chip on the toolbar row — a button that opens its own popover. */
+function chip(name: string | RegExp): HTMLElement {
+    const found = screen
+        .getAllByRole('button', { name })
+        .find((button) => button.getAttribute('aria-haspopup') === 'dialog');
+    if (!found) throw new Error(`No filter chip named ${String(name)}`);
+    return found;
+}
+
 function setUp({ payments = [payout], customers = [alice, bob] }: { payments?: unknown[]; customers?: unknown[] } = {}) {
     jest.clearAllMocks();
     useToastStore.setState({ toasts: [] });
@@ -137,23 +155,65 @@ describe('CustomerPaymentsPage — summary', () => {
         render(<CustomerPaymentsPage />);
         await screen.findByText('CP-00007');
 
-        const tile = (label: string) => screen.getByText(label, { selector: 'p' }).parentElement as HTMLElement;
-        expect(tile('Received')).toHaveTextContent('1,000.00');
-        expect(tile('Paid out (refunds)')).toHaveTextContent('250.00');
-        expect(tile('Discount allowed')).toHaveTextContent('20.00');
-        expect(tile('Net collected')).toHaveTextContent('750.00');
-        // The receipts are broken down by method under their tile.
-        expect(tile('Received')).toHaveTextContent('bKash');
+        const strip = screen.getByRole('region', { name: 'Payments summary' });
+        const tile = (label: string) => within(strip).getByText(label, { selector: 'p' }).parentElement as HTMLElement;
+        expect(tile('Payments')).toHaveTextContent('2');
+        expect(tile('Received')).toHaveTextContent('1,000');
+        expect(tile('Received')).toHaveTextContent('1 entry');
+        expect(tile('Paid out (refunds)')).toHaveTextContent('250');
+        expect(tile('Discount allowed')).toHaveTextContent('20');
+        expect(tile('Net collected')).toHaveTextContent('750');
+        // The receipts' biggest method, with its share of them.
+        expect(tile('Top method')).toHaveTextContent('bKash');
+        expect(tile('Top method')).toHaveTextContent('100%');
     });
 
-    it('filters the list to one direction', async () => {
+    it('filters the list to one direction, and the strip follows', async () => {
         render(<CustomerPaymentsPage />);
         await screen.findByText('CP-00007');
 
-        fireEvent.click(screen.getByRole('radio', { name: 'Out' }));
+        fireEvent.click(chip('Direction'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Pay to customer' }));
 
         expect(screen.getByText('CP-00007')).toBeInTheDocument();
         expect(screen.queryByText('CPY-00005')).not.toBeInTheDocument();
+        const strip = screen.getByRole('region', { name: 'Payments summary' });
+        expect(within(strip).getByText('Received', { selector: 'p' }).parentElement).toHaveTextContent('0');
+        expect(within(strip).getByText('Payments', { selector: 'p' }).parentElement).toHaveTextContent('1');
+    });
+
+    it('filters by method, "Not recorded" included, without asking the server again', async () => {
+        render(<CustomerPaymentsPage />);
+        await screen.findByText('CP-00007');
+        const calls = (api.getCustomerCreditPayments as jest.Mock).mock.calls.length;
+
+        fireEvent.click(chip('Method'));
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'Not recorded' }));
+
+        expect(screen.getByText('CP-00007')).toBeInTheDocument();
+        expect(screen.queryByText('CPY-00005')).not.toBeInTheDocument();
+        expect((api.getCustomerCreditPayments as jest.Mock).mock.calls.length).toBe(calls);
+    });
+
+    it('narrows to one customer on the server', async () => {
+        render(<CustomerPaymentsPage />);
+        await screen.findByText('CP-00007');
+
+        fireEvent.click(chip('Customer'));
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'Bob Traders' }));
+
+        await waitFor(() =>
+            expect(api.getCustomerCreditPayments).toHaveBeenLastCalledWith(expect.objectContaining({ customerId: 'cust-2' })),
+        );
+    });
+
+    it('keeps Recorded by behind More', async () => {
+        render(<CustomerPaymentsPage />);
+        await screen.findByText('CP-00007');
+
+        fireEvent.click(chip(/^More/));
+        const more = screen.getByRole('dialog', { name: 'More' });
+        expect(within(more).getByRole('button', { name: /^Recorded By/i })).toBeInTheDocument();
     });
 });
 

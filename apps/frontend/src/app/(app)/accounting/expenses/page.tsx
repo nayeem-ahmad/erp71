@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Banknote, BarChart3, Calculator, CreditCard, Pencil, Plus, Receipt, Settings2, Tags, Trash2, Wallet } from 'lucide-react';
 import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
-import { applyCreatedRangeQuery, createdRangeFromPreset, type CreatedRange } from '@/lib/created-range';
+import { applyCreatedRangeQuery, createdRangeFromPreset, tenantDateOnly, type CreatedRange } from '@/lib/created-range';
 import type { NumberCondition } from '@/lib/number-condition';
 import { AccountingPageShell } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -88,7 +88,7 @@ function ExpensesPageContent() {
 
     const [formHeadId, setFormHeadId] = useState('');
     const [formAmount, setFormAmount] = useState('');
-    const [formDate, setFormDate] = useState(new Date().toISOString().slice(0, 10));
+    const [formDate, setFormDate] = useState(tenantDateOnly);
     const [formDescription, setFormDescription] = useState('');
     const [formPaymentMethod, setFormPaymentMethod] = useState<(typeof PAYMENT_METHODS)[number]>('CASH');
 
@@ -164,7 +164,7 @@ function ExpensesPageContent() {
     const resetForm = () => {
         setFormHeadId('');
         setFormAmount('');
-        setFormDate(new Date().toISOString().slice(0, 10));
+        setFormDate(tenantDateOnly());
         setFormDescription('');
         setFormPaymentMethod('CASH');
     };

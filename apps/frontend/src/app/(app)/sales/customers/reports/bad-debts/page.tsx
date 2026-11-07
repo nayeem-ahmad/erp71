@@ -1,15 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { RefreshCw, Undo2 } from 'lucide-react';
+import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
+import { ArrowUpRight, FileX, ReceiptText, RefreshCw, Undo2, Users, Wallet } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
-import PageHeader from '@/components/ui/compact/PageHeader';
-import { PageShell, Button, ConfirmDialog } from '@/components/ui';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch, inDateRange } from '@/lib/list-filter';
+import type { CreatedRange } from '@/lib/created-range';
+import type { NumberCondition } from '@/lib/number-condition';
+import { Button, ConfirmDialog, PageHeader, PageShell } from '@/components/ui';
 
 type WriteOff = {
     id: string;
@@ -23,6 +29,21 @@ type WriteOff = {
     creator: { id: string; name: string } | null;
 };
 
+/** The chips' value for a write-off whose customer or author is gone. */
+const NONE = '__none__';
+
+const columnHelper = createColumnHelper<WriteOff>();
+
+/** The distinct `pick` of the rows, by name — the options a chip offers. */
+function distinctByName(rows: WriteOff[], pick: (row: WriteOff) => { id: string; name: string } | null) {
+    const byId = new Map<string, string>();
+    for (const row of rows) {
+        const value = pick(row);
+        if (value) byId.set(value.id, value.name);
+    }
+    return [...byId].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+}
+
 /**
  * The bad-debt register: every customer debt this workspace has forgiven.
  *
@@ -31,21 +52,32 @@ type WriteOff = {
  * them, with who entered each and why, IS the audit trail. It is also the only
  * place a write-off can be undone, which is how a debt that is paid after being
  * written off gets back onto the customer's ledger.
+ *
+ * The register is loaded whole, so its chips narrow the rows here and the
+ * strip adds up exactly what is left.
  */
 export default function BadDebtsReportPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const m = t.customers.profile.writeOff;
+    const title = t.sales.hub.links.badDebts.title;
 
-    const [rows, setRows] = useState<WriteOff[]>([]);
+    const [writeOffs, setWriteOffs] = useState<WriteOff[]>([]);
     const [loading, setLoading] = useState(true);
     const [reversing, setReversing] = useState<string | null>(null);
     const [confirming, setConfirming] = useState<WriteOff | null>(null);
+    const [dateRange, setDateRange] = useState<CreatedRange | null>(null);
+    const [reasons, setReasons] = useState<string[]>([]);
+    const [reasonsExclude, setReasonsExclude] = useState(false);
+    const [customers, setCustomers] = useState<string[]>([]);
+    const [amountFilter, setAmountFilter] = useState<NumberCondition | null>(null);
+    const [creators, setCreators] = useState<string[]>([]);
+    const [search, setSearch] = useState('');
 
     const load = useCallback(async () => {
         setLoading(true);
         try {
             const data = await api.getCustomerWriteOffs();
-            setRows(Array.isArray(data) ? data : []);
+            setWriteOffs(Array.isArray(data) ? data : []);
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : t.common.error);
         } finally {
@@ -69,13 +101,195 @@ export default function BadDebtsReportPage() {
         }
     };
 
-    const total = rows.reduce((sum, row) => sum + Number(row.amount), 0);
+    const reasonLabel = useCallback(
+        (reason: string | null) => (reason && reason in m.reasons ? m.reasons[reason as keyof typeof m.reasons] : null),
+        [m],
+    );
+
+    const rows = useMemo(
+        () => writeOffs.filter((row) => (
+            inDateRange(row.created_at, dateRange)
+            && matchesAnyOf(reasons, row.reason ?? NONE, reasonsExclude)
+            && matchesAnyOf(customers, row.customer?.id ?? NONE)
+            && matchesAnyOf(creators, row.creator?.id ?? NONE)
+            && matchesNumberCondition(Number(row.amount), amountFilter)
+            && matchesSearch(
+                search,
+                row.payment_number,
+                row.customer?.name,
+                row.customer?.phone,
+                reasonLabel(row.reason),
+                row.notes,
+                row.creator?.name,
+                row.accounting_voucher_number,
+            )
+        )),
+        [writeOffs, dateRange, reasons, reasonsExclude, customers, creators, amountFilter, search, reasonLabel],
+    );
+
+    const total = useMemo(() => rows.reduce((sum, row) => sum + Number(row.amount), 0), [rows]);
+
+    const columns = useMemo<ColumnDef<WriteOff, any>[]>(() => [
+        columnHelper.accessor('created_at', {
+            header: t.common.date,
+            cell: (info) => (
+                <div className="min-w-0">
+                    <span>{formatDate(info.getValue(), locale)}</span>
+                    {info.row.original.payment_number ? (
+                        <span className="block truncate text-gray-500">{info.row.original.payment_number}</span>
+                    ) : null}
+                </div>
+            ),
+            footer: () => t.common.total,
+            sortingFn: 'datetime',
+            size: 130,
+        }),
+        columnHelper.accessor((row) => row.customer?.name ?? '', {
+            id: 'customer',
+            header: t.common.customer,
+            cell: (info) => {
+                const customer = info.row.original.customer;
+                if (!customer) return <span className="text-gray-400">—</span>;
+                return (
+                    <Link href={routes.sales.customerDetail(customer.id)} className="text-blue-600 hover:underline">
+                        {customer.name}
+                    </Link>
+                );
+            },
+            size: 180,
+        }),
+        columnHelper.accessor((row) => reasonLabel(row.reason) ?? '—', {
+            id: 'reason',
+            header: m.reason,
+            size: 170,
+        }),
+        columnHelper.accessor((row) => row.notes ?? '—', {
+            id: 'notes',
+            header: m.notes,
+            size: 220,
+            meta: { hideOnMobile: true },
+        }),
+        columnHelper.accessor((row) => row.creator?.name ?? '—', {
+            id: 'recordedBy',
+            header: m.recordedBy,
+            cell: (info) => (
+                <div className="min-w-0">
+                    <span>{info.getValue()}</span>
+                    {info.row.original.accounting_voucher_number ? (
+                        <span className="block truncate text-gray-500">{info.row.original.accounting_voucher_number}</span>
+                    ) : null}
+                </div>
+            ),
+            size: 150,
+            meta: { hideOnMobile: true },
+        }),
+        columnHelper.accessor((row) => Number(row.amount), {
+            id: 'amount',
+            header: t.common.amount,
+            cell: (info) => formatBDT(info.getValue(), { locale }),
+            footer: () => formatBDT(total, { locale }),
+            size: 130,
+            meta: { align: 'end' },
+        }),
+        columnHelper.display({
+            id: 'actions',
+            header: t.common.actions,
+            cell: (info) => (
+                <RowActions>
+                    <RowActionButton
+                        icon={<Undo2 />}
+                        label={m.reverse}
+                        intent="warning"
+                        onClick={() => setConfirming(info.row.original)}
+                        disabled={reversing === info.row.original.id}
+                    />
+                </RowActions>
+            ),
+            size: 80,
+            enableSorting: false,
+        }),
+    ], [t, m, locale, total, reversing, reasonLabel]);
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'date',
+            type: 'date-range',
+            label: t.common.date,
+            value: dateRange,
+            onChange: setDateRange,
+            operators: true,
+        },
+        {
+            id: 'reason',
+            type: 'multi-select',
+            label: m.reason,
+            value: reasons,
+            onChange: setReasons,
+            exclude: { value: reasonsExclude, onChange: setReasonsExclude },
+            options: Object.entries(m.reasons).map(([value, label]) => ({ value, label })),
+        },
+        {
+            id: 'customer',
+            type: 'multi-select',
+            label: t.common.customer,
+            value: customers,
+            onChange: setCustomers,
+            options: distinctByName(writeOffs, (row) => row.customer),
+            searchable: true,
+        },
+        {
+            id: 'amount',
+            type: 'number',
+            label: t.common.amount,
+            value: amountFilter,
+            onChange: setAmountFilter,
+            money: true,
+        },
+        {
+            id: 'recordedBy',
+            type: 'multi-select',
+            label: m.recordedBy,
+            value: creators,
+            onChange: setCreators,
+            options: distinctByName(writeOffs, (row) => row.creator),
+            more: true,
+        },
+    ], [t, m, dateRange, reasons, reasonsExclude, customers, writeOffs, amountFilter, creators]);
+
+    const stats = useMemo(() => {
+        const largest = rows.reduce((max, row) => Math.max(max, Number(row.amount)), 0);
+        const customerCount = new Set(rows.map((row) => row.customer?.id ?? NONE)).size;
+        const items: ListStat[] = [
+            {
+                id: 'total',
+                icon: <Wallet aria-hidden />,
+                label: m.writtenOffTotal,
+                value: formatBDT(total, { locale }),
+                tone: total > 0 ? 'warning' : 'default',
+            },
+            { id: 'count', icon: <ReceiptText aria-hidden />, label: m.writeOffs, value: rows.length.toLocaleString() },
+            { id: 'customers', icon: <Users aria-hidden />, label: m.customers, value: customerCount.toLocaleString() },
+            {
+                id: 'largest',
+                icon: <ArrowUpRight aria-hidden />,
+                label: m.largest,
+                value: rows.length > 0 ? formatBDT(largest, { locale }) : '—',
+            },
+        ];
+        return { items, loading: loading && writeOffs.length === 0, label: m.statsLabel };
+    }, [rows, total, loading, writeOffs.length, locale, m]);
 
     return (
         <PageShell>
             <PageHeader
-                title={t.sales.hub.links.badDebts.title}
+                title={title}
                 subtitle={t.sales.hub.links.badDebts.description}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.sales,
+                    title,
+                    'sales',
+                )}
                 actions={
                     <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void load()}>
                         {t.common.refresh}
@@ -83,91 +297,23 @@ export default function BadDebtsReportPage() {
                 }
             />
 
-            {!loading && rows.length > 0 && (
-                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
-                    <p className="text-xs font-semibold text-amber-800">{m.writtenOffTotal}</p>
-                    <p className="text-xl font-bold text-amber-900">{formatBDT(total)}</p>
-                </div>
-            )}
-
-            <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white">
-                <table className="w-full text-sm">
-                    <thead className="border-b border-gray-100 bg-gray-50 text-start text-xs text-gray-500">
-                        <tr>
-                            <th className="p-3 font-semibold">{t.common.date}</th>
-                            <th className="p-3 font-semibold">{t.customers.title}</th>
-                            <th className="p-3 font-semibold">{m.reason}</th>
-                            <th className="p-3 font-semibold hidden md:table-cell">{m.notes}</th>
-                            <th className="p-3 font-semibold hidden md:table-cell">{t.customers.profile.by}</th>
-                            <th className="p-3 text-end font-semibold">{t.common.amount}</th>
-                            <th className="p-3 text-end font-semibold">{t.common.actions}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading ? (
-                            <tr>
-                                <td colSpan={7} className="p-8 text-center text-xs text-gray-400">
-                                    {t.common.loading}
-                                </td>
-                            </tr>
-                        ) : rows.length === 0 ? (
-                            <tr>
-                                <td colSpan={7} className="p-8 text-center text-xs text-gray-400">
-                                    {t.common.noData}
-                                </td>
-                            </tr>
-                        ) : (
-                            rows.map((row) => (
-                                <tr key={row.id} className="border-b border-gray-50 last:border-0">
-                                    <td className="p-3 whitespace-nowrap text-xs text-gray-600">
-                                        <div>{formatDate(row.created_at)}</div>
-                                        <div className="text-gray-400">{row.payment_number}</div>
-                                    </td>
-                                    <td className="p-3">
-                                        {row.customer ? (
-                                            <Link
-                                                href={routes.sales.customerDetail(row.customer.id)}
-                                                className="font-medium text-primary hover:underline"
-                                            >
-                                                {row.customer.name}
-                                            </Link>
-                                        ) : (
-                                            <span className="text-gray-400">—</span>
-                                        )}
-                                    </td>
-                                    <td className="p-3 text-xs text-gray-600">
-                                        {row.reason && row.reason in m.reasons
-                                            ? m.reasons[row.reason as keyof typeof m.reasons]
-                                            : '—'}
-                                    </td>
-                                    <td className="p-3 hidden md:table-cell text-xs text-gray-500">
-                                        {row.notes ?? '—'}
-                                    </td>
-                                    <td className="p-3 hidden md:table-cell text-xs text-gray-500">
-                                        <div>{row.creator?.name ?? '—'}</div>
-                                        {row.accounting_voucher_number && (
-                                            <div className="text-gray-400">{row.accounting_voucher_number}</div>
-                                        )}
-                                    </td>
-                                    <td className="p-3 text-end font-semibold text-amber-800 whitespace-nowrap">
-                                        {formatBDT(Number(row.amount))}
-                                    </td>
-                                    <td className="p-3 text-end">
-                                        <Button
-                                            variant="ghost"
-                                            icon={<Undo2 className="h-4 w-4" />}
-                                            onClick={() => setConfirming(row)}
-                                            disabled={reversing === row.id}
-                                        >
-                                            {m.reverse}
-                                        </Button>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+            <DataTable<WriteOff>
+                title={title}
+                tableId="sales-bad-debts"
+                columns={columns}
+                data={rows}
+                getRowId={(row) => row.id}
+                isLoading={loading}
+                emptyMessage={t.common.noData}
+                emptyIcon={<FileX className="h-16 w-16 text-gray-200" />}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+            />
 
             {confirming && (
                 <ConfirmDialog

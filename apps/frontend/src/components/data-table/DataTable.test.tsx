@@ -185,6 +185,12 @@ describe('DataTable', () => {
         expect(screen.getByRole('button', { name: /print/i })).toBeInTheDocument();
     });
 
+    it('hides the built-in Print button when showPrint is false', () => {
+        render(<DataTable {...defaultProps} showPrint={false} />);
+        expect(screen.queryByRole('button', { name: /print/i })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument();
+    });
+
     it('shows loading state when isLoading is true', () => {
         render(<DataTable {...defaultProps} isLoading={true} />);
         expect(screen.getByText(/loading/i)).toBeInTheDocument();

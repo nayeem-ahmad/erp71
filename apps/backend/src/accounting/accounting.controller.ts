@@ -62,6 +62,7 @@ import {
     CreateCostCenterDto,
     CostCenterPLQueryDto,
     CreateFixedAssetDto,
+    UpdateFixedAssetDto,
     RunDepreciationDto,
     CreateRecurringJournalDto,
     CreateRecurringVoucherDto,
@@ -275,6 +276,17 @@ export class AccountingController {
         return this.accountingService.findVouchers(tenant.tenantId, { ...scoped, timezone: tenant.timezone });
     }
 
+    /**
+     * The stats strip above the voucher list — the list's own filters and
+     * branch scope. Declared before `vouchers/:id`, which would otherwise take
+     * "summary" for an id.
+     */
+    @Get('vouchers/summary')
+    async getVoucherListSummary(@Tenant() tenant: TenantContext, @Query() query: ListVouchersQueryDto) {
+        const scoped = await this.branchQuery(tenant, query);
+        return this.accountingService.getVoucherListSummary(tenant.tenantId, { ...scoped, timezone: tenant.timezone });
+    }
+
     @Get('vouchers/next-number')
     getVoucherNumberPreview(
         @Tenant() tenant: TenantContext,
@@ -393,6 +405,15 @@ export class AccountingController {
         @Body() dto: UpdatePostingRuleDto,
     ) {
         return this.accountingService.updatePostingRule(tenant.tenantId, id, dto);
+    }
+
+    /** The strip above the list: events per status over the same filters. Declared before any `:id` route. */
+    @Get('reconciliation/posting-exceptions/summary')
+    getPostingExceptionSummary(
+        @Tenant() tenant: TenantContext,
+        @Query() query: ListPostingExceptionsQueryDto,
+    ) {
+        return this.accountingService.getPostingExceptionSummary(tenant.tenantId, query);
     }
 
     @Get('reconciliation/posting-exceptions')
@@ -578,6 +599,12 @@ export class AccountingController {
     @TenantRoles('OWNER', 'ACCOUNTANT')
     createFixedAsset(@Tenant() tenant: TenantContext, @Body() dto: CreateFixedAssetDto) {
         return this.accountingService.createFixedAsset(tenant.tenantId, dto);
+    }
+
+    @Patch('fixed-assets/:id')
+    @TenantRoles('OWNER', 'ACCOUNTANT')
+    updateFixedAsset(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateFixedAssetDto) {
+        return this.accountingService.updateFixedAsset(tenant.tenantId, id, dto);
     }
 
     @Post('fixed-assets/run-depreciation')

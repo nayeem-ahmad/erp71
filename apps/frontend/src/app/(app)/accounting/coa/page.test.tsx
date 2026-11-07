@@ -28,12 +28,42 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+// DataTable folds the toolbar chips into a sheet on a narrow viewport, which is
+// all the global matchMedia mock reports.
+let mockMdUp = false;
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => mockMdUp,
+    useIsMdUp: () => mockMdUp,
+}));
+
+/** A toolbar chip: a button that opens its own panel. */
+function chip(name: string | RegExp): HTMLElement {
+    const found = screen
+        .getAllByRole('button', { name })
+        .find((button) => button.getAttribute('aria-haspopup') === 'dialog');
+    if (!found) throw new Error(`No filter chip named ${String(name)}`);
+    return found;
+}
+
+const payable = {
+    id: 'account-2',
+    name: 'Supplier Payables',
+    code: '210101',
+    type: 'liability',
+    category: 'general',
+    group: { id: 'group-2', name: 'Current Liabilities', code: '21', type: 'liability' },
+    subgroup: null,
+    balance: 1200,
+    balance_side: 'credit',
+};
+
 jest.mock('next/link', () => {
     return ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>;
 });
 
 describe('ChartOfAccountsPage', () => {
     beforeEach(() => {
+        mockMdUp = false;
         mockBranchScope();
         const { api } = require('@/lib/api');
         jest.clearAllMocks();
@@ -81,21 +111,56 @@ describe('ChartOfAccountsPage', () => {
 
         await waitFor(() => screen.getByText('Cash in Hand'));
 
-        expect(screen.getByText(/3,800/)).toBeInTheDocument();
-        expect(screen.getByText('Debit')).toBeInTheDocument();
+        const row = screen.getByText('Cash in Hand').closest('tr') as HTMLElement;
+        expect(within(row).getByText(/3,800/)).toBeInTheDocument();
+        expect(within(row).getByText('Debit')).toBeInTheDocument();
     });
 
-    it('applies account type filters through the API loader', async () => {
+    it('loads the branch accounts once and leaves the chips to filter them', async () => {
         const { api } = require('@/lib/api');
         renderPage();
 
-        await waitFor(() => expect(api.getAccounts).toHaveBeenCalled());
+        await waitFor(() => screen.getByText('Cash in Hand'));
+        expect(api.getAccounts).toHaveBeenCalledTimes(1);
+        expect(api.getAccounts).toHaveBeenLastCalledWith({ storeId: 'store-1' });
+    });
 
-        fireEvent.change(screen.getByLabelText('Filter by type'), { target: { value: 'asset' } });
+    it('narrows the accounts by type from the toolbar chip, and the strip follows', async () => {
+        mockMdUp = true;
+        const { api } = require('@/lib/api');
+        const cash = (await api.getAccounts())[0];
+        api.getAccounts.mockClear();
+        api.getAccounts.mockResolvedValue([cash, payable]);
+        renderPage();
 
-        await waitFor(() => {
-            expect(api.getAccounts).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'asset' }));
-        });
+        await waitFor(() => screen.getByText('Supplier Payables'));
+        const strip = screen.getByRole('region', { name: 'Chart of accounts summary' });
+        expect(within(strip).getByText('Accounts').parentElement).toHaveTextContent('2');
+        expect(within(strip).getByText('Liabilities').parentElement).toHaveTextContent('1,200');
+
+        fireEvent.click(chip('Type'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Liabilities' }));
+
+        await waitFor(() => expect(screen.queryByText('Cash in Hand')).not.toBeInTheDocument());
+        expect(screen.getByText('Supplier Payables')).toBeInTheDocument();
+        expect(within(strip).getByText('Accounts').parentElement).toHaveTextContent('1');
+        expect(within(strip).getByText('Assets').parentElement).toHaveTextContent('0');
+        // Filtering happens on the loaded rows, not by asking the server again.
+        expect(api.getAccounts).toHaveBeenCalledTimes(1);
+    });
+
+    it('searches accounts by name or code', async () => {
+        mockMdUp = true;
+        const { api } = require('@/lib/api');
+        const cash = (await api.getAccounts())[0];
+        api.getAccounts.mockResolvedValue([cash, payable]);
+        renderPage();
+
+        await waitFor(() => screen.getByText('Supplier Payables'));
+        fireEvent.change(screen.getByPlaceholderText('Search accounts by name or code...'), { target: { value: '2101' } });
+
+        await waitFor(() => expect(screen.queryByText('Cash in Hand')).not.toBeInTheDocument());
+        expect(screen.getByText('Supplier Payables')).toBeInTheDocument();
     });
 
     it('creates an account from the modal, deriving the type from the chosen group', async () => {

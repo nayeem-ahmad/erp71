@@ -1,6 +1,6 @@
 'use client';
 
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import ConsolidatedReportPage from './page';
 
 jest.mock('@/lib/api', () => ({
@@ -10,9 +10,31 @@ jest.mock('@/lib/api', () => ({
 }));
 
 jest.mock('@/lib/format', () => ({
+    ...jest.requireActual('@/lib/format'),
     formatBDT: (n: number) => `৳${n}`,
     formatDate: (d: string) => d,
 }));
+
+// A wide screen, so the chips sit in the toolbar and every column is drawn.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
+}));
+
+/** A toolbar chip: a button that opens its own panel. */
+function chip(name: string | RegExp): HTMLElement {
+    const found = screen
+        .getAllByRole('button', { name })
+        .find((button) => button.getAttribute('aria-haspopup') === 'dialog');
+    if (!found) throw new Error(`No filter chip named ${String(name)}`);
+    return found;
+}
+
+/** The figure beside a label in the summary strip. */
+function stat(label: string): string {
+    const strip = screen.getByRole('region', { name: 'Consolidated summary' });
+    return within(strip).getByText(label).nextElementSibling?.textContent ?? '';
+}
 
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: jest.fn() }),
@@ -84,108 +106,96 @@ describe('ConsolidatedReportPage', () => {
         });
     });
 
-    it('calls getConsolidatedReport on mount with a default date range', async () => {
+    it('calls getConsolidatedReport on mount with the last 30 days', async () => {
         const { api } = require('@/lib/api');
         render(<ConsolidatedReportPage />);
 
         await waitFor(() => {
             expect(api.getConsolidatedReport).toHaveBeenCalledTimes(1);
-            expect(api.getConsolidatedReport).toHaveBeenCalledWith(
-                expect.objectContaining({ from: expect.any(String), to: expect.any(String) }),
-            );
         });
+        const [{ from, to }] = api.getConsolidatedReport.mock.calls[0];
+        expect((Date.parse(to) - Date.parse(from)) / 86_400_000).toBe(29);
     });
 
-    it('renders the Generate button', async () => {
+    it('reloads when a period preset is picked from the toolbar', async () => {
+        const { api } = require('@/lib/api');
         render(<ConsolidatedReportPage />);
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /generate/i })).toBeInTheDocument();
-        });
+        await waitFor(() => expect(api.getConsolidatedReport).toHaveBeenCalledTimes(1));
+
+        fireEvent.click(chip(/^Period/));
+        fireEvent.click(screen.getByRole('button', { name: 'This year' }));
+
+        await waitFor(() => expect(api.getConsolidatedReport).toHaveBeenCalledTimes(2));
+        expect(api.getConsolidatedReport).toHaveBeenLastCalledWith(
+            expect.objectContaining({ from: expect.stringMatching(/-01-01$/) }),
+        );
     });
 
-    it('renders From and To date labels', async () => {
+    it('has no date boxes or Generate button of its own any more', async () => {
         render(<ConsolidatedReportPage />);
-        await waitFor(() => {
-            expect(screen.getByText('From')).toBeInTheDocument();
-            expect(screen.getByText('To')).toBeInTheDocument();
-        });
+        await waitFor(() => expect(chip(/^Period/)).toBeInTheDocument());
+
+        expect(screen.queryByRole('button', { name: /generate/i })).not.toBeInTheDocument();
+        expect(screen.queryByText('From')).not.toBeInTheDocument();
     });
 
-    it('shows overall summary cards after loading with data', async () => {
+    it('shows the overall figures in the summary strip', async () => {
         const { api } = require('@/lib/api');
         api.getConsolidatedReport.mockResolvedValue(mockReport);
 
         render(<ConsolidatedReportPage />);
 
-        await waitFor(() => {
-            expect(screen.getByText('Total Revenue')).toBeInTheDocument();
-            expect(screen.getByText('Total Transactions')).toBeInTheDocument();
-            expect(screen.getByText('Avg Order Value')).toBeInTheDocument();
-            expect(screen.getByText('Top Product')).toBeInTheDocument();
-        });
-    });
-
-    it('displays overall revenue formatted correctly', async () => {
-        const { api } = require('@/lib/api');
-        api.getConsolidatedReport.mockResolvedValue(mockReport);
-
-        render(<ConsolidatedReportPage />);
-
-        await waitFor(() => {
-            expect(screen.getByText('৳150000')).toBeInTheDocument();
-        });
-    });
-
-    it('displays top product name when available', async () => {
-        const { api } = require('@/lib/api');
-        api.getConsolidatedReport.mockResolvedValue(mockReport);
-
-        render(<ConsolidatedReportPage />);
-
-        await waitFor(() => {
-            expect(screen.getByText('Widget A')).toBeInTheDocument();
-        });
+        await waitFor(() => expect(stat('Total Revenue')).toBe('৳150000'));
+        expect(stat('Total Transactions')).toBe('320');
+        expect(stat('Avg Order Value')).toBe('৳468.75');
+        expect(stat('Branches')).toBe('2');
+        expect(stat('Top Product')).toBe('Widget A');
     });
 
     it('displays a dash for top product when null', async () => {
-        const { api } = require('@/lib/api');
-        api.getConsolidatedReport.mockResolvedValue(emptyReport);
-
         render(<ConsolidatedReportPage />);
 
-        await waitFor(() => {
-            expect(screen.getByText('—')).toBeInTheDocument();
-        });
+        await waitFor(() => expect(stat('Top Product')).toBe('—'));
     });
 
-    it('shows Store Breakdown table with store rows when data is available', async () => {
+    it('lists every store with its share and a total row', async () => {
         const { api } = require('@/lib/api');
         api.getConsolidatedReport.mockResolvedValue(mockReport);
 
         render(<ConsolidatedReportPage />);
 
         await waitFor(() => {
-            expect(screen.getByText('Store Breakdown')).toBeInTheDocument();
-            expect(screen.getAllByText('Main Store').length).toBeGreaterThan(0);
-            expect(screen.getAllByText('Branch Store').length).toBeGreaterThan(0);
+            expect(screen.getByText('Main Store')).toBeInTheDocument();
+            expect(screen.getByText('Branch Store')).toBeInTheDocument();
         });
+        expect(screen.getByText('60.0%')).toBeInTheDocument();
+        expect(screen.getByText('40.0%')).toBeInTheDocument();
+        expect(screen.getByText('200')).toBeInTheDocument();
+        const footer = screen.getAllByRole('rowgroup').find((group) => group.tagName === 'TFOOT')!;
+        expect(footer).toHaveTextContent('Total');
+        expect(footer).toHaveTextContent('৳150000');
+        expect(footer).toHaveTextContent('100.0%');
     });
 
-    it('shows Revenue by Store bar chart section when data is available', async () => {
+    it('narrows to the branches picked, and the strip and total row follow', async () => {
         const { api } = require('@/lib/api');
         api.getConsolidatedReport.mockResolvedValue(mockReport);
 
         render(<ConsolidatedReportPage />);
+        await screen.findByText('Branch Store');
 
-        await waitFor(() => {
-            expect(screen.getByText('Revenue by Store')).toBeInTheDocument();
-        });
+        fireEvent.click(chip('Branch'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Branch Store' }));
+
+        const body = () => screen.getAllByRole('rowgroup').find((group) => group.tagName === 'TBODY')!;
+        await waitFor(() => expect(body()).not.toHaveTextContent('Main Store'));
+        expect(body()).toHaveTextContent('Branch Store');
+        expect(stat('Total Revenue')).toBe('৳60000');
+        expect(stat('Branches')).toBe('1');
+        expect(stat('Avg Order Value')).toBe('৳500');
     });
 
     it('shows the empty state when by_store is empty', async () => {
-        const { api } = require('@/lib/api');
-        api.getConsolidatedReport.mockResolvedValue(emptyReport);
-
         render(<ConsolidatedReportPage />);
 
         await waitFor(() => {
@@ -201,56 +211,6 @@ describe('ConsolidatedReportPage', () => {
 
         await waitFor(() => {
             expect(screen.getByText('Server unavailable')).toBeInTheDocument();
-        });
-    });
-
-    it('calls getConsolidatedReport again when Generate button is clicked', async () => {
-        const { api } = require('@/lib/api');
-        api.getConsolidatedReport.mockResolvedValue(emptyReport);
-
-        render(<ConsolidatedReportPage />);
-        await waitFor(() => screen.getByRole('button', { name: /generate/i }));
-
-        fireEvent.click(screen.getByRole('button', { name: /generate/i }));
-
-        await waitFor(() => {
-            expect(api.getConsolidatedReport).toHaveBeenCalledTimes(2);
-        });
-    });
-
-    it('disables Generate button while loading', async () => {
-        const { api } = require('@/lib/api');
-        // Make it never resolve so we stay in loading state
-        api.getConsolidatedReport.mockReturnValue(new Promise(() => {}));
-
-        render(<ConsolidatedReportPage />);
-
-        // The initial call triggers loading — check the button is disabled
-        const button = screen.getByRole('button', { name: /loading/i });
-        expect(button).toBeDisabled();
-    });
-
-    it('shows revenue_share percentage in the store breakdown table', async () => {
-        const { api } = require('@/lib/api');
-        api.getConsolidatedReport.mockResolvedValue(mockReport);
-
-        render(<ConsolidatedReportPage />);
-
-        await waitFor(() => {
-            expect(screen.getByText('60.0%')).toBeInTheDocument();
-            expect(screen.getByText('40.0%')).toBeInTheDocument();
-        });
-    });
-
-    it('shows transaction counts in the store breakdown table', async () => {
-        const { api } = require('@/lib/api');
-        api.getConsolidatedReport.mockResolvedValue(mockReport);
-
-        render(<ConsolidatedReportPage />);
-
-        await waitFor(() => {
-            // store1 has 200 transactions
-            expect(screen.getByText('200')).toBeInTheDocument();
         });
     });
 });

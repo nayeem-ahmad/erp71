@@ -461,9 +461,6 @@ export const accountingMessages = {
         loadAccountsFailed: "Impossible de charger la liste des comptes du grand livre.",
         openJournal: "Ouvrir le journal",
         openVoucherDetail: "Ouvrir le détail de la dernière écriture",
-        accountAria: "Compte du grand livre",
-        fromDateAria: "Grand livre — date de début",
-        toDateAria: "Grand livre — date de fin",
         columns: {
             voucherNumber: "N° d'écriture",
             date: "Date",
@@ -491,10 +488,6 @@ export const accountingMessages = {
         open: "Ouvrir",
         accountingJournal: "Journal comptable",
         emptyMessage: "Aucune écriture trouvée pour les filtres sélectionnés",
-        searchPlaceholder: "Rechercher des lignes de journal par numéro, description ou type...",
-        voucherTypeAria: "Type d'écriture du journal",
-        fromDateAria: "Journal — date de début",
-        toDateAria: "Journal — date de fin",
         detail: {
             loading: "Chargement du détail de l'écriture...",
             loadFailed: "Impossible de charger le détail de l'écriture.",
@@ -545,7 +538,6 @@ export const accountingMessages = {
             editVoucher: "Modifier l'écriture",
             saveChanges: "Enregistrer les modifications",
             emptyMessage: "Aucune écriture trouvée pour les filtres sélectionnés",
-            searchPlaceholder: "Rechercher par numéro d'écriture, référence ou type...",
             deleteConfirm: "Supprimer l'écriture {voucherNumber} ?",
             deleteSuccess: "Écriture supprimée.",
             deleteFailed: "Impossible de supprimer l'écriture.",

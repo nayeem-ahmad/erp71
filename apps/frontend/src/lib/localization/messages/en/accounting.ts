@@ -461,9 +461,6 @@ export const accountingMessages = {
         loadAccountsFailed: 'Failed to load ledger account options.',
         openJournal: 'Open journal',
         openVoucherDetail: 'Open latest voucher detail',
-        accountAria: 'Ledger account',
-        fromDateAria: 'Ledger from date',
-        toDateAria: 'Ledger to date',
         columns: {
             voucherNumber: 'Voucher #',
             date: 'Date',
@@ -491,10 +488,6 @@ export const accountingMessages = {
         open: 'Open',
         accountingJournal: 'Accounting Journal',
         emptyMessage: 'No vouchers found for the selected filters',
-        searchPlaceholder: 'Search journal rows by voucher number, description, or type...',
-        voucherTypeAria: 'Journal voucher type',
-        fromDateAria: 'Journal from date',
-        toDateAria: 'Journal to date',
         detail: {
             loading: 'Loading voucher detail...',
             loadFailed: 'Failed to load voucher detail.',
@@ -545,7 +538,6 @@ export const accountingMessages = {
             editVoucher: 'Edit Voucher',
             saveChanges: 'Save Changes',
             emptyMessage: 'No vouchers found for the selected filters',
-            searchPlaceholder: 'Search by voucher number, reference, or type...',
             deleteConfirm: 'Delete voucher {voucherNumber}?',
             deleteSuccess: 'Voucher deleted.',
             deleteFailed: 'Failed to delete voucher.',

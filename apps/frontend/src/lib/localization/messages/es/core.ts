@@ -92,6 +92,9 @@ export const coreMessages = {
             fromAfterTo: "«Desde» debe ser anterior o igual a «Hasta»",
             date: 'Fecha',
             pickDate: 'Elige una fecha',
+            endOfLastMonth: 'Fin del mes pasado',
+            endOfLastQuarter: 'Fin del trimestre pasado',
+            endOfLastYear: 'Fin del año pasado',
             ops: {
                 between: 'está entre',
                 on: 'es el',
@@ -1444,6 +1447,7 @@ export const coreMessages = {
         onlineBadge: "En línea",
     },
     partyPayments: {
+        listUi: { statsLabel: "Resumen de pagos", payments: "Pagos", topMethod: "Método principal" },
         directionAll: "Todos",
         directionIn: "Entradas",
         directionOut: "Salidas",
@@ -1569,6 +1573,7 @@ export const coreMessages = {
     },
     customerLedger: {
         title: "Mayor de clientes",
+        statsLabel: "Resumen del mayor",
         ledgerTitle: "Apuntes del mayor",
         subtitle: "Consulta los saldos pendientes y el historial de operaciones a crédito.",
         currentDue: "Pendiente actual",

@@ -92,6 +92,9 @@ export const coreMessages = {
             fromAfterTo: 'From must be on or before To',
             date: 'Date',
             pickDate: 'Pick a date',
+            endOfLastMonth: 'End of last month',
+            endOfLastQuarter: 'End of last quarter',
+            endOfLastYear: 'End of last year',
             ops: {
                 between: 'is between',
                 on: 'is on',
@@ -1444,6 +1447,7 @@ export const coreMessages = {
         onlineBadge: "Online",
     },
     partyPayments: {
+        listUi: { statsLabel: "Payments summary", payments: "Payments", topMethod: "Top method" },
         directionAll: "All",
         directionIn: "In",
         directionOut: "Out",
@@ -1569,6 +1573,7 @@ export const coreMessages = {
     },
     customerLedger: {
         title: 'Customer Ledger',
+        statsLabel: "Ledger summary",
         ledgerTitle: 'Ledger entries',
         subtitle: 'View due balances and credit transaction history.',
         currentDue: 'Current due',

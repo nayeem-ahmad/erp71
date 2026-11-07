@@ -92,6 +92,9 @@ export const coreMessages = {
             fromAfterTo: "„Von“ muss vor oder gleich „Bis“ sein",
             date: 'Datum',
             pickDate: 'Datum wählen',
+            endOfLastMonth: 'Ende letzten Monats',
+            endOfLastQuarter: 'Ende letzten Quartals',
+            endOfLastYear: 'Ende letzten Jahres',
             ops: {
                 between: 'liegt zwischen',
                 on: 'ist am',
@@ -1444,6 +1447,7 @@ export const coreMessages = {
         onlineBadge: "Online",
     },
     partyPayments: {
+        listUi: { statsLabel: "Übersicht Zahlungen", payments: "Zahlungen", topMethod: "Häufigste Zahlart" },
         directionAll: "Alle",
         directionIn: "Ein",
         directionOut: "Aus",
@@ -1569,6 +1573,7 @@ export const coreMessages = {
     },
     customerLedger: {
         title: "Kundenkonto",
+        statsLabel: "Kontoübersicht",
         ledgerTitle: "Kontobewegungen",
         subtitle: "Offene Salden und den Verlauf der Kredittransaktionen ansehen.",
         currentDue: "Aktuell offen",

@@ -7183,6 +7183,8 @@ model FixedAsset {
   disposal_date            DateTime?
   asset_account_id         String?
   depreciation_account_id  String?
+  /// Free text (Furniture, Vehicles…); null is an uncategorised asset.
+  category                 String?
   is_active                Boolean            @default(true)
   created_at               DateTime           @default(now())
   updated_at               DateTime           @updatedAt
@@ -7193,6 +7195,7 @@ model FixedAsset {
 
   @@unique([tenant_id, asset_code])
   @@index([tenant_id])
+  @@index([tenant_id, category])
   @@map("fixed_assets")
 }
 

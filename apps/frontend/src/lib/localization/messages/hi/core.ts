@@ -92,6 +92,9 @@ export const coreMessages = {
             fromAfterTo: "\"से\" को \"तक\" से पहले या उसके बराबर होना चाहिए",
             date: 'तारीख',
             pickDate: 'तारीख चुनें',
+            endOfLastMonth: 'पिछले महीने का अंत',
+            endOfLastQuarter: 'पिछली तिमाही का अंत',
+            endOfLastYear: 'पिछले साल का अंत',
             ops: {
                 between: 'के बीच',
                 on: 'को',
@@ -1444,6 +1447,7 @@ export const coreMessages = {
         onlineBadge: "ऑनलाइन",
     },
     partyPayments: {
+        listUi: { statsLabel: "भुगतान सारांश", payments: "भुगतान", topMethod: "मुख्य तरीका" },
         directionAll: "सभी",
         directionIn: "आवक",
         directionOut: "जावक",
@@ -1569,6 +1573,7 @@ export const coreMessages = {
     },
     customerLedger: {
         title: "ग्राहक बहीखाता",
+        statsLabel: "बहीखाता सारांश",
         ledgerTitle: "बहीखाता प्रविष्टियाँ",
         subtitle: "बकाया शेष और उधार लेनदेन का इतिहास देखें।",
         currentDue: "वर्तमान बकाया",

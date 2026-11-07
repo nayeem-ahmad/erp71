@@ -1795,6 +1795,39 @@ export const crmHrMessages = {
         }
     },
     "delivery": {
+        "listUi": {
+            "searchPlaceholder": "Rechercher un client, un téléphone, une adresse, un livreur ou une facture…",
+            "statsLabel": "Synthèse des livraisons",
+            "unassigned": "Non attribuée",
+            "sale": "Vente",
+            "overdueHint": "L'heure prévue est dépassée",
+            "markDelivered": "Marquer comme livrée",
+            "markedDelivered": "Livrée à {customer}",
+            "cancelDelivery": "Annuler la livraison",
+            "cancelled": "Livraison annulée",
+            "saved": "Livraison enregistrée",
+            "saveFailed": "Impossible d'enregistrer la livraison",
+            "form": {
+                "saleId": "ID de vente (facultatif)",
+                "customerName": "Nom du client",
+                "customerPhone": "Téléphone du client",
+                "deliveryAddress": "Adresse de livraison",
+                "driverName": "Nom du livreur",
+                "driverPhone": "Téléphone du livreur",
+                "scheduledAt": "Date et heure prévues",
+                "required": "Le nom du client et l'adresse de livraison sont obligatoires."
+            },
+            "stats": {
+                "deliveries": "Livraisons",
+                "pending": "En attente",
+                "inTransit": "En transit",
+                "delivered": "Livrées",
+                "overdue": "En retard",
+                "failed": "Échouées / annulées",
+                "unassigned": "{count} non attribuées",
+                "cancelledHint": "{count} annulées"
+            }
+        },
         "title": "Bons de livraison",
         "subtitle": "Planifiez et suivez les livraisons client",
         "newDelivery": "Nouvelle livraison",

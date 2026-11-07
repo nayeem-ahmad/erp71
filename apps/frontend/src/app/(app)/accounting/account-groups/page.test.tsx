@@ -27,12 +27,29 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+// The toolbar chips sit in the row only on a wide screen.
+let mockMdUp = false;
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => mockMdUp,
+    useIsMdUp: () => mockMdUp,
+}));
+
+/** A toolbar chip: a button that opens its own panel. */
+function chip(name: string | RegExp): HTMLElement {
+    const found = screen
+        .getAllByRole('button', { name })
+        .find((button) => button.getAttribute('aria-haspopup') === 'dialog');
+    if (!found) throw new Error(`No filter chip named ${String(name)}`);
+    return found;
+}
+
 jest.mock('next/link', () => {
     return ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>;
 });
 
 describe('AccountGroupsPage', () => {
     beforeEach(() => {
+        mockMdUp = false;
         const { api } = require('@/lib/api');
         jest.clearAllMocks();
         api.getAccountGroups.mockResolvedValue([
@@ -163,5 +180,35 @@ describe('AccountGroupsPage', () => {
         await waitFor(() => {
             expect(api.deleteAccountGroup).toHaveBeenCalledWith('group-1');
         });
+    });
+
+    it('narrows the rail by group type from the toolbar chip, and the strip follows', async () => {
+        mockMdUp = true;
+        renderPage();
+
+        await waitFor(() => screen.getByText('Cash and Bank'));
+        const strip = screen.getByRole('region', { name: 'Account groups summary' });
+        expect(within(strip).getByText('Groups').parentElement).toHaveTextContent('2');
+        expect(within(strip).getByText('Accounts').parentElement).toHaveTextContent('3');
+
+        fireEvent.click(chip('Group type'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Revenue' }));
+
+        // The selected group is filtered away, so the pane moves to the first one kept.
+        await waitFor(() => expect(screen.getByText('Subgroups in Operating Revenue')).toBeInTheDocument());
+        expect(screen.queryByRole('button', { name: /^11 Current Assets/ })).not.toBeInTheDocument();
+        expect(within(strip).getByText('Groups').parentElement).toHaveTextContent('1');
+        expect(within(strip).getByText('Accounts').parentElement).toHaveTextContent('1');
+    });
+
+    it('finds a group through the name of one of its subgroups', async () => {
+        renderPage();
+
+        await waitFor(() => screen.getByText('Cash and Bank'));
+        fireEvent.change(screen.getByPlaceholderText('Search groups and subgroups...'), { target: { value: 'sales' } });
+
+        await waitFor(() => expect(screen.getByText('Subgroups in Operating Revenue')).toBeInTheDocument());
+        expect(screen.getByText('Sales')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^11 Current Assets/ })).not.toBeInTheDocument();
     });
 });

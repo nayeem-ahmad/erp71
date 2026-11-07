@@ -1,0 +1,62 @@
+/** Accounting list UI (Sales list pattern) — books pages. */
+export const accountingBooksUiMessages = {
+    accountingBooksUi: {
+        common: {
+            voucherType: 'Type de pièce',
+            side: 'Sens',
+            entries: 'Écritures',
+            openingBalance: 'Solde d’ouverture',
+            closingBalance: 'Solde de clôture',
+            totalDebit: 'Total débit',
+            totalCredit: 'Total crédit',
+            neutral: 'Neutre',
+        },
+        ledger: {
+            subtitle: 'Examinez un compte à la fois avec le solde d’ouverture, le mouvement de la période, la position de clôture et le détail des pièces.',
+            loadFailed: 'Impossible de charger le grand livre.',
+            statsLabel: 'Résumé du grand livre',
+        },
+        cashbook: {
+            loadFailed: 'Impossible de charger le livre de caisse',
+            statsLabel: 'Résumé du livre de caisse',
+            flow: 'Encaissement ou décaissement',
+            totalReceipts: 'Total des encaissements',
+            totalPayments: 'Total des décaissements',
+        },
+        bankbook: {
+            loadFailed: 'Impossible de charger le livre de banque',
+            statsLabel: 'Résumé du livre de banque',
+            bankAccount: 'Compte bancaire',
+            flow: 'Dépôt ou retrait',
+            totalDeposits: 'Total des dépôts',
+            totalWithdrawals: 'Total des retraits',
+        },
+        expenseReports: {
+            statsLabel: 'Résumé du rapport de dépenses',
+            months: 'Mois',
+            periods: 'Périodes',
+            highestMonth: 'Mois le plus élevé',
+            highestPeriod: 'Période la plus élevée',
+            topHead: 'Poste principal',
+        },
+        trialBalance: {
+            statsLabel: 'Résumé de la balance',
+            accountType: 'Type de compte',
+            accounts: 'Comptes',
+            rows: 'Lignes',
+            branches: 'Succursales',
+            searchPlaceholder: 'Rechercher par code, compte ou groupe…',
+        },
+        cashFlow: {
+            statsLabel: 'Résumé des flux de trésorerie',
+            operating: 'Exploitation',
+            investing: 'Investissement',
+            financing: 'Financement',
+            netSection: '{label} net',
+            openingCash: 'Trésorerie d’ouverture',
+            closingCash: 'Trésorerie de clôture',
+            searchPlaceholder: 'Rechercher des activités…',
+            noMatches: 'Aucune activité ne correspond à la recherche',
+        },
+    },
+} as const;

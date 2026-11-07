@@ -2,16 +2,30 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Users } from 'lucide-react';
-import DataTable from '@/components/data-table/DataTable';
+import { Percent, PiggyBank, Receipt, Truck, Users, Wallet } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import GroupByChip from '@/components/hr/GroupByChip';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
+import type { NumberCondition } from '@/lib/number-condition';
+import { toast } from '@/lib/toast';
+import type { CreatedRange } from '@/lib/created-range';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { BranchFilter, PageShell } from '@/components/ui';
-import { CoverageNotice, MarginCell, ProfitCell, StatTile, type Coverage } from '@/components/gross-profit';
+import {
+    CoverageNotice,
+    MARGIN_BANDS,
+    MarginCell,
+    ProfitCell,
+    marginBand,
+    sumMarginRows,
+    type Coverage,
+} from '@/components/gross-profit';
+import { defaultReportPeriod, reportPeriodFilter, reportPeriodQuery } from '../../report-period';
 
 interface Row {
     id: string | null;
@@ -26,86 +40,191 @@ interface Row {
 }
 
 interface Summary {
-    groupBy: string;
-    netRevenue: number;
-    cogs: number;
-    grossProfit: number | null;
-    grossMarginPct: number | null;
     coverage: Coverage;
 }
 
-const columnHelper = createColumnHelper<Row>();
+type GroupBy = 'salesRep' | 'user' | 'counter';
 
-function defaultFrom() {
-    const d = new Date();
-    d.setDate(d.getDate() - 29);
-    return d.toISOString().slice(0, 10);
-}
+const GROUPS: GroupBy[] = ['salesRep', 'user', 'counter'];
+
+const columnHelper = createColumnHelper<Row>();
 
 export default function GrossProfitBySalespersonPage() {
     const { t, locale } = useI18n();
     const branch = useBranchScope();
     const gp = t.salesReports.grossProfit;
+    const ui = t.salesReports.listUi;
     const [rows, setRows] = useState<Row[]>([]);
     const [summary, setSummary] = useState<Summary | null>(null);
-    const [fromDate, setFromDate] = useState(defaultFrom());
-    const [toDate, setToDate] = useState(new Date().toISOString().slice(0, 10));
+    const [period, setPeriod] = useState<CreatedRange>(defaultReportPeriod);
     // By the employee each sale is credited to, unless asked for who entered it
     // or the till it went through.
-    const [groupBy, setGroupBy] = useState<'salesRep' | 'user' | 'counter'>('salesRep');
+    const [groupBy, setGroupBy] = useState<GroupBy>('salesRep');
+    const [search, setSearch] = useState('');
+    const [bands, setBands] = useState<string[]>([]);
+    const [revenueFilter, setRevenueFilter] = useState<NumberCondition | null>(null);
+    const [ordersFilter, setOrdersFilter] = useState<NumberCondition | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (!branch.ready) return;
         void load();
-    }, [branch.ready, branch.apiStoreId, fromDate, toDate, groupBy]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch.ready, branch.apiStoreId, period, groupBy]);
 
     const load = async () => {
         setLoading(true);
         try {
-            const data = await api.getGrossProfitBySalesperson({ storeId: branch.apiStoreId, from: fromDate, to: toDate, groupBy });
-            setSummary(data.summary);
-            setRows(data.rows);
+            const data = await api.getGrossProfitBySalesperson({
+                storeId: branch.apiStoreId,
+                ...reportPeriodQuery(period),
+                groupBy,
+            });
+            setSummary(data?.summary ?? null);
+            setRows(Array.isArray(data?.rows) ? data.rows : []);
         } catch (error) {
+            setRows([]);
+            setSummary(null);
             if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
-            console.error('Failed to load gross profit by salesperson', error);
+            toast.error(error instanceof Error ? error.message : t.common.loadFailed);
         } finally {
             setLoading(false);
         }
     };
 
+    const visible = useMemo(
+        () =>
+            rows.filter((row) => {
+                if (!matchesAnyOf(bands, marginBand(row.grossMarginPct))) return false;
+                if (!matchesNumberCondition(row.revenue, revenueFilter)) return false;
+                if (!matchesNumberCondition(row.orders, ordersFilter)) return false;
+                return matchesSearch(search, row.name);
+            }),
+        [rows, bands, revenueFilter, ordersFilter, search],
+    );
+
+    const totals = useMemo(
+        () => ({
+            ...sumMarginRows(visible),
+            orders: visible.reduce((sum, row) => sum + row.orders, 0),
+            units: visible.reduce((sum, row) => sum + row.units, 0),
+        }),
+        [visible],
+    );
+
+    // The chip names each grouping as the first column is headed under it.
+    const groupLabel = useMemo<Record<GroupBy, string>>(
+        () => ({ salesRep: gp.salesperson, user: gp.enteredBy, counter: gp.counter }),
+        [gp],
+    );
+
     const columns: ColumnDef<Row, any>[] = useMemo(
         () => [
             columnHelper.accessor('name', {
-                header: groupBy === 'counter' ? gp.counter : groupBy === 'user' ? gp.enteredBy : gp.salesperson,
+                header: groupLabel[groupBy],
+                footer: () => t.salesReports.common.total,
                 size: 200,
             }),
-            columnHelper.accessor('orders', { header: gp.orders, size: 90 }),
-            columnHelper.accessor('units', { header: gp.units, size: 90, meta: { hideOnMobile: true } }),
+            columnHelper.accessor('orders', {
+                header: gp.orders,
+                cell: (info) => Number(info.getValue()).toLocaleString(locale),
+                footer: () => totals.orders.toLocaleString(locale),
+                size: 90,
+                meta: { align: 'end' },
+            }),
+            columnHelper.accessor('units', {
+                header: gp.units,
+                cell: (info) => Number(info.getValue()).toLocaleString(locale),
+                footer: () => totals.units.toLocaleString(locale),
+                size: 90,
+                meta: { align: 'end', hideOnMobile: true },
+            }),
             columnHelper.accessor('revenue', {
                 header: gp.revenue,
                 cell: (info) => formatBDT(Number(info.getValue()), { locale }),
+                footer: () => formatBDT(totals.revenue, { locale }),
                 size: 130,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('cogs', {
                 header: gp.cogs,
                 cell: (info) => formatBDT(Number(info.getValue()), { locale }),
+                footer: () => formatBDT(totals.cogs, { locale }),
                 size: 130,
-                meta: { hideOnMobile: true },
+                meta: { align: 'end', hideOnMobile: true },
             }),
             columnHelper.accessor('grossProfit', {
                 header: gp.grossProfit,
                 cell: (info) => <ProfitCell value={info.getValue()} locale={locale} dash={t.shared.dash} />,
+                footer: () => <ProfitCell value={totals.grossProfit} locale={locale} dash={t.shared.dash} />,
                 size: 130,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('grossMarginPct', {
                 header: gp.margin,
                 cell: (info) => <MarginCell value={info.getValue()} dash={t.shared.dash} />,
+                footer: () => <MarginCell value={totals.grossMarginPct} dash={t.shared.dash} />,
                 size: 100,
+                meta: { align: 'end', hideOnMobile: true },
             }),
         ],
-        [t, locale, gp, groupBy],
+        [t, locale, gp, groupBy, groupLabel, totals],
     );
+
+    const filters = useMemo<ListFilter[]>(
+        () => [
+            reportPeriodFilter({ label: ui.period, value: period, onChange: setPeriod }),
+            {
+                id: 'margin',
+                type: 'multi-select',
+                label: gp.margin,
+                value: bands,
+                onChange: setBands,
+                options: MARGIN_BANDS.map((band) => ({ value: band, label: ui.bands[band] })),
+            },
+            {
+                id: 'revenue',
+                type: 'number',
+                label: gp.revenue,
+                value: revenueFilter,
+                onChange: setRevenueFilter,
+                money: true,
+            },
+            {
+                id: 'orders',
+                type: 'number',
+                label: gp.orders,
+                value: ordersFilter,
+                onChange: setOrdersFilter,
+                more: true,
+            },
+        ],
+        [gp, ui, period, bands, revenueFilter, ordersFilter],
+    );
+
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const items: ListStat[] = [
+            { id: 'revenue', icon: <Wallet aria-hidden />, label: gp.revenue, value: money(totals.revenue) },
+            { id: 'cogs', icon: <Truck aria-hidden />, label: gp.cogs, value: money(totals.cogs) },
+            {
+                id: 'grossProfit',
+                icon: <PiggyBank aria-hidden />,
+                label: gp.grossProfit,
+                value: totals.grossProfit === null ? t.shared.dash : money(totals.grossProfit),
+                tone: (totals.grossProfit ?? 0) < 0 ? 'danger' : 'default',
+            },
+            {
+                id: 'margin',
+                icon: <Percent aria-hidden />,
+                label: gp.margin,
+                value: totals.grossMarginPct === null ? t.shared.dash : `${totals.grossMarginPct.toFixed(1)}%`,
+                tone: totals.grossMarginPct !== null && totals.grossMarginPct < 0 ? 'danger' : 'default',
+            },
+            { id: 'orders', icon: <Receipt aria-hidden />, label: gp.orders, value: totals.orders.toLocaleString(locale) },
+        ];
+        return { items, loading, label: ui.statsLabel };
+    }, [totals, loading, locale, gp, ui, t.shared.dash]);
 
     return (
         <PageShell>
@@ -121,19 +240,6 @@ export default function GrossProfitBySalespersonPage() {
                 actions={<BranchFilter scope={branch} />}
             />
 
-            <div className="grid md:grid-cols-4 gap-4">
-                <StatTile label={gp.revenue} tone="primary">
-                    {formatBDT(summary?.netRevenue ?? 0, { locale })}
-                </StatTile>
-                <StatTile label={gp.cogs}>{formatBDT(summary?.cogs ?? 0, { locale })}</StatTile>
-                <StatTile label={gp.grossProfit}>
-                    <ProfitCell value={summary?.grossProfit} locale={locale} dash={t.shared.dash} />
-                </StatTile>
-                <StatTile label={gp.margin}>
-                    <MarginCell value={summary?.grossMarginPct} dash={t.shared.dash} />
-                </StatTile>
-            </div>
-
             <CoverageNotice
                 coverage={summary?.coverage}
                 locale={locale}
@@ -145,38 +251,31 @@ export default function GrossProfitBySalespersonPage() {
                 }}
             />
 
-            <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
-                <input
-                    type="date"
-                    value={fromDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                    className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-h-touch"
-                />
-                <input
-                    type="date"
-                    value={toDate}
-                    onChange={(e) => setToDate(e.target.value)}
-                    className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-h-touch"
-                />
-                <select
-                    value={groupBy}
-                    onChange={(e) => setGroupBy(e.target.value as 'salesRep' | 'user' | 'counter')}
-                    className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-h-touch"
-                >
-                    <option value="salesRep">{gp.groupBySalesRep}</option>
-                    <option value="user">{gp.groupByUser}</option>
-                    <option value="counter">{gp.groupByCounter}</option>
-                </select>
-            </div>
-
             <DataTable<Row>
                 tableId="gross-profit-by-salesperson"
                 columns={columns}
-                data={rows}
+                data={visible}
                 title={gp.bySalespersonTitle}
                 isLoading={loading}
                 emptyMessage={gp.empty}
                 emptyIcon={<Users className="w-16 h-16 text-gray-200" />}
+                searchPlaceholder={ui.searchPeople}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+                getRowId={(row) => row.id ?? 'unattributed'}
+                toolbarActions={(
+                    <GroupByChip<GroupBy>
+                        label={ui.groupBy}
+                        value={groupBy}
+                        onChange={setGroupBy}
+                        options={GROUPS.map((group) => ({ value: group, label: groupLabel[group] }))}
+                    />
+                )}
             />
         </PageShell>
     );

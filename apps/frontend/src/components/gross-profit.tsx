@@ -104,22 +104,53 @@ export function ProfitCell({
     );
 }
 
-/** One headline figure. */
-export function StatTile({
-    label,
-    children,
-    tone = 'default',
-}: {
-    label: string;
-    children: React.ReactNode;
-    tone?: 'default' | 'primary' | 'danger';
-}) {
-    const toneClass =
-        tone === 'primary' ? 'text-blue-700' : tone === 'danger' ? 'text-red-600' : 'text-gray-900';
-    return (
-        <div className="bg-white border border-gray-100 rounded-lg p-5">
-            <div className="text-xs font-medium text-gray-500">{label}</div>
-            <div className={`text-2xl font-bold mt-2 ${toneClass}`}>{children}</div>
-        </div>
-    );
+/**
+ * Where a row's margin falls, for the Margin chip: a loss, under 10%, 10% or
+ * more, or no cost on file at all — the same bands `MarginCell` colours red,
+ * amber and green.
+ */
+export type MarginBand = 'loss' | 'thin' | 'healthy' | 'noCost';
+
+export const MARGIN_BANDS: readonly MarginBand[] = ['loss', 'thin', 'healthy', 'noCost'];
+
+export function marginBand(marginPct: number | null | undefined): MarginBand {
+    if (marginPct === null || marginPct === undefined) return 'noCost';
+    if (marginPct < 0) return 'loss';
+    return marginPct < 10 ? 'thin' : 'healthy';
+}
+
+/** The figures a gross-profit report's rows carry, whatever they are grouped by. */
+export interface MarginRowFigures {
+    revenue: number;
+    cogs: number;
+    grossProfit: number | null;
+    coverage: Coverage;
+}
+
+/**
+ * The totals over a set of rows, worked the way the server works its own
+ * summary: profit only where a cost is on file, and the margin over the
+ * revenue that cost belongs to. So the strip over the rows a chip leaves
+ * reads the same as the server's figure when no chip is set.
+ */
+export function sumMarginRows(rows: readonly MarginRowFigures[]) {
+    let revenue = 0;
+    let cogs = 0;
+    let grossProfit = 0;
+    let costedRevenue = 0;
+    let costedLines = 0;
+    for (const row of rows) {
+        revenue += row.revenue;
+        cogs += row.cogs;
+        if (row.grossProfit !== null) grossProfit += row.grossProfit;
+        costedRevenue += row.coverage.costedRevenue;
+        costedLines += row.coverage.costedLines;
+    }
+    const hasBasis = costedLines > 0;
+    return {
+        revenue,
+        cogs,
+        grossProfit: hasBasis ? grossProfit : null,
+        grossMarginPct: hasBasis && costedRevenue > 0 ? (grossProfit / costedRevenue) * 100 : null,
+    };
 }

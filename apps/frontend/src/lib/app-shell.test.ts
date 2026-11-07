@@ -1,7 +1,7 @@
 import { APP_REGISTRY, DEFAULT_TENANT_NAV_LAYOUT } from '@erp71/shared-types';
 import { enMessages } from './localization/messages/en/index';
 import { buildNavModulesFromLayout } from './nav-resolver';
-import { appHomeHref, buildRail, findActiveAppKey } from './app-shell';
+import { appHomeHref, buildRail, collectNavLinkTargets, findActiveAppKey, isNavLinkActive } from './app-shell';
 
 /** The whole default tenant nav, ungated, less the platform console's module. */
 const modules = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>)
@@ -95,5 +95,48 @@ describe('buildRail', () => {
         const rail = buildRail(modules.filter((module) => !['support', 'whats-new'].includes(module.key)), 'Help & support');
         const help = rail.utility.find((entry) => entry.key === 'help')!;
         expect(help.label).toBe(byKey('help').label);
+    });
+});
+
+describe('isNavLinkActive', () => {
+    const targets = collectNavLinkTargets(modules);
+    const active = (href: string, pathname: string, exact = false) => isNavLinkActive(href, pathname, targets, exact);
+
+    it('the default nav holds both reconciliation links', () => {
+        const hrefs = targets.map((target) => target.href);
+        expect(hrefs).toContain('/accounting/reconciliation');
+        expect(hrefs).toContain('/accounting/reconciliation/bank');
+    });
+
+    it('lights only the longest link holding the page', () => {
+        expect(active('/accounting/reconciliation/bank', '/accounting/reconciliation/bank')).toBe(true);
+        expect(active('/accounting/reconciliation', '/accounting/reconciliation/bank')).toBe(false);
+        // A page under the longer link belongs to it too.
+        expect(active('/accounting/reconciliation', '/accounting/reconciliation/bank/42')).toBe(false);
+        expect(active('/accounting/reconciliation/bank', '/accounting/reconciliation/bank/42')).toBe(true);
+    });
+
+    it('keeps a link lit on its own pages when no longer link holds them', () => {
+        expect(active('/accounting/reconciliation', '/accounting/reconciliation')).toBe(true);
+        expect(active('/accounting/reconciliation', '/accounting/reconciliation/some-event')).toBe(true);
+        expect(active('/accounting/vouchers', '/accounting/vouchers/9')).toBe(true);
+    });
+
+    it('does not let a neighbour that merely shares a prefix win', () => {
+        const local = [{ href: '/a/report' }, { href: '/a/reports' }];
+        expect(isNavLinkActive('/a/report', '/a/report/1', local)).toBe(true);
+        expect(isNavLinkActive('/a/reports', '/a/report/1', local)).toBe(false);
+    });
+
+    it('lets an exact link compete only on its own page', () => {
+        const local = [{ href: '/s' }, { href: '/s/list', exact: true }];
+        expect(isNavLinkActive('/s', '/s/list/7', local)).toBe(true);
+        expect(isNavLinkActive('/s', '/s/list', local)).toBe(false);
+        expect(isNavLinkActive('/s/list', '/s/list/7', local, true)).toBe(false);
+    });
+
+    it('lights Home only on Home', () => {
+        expect(isNavLinkActive('/dashboard', '/dashboard', targets)).toBe(true);
+        expect(isNavLinkActive('/dashboard', '/dashboard/x', targets)).toBe(false);
     });
 });
