@@ -283,6 +283,7 @@ export class StorefrontService {
         return {
             name: tenant.name,
             slug,
+            storefront_banner: tenant.storefront_banner,
             storefront_hero_image: tenant.storefront_hero_image,
             storefront_hero_headline: tenant.storefront_hero_headline,
             storefront_logo: tenant.storefront_logo,

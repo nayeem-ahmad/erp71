@@ -309,7 +309,15 @@ export class StorefrontPagesService {
     private async findEnabledTenant(storefrontSlug: string) {
         const tenant = await this.db.tenant.findFirst({
             where: { storefront_slug: storefrontSlug, storefront_enabled: true, deleted_at: null },
-            select: { id: true, name: true, blogSettings: { select: { enabled: true } } },
+            select: {
+                id: true,
+                name: true,
+                storefront_banner: true,
+                storefront_logo: true,
+                storefront_logo_show_name: true,
+                brand_primary_color: true,
+                blogSettings: { select: { enabled: true } },
+            },
         });
         if (!tenant) throw new NotFoundException('Storefront not found or not available');
         return tenant;
@@ -413,7 +421,14 @@ export class StorefrontPagesService {
         if (!page) throw new NotFoundException('Page not found');
 
         return {
-            shop: { name: tenant.name, slug: storefrontSlug },
+            shop: {
+                name: tenant.name,
+                slug: storefrontSlug,
+                storefront_banner: tenant.storefront_banner,
+                storefront_logo: tenant.storefront_logo,
+                storefront_logo_show_name: tenant.storefront_logo_show_name,
+                brand_primary_color: tenant.brand_primary_color,
+            },
             page,
             menu: await this.resolveMenu(tenant.id, storefrontSlug, tenant.blogSettings?.enabled ?? false),
         };
