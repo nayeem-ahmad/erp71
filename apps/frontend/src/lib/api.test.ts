@@ -911,6 +911,24 @@ describe('api.createWarehouseTransfer', () => {
     });
 });
 
+describe('api.updateWarehouseTransfer', () => {
+    it('patches /warehouse-transfers/:id', async () => {
+        mockOk({ data: {} });
+        await api.updateWarehouseTransfer('wt1', { items: [] });
+        expect(lastUrl()).toContain('/warehouse-transfers/wt1');
+        expect(lastOpts().method).toBe('PATCH');
+    });
+});
+
+describe('api.deleteWarehouseTransfer', () => {
+    it('deletes /warehouse-transfers/:id', async () => {
+        mockOk({ data: {} });
+        await api.deleteWarehouseTransfer('wt1');
+        expect(lastUrl()).toContain('/warehouse-transfers/wt1');
+        expect(lastOpts().method).toBe('DELETE');
+    });
+});
+
 describe('api.sendWarehouseTransfer', () => {
     it('posts to /warehouse-transfers/:id/send', async () => {
         mockOk({ data: {} });
