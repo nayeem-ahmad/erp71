@@ -2165,6 +2165,7 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Released `dev` → `main` (PR #987) — storefront online-orders TODO note.** Merge commit `3a3f6f68`, 2026-11-07, pinned to `9661beba` (PR #986). Required checks green. Main CI run 42400452372 green. Deploy to VPS run 42401359754 green (displayed headSha `9661beba`). Live health reports `3a3f6f68` with `db: ok`, app HTTP 200, backend uptime 38 on first check.
 - [x] **Released `dev` → `main` (PR #985) — Online orders under Storefront.** Merge commit `33596039`, 2026-11-07, pinned to `a796c4c5` (PR #982). Required checks green (Lint, Dependency Audit, Test Frontend/Backend, Build; Playwright skipped). Main CI run 42395673801 green. Deploy to VPS run 42396632664 green (displayed headSha `a796c4c5`, the usual workflow_run display). Live health reports `33596039` with `db: ok`, app HTTP 200, backend uptime 60 on first check.
 - [x] **Split online orders out of Sales Orders onto Storefront** — done 2026-11-07. Storefront › Online Orders is the web-order queue (`/storefront`); Sales › Sales Orders is in-store orders only. Old `/sales/orders?tab=online` bookmarks redirect. Same `GET /storefront/orders` API.
 - [x] **Released `dev` → `main` (PR #979) — Inventory list UI, expense compact spacing, VPS heap fix.** Merge commit `89aa74df`, 2026-11-07, pinned to `e5b09bda`. Required checks green. Deploy to VPS run 42390646429 green after the #977 OOM (42387017462). Live health reports `89aa74df` with `db: ok`, app HTTP 200, backend uptime 12 on first check.
