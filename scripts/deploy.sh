@@ -57,8 +57,13 @@ export GIT_SHA
 
 # 1. Build. Every service with a build: section, as `up -d --build` used to.
 #    The old containers keep serving; a failed build stops here (set -e).
-echo "==> Building images (project: $COMPOSE_PROJECT, commit: $GIT_SHA)"
-compose build
+#    Backend then frontend, not in parallel: the VPS is 1.9GB RAM + swap, and
+#    `next build` already needs a 4096 MB V8 heap. Overlapping the two Node
+#    compiles is what pushed the #977 image build into OOM (run 42387017462).
+echo "==> Building backend (project: $COMPOSE_PROJECT, commit: $GIT_SHA)"
+compose build backend
+echo "==> Building frontend (project: $COMPOSE_PROJECT, commit: $GIT_SHA)"
+compose build frontend
 
 # 2. Prepare the database for the new commit, in a one-off container from the
 #    image just built, while the old backend is still serving.
