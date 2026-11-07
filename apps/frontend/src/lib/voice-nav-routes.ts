@@ -13,6 +13,7 @@ export type VoiceNavTargetId =
     | 'purchase-entry'
     | 'purchases'
     | 'sales-order'
+    | 'online-order'
     | 'sales-quote'
     | 'sales-return'
     | 'purchase-order'
@@ -162,6 +163,11 @@ export const VOICE_NAV_ROUTES: VoiceNavRoute[] = [
         id: 'sales-order',
         path: '/sales/orders',
         aliases: ['sales order', 'sales orders', 'order entry', 'সেলস অর্ডার', 'বিক্রয় অর্ডার'],
+    },
+    {
+        id: 'online-order',
+        path: '/storefront',
+        aliases: ['online order', 'online orders', 'storefront orders', 'অনলাইন অর্ডার'],
     },
     {
         id: 'sales-quote',

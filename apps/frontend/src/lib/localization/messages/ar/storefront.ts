@@ -153,7 +153,7 @@ export const storefrontMessages = {
     },
     dashboard: {
         orders: {
-            title: "طلبات المتجر",
+            title: "الطلبات الإلكترونية",
             description: "الطلبات الإلكترونية من متجرك العام",
             storeSettings: "إعدادات المتجر",
             loading: "جارٍ تحميل الطلبات…",

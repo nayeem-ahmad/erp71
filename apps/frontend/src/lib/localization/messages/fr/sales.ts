@@ -311,7 +311,7 @@ export const salesMessages = {
                 customerDuesSummary: { title: "Synthèse des créances clients", description: "Chaque client et ce qu'il doit aujourd'hui, par succursale et par commercial." },
                 badDebts: { title: "Créances irrécouvrables", description: "Chaque créance client abandonnée, avec l'auteur et le motif." },
                 quotes: { title: "Devis clients", description: "Préparez des estimations et suivez le statut des devis." },
-                orders: { title: "Commandes clients", description: "Commandes en magasin et commandes de la boutique en ligne au même endroit." },
+                orders: { title: "Commandes clients", description: "Commandes prises en magasin — confirmer, traiter et convertir en vente." },
                 delivery: { title: "Livraison", description: "Planifiez et suivez les livraisons sortantes." },
                 returns: { title: "Retours clients", description: "Traitez les remboursements et réintégrez le stock issu des retours." },
                 warrantyClaims: { title: "Dossiers de garantie", description: "Suivez les demandes de garantie des clients et leur résolution." },
@@ -661,10 +661,6 @@ export const salesMessages = {
     orders: {
         title: "Commandes clients",
         subtitle: "Gérez la préparation et les acomptes",
-        tabs: {
-            salesOrders: "Commandes clients",
-            onlineOrders: "Commandes en ligne",
-        },
         newOrder: "Nouvelle commande",
         statsLabel: "Résumé des commandes clients",
         stats: {

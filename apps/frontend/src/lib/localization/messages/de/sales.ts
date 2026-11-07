@@ -311,7 +311,7 @@ export const salesMessages = {
                 customerDuesSummary: { title: "Offene Kundenforderungen", description: "Jeder Kunde mit seinem aktuell offenen Betrag, nach Filiale und Vertriebsmitarbeiter." },
                 badDebts: { title: "Forderungsverluste", description: "Jede abgeschriebene Kundenforderung, mit Bearbeiter und Grund." },
                 quotes: { title: "Angebote", description: "Kostenvoranschläge erstellen und ihren Status verfolgen." },
-                orders: { title: "Kundenaufträge", description: "Aufträge aus dem Laden und aus dem Onlineshop an einem Ort." },
+                orders: { title: "Kundenaufträge", description: "Kundenaufträge aus dem Laden — bestätigen, bearbeiten und in einen Verkauf umwandeln." },
                 delivery: { title: "Lieferung", description: "Ausgehende Lieferungen planen und verfolgen." },
                 returns: { title: "Verkaufsretouren", description: "Erstattungen verarbeiten und Bestand aus Retouren zurückführen." },
                 warrantyClaims: { title: "Garantiefälle", description: "Eingereichte Garantiefälle und ihre Lösung verfolgen." },
@@ -661,10 +661,6 @@ export const salesMessages = {
     orders: {
         title: "Kundenaufträge",
         subtitle: "Abwicklung und Anzahlungen verwalten",
-        tabs: {
-            salesOrders: "Kundenaufträge",
-            onlineOrders: "Online-Bestellungen",
-        },
         newOrder: "Neuer Auftrag",
         statsLabel: "Übersicht Kundenaufträge",
         stats: {

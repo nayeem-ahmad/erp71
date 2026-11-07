@@ -153,7 +153,7 @@ export const storefrontMessages = {
         },
         dashboard: {
             orders: {
-                title: "Pesanan Storefront",
+                title: "Pesanan Dalam Talian",
                 description: "Pesanan dalam talian dari kedai awam anda",
                 storeSettings: "Tetapan Kedai",
                 loading: "Sedang dimuatkan pesanan…",

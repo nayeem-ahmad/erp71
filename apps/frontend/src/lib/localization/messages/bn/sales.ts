@@ -311,7 +311,7 @@ export const salesMessages = {
                     customerDuesSummary: { title: "গ্রাহক বকেয়া সারাংশ", description: "শাখা ও বিক্রয় প্রতিনিধি অনুযায়ী প্রত্যেক গ্রাহকের বর্তমান বকেয়া।" },
                     badDebts: { title: "মওকুফকৃত বকেয়া", description: "মওকুফ করা প্রতিটি বকেয়া — কে, কেন করেছেন সহ।" },
                     quotes: { title: "বিক্রয় কোটেশন", description: "অনুমান ও কোট স্ট্যাটাস ট্র্যাক করুন।" },
-                    orders: { title: "বিক্রয় অর্ডার", description: "অর্ডার ও ডেলিভারি পরিচালনা করুন।" },
+                    orders: { title: "বিক্রয় অর্ডার", description: "দোকানে নেওয়া অর্ডার — নিশ্চিত করুন, প্রসেস করুন, এবং বিক্রয়ে রূপান্তর করুন।" },
                     delivery: { title: "ডেলিভারি", description: "ডেলিভারি শিডিউল ও ট্র্যাক করুন।" },
                     returns: { title: "বিক্রয় রিটার্ন", description: "রিফান্ড ও স্টক ফেরত প্রক্রিয়া করুন।" },
                     warrantyClaims: { title: "ওয়ারেন্টি ক্লেইম", description: "ওয়ারেন্টি দাবি ট্র্যাক করুন।" },
@@ -661,10 +661,6 @@ export const salesMessages = {
         orders: {
             title: "বিক্রয় অর্ডার",
             subtitle: "পরিচালনা fulfillment and deposits",
-            tabs: {
-                salesOrders: "বিক্রয় অর্ডার",
-                onlineOrders: "অনলাইন অর্ডার",
-            },
             newOrder: "নতুন অর্ডার",
             statsLabel: "বিক্রয় অর্ডারের সারাংশ",
             stats: {

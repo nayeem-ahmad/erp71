@@ -153,7 +153,7 @@ export const storefrontMessages = {
     },
     dashboard: {
         orders: {
-            title: "Pedidos de la tienda",
+            title: "Pedidos en línea",
             description: "Pedidos en línea de su tienda pública",
             storeSettings: "Ajustes de la tienda",
             loading: "Cargando pedidos…",

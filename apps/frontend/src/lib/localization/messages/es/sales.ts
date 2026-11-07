@@ -311,7 +311,7 @@ export const salesMessages = {
                 customerDuesSummary: { title: "Resumen de deudas de clientes", description: "Cada cliente con lo que debe hoy, por sucursal y vendedor." },
                 badDebts: { title: "Deudas incobrables", description: "Cada deuda de cliente dada de baja, con quién y por qué." },
                 quotes: { title: "Presupuestos de venta", description: "Prepare estimaciones y siga el estado de los presupuestos." },
-                orders: { title: "Pedidos de venta", description: "Pedidos de tienda y de la tienda en línea en un mismo lugar." },
+                orders: { title: "Pedidos de venta", description: "Pedidos tomados en la tienda: confirmar, procesar y convertir en una venta." },
                 delivery: { title: "Entregas", description: "Planifique y siga las entregas salientes." },
                 returns: { title: "Devoluciones de venta", description: "Procese reembolsos y reponga existencias a partir de devoluciones." },
                 warrantyClaims: { title: "Reclamaciones de garantía", description: "Siga las reclamaciones de garantía de clientes y su resolución." },
@@ -661,10 +661,6 @@ export const salesMessages = {
     orders: {
         title: "Pedidos de venta",
         subtitle: "Gestione la preparación y los anticipos",
-        tabs: {
-            salesOrders: "Pedidos de venta",
-            onlineOrders: "Pedidos en línea",
-        },
         newOrder: "Nuevo pedido",
         statsLabel: "Resumen de pedidos de venta",
         stats: {
