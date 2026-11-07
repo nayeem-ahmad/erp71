@@ -267,10 +267,14 @@
 }
 
 /* Compact rows are as tall as their tallest control, so the action buttons
-   step down from 28px to 24px — on a desktop only; a phone keeps its 44px. */
+   step down from 28px to 24px — on a desktop only; a phone keeps its 44px.
+   Clear min-height/width too: an always-on `min-h-touch` would otherwise keep
+   every compact row at 44px even after height is reduced. */
 @media (min-width: 768px) {
     .dt-single-line td[data-actions] :is(a, button, [role='button']) {
         height: 1.5rem;
         width: 1.5rem;
+        min-height: 0;
+        min-width: 0;
     }
 }

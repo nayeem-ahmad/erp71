@@ -144,4 +144,12 @@ describe('ExpenseHeadsPage', () => {
         await waitFor(() => expect(api.deleteExpenseHead).toHaveBeenCalledWith('head-karim'));
         expect(toast.success).toHaveBeenCalled();
     });
+
+    it('keeps row actions from forcing 44px row height on desktop', async () => {
+        render(<ExpenseHeadsPage />);
+        const edit = await screen.findAllByRole('button', { name: /edit head/i });
+        expect(edit[0]).toHaveClass('h-7');
+        expect(edit[0].className.split(/\s+/)).toContain('max-md:min-h-touch');
+        expect(edit[0].className.split(/\s+/)).not.toContain('min-h-touch');
+    });
 });
