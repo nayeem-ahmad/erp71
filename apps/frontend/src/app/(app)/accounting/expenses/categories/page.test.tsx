@@ -19,7 +19,7 @@ jest.mock('@/components/data-table', () => ({
         <div data-testid="data-table" data-filter-layout={filterLayout} data-view-options={String(Boolean(viewOptions))}>
             {data.map((row) => (
                 <div key={row.id}>
-                    {columns.filter((column) => column.id === 'heads').map((column) => (
+                    {columns.filter((column) => column.id === 'heads' || column.id === 'actions').map((column) => (
                         <span key={column.id}>{column.cell?.({ row: { original: row } })}</span>
                     ))}
                 </div>
@@ -33,10 +33,18 @@ jest.mock('@/lib/api', () => ({
         getExpenseCategories: jest.fn(),
         createExpenseCategory: jest.fn(),
         updateExpenseCategory: jest.fn(),
+        deleteExpenseCategory: jest.fn(),
         createExpenseHead: jest.fn(),
         getAccounts: jest.fn(),
     },
 }));
+
+const rentCategory = {
+    id: 'cat-rent',
+    name: 'Rent',
+    heads: [{ id: 'head-shop', name: 'Shop rent' }],
+    _count: { entries: 1, heads: 1 },
+};
 
 describe('ExpenseCategoriesPage', () => {
     beforeEach(() => {
@@ -88,5 +96,19 @@ describe('ExpenseCategoriesPage', () => {
                 expect.objectContaining({ name: 'Conveyance', accountId: null }),
             ),
         );
+    });
+
+    it('keeps row actions and the heads link from forcing 44px row height on desktop', async () => {
+        (api.getExpenseCategories as jest.Mock).mockResolvedValue([rentCategory]);
+        render(<ExpenseCategoriesPage />);
+
+        const heads = await screen.findByRole('link', { name: /1\s*heads/i });
+        expect(heads.className.split(/\s+/)).toContain('max-md:min-h-touch');
+        expect(heads.className.split(/\s+/)).not.toContain('min-h-touch');
+
+        const edit = await screen.findByRole('button', { name: /edit category/i });
+        expect(edit).toHaveClass('h-7');
+        expect(edit.className.split(/\s+/)).toContain('max-md:min-h-touch');
+        expect(edit.className.split(/\s+/)).not.toContain('min-h-touch');
     });
 });

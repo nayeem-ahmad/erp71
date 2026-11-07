@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Calculator } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { Boxes, Calculator, Package, Wallet } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { warehouseLabel } from '@/lib/warehouse-label';
 import { formatBDT } from '@/lib/format';
@@ -24,7 +24,9 @@ interface ValuationRow {
 const columnHelper = createColumnHelper<ValuationRow>();
 
 export default function InventoryValuationPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
+    const copy = t.inventoryReports.valuation;
+    const listUi = t.inventoryReports.listUi;
     const branch = useBranchScope();
     const [rows, setRows] = useState<ValuationRow[]>([]);
     const [summary, setSummary] = useState<any>(null);
@@ -96,81 +98,134 @@ export default function InventoryValuationPage() {
 
     const columns: ColumnDef<ValuationRow, any>[] = useMemo(
         () => [
-            columnHelper.accessor((row) => row.product.name, { id: 'product', header: t.inventoryReports.valuation.columns.product, size: 220 }),
-            columnHelper.accessor((row) => row.product.group?.name || t.inventoryReports.reorder.uncategorized, { id: 'group', header: t.inventoryReports.valuation.columns.group, size: 160 }),
-            columnHelper.accessor('quantity', { header: t.inventoryReports.valuation.columns.quantity, size: 100 }),
+            columnHelper.accessor((row) => row.product.name, { id: 'product', header: copy.columns.product, size: 220 }),
+            columnHelper.accessor((row) => row.product.group?.name || t.inventoryReports.reorder.uncategorized, {
+                id: 'group',
+                header: copy.columns.group,
+                size: 160,
+            }),
+            columnHelper.accessor('quantity', {
+                header: copy.columns.quantity,
+                cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
+                size: 100,
+                meta: { align: 'end' },
+            }),
             columnHelper.accessor('unitValue', {
-                header: t.inventoryReports.valuation.columns.unitValue,
-                cell: (info) => formatBDT(Number(info.getValue() || 0)),
+                header: copy.columns.unitValue,
+                cell: (info) => <span className="tabular-nums">{formatBDT(Number(info.getValue() || 0), { locale })}</span>,
                 size: 110,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('stockValue', {
-                header: t.inventoryReports.valuation.columns.stockValue,
-                cell: (info) => <span className="text-sm font-bold text-blue-600">{formatBDT(Number(info.getValue() || 0))}</span>,
+                header: copy.columns.stockValue,
+                cell: (info) => (
+                    <span className="tabular-nums text-sm font-bold text-blue-600">
+                        {formatBDT(Number(info.getValue() || 0), { locale })}
+                    </span>
+                ),
                 size: 130,
+                meta: { align: 'end' },
             }),
         ],
-        [t],
+        [copy, t.inventoryReports.reorder.uncategorized, locale],
     );
+
+    const filters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'warehouse',
+                type: 'select',
+                label: t.inventoryLedger.warehouseLabel,
+                value: warehouseId || null,
+                onChange: (v) => setWarehouseId(v ?? ''),
+                options: visibleWarehouses.map((warehouse: any) => ({
+                    value: warehouse.id,
+                    label: warehouseLabel(warehouse, visibleWarehouses),
+                })),
+            },
+            {
+                id: 'group',
+                type: 'select',
+                label: copy.columns.group,
+                value: groupId || null,
+                onChange: (v) => {
+                    setGroupId(v ?? '');
+                    setSubgroupId('');
+                },
+                options: groups.map((group: any) => ({ value: group.id, label: group.name })),
+            },
+            {
+                id: 'subgroup',
+                type: 'select',
+                label: t.inventory.columns.subgroup,
+                value: subgroupId || null,
+                onChange: (v) => setSubgroupId(v ?? ''),
+                options: filteredSubgroups.map((subgroup: any) => ({ value: subgroup.id, label: subgroup.name })),
+                more: true,
+            },
+        ],
+        [t, copy, warehouseId, visibleWarehouses, groupId, groups, subgroupId, filteredSubgroups],
+    );
+
+    const stats = useMemo(() => {
+        const items: ListStat[] = [
+            {
+                id: 'totalValue',
+                icon: <Wallet aria-hidden />,
+                label: copy.totalValue,
+                value: formatBDT(Number(summary?.totalStockValue || 0), { locale }),
+            },
+            {
+                id: 'totalQuantity',
+                icon: <Boxes aria-hidden />,
+                label: copy.totalQuantity,
+                value: Number(summary?.totalQuantity ?? 0).toLocaleString(locale),
+            },
+            {
+                id: 'productsWithStock',
+                icon: <Package aria-hidden />,
+                label: copy.productsWithStock,
+                value: Number(summary?.productCount ?? 0).toLocaleString(locale),
+            },
+            {
+                id: 'averageUnitValue',
+                icon: <Calculator aria-hidden />,
+                label: copy.averageUnitValue,
+                value: formatBDT(Number(summary?.averageUnitValue || 0), { locale }),
+            },
+        ];
+        return { items, loading, label: listUi.statsLabel };
+    }, [summary, loading, locale, copy, listUi]);
 
     return (
         <PageShell>
-                <PageHeader
-                    title={t.inventoryReports.valuation.title}
-                    subtitle={t.inventoryReports.valuation.subtitleMeasure}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.inventory,
-                        t.inventoryReports.valuation.title,
-                        'inventory',
-                    )}
-                    actions={<BranchFilter scope={branch} />}
-                />
+            <PageHeader
+                title={copy.title}
+                subtitle={copy.subtitleMeasure}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.inventory,
+                    copy.title,
+                    'inventory',
+                )}
+                actions={<BranchFilter scope={branch} />}
+            />
 
-                <div className="grid md:grid-cols-4 gap-4">
-                    <div className="bg-white border border-gray-100 rounded-lg p-5">
-                        <div className="text-xs font-medium text-gray-500">{t.inventoryReports.valuation.totalValue}</div>
-                        <div className="text-2xl font-bold text-blue-700 mt-2">{formatBDT(Number(summary?.totalStockValue || 0))}</div>
-                    </div>
-                    <div className="bg-white border border-gray-100 rounded-lg p-5">
-                        <div className="text-xs font-medium text-gray-500">{t.inventoryReports.valuation.totalQuantity}</div>
-                        <div className="text-2xl font-bold text-gray-900 mt-2">{summary?.totalQuantity ?? 0}</div>
-                    </div>
-                    <div className="bg-white border border-gray-100 rounded-lg p-5">
-                        <div className="text-xs font-medium text-gray-500">{t.inventoryReports.valuation.productsWithStock}</div>
-                        <div className="text-2xl font-bold text-gray-900 mt-2">{summary?.productCount ?? 0}</div>
-                    </div>
-                    <div className="bg-white border border-gray-100 rounded-lg p-5">
-                        <div className="text-xs font-medium text-gray-500">{t.inventoryReports.valuation.averageUnitValue}</div>
-                        <div className="text-2xl font-bold text-gray-900 mt-2">{formatBDT(Number(summary?.averageUnitValue || 0))}</div>
-                    </div>
-                </div>
-
-                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
-                    <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[220px]">
-                        <option value="">{t.inventoryReports.reorder.allWarehouses}</option>
-                        {visibleWarehouses.map((warehouse: any) => <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, visibleWarehouses)}</option>)}
-                    </select>
-                    <select value={groupId} onChange={(e) => { setGroupId(e.target.value); setSubgroupId(''); }} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[220px]">
-                        <option value="">{t.inventoryReports.reorder.allGroups}</option>
-                        {groups.map((group: any) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                    </select>
-                    <select value={subgroupId} onChange={(e) => setSubgroupId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[220px]">
-                        <option value="">{t.inventoryReports.reorder.allSubgroups}</option>
-                        {filteredSubgroups.map((subgroup: any) => <option key={subgroup.id} value={subgroup.id}>{subgroup.name}</option>)}
-                    </select>
-                </div>
-
-                <DataTable<ValuationRow>
-                    tableId="inventory-valuation"
-                    columns={columns}
-                    data={rows}
-                    title={t.inventoryReports.valuation.title}
-                    isLoading={loading}
-                    emptyMessage={t.inventoryReports.valuation.emptyValuation}
-                    emptyIcon={<Calculator className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.inventoryReports.valuation.searchPlaceholder}
-                />
-    </PageShell>
+            <DataTable<ValuationRow>
+                tableId="inventory-valuation"
+                columns={columns}
+                data={rows}
+                title={copy.title}
+                isLoading={loading}
+                emptyMessage={copy.emptyValuation}
+                emptyIcon={<Calculator className="w-16 h-16 text-gray-200" />}
+                searchPlaceholder={copy.searchPlaceholder}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+            />
+        </PageShell>
     );
 }

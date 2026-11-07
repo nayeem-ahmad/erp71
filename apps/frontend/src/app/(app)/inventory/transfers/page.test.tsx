@@ -18,7 +18,67 @@ jest.mock('next/link', () => ({
 }));
 
 jest.mock('@/components/data-table', () => ({
-    DataTable: ({ data }: any) => <div data-testid="data-table">{data?.length} rows</div>,
+    DataTable: ({ data, filters, stats, filterLayout, viewOptions }: any) => (
+        <div data-testid="data-table">
+            <span>{data?.length} rows</span>
+            <div data-testid="filter-layout">{filterLayout ?? ''}</div>
+            <div data-testid="has-view-options">{viewOptions ? 'yes' : 'no'}</div>
+            <div data-testid="stats-label">{stats?.label ?? ''}</div>
+            <div data-testid="stats-count">{stats?.items?.length ?? 0}</div>
+            {(filters ?? []).map((filter: any) => {
+                if (filter.type === 'date-range') {
+                    return (
+                        <div key={filter.id} data-testid={`filter-${filter.id}`}>
+                            <span data-testid={`filter-${filter.id}-type`}>date-range</span>
+                            <button type="button" onClick={() => filter.onChange?.({ from: '2024-01-01', to: '2024-01-01' })}>
+                                Created · Any time
+                            </button>
+                        </div>
+                    );
+                }
+                if (filter.type === 'toggle') {
+                    return (
+                        <div key={filter.id} data-testid={`filter-${filter.id}`}>
+                            <span data-testid={`filter-${filter.id}-pressed`}>{String(Boolean(filter.pressed))}</span>
+                        </div>
+                    );
+                }
+                const value = filter.type === 'multi-select'
+                    ? (Array.isArray(filter.value) ? (filter.value[0] ?? '') : '')
+                    : (filter.value ?? '');
+                return (
+                    <div key={filter.id} data-testid={`filter-${filter.id}`}>
+                        <label htmlFor={`filter-${filter.id}-select`}>{filter.label ?? filter.id}</label>
+                        <select
+                            id={`filter-${filter.id}-select`}
+                            aria-label={filter.label ?? filter.id}
+                            value={value}
+                            onChange={(e) => {
+                                const next = e.target.value;
+                                if (filter.type === 'multi-select') {
+                                    filter.onChange?.(next ? [next] : []);
+                                } else {
+                                    filter.onChange?.(next || null);
+                                }
+                            }}
+                        >
+                            <option value="">All</option>
+                            {(filter.options ?? []).map((opt: any) => (
+                                <option
+                                    key={opt.value}
+                                    value={opt.value}
+                                    data-testid={`filter-${filter.id}-option-${opt.value}`}
+                                >
+                                    {opt.label}
+                                </option>
+                            ))}
+                        </select>
+                        {filter.searchable ? <span data-testid={`filter-${filter.id}-searchable`}>searchable</span> : null}
+                    </div>
+                );
+            })}
+        </div>
+    ),
     createdAtColumn: () => ({ id: 'created_at', header: 'Created' }),
     CreatedRangeFilter: ({ onChange }: { onChange: (next: { from: string; to: string }) => void }) => (
         <button type="button" onClick={() => onChange({ from: '2024-01-01', to: '2024-01-01' })}>
@@ -153,43 +213,49 @@ describe('InventoryTransfersPage', () => {
         });
     });
 
-    it('renders status filter dropdown', async () => {
+    it('renders status filter chip', async () => {
         render(<InventoryTransfersPage />);
         await waitFor(() => {
-            expect(screen.getByText('All Statuses')).toBeInTheDocument();
+            expect(screen.getByTestId('filter-status')).toBeInTheDocument();
         });
+        expect(screen.getByTestId('filter-layout')).toHaveTextContent('row');
+        expect(screen.getByTestId('has-view-options')).toHaveTextContent('yes');
+        expect(screen.getByTestId('stats-label')).toHaveTextContent('Transfer summary');
     });
 
     it('renders filter options for status', async () => {
         render(<InventoryTransfersPage />);
         await waitFor(() => {
-            expect(screen.getByRole('option', { name: 'Draft' })).toBeInTheDocument();
-            expect(screen.getByRole('option', { name: 'Sent' })).toBeInTheDocument();
-            expect(screen.getByRole('option', { name: 'Received' })).toBeInTheDocument();
+            expect(screen.getByTestId('filter-status-option-DRAFT')).toHaveTextContent('Draft');
+            expect(screen.getByTestId('filter-status-option-SENT')).toHaveTextContent('Sent');
+            expect(screen.getByTestId('filter-status-option-RECEIVED')).toHaveTextContent('Received');
         });
     });
 
     it('loads warehouses and shows them in filter dropdowns', async () => {
         render(<InventoryTransfersPage />);
         await waitFor(() => {
-            expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0);
+            expect(screen.getByTestId('filter-source')).toBeInTheDocument();
+            expect(screen.getByTestId('filter-source-option-w1')).toBeInTheDocument();
         });
     });
 
     it('filters out inactive warehouses in selects', async () => {
         render(<InventoryTransfersPage />);
         await waitFor(() => {
-            expect(screen.queryByText('Inactive Warehouse')).not.toBeInTheDocument();
+            expect(screen.getByTestId('filter-source-option-w1')).toBeInTheDocument();
         });
+        expect(screen.queryByTestId('filter-source-option-w3')).not.toBeInTheDocument();
+        expect(screen.queryByText('Inactive Warehouse')).not.toBeInTheDocument();
     });
 
-    it('loads products and shows them in select', async () => {
+    it('loads products and shows them in the product filter', async () => {
         render(<InventoryTransfersPage />);
         await waitFor(() => {
-            expect(screen.getByPlaceholderText('All Products')).toBeInTheDocument();
+            expect(screen.getByTestId('filter-product')).toBeInTheDocument();
+            expect(screen.getByTestId('filter-product-option-p1')).toHaveTextContent('Widget A');
         });
-        fireEvent.focus(screen.getByPlaceholderText('All Products'));
-        expect(screen.getByText('Widget A')).toBeInTheDocument();
+        expect(screen.getByTestId('filter-product-searchable')).toBeInTheDocument();
     });
 
     it('calls getWarehouseTransfers on mount', async () => {
@@ -215,11 +281,9 @@ describe('InventoryTransfersPage', () => {
 
     it('changes status filter and reloads transfers', async () => {
         render(<InventoryTransfersPage />);
-        await waitFor(() => expect(screen.getByText('All Statuses')).toBeInTheDocument());
-        // The status filter sits in the header beside the branch filter.
-        const statusSelect = screen.getByDisplayValue('All Statuses');
+        await waitFor(() => expect(screen.getByTestId('filter-status')).toBeInTheDocument());
         await act(async () => {
-            fireEvent.change(statusSelect, { target: { value: 'SENT' } });
+            fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'SENT' } });
         });
         await waitFor(() => {
             expect(mockApi.getWarehouseTransfers).toHaveBeenCalledWith(
@@ -237,7 +301,8 @@ describe('InventoryTransfersPage', () => {
         expect(mockApi.getWarehouseTransfers).toHaveBeenCalledTimes(1);
 
         await act(async () => {
-            fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
+            // Scope chip is also labelled "Branch"; the header control owns this test id.
+            fireEvent.change(screen.getByTestId('branch-filter'), { target: { value: 'store-2' } });
         });
 
         await waitFor(() =>
@@ -248,19 +313,16 @@ describe('InventoryTransfersPage', () => {
     it('clears a warehouse filter when the branch changes', async () => {
         mockBranchScope();
         render(<InventoryTransfersPage />);
-        await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
-        const sourceFilter = screen.getAllByRole('combobox').find(
-            (element) => element.closest('form') === null && (element as HTMLSelectElement).value === '' && element.querySelector('option[value="w1"]'),
-        ) as HTMLSelectElement;
+        await waitFor(() => expect(screen.getByTestId('filter-source-option-w1')).toBeInTheDocument());
         await act(async () => {
-            fireEvent.change(sourceFilter, { target: { value: 'w1' } });
+            fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'w1' } });
         });
         await waitFor(() =>
             expect(mockApi.getWarehouseTransfers).toHaveBeenLastCalledWith(expect.objectContaining({ sourceWarehouseId: 'w1' })),
         );
 
         await act(async () => {
-            fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'all' } });
+            fireEvent.change(screen.getByTestId('branch-filter'), { target: { value: 'all' } });
         });
 
         await waitFor(() =>
@@ -406,11 +468,9 @@ describe('InventoryTransfersPage', () => {
 
     it('changes source warehouse filter', async () => {
         render(<InventoryTransfersPage />);
-        await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
-        // Filter section has "All Sources" dropdown
-        const allSources = screen.getByRole('option', { name: 'All Sources' }).closest('select')!;
+        await waitFor(() => expect(screen.getByTestId('filter-source')).toBeInTheDocument());
         await act(async () => {
-            fireEvent.change(allSources, { target: { value: 'w1' } });
+            fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'w1' } });
         });
         await waitFor(() => {
             expect(mockApi.getWarehouseTransfers).toHaveBeenCalledWith(
@@ -421,10 +481,9 @@ describe('InventoryTransfersPage', () => {
 
     it('changes destination warehouse filter', async () => {
         render(<InventoryTransfersPage />);
-        await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
-        const allDestinations = screen.getByRole('option', { name: 'All Destinations' }).closest('select')!;
+        await waitFor(() => expect(screen.getByTestId('filter-destination')).toBeInTheDocument());
         await act(async () => {
-            fireEvent.change(allDestinations, { target: { value: 'w2' } });
+            fireEvent.change(screen.getByLabelText('Destination'), { target: { value: 'w2' } });
         });
         await waitFor(() => {
             expect(mockApi.getWarehouseTransfers).toHaveBeenCalledWith(
@@ -435,7 +494,7 @@ describe('InventoryTransfersPage', () => {
 
     it('changes from date filter', async () => {
         render(<InventoryTransfersPage />);
-        await waitFor(() => expect(screen.getByText('New Transfer')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('filter-created')).toBeInTheDocument());
         await act(async () => {
             fireEvent.click(screen.getByRole('button', { name: /created · any time/i }));
         });
@@ -466,18 +525,17 @@ describe('InventoryTransfersPage', () => {
             render(<InventoryTransfersPage />);
             await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
 
-            // One <optgroup> per branch, per picker (2 filters + 2 form fields).
-            expect(screen.getAllByRole('group', { name: 'Dhaka Main' }).length).toBe(4);
-            expect(screen.getAllByRole('group', { name: 'Chattogram' }).length).toBe(4);
+            // Form pickers still group by branch; list filters are flat chips.
+            expect(screen.getAllByRole('group', { name: 'Dhaka Main' }).length).toBe(2);
+            expect(screen.getAllByRole('group', { name: 'Chattogram' }).length).toBe(2);
         });
 
         it('offers a scope filter and asks the API for cross-branch transfers only', async () => {
             render(<InventoryTransfersPage />);
-            await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
+            await waitFor(() => expect(screen.getByTestId('filter-scope')).toBeInTheDocument());
 
-            const scope = screen.getByRole('option', { name: 'All Branches' }).closest('select')!;
             await act(async () => {
-                fireEvent.change(scope, { target: { value: 'cross' } });
+                fireEvent.change(screen.getByTestId('filter-scope').querySelector('select')!, { target: { value: 'cross' } });
             });
 
             await waitFor(() => expect(mockApi.getWarehouseTransfers).toHaveBeenCalledWith(
@@ -487,11 +545,10 @@ describe('InventoryTransfersPage', () => {
 
         it('asks for intra-branch transfers with an explicit false, not an omitted filter', async () => {
             render(<InventoryTransfersPage />);
-            await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
+            await waitFor(() => expect(screen.getByTestId('filter-scope')).toBeInTheDocument());
 
-            const scope = screen.getByRole('option', { name: 'All Branches' }).closest('select')!;
             await act(async () => {
-                fireEvent.change(scope, { target: { value: 'within' } });
+                fireEvent.change(screen.getByTestId('filter-scope').querySelector('select')!, { target: { value: 'within' } });
             });
 
             await waitFor(() => expect(mockApi.getWarehouseTransfers).toHaveBeenCalledWith(
@@ -542,15 +599,15 @@ describe('InventoryTransfersPage', () => {
             await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
 
             expect(screen.queryAllByRole('group')).toHaveLength(0);
-            expect(screen.queryByRole('option', { name: 'All Branches' })).not.toBeInTheDocument();
+            expect(screen.queryByTestId('filter-scope')).not.toBeInTheDocument();
         });
 
         it('offers the two approval statuses in the status filter', async () => {
             render(<InventoryTransfersPage />);
-            await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
+            await waitFor(() => expect(screen.getByTestId('filter-status')).toBeInTheDocument());
 
-            expect(screen.getByRole('option', { name: 'Pending Approval' })).toBeInTheDocument();
-            expect(screen.getByRole('option', { name: 'Rejected' })).toBeInTheDocument();
+            expect(screen.getByTestId('filter-status-option-PENDING_APPROVAL')).toHaveTextContent('Pending Approval');
+            expect(screen.getByTestId('filter-status-option-REJECTED')).toHaveTextContent('Rejected');
         });
     });
 });

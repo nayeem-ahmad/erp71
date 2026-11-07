@@ -118,7 +118,14 @@ export const inventoryExtrasMessages = {
                 duplicateProduct: "একই পণ্য দুইবার আছে। লাইনগুলো একত্র করুন।",
                 saveFailed: "চাহিদা সংরক্ষণ করা যায়নি।",
                 actionFailed: "কাজটি সম্পন্ন করা যায়নি।"
-            }
+            },
+        listUi: {
+            statsLabel: "চাহিদার সারাংশ",
+            total: "চাহিদা",
+            submitted: "জমা দেওয়া",
+            approved: "অনুমোদিত",
+            open: "খোলা",
+        }
         },
         inventoryTransfers: {
             title: "গুদাম ট্রান্সফার",
@@ -169,6 +176,13 @@ export const inventoryExtrasMessages = {
                 pendingApproval: "অনুমোদনের অপেক্ষায়",
                 rejected: "প্রত্যাখ্যাত",
             },
+        listUi: {
+            statsLabel: "ট্রান্সফারের সারাংশ",
+            total: "ট্রান্সফার",
+            pendingApproval: "অনুমোদনের অপেক্ষায়",
+            inTransit: "পথে",
+            received: "গৃহীত",
+        }
         },
         inventoryShrinkage: {
             title: "ইনভেন্টরি শ্রিংকেজ",
@@ -210,6 +224,11 @@ export const inventoryExtrasMessages = {
             remove: "সরান",
             notes: "নোট",
             selectProduct: "পণ্য নির্বাচন করুন",
+        listUi: {
+            statsLabel: "সঙ্কোচনের সারাংশ",
+            total: "এন্ট্রি",
+            totalQty: "মোট পরিমাণ",
+        }
         },
         inventoryStockTakes: {
             title: "স্টক টেক",
@@ -235,6 +254,19 @@ export const inventoryExtrasMessages = {
                 actions: "কার্যক্রম",
                 open: "খুলুন",
             },
+        statuses: {
+            draft: "খসড়া",
+            counting: "গণনা চলছে",
+            review: "পর্যালোচনায়",
+            posted: "পোস্ট করা",
+            cancelled: "বাতিল",
+        },
+        listUi: {
+            statsLabel: "স্টক টেকের সারাংশ",
+            sessions: "সেশন",
+            open: "খোলা",
+            discrepant: "অমিল",
+        }
         },
         inventoryLedger: {
             title: "ইনভেন্টরি লেজার",
@@ -352,6 +384,13 @@ export const inventoryExtrasMessages = {
             reasonUpdateFailed: "ইনভেন্টরি কারণ আপডেট ব্যর্থ।",
         },
         inventoryReports: {
+            listUi: {
+                statsLabel: "রিপোর্টের সংখ্যা",
+                suggestionCount: "পরামর্শ",
+                suggestedUnits: "প্রস্তাবিত একক",
+                outOfStock: "স্টক নেই",
+                movementCount: "মুভমেন্ট",
+            },
             reorder: {
                 title: "রি-অর্ডার পরামর্শ",
                 subtitle: "রি-অর্ডার থ্রেশহোল্ডের নিচে পণ্য ও প্রস্তাবিত ক্রয় পরিমাণ",

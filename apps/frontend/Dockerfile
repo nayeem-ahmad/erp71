@@ -47,13 +47,13 @@ ARG NEXT_PUBLIC_MEET71_ORIGIN
 # because Next.js compiles rewrite destinations into the routes manifest.
 ARG BACKEND_URL=http://backend:4000
 ENV NEXT_TELEMETRY_DISABLED=1
-# The production VPS has 1.9GB RAM but ~7GB of swap. 1536 was under the heap the
-# build now needs and `next build` died with "Reached heap limit ... JavaScript
-# heap out of memory" (exit 134), leaving the repo advanced but the containers on
-# the previous image — a half-deploy that still serves traffic, so it is easy to
-# miss. This is a V8 ceiling rather than physical exhaustion, so raising it lets
-# the build spill into swap: slower, but it completes.
-ENV NODE_OPTIONS="--max-old-space-size=3072"
+# The production VPS has 1.9GB RAM but ~7GB of swap. 1536, then 3072, were under
+# the heap `next build` now needs; 3072 died with "Ineffective mark-compacts near
+# heap limit" (exit 134) on the #977 deploy (run 42387017462) at ~2726/3089 MB.
+# This is a V8 ceiling rather than physical exhaustion, so raising it lets the
+# build spill into swap: slower, but it completes. deploy.sh builds backend then
+# frontend so the two Node compiles do not share that ceiling.
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 ENV NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE}
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_MARKETING_URL=${NEXT_PUBLIC_MARKETING_URL}

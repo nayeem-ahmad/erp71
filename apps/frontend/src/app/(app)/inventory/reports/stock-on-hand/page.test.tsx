@@ -25,7 +25,8 @@ jest.mock('next/navigation', () => ({
 }));
 
 // Surfaces the resolved column headers so the per-warehouse columns can be
-// asserted — the whole point of this report.
+// asserted — the whole point of this report. Also surfaces list filters/stats
+// so chip-toolbar assertions and filter-driven refetches still work.
 jest.mock('@/components/data-table', () => ({
     DataTable: ({
         title,
@@ -33,18 +34,71 @@ jest.mock('@/components/data-table', () => ({
         isLoading,
         data,
         columns,
+        filters,
+        stats,
+        filterLayout,
+        viewOptions,
     }: {
         title: string;
         emptyMessage: string;
         isLoading: boolean;
         data: any[];
         columns: any[];
+        filters?: any[];
+        stats?: { label?: string; items?: any[] };
+        filterLayout?: string;
+        viewOptions?: boolean;
     }) => (
         <div>
             <div data-testid="data-table-title">{title}</div>
             {isLoading && <div data-testid="loading-indicator">Loading</div>}
             <div data-testid="empty-message">{emptyMessage}</div>
             <div data-testid="row-count">{data.length}</div>
+            <div data-testid="filter-layout">{filterLayout ?? ''}</div>
+            <div data-testid="has-view-options">{viewOptions ? 'yes' : 'no'}</div>
+            <div data-testid="stats-label">{stats?.label ?? ''}</div>
+            <div data-testid="stats-count">{stats?.items?.length ?? 0}</div>
+            {(stats?.items ?? []).map((item: any) => (
+                <div key={item.id} data-testid={`stat-${item.id}`}>{item.label}</div>
+            ))}
+            {(filters ?? []).map((filter: any) => {
+                if (filter.type === 'toggle') {
+                    return (
+                        <label key={filter.id} data-testid={`filter-${filter.id}`}>
+                            <input
+                                type="checkbox"
+                                aria-label={filter.label}
+                                checked={Boolean(filter.pressed)}
+                                onChange={(e) => filter.onChange?.(e.target.checked)}
+                            />
+                            {filter.label}
+                            <span data-testid={`filter-${filter.id}-pressed`}>{String(Boolean(filter.pressed))}</span>
+                        </label>
+                    );
+                }
+                return (
+                    <div key={filter.id} data-testid={`filter-${filter.id}`}>
+                        <label htmlFor={`filter-${filter.id}-select`}>{filter.label ?? filter.id}</label>
+                        <select
+                            id={`filter-${filter.id}-select`}
+                            aria-label={filter.label ?? filter.id}
+                            value={filter.value ?? ''}
+                            onChange={(e) => filter.onChange?.(e.target.value || null)}
+                        >
+                            <option value="">All</option>
+                            {(filter.options ?? []).map((opt: any) => (
+                                <option
+                                    key={opt.value}
+                                    value={opt.value}
+                                    data-testid={`filter-${filter.id}-option-${opt.value}`}
+                                >
+                                    {opt.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                );
+            })}
             <div data-testid="column-headers">{columns.map((column) => column.header).join('|')}</div>
             {data.map((row, index) => (
                 <div key={index} data-testid={`row-${index}`}>
@@ -175,17 +229,21 @@ describe('StockOnHandPage', () => {
         expect(screen.getByTestId('cell-0-salesPrice')).toHaveTextContent('-');
     });
 
-    it('renders summary KPI cards', async () => {
+    it('renders summary KPI stats on the list', async () => {
         render(<StockOnHandPage />);
-        await waitFor(() => expect(screen.getByText('Total Stock Value')).toBeInTheDocument());
-        expect(screen.getByText('Total Quantity')).toBeInTheDocument();
-        expect(screen.getByText('Products In Stock')).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByTestId('stat-totalStockValue')).toHaveTextContent('Total Stock Value'));
+        expect(screen.getByTestId('stat-totalQuantity')).toHaveTextContent('Total Quantity');
+        expect(screen.getByTestId('stat-productsInStock')).toHaveTextContent('Products In Stock');
+        expect(screen.getByTestId('filter-layout')).toHaveTextContent('row');
+        expect(screen.getByTestId('has-view-options')).toHaveTextContent('yes');
+        expect(screen.getByTestId('stats-label')).toHaveTextContent('Report figures');
     });
 
     it('leaves a closed warehouse out of the filter once the report stops counting it', async () => {
         render(<StockOnHandPage />);
-        await waitFor(() => expect(screen.getByText('Dhaka Main')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('filter-warehouse-option-wh-1')).toHaveTextContent('Dhaka Main'));
         // wh-3 is closed and holds nothing, so it has no column in mockReport.
+        expect(screen.queryByTestId('filter-warehouse-option-wh-3')).not.toBeInTheDocument();
         expect(screen.queryByText('Closed Depot')).not.toBeInTheDocument();
     });
 
@@ -208,7 +266,7 @@ describe('StockOnHandPage', () => {
         render(<StockOnHandPage />);
 
         await waitFor(() => expect(screen.getByTestId('column-headers')).toHaveTextContent('Closed Depot (closed)'));
-        expect(screen.getByRole('option', { name: 'Closed Depot' })).toBeInTheDocument();
+        expect(screen.getByTestId('filter-warehouse-option-wh-3')).toHaveTextContent('Closed Depot');
     });
 
     /**
@@ -244,7 +302,7 @@ describe('StockOnHandPage', () => {
         render(<StockOnHandPage />);
         await waitFor(() => expect(api.getStockOnHand).toHaveBeenCalled());
 
-        fireEvent.change(screen.getByLabelText('All Warehouses'), { target: { value: 'wh-2' } });
+        fireEvent.change(screen.getByLabelText('Warehouse'), { target: { value: 'wh-2' } });
 
         await waitFor(() =>
             expect(api.getStockOnHand).toHaveBeenCalledWith(expect.objectContaining({ warehouseId: 'wh-2' })),
@@ -302,13 +360,13 @@ describe('StockOnHandPage', () => {
 
     it('narrows the warehouse picker to the chosen branch', async () => {
         render(<StockOnHandPage />);
-        await waitFor(() => expect(screen.getByText('Dhaka Main')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('filter-warehouse-option-wh-1')).toHaveTextContent('Dhaka Main'));
 
         fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
 
         // wh-1 belongs to store-1, so it leaves the picker; wh-2 is store-2's own.
-        await waitFor(() => expect(screen.queryByText('Dhaka Main')).not.toBeInTheDocument());
-        expect(screen.getByText('Chattogram')).toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByTestId('filter-warehouse-option-wh-1')).not.toBeInTheDocument());
+        expect(screen.getByTestId('filter-warehouse-option-wh-2')).toHaveTextContent('Chattogram');
     });
 
     /**
@@ -320,7 +378,7 @@ describe('StockOnHandPage', () => {
         render(<StockOnHandPage />);
         await waitFor(() => expect(api.getStockOnHand).toHaveBeenCalled());
 
-        fireEvent.change(screen.getByLabelText('All Warehouses'), { target: { value: 'wh-1' } });
+        fireEvent.change(screen.getByLabelText('Warehouse'), { target: { value: 'wh-1' } });
         await waitFor(() =>
             expect(api.getStockOnHand).toHaveBeenCalledWith(expect.objectContaining({ warehouseId: 'wh-1' })),
         );
@@ -344,8 +402,8 @@ describe('StockOnHandPage', () => {
         );
         expect(api.getStockOnHand).toHaveBeenCalledTimes(1);
         // Only the header branch's own warehouse is on offer.
-        await waitFor(() => expect(screen.getByRole('option', { name: 'Dhaka Main' })).toBeInTheDocument());
-        expect(screen.queryByRole('option', { name: 'Chattogram' })).not.toBeInTheDocument();
+        await waitFor(() => expect(screen.getByTestId('filter-warehouse-option-wh-1')).toHaveTextContent('Dhaka Main'));
+        expect(screen.queryByTestId('filter-warehouse-option-wh-2')).not.toBeInTheDocument();
     });
 
     it('goes back to the header branch when the server refuses the chosen one', async () => {

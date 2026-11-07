@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { ArrowRightLeft, Plus, ShieldCheck, Truck } from 'lucide-react';
-import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { ArrowRightLeft, CheckCircle2, Clock, Hash, Plus, ShieldCheck, Truck } from 'lucide-react';
+import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
+import { matchesAnyOf } from '@/lib/list-filter';
 import { api } from '@/lib/api';
-import { BranchFilter } from '@/components/ui';
+import { BranchFilter, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { handleBranchForbidden, useBranchBoundState, useBranchScope } from '@/lib/branch-scope';
 import { PostingBadge } from '@/components/PostingBadge';
 import PageShell from '@/components/ui/compact/PageShell';
@@ -38,27 +39,37 @@ const columnHelper = createColumnHelper<WarehouseTransfer>();
 
 /**
  * Semantic tones per CLAUDE.md: amber warns (waiting on a person, or a receipt
- * still open), emerald is done, red is refused. Blue stays the in-flight state
+ * still open), emerald is done, red is refused. Info stays the in-flight state
  * because it is the one the module's primary action produces.
  */
-const STATUS_TONE: Record<string, string> = {
-    DRAFT: 'text-gray-600',
-    PENDING_APPROVAL: 'text-amber-700',
-    SENT: 'text-blue-700',
-    PARTIALLY_RECEIVED: 'text-amber-700',
-    RECEIVED: 'text-emerald-700',
-    REJECTED: 'text-red-700',
+const STATUS_TONE: Record<string, StatusBadgeTone> = {
+    DRAFT: 'neutral',
+    PENDING_APPROVAL: 'warning',
+    SENT: 'info',
+    PARTIALLY_RECEIVED: 'warning',
+    RECEIVED: 'success',
+    REJECTED: 'danger',
 };
 
+const TRANSFER_STATUSES = [
+    'DRAFT',
+    'PENDING_APPROVAL',
+    'SENT',
+    'PARTIALLY_RECEIVED',
+    'RECEIVED',
+    'REJECTED',
+] as const;
+
 export default function InventoryTransfersPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
+    const listUi = t.inventoryTransfers.listUi;
     const branch = useBranchScope();
     const [transfers, setTransfers] = useState<WarehouseTransfer[]>([]);
     const [warehouses, setWarehouses] = useState<any[]>([]);
     const [stores, setStores] = useState<any[]>([]);
     const [products, setProducts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [statusFilter, setStatusFilter] = useState('');
+    const [statusFilter, setStatusFilter] = useState<string[]>([]);
     // A transfer belongs to both its branches, so either end may sit in a branch
     // other than the filter's: the pickers keep every warehouse, but a choice is
     // cleared when the branch filter changes, like the reports' warehouse.
@@ -98,7 +109,7 @@ export default function InventoryTransfersPage() {
         setLoading(true);
         try {
             const data = await api.getWarehouseTransfers({
-                status: statusFilter || undefined,
+                status: statusFilter.length === 1 ? statusFilter[0] : undefined,
                 sourceWarehouseId: sourceWarehouseId || undefined,
                 destinationWarehouseId: destinationWarehouseId || undefined,
                 productId: productId || undefined,
@@ -265,9 +276,9 @@ export default function InventoryTransfersPage() {
             columnHelper.accessor('status', {
                 header: t.common.status,
                 cell: (info) => (
-                    <span className={`text-xs font-semibold ${STATUS_TONE[info.getValue()] ?? 'text-gray-600'}`}>
+                    <StatusBadge tone={STATUS_TONE[info.getValue()] ?? 'neutral'}>
                         {statusLabels[info.getValue()] ?? info.getValue()}
-                    </span>
+                    </StatusBadge>
                 ),
                 size: 150,
             }),
@@ -281,7 +292,7 @@ export default function InventoryTransfersPage() {
                         return <span className="text-sm text-gray-600">{source ?? t.inventoryTransfers.withinBranch}</span>;
                     }
                     return (
-                        <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                        <span className="inline-flex items-center text-xs font-semibold text-amber-700">
                             {/* Arrow flipped for RTL the way the DataTable scroll hint does
                                 it — see docs/rtl-guidelines.md. */}
                             {source ?? '?'}
@@ -297,13 +308,15 @@ export default function InventoryTransfersPage() {
             columnHelper.accessor((row) => row.items.map((item) => item.product?.name).filter(Boolean).join(', '), {
                 id: 'products',
                 header: t.nav.products,
-                cell: (info) => <span className="text-sm text-gray-600 line-clamp-2">{info.getValue() || '-'}</span>,
+                cell: (info) => <span className="truncate text-sm text-gray-600">{info.getValue() || '-'}</span>,
                 size: 260,
             }),
             columnHelper.accessor((row) => row.items.reduce((sum, item) => sum + (item.quantity_sent - item.quantity_received), 0), {
                 id: 'outstanding',
                 header: t.inventoryTransfers.columns.outstanding,
+                cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
                 size: 110,
+                meta: { align: 'end' },
             }),
             createdAtColumn(columnHelper, { header: t.common.createdAt }),
             columnHelper.display({
@@ -331,6 +344,121 @@ export default function InventoryTransfersPage() {
         [t, statusLabels, storeNames],
     );
 
+    const warehouseFilterOptions = useMemo(
+        () => warehouses.map((warehouse) => {
+            const branchName = storeNames.get(warehouse.store_id ?? '');
+            const label = warehouseGroups.length > 1 && branchName
+                ? `${warehouse.name} · ${branchName}`
+                : String(warehouse.name);
+            return { value: warehouse.id as string, label };
+        }),
+        [warehouses, storeNames, warehouseGroups.length],
+    );
+
+    const productFilterOptions = useMemo(
+        () => products.map((product) => ({
+            value: product.id as string,
+            label: product.sku ? `${product.name} (${product.sku})` : String(product.name),
+        })),
+        [products],
+    );
+
+    const filteredTransfers = useMemo(
+        () => transfers.filter((transfer) => matchesAnyOf(statusFilter, transfer.status)),
+        [transfers, statusFilter],
+    );
+
+    const filters = useMemo<ListFilter[]>(() => {
+        const chips: ListFilter[] = [
+            {
+                id: 'status',
+                type: 'multi-select',
+                label: t.common.status,
+                value: statusFilter,
+                onChange: setStatusFilter,
+                options: TRANSFER_STATUSES.map((status) => ({
+                    value: status,
+                    label: statusLabels[status] ?? status,
+                })),
+            },
+            {
+                id: 'source',
+                type: 'select',
+                label: t.inventoryTransfers.columns.source,
+                value: sourceWarehouseId || null,
+                onChange: (next) => setSourceWarehouseId(next ?? ''),
+                options: warehouseFilterOptions,
+                searchable: true,
+            },
+            {
+                id: 'destination',
+                type: 'select',
+                label: t.inventoryTransfers.columns.destination,
+                value: destinationWarehouseId || null,
+                onChange: (next) => setDestinationWarehouseId(next ?? ''),
+                options: warehouseFilterOptions,
+                searchable: true,
+            },
+            {
+                id: 'product',
+                type: 'select',
+                label: t.nav.products,
+                value: productId || null,
+                onChange: (next) => setProductId(next ?? ''),
+                options: productFilterOptions,
+                searchable: true,
+            },
+        ];
+        // Only a multi-branch tenant has a scope to filter by.
+        if (warehouseGroups.length > 1) {
+            chips.push({
+                id: 'scope',
+                type: 'select',
+                label: t.inventoryTransfers.columns.branch,
+                value: scopeFilter || null,
+                onChange: (next) => setScopeFilter(next ?? ''),
+                options: [
+                    { value: 'cross', label: t.inventoryTransfers.crossBranchOnly },
+                    { value: 'within', label: t.inventoryTransfers.withinBranchOnly },
+                ],
+            });
+        }
+        chips.push({ id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange, operators: true });
+        return chips;
+    }, [
+        t,
+        statusFilter,
+        statusLabels,
+        sourceWarehouseId,
+        destinationWarehouseId,
+        productId,
+        scopeFilter,
+        createdRange,
+        warehouseFilterOptions,
+        productFilterOptions,
+        warehouseGroups.length,
+    ]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const pending = filteredTransfers.filter((row) => row.status === 'PENDING_APPROVAL').length;
+        const inTransit = filteredTransfers.filter((row) => row.status === 'SENT' || row.status === 'PARTIALLY_RECEIVED').length;
+        const received = filteredTransfers.filter((row) => row.status === 'RECEIVED').length;
+        const items: ListStat[] = [
+            { id: 'total', icon: <Hash aria-hidden />, label: listUi.total, value: n(filteredTransfers.length) },
+            {
+                id: 'pending',
+                icon: <Clock aria-hidden />,
+                label: listUi.pendingApproval,
+                value: n(pending),
+                tone: pending > 0 ? 'warning' : 'default',
+            },
+            { id: 'inTransit', icon: <Truck aria-hidden />, label: listUi.inTransit, value: n(inTransit) },
+            { id: 'received', icon: <CheckCircle2 aria-hidden />, label: listUi.received, value: n(received) },
+        ];
+        return { items, loading, label: listUi.statsLabel };
+    }, [filteredTransfers, loading, locale, listUi]);
+
     return (
         <PageShell>
                 <PageHeader
@@ -342,51 +470,8 @@ export default function InventoryTransfersPage() {
                         t.inventoryTransfers.title,
                         'inventory',
                     )}
-                    actions={(
-                        <>
-                            <BranchFilter scope={branch} />
-                            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-700">
-                                <option value="">{t.inventoryTransfers.allStatuses}</option>
-                                <option value="DRAFT">{t.inventoryTransfers.statuses.draft}</option>
-                                <option value="PENDING_APPROVAL">{t.inventoryTransfers.statuses.pendingApproval}</option>
-                                <option value="SENT">{t.inventoryTransfers.statuses.sent}</option>
-                                <option value="PARTIALLY_RECEIVED">{t.inventoryTransfers.statuses.partiallyReceived}</option>
-                                <option value="RECEIVED">{t.inventoryTransfers.statuses.received}</option>
-                                <option value="REJECTED">{t.inventoryTransfers.statuses.rejected}</option>
-                            </select>
-                        </>
-                    )}
+                    actions={<BranchFilter scope={branch} />}
                 />
-
-                <div className="bg-white border border-gray-100 rounded-lg p-4 grid md:grid-cols-5 gap-3 items-end">
-                    <select value={sourceWarehouseId} onChange={(e) => setSourceWarehouseId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                        <option value="">{t.inventoryTransfers.allSources}</option>
-                        {warehouseOptions}
-                    </select>
-                    <select value={destinationWarehouseId} onChange={(e) => setDestinationWarehouseId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                        <option value="">{t.inventoryTransfers.allDestinations}</option>
-                        {warehouseOptions}
-                    </select>
-                    <IdSearchSelect
-                        items={products}
-                        value={productId}
-                        onChange={setProductId}
-                        placeholder={t.inventoryTransfers.allProducts}
-                        emptyLabel={t.pos.searchPlaceholder}
-                        noMatchLabel={t.common.noData}
-                        ariaLabel={t.inventoryTransfers.allProducts}
-                        subtitle={(product) => product.sku ?? ''}
-                    />
-                    {/* Only a multi-branch tenant has a scope to filter by. */}
-                    {warehouseGroups.length > 1 ? (
-                        <select value={scopeFilter} onChange={(e) => setScopeFilter(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                            <option value="">{t.inventoryTransfers.allScopes}</option>
-                            <option value="cross">{t.inventoryTransfers.crossBranchOnly}</option>
-                            <option value="within">{t.inventoryTransfers.withinBranchOnly}</option>
-                        </select>
-                    ) : null}
-                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
-                </div>
 
                 <form onSubmit={handleCreate} className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
                     <div className="flex items-center gap-2">
@@ -486,12 +571,17 @@ export default function InventoryTransfersPage() {
                 <DataTable<WarehouseTransfer>
                     tableId="inventory-transfers"
                     columns={columns}
-                    data={transfers}
+                    data={filteredTransfers}
                     title={t.inventoryTransfers.title}
                     isLoading={loading}
                     emptyMessage={t.inventoryTransfers.emptyMessage}
                     emptyIcon={<Truck className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.inventoryTransfers.searchPlaceholder}
+                    filters={filters}
+                    filterLayout="row"
+                    stats={stats}
+                    enableColumnFilters={false}
+                    viewOptions
                 />
     </PageShell>
     );

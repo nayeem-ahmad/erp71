@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { AlertTriangle, Award, Boxes, Wallet } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { warehouseLabel } from '@/lib/warehouse-label';
 import { formatBDT } from '@/lib/format';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -24,7 +25,9 @@ interface ShrinkageSummaryRow {
 const columnHelper = createColumnHelper<ShrinkageSummaryRow>();
 
 export default function ShrinkageReportPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
+    const copy = t.inventoryReports.shrinkage;
+    const listUi = t.inventoryReports.listUi;
     const branch = useBranchScope();
     const [report, setReport] = useState<any>({ summary: { totalQuantity: 0, totalValue: 0, topReasons: [] }, rows: [], detailRows: [] });
     const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -41,8 +44,7 @@ export default function ShrinkageReportPage() {
     const [reasonId, setReasonId] = useState('');
     const [groupId, setGroupId] = useState('');
     const [subgroupId, setSubgroupId] = useState('');
-    const [fromDate, setFromDate] = useState('');
-    const [toDate, setToDate] = useState('');
+    const [dateRange, setDateRange] = useState<CreatedRange>({});
 
     useEffect(() => {
         void loadFilters();
@@ -51,11 +53,13 @@ export default function ShrinkageReportPage() {
     useEffect(() => {
         if (!branch.ready) return;
         void loadReport();
-    }, [branch.ready, branch.apiStoreId, direction, warehouseId, reasonId, groupId, subgroupId, fromDate, toDate]);
+    }, [branch.ready, branch.apiStoreId, direction, warehouseId, reasonId, groupId, subgroupId, dateRange]);
 
     const loadReport = async () => {
         setLoading(true);
         try {
+            // Shrinkage API expects `from`/`to`; applyCreatedRangeQuery yields createdFrom/createdTo.
+            const range = applyCreatedRangeQuery(dateRange);
             const data = await api.getShrinkageSummary({
                 direction,
                 storeId: branch.apiStoreId,
@@ -63,8 +67,8 @@ export default function ShrinkageReportPage() {
                 reasonId: reasonId || undefined,
                 groupId: groupId || undefined,
                 subgroupId: subgroupId || undefined,
-                from: fromDate || undefined,
-                to: toDate || undefined,
+                from: range.createdFrom,
+                to: range.createdTo,
             });
             setReport(data);
         } catch (error) {
@@ -118,108 +122,169 @@ export default function ShrinkageReportPage() {
 
     const columns: ColumnDef<ShrinkageSummaryRow, any>[] = useMemo(
         () => [
-            columnHelper.accessor('warehouseName', { header: t.inventoryReports.shrinkage.columns.warehouse, size: 220 }),
-            columnHelper.accessor('reasonLabel', { header: t.inventoryReports.shrinkage.columns.reason, size: 220 }),
+            columnHelper.accessor('warehouseName', { header: copy.columns.warehouse, size: 220 }),
+            columnHelper.accessor('reasonLabel', { header: copy.columns.reason, size: 220 }),
             columnHelper.accessor('quantity', {
-                header: isFound
-                    ? t.inventoryReports.shrinkage.columns.quantityFound
-                    : t.inventoryReports.shrinkage.columns.quantityLost,
+                header: isFound ? copy.columns.quantityFound : copy.columns.quantityLost,
+                cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
                 size: 120,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('value', {
-                header: t.inventoryReports.shrinkage.columns.estimatedValue,
+                header: copy.columns.estimatedValue,
                 // Red states a loss. A surplus is not one, and colouring it the
                 // same would read as money gone on a number that is money back.
                 cell: (info) => (
-                    <span className={`text-sm font-bold ${isFound ? 'text-gray-900' : 'text-danger'}`}>
-                        {formatBDT(Number(info.getValue()))}
+                    <span className={`tabular-nums text-sm font-bold ${isFound ? 'text-gray-900' : 'text-danger'}`}>
+                        {formatBDT(Number(info.getValue()), { locale })}
                     </span>
                 ),
                 size: 150,
+                meta: { align: 'end' },
             }),
         ],
-        [t, isFound],
+        [copy, isFound, locale],
     );
+
+    const filters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'direction',
+                type: 'select',
+                label: copy.direction,
+                value: direction,
+                // A reason belongs to one direction only, so a reason left over
+                // from the other side would filter the report down to nothing.
+                onChange: (v) => {
+                    setDirection((v as 'LOSS' | 'FOUND') ?? 'LOSS');
+                    setReasonId('');
+                },
+                required: true,
+                defaultValue: 'LOSS',
+                options: [
+                    { value: 'LOSS', label: copy.directionLoss },
+                    { value: 'FOUND', label: copy.directionFound },
+                ],
+            },
+            {
+                id: 'warehouse',
+                type: 'select',
+                label: t.inventoryLedger.warehouseLabel,
+                value: warehouseId || null,
+                onChange: (v) => setWarehouseId(v ?? ''),
+                options: visibleWarehouses.map((warehouse: any) => ({
+                    value: warehouse.id,
+                    label: warehouseLabel(warehouse, visibleWarehouses),
+                })),
+            },
+            {
+                id: 'reason',
+                type: 'select',
+                label: copy.columns.reason,
+                value: reasonId || null,
+                onChange: (v) => setReasonId(v ?? ''),
+                options: visibleReasons.map((reason: any) => ({ value: reason.id, label: reason.label })),
+            },
+            {
+                id: 'group',
+                type: 'select',
+                label: t.inventoryReports.reorder.columns.group,
+                value: groupId || null,
+                onChange: (v) => {
+                    setGroupId(v ?? '');
+                    setSubgroupId('');
+                },
+                options: groups.map((group: any) => ({ value: group.id, label: group.name })),
+            },
+            {
+                id: 'subgroup',
+                type: 'select',
+                label: t.inventory.columns.subgroup,
+                value: subgroupId || null,
+                onChange: (v) => setSubgroupId(v ?? ''),
+                options: filteredSubgroups.map((subgroup: any) => ({ value: subgroup.id, label: subgroup.name })),
+                more: true,
+            },
+            {
+                id: 'period',
+                type: 'date-range',
+                label: t.common.date,
+                value: dateRange,
+                onChange: (next) => setDateRange(next ?? {}),
+            },
+        ],
+        [
+            t,
+            copy,
+            direction,
+            warehouseId,
+            visibleWarehouses,
+            reasonId,
+            visibleReasons,
+            groupId,
+            groups,
+            subgroupId,
+            filteredSubgroups,
+            dateRange,
+        ],
+    );
+
+    const topDriver = report.summary?.topReasons?.[0];
+    const stats = useMemo(() => {
+        const items: ListStat[] = [
+            {
+                id: 'totalQuantity',
+                icon: <Boxes aria-hidden />,
+                label: isFound ? copy.totalUnitsFound : copy.totalUnitsLost,
+                value: Number(report.summary?.totalQuantity ?? 0).toLocaleString(locale),
+            },
+            {
+                id: 'totalValue',
+                icon: <Wallet aria-hidden />,
+                label: isFound ? copy.estimatedValueFound : copy.estimatedValueLost,
+                value: formatBDT(Number(report.summary?.totalValue ?? 0), { locale }),
+                tone: isFound ? 'default' : 'danger',
+            },
+            {
+                id: 'topDriver',
+                icon: <Award aria-hidden />,
+                label: copy.topDriver,
+                value: topDriver?.reasonLabel || (isFound ? copy.noFoundLogged : copy.noShrinkageLogged),
+                hint: topDriver?.warehouseName || copy.allWarehousesLabel,
+            },
+        ];
+        return { items, loading, label: listUi.statsLabel };
+    }, [report.summary, topDriver, isFound, loading, locale, copy, listUi]);
 
     return (
         <PageShell>
-                <PageHeader
-                    title={t.inventoryReports.shrinkage.title}
-                    subtitle={t.inventoryReports.shrinkage.subtitleTrack}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.inventory,
-                        t.inventoryReports.shrinkage.title,
-                        'inventory',
-                    )}
-                    actions={<BranchFilter scope={branch} />}
-                />
+            <PageHeader
+                title={copy.title}
+                subtitle={copy.subtitleTrack}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.inventory,
+                    copy.title,
+                    'inventory',
+                )}
+                actions={<BranchFilter scope={branch} />}
+            />
 
-                <div className="grid md:grid-cols-3 gap-4">
-                    <div className="bg-white border border-gray-100 rounded-lg p-4">
-                        <div className="text-xs font-medium text-gray-500">
-                            {isFound ? t.inventoryReports.shrinkage.totalUnitsFound : t.inventoryReports.shrinkage.totalUnitsLost}
-                        </div>
-                        <div className="mt-2 text-2xl font-bold text-gray-900">{report.summary?.totalQuantity ?? 0}</div>
-                    </div>
-                    <div className="bg-white border border-gray-100 rounded-lg p-4">
-                        <div className="text-xs font-medium text-gray-500">
-                            {isFound ? t.inventoryReports.shrinkage.estimatedValueFound : t.inventoryReports.shrinkage.estimatedValueLost}
-                        </div>
-                        <div className={`mt-2 text-2xl font-bold ${isFound ? 'text-gray-900' : 'text-danger'}`}>
-                            {formatBDT(Number(report.summary?.totalValue ?? 0))}
-                        </div>
-                    </div>
-                    <div className="bg-white border border-gray-100 rounded-lg p-4">
-                        <div className="text-xs font-medium text-gray-500">{t.inventoryReports.shrinkage.topDriver}</div>
-                        <div className="mt-2 text-lg font-bold text-gray-900">{report.summary?.topReasons?.[0]?.reasonLabel || (isFound ? t.inventoryReports.shrinkage.noFoundLogged : t.inventoryReports.shrinkage.noShrinkageLogged)}</div>
-                        <div className="text-sm text-gray-500">{report.summary?.topReasons?.[0]?.warehouseName || t.inventoryReports.shrinkage.allWarehousesLabel}</div>
-                    </div>
-                </div>
-
-                <div className="bg-white border border-gray-100 rounded-lg p-4 grid md:grid-cols-4 gap-3 items-end">
-                    <select
-                        value={direction}
-                        // A reason belongs to one direction only, so a reason
-                        // left over from the other side would filter the report
-                        // down to nothing.
-                        onChange={(e) => { setDirection(e.target.value as 'LOSS' | 'FOUND'); setReasonId(''); }}
-                        aria-label={t.inventoryReports.shrinkage.direction}
-                        className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium"
-                    >
-                        <option value="LOSS">{t.inventoryReports.shrinkage.directionLoss}</option>
-                        <option value="FOUND">{t.inventoryReports.shrinkage.directionFound}</option>
-                    </select>
-                    <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                        <option value="">{t.inventoryReports.reorder.allWarehouses}</option>
-                        {visibleWarehouses.map((warehouse: any) => <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, visibleWarehouses)}</option>)}
-                    </select>
-                    <select value={reasonId} onChange={(e) => setReasonId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                        <option value="">{t.inventoryReports.shrinkage.allReasons}</option>
-                        {visibleReasons.map((reason: any) => <option key={reason.id} value={reason.id}>{reason.label}</option>)}
-                    </select>
-                    <select value={groupId} onChange={(e) => { setGroupId(e.target.value); setSubgroupId(''); }} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                        <option value="">{t.inventoryReports.reorder.allGroups}</option>
-                        {groups.map((group: any) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                    </select>
-                    <select value={subgroupId} onChange={(e) => setSubgroupId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                        <option value="">{t.inventoryReports.reorder.allSubgroups}</option>
-                        {filteredSubgroups.map((subgroup: any) => <option key={subgroup.id} value={subgroup.id}>{subgroup.name}</option>)}
-                    </select>
-                    <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
-                    <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
-                </div>
-
-                <DataTable<ShrinkageSummaryRow>
-                    tableId="inventory-shrinkage-report"
-                    columns={columns}
-                    data={report.rows || []}
-                    title={t.inventoryReports.shrinkage.shrinkageSummary}
-                    isLoading={loading}
-                    emptyMessage={isFound ? t.inventoryReports.shrinkage.emptyFoundMessage : t.inventoryReports.shrinkage.emptyFiltered}
-                    emptyIcon={<AlertTriangle className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.inventoryReports.shrinkage.searchPlaceholder}
-                />
-    </PageShell>
+            <DataTable<ShrinkageSummaryRow>
+                tableId="inventory-shrinkage-report"
+                columns={columns}
+                data={report.rows || []}
+                title={copy.shrinkageSummary}
+                isLoading={loading}
+                emptyMessage={isFound ? copy.emptyFoundMessage : copy.emptyFiltered}
+                emptyIcon={<AlertTriangle className="w-16 h-16 text-gray-200" />}
+                searchPlaceholder={copy.searchPlaceholder}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+            />
+        </PageShell>
     );
 }

@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Warehouse } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { Boxes, Package, Warehouse, Wallet } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { warehouseLabel } from '@/lib/warehouse-label';
 import { formatBDT } from '@/lib/format';
@@ -63,7 +63,9 @@ interface StockOnHandSummary {
 const columnHelper = createColumnHelper<StockOnHandRow>();
 
 export default function StockOnHandPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
+    const strings = t.inventoryReports.stockOnHand;
+    const listUi = t.inventoryReports.listUi;
     const branch = useBranchScope();
     const [rows, setRows] = useState<StockOnHandRow[]>([]);
     const [warehouseColumns, setWarehouseColumns] = useState<WarehouseColumn[]>([]);
@@ -174,8 +176,6 @@ export default function StockOnHandPage() {
     );
 
     const columns: ColumnDef<StockOnHandRow, any>[] = useMemo(() => {
-        const strings = t.inventoryReports.stockOnHand;
-
         // The report's own columns carry no branch, so borrow it from the filter
         // list — the same warehouses, loaded from /inventory/warehouses — which
         // is what lets two branches' identically named locations be told apart.
@@ -199,8 +199,9 @@ export default function StockOnHandPage() {
                 // backend gets a payload without the flag at all, and marking
                 // every warehouse closed would be worse than marking none.
                 header: warehouse.is_active === false ? formatMessage(strings.closedWarehouse, { warehouse: label }) : label,
+                cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
                 size: 110,
-                meta: { hideOnMobile: index > 1 },
+                meta: { align: 'end', hideOnMobile: index > 1 },
             });
         });
 
@@ -221,26 +222,37 @@ export default function StockOnHandPage() {
             ...perWarehouse,
             columnHelper.accessor('totalQuantity', {
                 header: strings.columns.totalQuantity,
-                cell: (info) => <span className="text-sm font-semibold">{info.getValue()}</span>,
+                cell: (info) => <span className="tabular-nums text-sm font-semibold">{info.getValue()}</span>,
                 size: 100,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor((row) => row.averageUnitCost ?? '', {
                 id: 'averageUnitCost',
                 header: strings.columns.avgUnitCost,
                 cell: (info) => {
                     const value = info.row.original.averageUnitCost;
-                    return value == null ? <span className="text-xs text-gray-400">-</span> : formatBDT(value);
+                    return value == null ? (
+                        <span className="text-xs text-gray-400">-</span>
+                    ) : (
+                        <span className="tabular-nums">{formatBDT(value, { locale })}</span>
+                    );
                 },
                 size: 120,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor((row) => (row.lastPurchasePrice != null && row.lastPurchasePrice > 0 ? row.lastPurchasePrice : ''), {
                 id: 'lastPurchasePrice',
                 header: strings.columns.lastPurchasePrice,
                 cell: (info) => {
                     const value = info.row.original.lastPurchasePrice;
-                    return value == null || value <= 0 ? <span className="text-xs text-gray-400">-</span> : formatBDT(value);
+                    return value == null || value <= 0 ? (
+                        <span className="text-xs text-gray-400">-</span>
+                    ) : (
+                        <span className="tabular-nums">{formatBDT(value, { locale })}</span>
+                    );
                 },
                 size: 150,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor((row) => {
                 const value = Number(row.product.sellingPrice ?? 0);
@@ -250,9 +262,14 @@ export default function StockOnHandPage() {
                 header: strings.columns.salesPrice,
                 cell: (info) => {
                     const value = Number(info.getValue() || 0);
-                    return value <= 0 ? <span className="text-xs text-gray-400">-</span> : formatBDT(value);
+                    return value <= 0 ? (
+                        <span className="text-xs text-gray-400">-</span>
+                    ) : (
+                        <span className="tabular-nums">{formatBDT(value, { locale })}</span>
+                    );
                 },
                 size: 120,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('costBasis', {
                 header: strings.columns.costBasis,
@@ -266,13 +283,16 @@ export default function StockOnHandPage() {
             }),
             columnHelper.accessor('totalStockValue', {
                 header: strings.columns.totalValue,
-                cell: (info) => <span className="text-sm font-bold text-blue-600">{formatBDT(Number(info.getValue() || 0))}</span>,
+                cell: (info) => (
+                    <span className="tabular-nums text-sm font-bold text-blue-600">
+                        {formatBDT(Number(info.getValue() || 0), { locale })}
+                    </span>
+                ),
                 size: 130,
+                meta: { align: 'end' },
             }),
         ];
-    }, [t, warehouseColumns, warehouses]);
-
-    const strings = t.inventoryReports.stockOnHand;
+    }, [strings, warehouseColumns, warehouses, locale]);
 
     // Stock is counted per warehouse, so a scope with none of them has nothing
     // to report on — a different answer from "these shelves are bare", and the
@@ -282,6 +302,101 @@ export default function StockOnHandPage() {
         : warehouseColumns.length === 0
             ? strings.noWarehouses
             : strings.emptyMessage;
+
+    const filters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'warehouse',
+                type: 'select',
+                label: t.inventoryLedger.warehouseLabel,
+                value: warehouseId || null,
+                onChange: (v) => setWarehouseId(v ?? ''),
+                options: visibleWarehouses.map((warehouse: any) => ({
+                    value: warehouse.id,
+                    label: warehouseLabel(warehouse, visibleWarehouses),
+                })),
+            },
+            {
+                id: 'group',
+                type: 'select',
+                label: strings.columns.group,
+                value: groupId || null,
+                onChange: (v) => {
+                    setGroupId(v ?? '');
+                    setSubgroupId('');
+                },
+                options: groups.map((group: any) => ({ value: group.id, label: group.name })),
+            },
+            {
+                id: 'subgroup',
+                type: 'select',
+                label: t.inventory.columns.subgroup,
+                value: subgroupId || null,
+                onChange: (v) => setSubgroupId(v ?? ''),
+                options: filteredSubgroups.map((subgroup: any) => ({ value: subgroup.id, label: subgroup.name })),
+                more: true,
+            },
+            {
+                id: 'brand',
+                type: 'select',
+                label: strings.columns.brand,
+                value: brandId || null,
+                onChange: (v) => setBrandId(v ?? ''),
+                options: brands.map((brand: any) => ({ value: brand.id, label: brand.name })),
+            },
+            {
+                id: 'includeZeroStock',
+                type: 'toggle',
+                control: 'checkbox',
+                label: strings.showZeroStock,
+                pressed: includeZeroStock,
+                onChange: setIncludeZeroStock,
+            },
+        ],
+        [
+            t,
+            strings,
+            warehouseId,
+            visibleWarehouses,
+            groupId,
+            groups,
+            subgroupId,
+            filteredSubgroups,
+            brandId,
+            brands,
+            includeZeroStock,
+        ],
+    );
+
+    const stats = useMemo(() => {
+        const items: ListStat[] = [
+            {
+                id: 'totalStockValue',
+                icon: <Wallet aria-hidden />,
+                label: strings.totalStockValue,
+                value: formatBDT(Number(summary?.totalStockValue || 0), { locale }),
+            },
+            {
+                id: 'totalQuantity',
+                icon: <Boxes aria-hidden />,
+                label: strings.totalQuantity,
+                value: Number(summary?.totalQuantity ?? 0).toLocaleString(locale),
+            },
+            {
+                id: 'productsInStock',
+                icon: <Package aria-hidden />,
+                label: strings.productsInStock,
+                value: Number(summary?.productCount ?? 0).toLocaleString(locale),
+            },
+            {
+                id: 'warehousesCounted',
+                icon: <Warehouse aria-hidden />,
+                label: strings.warehousesCounted,
+                value: warehouseColumns.length.toLocaleString(locale),
+            },
+        ];
+        return { items, loading, label: listUi.statsLabel };
+    }, [summary, warehouseColumns.length, loading, locale, strings, listUi]);
 
     return (
         <PageShell>
@@ -296,25 +411,6 @@ export default function StockOnHandPage() {
                 )}
                 actions={<BranchFilter scope={branch} />}
             />
-
-            <div className="grid md:grid-cols-4 gap-4">
-                <div className="bg-white border border-gray-100 rounded-lg p-5">
-                    <div className="text-xs font-medium text-gray-500">{strings.totalStockValue}</div>
-                    <div className="text-2xl font-bold text-blue-700 mt-2">{formatBDT(Number(summary?.totalStockValue || 0))}</div>
-                </div>
-                <div className="bg-white border border-gray-100 rounded-lg p-5">
-                    <div className="text-xs font-medium text-gray-500">{strings.totalQuantity}</div>
-                    <div className="text-2xl font-bold text-gray-900 mt-2">{summary?.totalQuantity ?? 0}</div>
-                </div>
-                <div className="bg-white border border-gray-100 rounded-lg p-5">
-                    <div className="text-xs font-medium text-gray-500">{strings.productsInStock}</div>
-                    <div className="text-2xl font-bold text-gray-900 mt-2">{summary?.productCount ?? 0}</div>
-                </div>
-                <div className="bg-white border border-gray-100 rounded-lg p-5">
-                    <div className="text-xs font-medium text-gray-500">{strings.warehousesCounted}</div>
-                    <div className="text-2xl font-bold text-gray-900 mt-2">{warehouseColumns.length}</div>
-                </div>
-            </div>
 
             {/* A read that failed is not an empty shop. Saying which is the
                 difference between "you hold nothing" and "we could not ask". */}
@@ -339,54 +435,6 @@ export default function StockOnHandPage() {
                 </div>
             )}
 
-            <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-center">
-                <select
-                    value={warehouseId}
-                    onChange={(e) => setWarehouseId(e.target.value)}
-                    aria-label={strings.allWarehouses}
-                    className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[200px] min-h-touch"
-                >
-                    <option value="">{strings.allWarehouses}</option>
-                    {visibleWarehouses.map((warehouse: any) => <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, visibleWarehouses)}</option>)}
-                </select>
-                <select
-                    value={groupId}
-                    onChange={(e) => { setGroupId(e.target.value); setSubgroupId(''); }}
-                    aria-label={strings.allGroups}
-                    className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[200px] min-h-touch"
-                >
-                    <option value="">{strings.allGroups}</option>
-                    {groups.map((group: any) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                </select>
-                <select
-                    value={subgroupId}
-                    onChange={(e) => setSubgroupId(e.target.value)}
-                    aria-label={strings.allSubgroups}
-                    className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[200px] min-h-touch"
-                >
-                    <option value="">{strings.allSubgroups}</option>
-                    {filteredSubgroups.map((subgroup: any) => <option key={subgroup.id} value={subgroup.id}>{subgroup.name}</option>)}
-                </select>
-                <select
-                    value={brandId}
-                    onChange={(e) => setBrandId(e.target.value)}
-                    aria-label={strings.allBrands}
-                    className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[200px] min-h-touch"
-                >
-                    <option value="">{strings.allBrands}</option>
-                    {brands.map((brand: any) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
-                </select>
-                <label className="flex items-center gap-2 text-sm text-gray-600 min-h-touch">
-                    <input
-                        type="checkbox"
-                        checked={includeZeroStock}
-                        onChange={(e) => setIncludeZeroStock(e.target.checked)}
-                        className="w-4 h-4 accent-blue-600"
-                    />
-                    {strings.showZeroStock}
-                </label>
-            </div>
-
             <DataTable<StockOnHandRow>
                 tableId="inventory-stock-on-hand"
                 columns={columns}
@@ -396,6 +444,11 @@ export default function StockOnHandPage() {
                 emptyMessage={emptyMessage}
                 emptyIcon={<Warehouse className="w-16 h-16 text-gray-200" />}
                 searchPlaceholder={strings.searchPlaceholder}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
             />
 
             <p className="text-xs text-gray-500">{strings.valuationBasisNote}</p>

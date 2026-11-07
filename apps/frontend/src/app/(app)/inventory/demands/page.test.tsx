@@ -26,6 +26,21 @@ jest.mock('next/navigation', () => ({
     useSearchParams: () => ({ get: jest.fn() }),
 }));
 
+// Desktop width: the one-row filter toolbar (the phone gets a sheet instead).
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
+}));
+
+/** A filter chip on the toolbar row — a button that opens its own popover. */
+function chip(name: string | RegExp): HTMLElement {
+    const found = screen
+        .getAllByRole('button', { name })
+        .find((button) => button.getAttribute('aria-haspopup') === 'dialog');
+    if (!found) throw new Error(`No filter chip named ${String(name)}`);
+    return found;
+}
+
 const tenantState = {
     planCode: 'pro',
     features: {},
@@ -125,7 +140,8 @@ describe('ProductDemandsPage', () => {
         render(<ProductDemandsPage />);
         await screen.findByText('PD-00001');
 
-        fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'SUBMITTED' } });
+        fireEvent.click(chip('Status'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Submitted' }));
 
         await waitFor(() => {
             expect(api.getProductDemands).toHaveBeenLastCalledWith(
@@ -134,11 +150,11 @@ describe('ProductDemandsPage', () => {
         });
     });
 
-    it('narrows to the caller’s own demands when "Only mine" is ticked', async () => {
+    it('narrows to the caller’s own demands when "Only mine" is pressed', async () => {
         render(<ProductDemandsPage />);
         await screen.findByText('PD-00001');
 
-        fireEvent.click(screen.getByLabelText('Only mine'));
+        fireEvent.click(screen.getByRole('button', { name: 'Only mine' }));
 
         await waitFor(() => {
             expect(api.getProductDemands).toHaveBeenLastCalledWith(

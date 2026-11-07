@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { FolderTree, Pencil, Plus, Receipt, Tags, Trash2 } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
 import { AccountingPageShell } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -199,7 +200,7 @@ export default function ExpenseCategoriesPage() {
                     return (
                         <Link
                             href={`${routes.accounting.expenseHeads}?category=${row.original.id}`}
-                            className="inline-flex min-h-touch items-center gap-2 text-sm text-blue-600 hover:underline"
+                            className="inline-flex max-md:min-h-touch items-center gap-2 text-sm text-blue-600 hover:underline"
                         >
                             <span className="font-medium text-gray-700">{count}</span>
                             {t.expenses.heads}
@@ -219,14 +220,19 @@ export default function ExpenseCategoriesPage() {
                 id: 'actions',
                 header: t.common.actions,
                 cell: ({ row }) => (
-                    <div className="flex items-center gap-1">
-                        <button type="button" onClick={() => openEdit(row.original)} className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-lg text-gray-400 hover:bg-blue-50 hover:text-blue-600" title={t.expenses.editCategory}>
-                            <Pencil className="w-4 h-4" />
-                        </button>
-                        <button type="button" onClick={() => handleDelete(row.original)} className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-danger" title={t.common.delete}>
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    </div>
+                    <RowActions>
+                        <RowActionButton
+                            icon={<Pencil />}
+                            label={t.expenses.editCategory}
+                            onClick={() => openEdit(row.original)}
+                        />
+                        <RowActionButton
+                            icon={<Trash2 />}
+                            label={t.common.delete}
+                            intent="danger"
+                            onClick={() => handleDelete(row.original)}
+                        />
+                    </RowActions>
                 ),
                 size: 90,
             }),
