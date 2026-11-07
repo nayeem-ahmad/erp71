@@ -1,82 +1,125 @@
 'use client';
 
-import { Suspense, useEffect, useId, useMemo } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { ScrollText } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
-import { Alert, BranchFilter, Button, CompactStat, Field, Input, PageShell } from '@/components/ui';
+import { Boxes, FileText, ListOrdered, ScrollText, Undo2, Wallet } from 'lucide-react';
+import { DataTable, type ListFilter, type ListFilterOption, type ListStat } from '@/components/data-table';
+import { Alert, BranchFilter, PageShell } from '@/components/ui';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import SearchFilterPicker from '@/components/reports/SearchFilterPicker';
-import { searchProductOptions, searchSupplierOptions } from '@/components/reports/filter-searches';
-import { useLineItemFilters } from '@/components/reports/useLineItemFilters';
+import { defaultLineItemWindow } from '@/components/reports/useLineItemFilters';
+import { searchProductOptions } from '@/components/reports/filter-searches';
 import { useServerList } from '@/hooks/useServerList';
-import { api, type Paginated, type PurchaseLineItemRow, type PurchaseLineItemsReport } from '@/lib/api';
+import { api, type Paginated, type PurchaseLineItemParams, type PurchaseLineItemRow, type PurchaseLineItemsReport } from '@/lib/api';
 import { formatBDT, formatDate, formatNumber } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { handleBranchForbidden } from '@/lib/branch-scope';
+import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
+import type { CreatedRange } from '@/lib/created-range';
+import { numberConditionParam, type NumberCondition } from '@/lib/number-condition';
 import { routes } from '@/lib/routes';
+import { supplierListFilter } from '../../components/supplier-list-filter';
+import { reportPeriodFilter, reportPeriodQuery } from '../report-period';
 
 type PurchaseLinePage = Paginated<PurchaseLineItemRow> & PurchaseLineItemsReport;
+type MultiSelectFilter = Extract<ListFilter, { type: 'multi-select' }>;
 
 const columnHelper = createColumnHelper<PurchaseLineItemRow>();
 
-/**
- * Purchase > Reports > Purchase Line Items: every line of every purchase that
- * still stands, narrowed by period, supplier, product, branch and free text —
- * "what did we pay Rahman Traders for rice this quarter, bill by bill".
- */
+const idList = (raw: string | null) => (raw ? raw.split(',').map((id) => id.trim()).filter(Boolean) : []);
+
 function PurchaseLineItemsContent() {
     const { t, locale } = useI18n();
     const copy = t.purchaseReports.lineItems;
-    const fieldId = useId();
-    const filters = useLineItemFilters('supplierId');
-    const { nameFromResponse, branch } = filters;
+    const ui = t.purchaseReports.listUi;
+    const searchParams = useSearchParams();
+    const branch = useBranchScope();
+
+    const [initial] = useState(() => {
+        const opening = defaultLineItemWindow();
+        return {
+            period: { from: searchParams.get('from') ?? opening.from, to: searchParams.get('to') ?? opening.to },
+            supplierIds: idList(searchParams.get('supplierId')),
+            productIds: idList(searchParams.get('productId')),
+        };
+    });
+    const [period, setPeriod] = useState<CreatedRange>(initial.period);
+    const [supplierIds, setSupplierIds] = useState<string[]>(initial.supplierIds);
+    const [productIds, setProductIds] = useState<string[]>(initial.productIds);
+    const [unitCost, setUnitCost] = useState<NumberCondition | null>(null);
+    const [quantity, setQuantity] = useState<NumberCondition | null>(null);
+    const [returned, setReturned] = useState<string | null>(null);
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
+
+    const query = useMemo<PurchaseLineItemParams>(
+        () => ({
+            ...reportPeriodQuery(period),
+            storeId: branch.apiStoreId,
+            supplierId: supplierIds.length ? supplierIds.join(',') : undefined,
+            productId: productIds.length ? productIds.join(',') : undefined,
+            unitCost: numberConditionParam(unitCost),
+            quantity: numberConditionParam(quantity),
+            returned: returned === 'yes' || returned === 'no' ? returned : undefined,
+            search: debouncedSearch || undefined,
+        }),
+        [period, branch.apiStoreId, supplierIds, productIds, unitCost, quantity, returned, debouncedSearch],
+    );
 
     const { items, response, loading, error, serverPagination } = useServerList<PurchaseLineItemRow, PurchaseLinePage>({
         tableId: 'purchase-line-items',
         initialSort: { id: 'date', desc: true },
-        deps: filters.deps,
+        deps: [query],
         enabled: branch.ready,
-        columnFilters: true,
         fetch: async (params) => {
             const report = await api.getPurchaseLineItems({
-                ...filters.query,
+                ...query,
                 page: params.page,
                 limit: params.limit,
                 sortBy: params.sortBy,
                 sortDir: params.sortDir,
-                filters: params.filters,
             });
             return { ...report, items: report.rows, ...report.pagination };
         },
     });
+    useBranchForbiddenReset(error, branch, t.dashboardLayout.branchFilterForbidden);
 
+    const [named, setNamed] = useState<{ suppliers: ListFilterOption[]; products: ListFilterOption[] }>({
+        suppliers: [],
+        products: [],
+    });
     useEffect(() => {
-        if (response) nameFromResponse({ party: response.filters.supplier, product: response.filters.product });
-    }, [response, nameFromResponse]);
-
-    // A branch the server refused: say so and go back to the header branch.
-    useEffect(() => {
-        if (error) handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [error]);
+        if (!response) return;
+        const filters = response.filters;
+        const suppliers = filters.suppliers ?? (filters.supplier ? [filters.supplier] : []);
+        const products = filters.products ?? (filters.product ? [filters.product] : []);
+        setNamed((current) => ({
+            suppliers: suppliers.length
+                ? suppliers.map((supplier) => ({ value: supplier.id, label: supplier.name }))
+                : current.suppliers,
+            products: products.length
+                ? products.map((product) => ({ value: product.id, label: product.name }))
+                : current.products,
+        }));
+    }, [response]);
 
     const summary = response?.summary;
 
     const columns = useMemo<ColumnDef<PurchaseLineItemRow, any>[]>(() => {
-        const muted = <span className="text-gray-300">—</span>;
+        const muted = <span className="text-gray-400">{t.shared.dash}</span>;
 
         return [
-            // Accessors return what an export should print; the cells dress it.
             columnHelper.accessor((row) => formatDate(row.date, locale), {
                 id: 'date',
                 header: copy.columns.date,
-                // The period pickers filter this column.
-                enableColumnFilter: false,
                 size: 96,
-                cell: (info) => <span className="whitespace-nowrap text-sm text-gray-700">{info.getValue()}</span>,
+                cell: (info) => <span className="whitespace-nowrap">{info.getValue()}</span>,
             }),
             columnHelper.accessor('purchaseNumber', {
                 id: 'bill',
@@ -86,15 +129,11 @@ function PurchaseLineItemsContent() {
                     const row = info.row.original;
                     return (
                         <span className="flex flex-col">
-                            <Link
-                                href={routes.purchases.purchaseInvoice(row.purchaseId)}
-                                className="text-sm font-semibold text-blue-600 hover:underline"
-                            >
+                            <Link href={routes.purchases.purchaseInvoice(row.purchaseId)} className="font-medium text-blue-600 hover:underline">
                                 {row.purchaseNumber}
                             </Link>
-                            {/* The supplier's own bill number — what their statement quotes. */}
                             {row.referenceNumber && (
-                                <span className="text-xs text-gray-400">{row.referenceNumber}</span>
+                                <span className="text-xs text-gray-500">{row.referenceNumber}</span>
                             )}
                         </span>
                     );
@@ -105,11 +144,6 @@ function PurchaseLineItemsContent() {
                 header: copy.columns.supplier,
                 size: 150,
                 meta: { hideOnMobile: true },
-                cell: (info) => (
-                    <span className={`text-sm ${info.row.original.supplier ? 'text-gray-800' : 'text-gray-400'}`}>
-                        {info.getValue()}
-                    </span>
-                ),
             }),
             columnHelper.accessor((row) => row.store?.name ?? '', {
                 id: 'branch',
@@ -117,11 +151,8 @@ function PurchaseLineItemsContent() {
                 size: 110,
                 enableSorting: false,
                 meta: { hideOnMobile: true },
-                cell: (info) => (info.getValue() ? <span className="text-sm text-gray-600">{info.getValue()}</span> : muted),
+                cell: (info) => info.getValue() || muted,
             }),
-            // The SKU rides under the name rather than in a column of its own, so
-            // the line's value stays on screen at laptop width; the export still
-            // carries both.
             columnHelper.accessor((row) => (row.product.sku ? `${row.product.name} (${row.product.sku})` : row.product.name), {
                 id: 'product',
                 header: copy.columns.product,
@@ -130,8 +161,8 @@ function PurchaseLineItemsContent() {
                     const { product } = info.row.original;
                     return (
                         <span className="flex flex-col">
-                            <span className="text-sm font-medium text-gray-900">{product.name}</span>
-                            {product.sku && <span className="text-xs text-gray-400">{product.sku}</span>}
+                            <span>{product.name}</span>
+                            {product.sku && <span className="text-xs text-gray-500">{product.sku}</span>}
                         </span>
                     );
                 },
@@ -140,62 +171,120 @@ function PurchaseLineItemsContent() {
                 id: 'quantity',
                 header: copy.columns.quantity,
                 size: 64,
-                cell: (info) => (
-                    <span className="text-sm font-semibold tabular-nums text-gray-900">
-                        {formatNumber(info.getValue(), locale)}
-                    </span>
-                ),
+                meta: { align: 'end' },
+                cell: (info) => formatNumber(info.getValue(), locale),
             }),
             columnHelper.accessor('unitCost', {
                 id: 'unitCost',
                 header: copy.columns.unitCost,
                 size: 104,
-                meta: { hideOnMobile: true },
-                cell: (info) => (
-                    <span className="text-sm tabular-nums text-gray-700">{formatBDT(info.getValue(), { locale })}</span>
-                ),
+                meta: { align: 'end', hideOnMobile: true },
+                cell: (info) => formatBDT(info.getValue(), { locale }),
             }),
             columnHelper.accessor('amount', {
                 id: 'amount',
                 header: copy.columns.amount,
                 size: 116,
-                cell: (info) => (
-                    <span className="text-sm font-semibold tabular-nums text-gray-900">
-                        {formatBDT(info.getValue(), { locale })}
-                    </span>
-                ),
+                meta: { align: 'end' },
+                cell: (info) => formatBDT(info.getValue(), { locale }),
             }),
             columnHelper.accessor('returnedQuantity', {
                 id: 'returned',
                 header: copy.columns.returned,
-                // Summed from the line's returns, not a stored value the query could match.
-                enableColumnFilter: false,
                 size: 96,
                 enableSorting: false,
-                meta: { hideOnMobile: true },
+                meta: { align: 'end', hideOnMobile: true },
                 cell: (info) => {
                     const row = info.row.original;
                     if (!row.returnedQuantity) return muted;
                     return (
-                        <span className="flex flex-col">
-                            <span className="text-sm font-semibold tabular-nums text-amber-700">
-                                {formatNumber(row.returnedQuantity, locale)}
-                            </span>
-                            <span className="text-xs tabular-nums text-gray-500">
-                                {formatBDT(row.returnedAmount, { locale })}
-                            </span>
+                        <span className="flex flex-col items-end">
+                            <span className="text-amber-700">{formatNumber(row.returnedQuantity, locale)}</span>
+                            <span className="text-xs text-gray-500">{formatBDT(row.returnedAmount, { locale })}</span>
                         </span>
                     );
                 },
             }),
         ];
-    }, [copy, locale]);
+    }, [copy, locale, t.shared.dash]);
 
-    const returnedNote = (value: string) => (
-        <span className="mt-0.5 block text-xs font-normal text-amber-700">
-            {formatMessage(copy.returned, { value })}
-        </span>
-    );
+    const filters = useMemo<ListFilter[]>(() => {
+        const supplier = supplierListFilter({
+            label: copy.supplierLabel,
+            noSupplierLabel: copy.noSupplier,
+            value: supplierIds,
+            onChange: setSupplierIds,
+        }) as MultiSelectFilter;
+        return [
+            reportPeriodFilter({ label: ui.period, value: period, onChange: setPeriod, fallback: defaultLineItemWindow }),
+            { ...supplier, options: [...supplier.options, ...named.suppliers] },
+            {
+                id: 'product',
+                type: 'multi-select',
+                label: copy.productLabel,
+                value: productIds,
+                onChange: setProductIds,
+                options: named.products,
+                loadOptions: (term) =>
+                    searchProductOptions(term).then((found) =>
+                        found.map((product) => ({
+                            value: product.id,
+                            label: product.detail ? `${product.name} (${product.detail})` : product.name,
+                        })),
+                    ),
+            },
+            {
+                id: 'unitCost',
+                type: 'number',
+                label: copy.columns.unitCost,
+                value: unitCost,
+                onChange: setUnitCost,
+                money: true,
+            },
+            {
+                id: 'quantity',
+                type: 'number',
+                label: copy.columns.quantity,
+                value: quantity,
+                onChange: setQuantity,
+                more: true,
+            },
+            {
+                id: 'returned',
+                type: 'select',
+                label: ui.returnedFilter,
+                value: returned,
+                onChange: setReturned,
+                options: [
+                    { value: 'yes', label: ui.someReturned },
+                    { value: 'no', label: ui.noneReturned },
+                ],
+                more: true,
+            },
+        ];
+    }, [copy, ui, period, supplierIds, productIds, named, unitCost, quantity, returned]);
+
+    const stats = useMemo(() => {
+        const n = (value: number) => formatNumber(value, locale);
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const dash = t.shared.dash;
+        const returnedAmount = summary?.returnedAmount ?? 0;
+        const items: ListStat[] = [
+            { id: 'lines', icon: <ListOrdered aria-hidden />, label: copy.lines, value: summary ? n(summary.lineCount) : dash },
+            { id: 'bills', icon: <FileText aria-hidden />, label: copy.bills, value: summary ? n(summary.billCount) : dash },
+            { id: 'quantity', icon: <Boxes aria-hidden />, label: copy.quantity, value: summary ? n(summary.quantity) : dash },
+            { id: 'amount', icon: <Wallet aria-hidden />, label: copy.amount, value: summary ? money(summary.amount) : dash },
+            {
+                id: 'returned',
+                icon: <Undo2 aria-hidden />,
+                label: copy.columns.returned,
+                value: summary ? money(returnedAmount) : dash,
+                hint: summary?.returnedQuantity ? formatMessage(ui.returnedUnits, { count: n(summary.returnedQuantity) }) : undefined,
+                tone: returnedAmount > 0 ? 'danger' : 'default',
+            },
+        ];
+        return { items, loading: loading && !summary, label: ui.statsLabel };
+    }, [summary, loading, locale, copy, ui, t.shared.dash]);
 
     return (
         <PageShell>
@@ -211,98 +300,12 @@ function PurchaseLineItemsContent() {
                 actions={<BranchFilter scope={branch} />}
             />
 
-            <div className="space-y-3 rounded-lg border border-gray-100 bg-white p-3 md:p-4">
-                <div className="grid gap-3 md:grid-cols-2">
-                    <SearchFilterPicker
-                        copy={{
-                            label: copy.supplierLabel,
-                            placeholder: copy.supplierPlaceholder,
-                            searchLabel: copy.supplierSearchLabel,
-                            clear: copy.clear,
-                            searching: copy.searching,
-                            noMatches: copy.noMatches,
-                        }}
-                        selected={filters.party}
-                        onSelect={filters.setParty}
-                        search={searchSupplierOptions}
-                    />
-                    <SearchFilterPicker
-                        copy={{
-                            label: copy.productLabel,
-                            placeholder: copy.productPlaceholder,
-                            searchLabel: copy.productSearchLabel,
-                            clear: copy.clear,
-                            searching: copy.searching,
-                            noMatches: copy.noMatches,
-                        }}
-                        selected={filters.product}
-                        onSelect={filters.setProduct}
-                        search={searchProductOptions}
-                    />
-                </div>
-
-                <div className="flex flex-wrap items-end gap-3">
-                    <Field label={t.accountingShared.from} htmlFor={`${fieldId}-from`} className="min-w-[140px]">
-                        <Input
-                            id={`${fieldId}-from`}
-                            type="date"
-                            value={filters.from}
-                            max={filters.to || undefined}
-                            onChange={(e) => filters.setFrom(e.target.value)}
-                        />
-                    </Field>
-                    <Field label={t.accountingShared.to} htmlFor={`${fieldId}-to`} className="min-w-[140px]">
-                        <Input
-                            id={`${fieldId}-to`}
-                            type="date"
-                            value={filters.to}
-                            min={filters.from || undefined}
-                            onChange={(e) => filters.setTo(e.target.value)}
-                        />
-                    </Field>
-                    <Field label={copy.searchLabel} htmlFor={`${fieldId}-search`} className="min-w-[200px] flex-[2]">
-                        <Input
-                            id={`${fieldId}-search`}
-                            type="search"
-                            value={filters.search}
-                            placeholder={copy.searchPlaceholder}
-                            onChange={(e) => filters.setSearch(e.target.value)}
-                        />
-                    </Field>
-                    <Button variant="secondary" onClick={filters.reset}>
-                        {copy.clearFilters}
-                    </Button>
-                </div>
-            </div>
-
             {error ? (
                 <Alert tone="danger">
                     {formatMessage(copy.loadError, { message: error instanceof Error ? error.message : String(error) })}
                 </Alert>
             ) : null}
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <CompactStat label={copy.lines} value={formatNumber(summary?.lineCount ?? 0, locale)} />
-                <CompactStat label={copy.bills} value={formatNumber(summary?.billCount ?? 0, locale)} />
-                <CompactStat
-                    label={copy.quantity}
-                    value={
-                        <>
-                            {formatNumber(summary?.quantity ?? 0, locale)}
-                            {summary?.returnedQuantity ? returnedNote(formatNumber(summary.returnedQuantity, locale)) : null}
-                        </>
-                    }
-                />
-                <CompactStat
-                    label={copy.amount}
-                    value={
-                        <>
-                            {formatBDT(summary?.amount ?? 0, { locale })}
-                            {summary?.returnedAmount ? returnedNote(formatBDT(summary.returnedAmount, { locale })) : null}
-                        </>
-                    }
-                />
-            </div>
             <p className="text-xs text-gray-500">{copy.basisNote}</p>
 
             <DataTable<PurchaseLineItemRow>
@@ -313,7 +316,13 @@ function PurchaseLineItemsContent() {
                 isLoading={loading}
                 emptyMessage={copy.emptyMessage}
                 emptyIcon={<ScrollText className="h-16 w-16 text-gray-200" />}
-                showSearch={false}
+                searchPlaceholder={copy.searchPlaceholder}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
                 getRowId={(row) => row.id}
                 serverPagination={serverPagination}
             />

@@ -20,8 +20,8 @@ function mockDb() {
             aggregate: jest.fn().mockResolvedValue({ _sum: { quantity: null, line_total: null } }),
         },
         store: { findFirst: jest.fn().mockResolvedValue(null) },
-        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
-        product: { findFirst: jest.fn().mockResolvedValue(null) },
+        supplier: { findMany: jest.fn().mockResolvedValue([]) },
+        product: { findMany: jest.fn().mockResolvedValue([]) },
     };
 }
 
@@ -49,7 +49,7 @@ describe('purchaseLineFilter', () => {
             TZ,
         );
 
-        expect(purchase).toMatchObject({ store_id: 'store-1', supplier_id: 'sup-1' });
+        expect(purchase).toMatchObject({ store_id: 'store-1', supplier_id: { in: ['sup-1'] } });
         expect(line.product_id).toBe('prod-1');
         expect(line.OR).toEqual([
             { product: { name: { contains: 'BILL-9', mode: 'insensitive' } } },
@@ -185,12 +185,12 @@ describe('PurchaseLineItemsService', () => {
     });
 
     it('names the supplier it was narrowed by, looked up inside the tenant only', async () => {
-        db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', name: 'Rahman Traders', phone: null });
+        db.supplier.findMany.mockResolvedValue([{ id: 'sup-1', name: 'Rahman Traders', phone: null }]);
 
         const report = await service.getPurchaseLineItems(TENANT, { supplierId: 'sup-1' }, TZ);
 
-        expect(db.supplier.findFirst).toHaveBeenCalledWith(
-            expect.objectContaining({ where: { id: 'sup-1', tenant_id: TENANT } }),
+        expect(db.supplier.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { id: { in: ['sup-1'] }, tenant_id: TENANT } }),
         );
         expect(report.filters.supplier).toEqual({ id: 'sup-1', name: 'Rahman Traders', phone: null });
     });

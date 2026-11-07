@@ -499,6 +499,22 @@ export const purchasesMessages = {
         },
     },
     purchaseReports: {
+        listUi: {
+            period: 'Period',
+            statsLabel: 'Report figures',
+            groupBy: 'Group by',
+            groupDay: 'Day',
+            groupMonth: 'Month',
+            withReturns: 'With returns',
+            subgroup: 'Subgroup',
+            topProduct: 'Top product',
+            shareOfSpend: '{pct}% of spend',
+            returnedFilter: 'Returns',
+            someReturned: 'Something returned',
+            noneReturned: 'Nothing returned',
+            returnedUnits: '{count} units',
+            total: 'Total',
+        },
         lineItems: {
             title: "Lignes d'achat",
             subtitle: "Chaque ligne de chaque achat — recherche par période, fournisseur, produit ou succursale",

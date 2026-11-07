@@ -499,6 +499,22 @@ export const purchasesMessages = {
             },
         },
         purchaseReports: {
+            listUi: {
+                period: 'Period',
+                statsLabel: 'Report figures',
+                groupBy: 'Group by',
+                groupDay: 'Day',
+                groupMonth: 'Month',
+                withReturns: 'With returns',
+                subgroup: 'Subgroup',
+                topProduct: 'Top product',
+                shareOfSpend: '{pct}% of spend',
+                returnedFilter: 'Returns',
+                someReturned: 'Something returned',
+                noneReturned: 'Nothing returned',
+                returnedUnits: '{count} units',
+                total: 'Total',
+            },
             lineItems: {
                 title: "ক্রয়ের লাইন আইটেম",
                 subtitle: "প্রতিটি ক্রয়ের প্রতিটি লাইন — সময়কাল, সরবরাহকারী, পণ্য বা শাখা দিয়ে খুঁজুন",

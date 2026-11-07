@@ -499,6 +499,22 @@ export const purchasesMessages = {
         },
     },
     purchaseReports: {
+        listUi: {
+            period: 'Period',
+            statsLabel: 'Report figures',
+            groupBy: 'Group by',
+            groupDay: 'Day',
+            groupMonth: 'Month',
+            withReturns: 'With returns',
+            subgroup: 'Subgroup',
+            topProduct: 'Top product',
+            shareOfSpend: '{pct}% of spend',
+            returnedFilter: 'Returns',
+            someReturned: 'Something returned',
+            noneReturned: 'Nothing returned',
+            returnedUnits: '{count} units',
+            total: 'Total',
+        },
         lineItems: {
             title: "بنود المشتريات",
             subtitle: "كل بند من كل عملية شراء — ابحث حسب الفترة أو المورّد أو المنتج أو الفرع",
