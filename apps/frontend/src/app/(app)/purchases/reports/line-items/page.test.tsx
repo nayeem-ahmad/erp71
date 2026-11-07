@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { defaultLineItemWindow } from '@/components/reports/useLineItemFilters';
 import PurchaseLineItemsPage from './page';
 import { mockBranchScope } from '@/test-utils/branch-scope';
@@ -83,6 +83,14 @@ function lastQuery() {
     return calls[calls.length - 1][0];
 }
 
+function chip(name: RegExp) {
+    return screen.getAllByRole('button', { name }).find((button) => button.getAttribute('aria-haspopup') === 'dialog')!;
+}
+
+function tile(label: string) {
+    return within(screen.getByRole('region', { name: 'Report figures' })).getByText(label).nextElementSibling?.textContent;
+}
+
 describe('PurchaseLineItemsPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -97,18 +105,6 @@ describe('PurchaseLineItemsPage', () => {
             pages: 1,
         });
         api().searchProductsByQuantity.mockResolvedValue([]);
-    });
-
-    // The table's advanced filters go to the server, so their matches are paged
-    // together rather than left wherever they fell in the unfiltered list.
-    it('filters on the server, from page 1, so the totals cover the same lines', async () => {
-        render(<PurchaseLineItemsPage />);
-        await waitFor(() => expect(api().getPurchaseLineItems).toHaveBeenCalled());
-
-        fireEvent.click(await screen.findByRole('button', { name: 'Filters' }));
-        fireEvent.change(screen.getByPlaceholderText(/^Filter Product/), { target: { value: 'rice' } });
-
-        await waitFor(() => expect(lastQuery()).toEqual(expect.objectContaining({ page: 1, filters: { product: 'rice' } })));
     });
 
     it('opens on the last 30 days, newest first', async () => {
@@ -129,21 +125,30 @@ describe('PurchaseLineItemsPage', () => {
         expect(screen.getByText('BILL-9')).toBeInTheDocument();
         expect(screen.getByText('Rahman Traders')).toBeInTheDocument();
         expect(screen.getByText('No supplier')).toBeInTheDocument();
-        expect(screen.getByText('Bills').nextElementSibling).toHaveTextContent('2');
-        expect(screen.getByText('Returned: 2')).toBeInTheDocument();
     });
 
-    it('narrows by a supplier found on the server', async () => {
+    it('states totals over every matching line in the strip, returns included', async () => {
         render(<PurchaseLineItemsPage />);
-        await waitFor(() => expect(api().getPurchaseLineItems).toHaveBeenCalled());
 
-        fireEvent.change(screen.getByLabelText('Filter by supplier'), { target: { value: 'rahman' } });
-        await waitFor(() =>
-            expect(api().getSuppliersPaged).toHaveBeenCalledWith({ search: 'rahman', limit: 20 }),
-        );
-        fireEvent.click(await screen.findByRole('option', { name: /Rahman Traders/ }));
+        await screen.findByRole('link', { name: 'P-1' });
+        expect(tile('Lines')).toBe('2');
+        expect(tile('Bills')).toBe('2');
+        expect(tile('Quantity')).toBe('25');
+        expect(tile('Amount')).toBe('৳ 7,700');
+        expect(tile('Returned')).toContain('৳ 900');
+        expect(tile('Returned')).toContain('2 units');
+    });
+
+    it('narrows by a supplier picked from the chip search, on the server, from page 1', async () => {
+        render(<PurchaseLineItemsPage />);
+        await screen.findByRole('link', { name: 'P-1' });
+
+        fireEvent.click(chip(/^Supplier/));
+        fireEvent.change(screen.getByRole('searchbox', { name: 'Search Supplier…' }), { target: { value: 'rahman' } });
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'Rahman Traders' }));
 
         await waitFor(() => expect(lastQuery()).toEqual(expect.objectContaining({ supplierId: 'sup-1', page: 1 })));
+        expect(api().getSuppliersPaged).toHaveBeenCalledWith({ search: 'rahman', limit: 20 });
     });
 
     it('sorts on the stored line total', async () => {

@@ -2,16 +2,20 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { Package } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { Award, Boxes, Package, Wallet } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
-import PageShell from '@/components/ui/compact/PageShell';
+import { formatMessage, useI18n } from '@/lib/i18n';
+import { matchesAnyOf, matchesNumberCondition, matchesSearch } from '@/lib/list-filter';
+import type { NumberCondition } from '@/lib/number-condition';
+import { toast } from '@/lib/toast';
+import type { CreatedRange } from '@/lib/created-range';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { BranchFilter } from '@/components/ui';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
-import { useI18n } from '@/lib/i18n';
+import { BranchFilter, PageShell } from '@/components/ui';
+import { defaultReportPeriod, reportPeriodFilter, reportPeriodQuery } from '../report-period';
 
 interface ProductRow {
     product: {
@@ -26,217 +30,229 @@ interface ProductRow {
     spendShare: number;
 }
 
-interface Summary {
-    totalSpend: number;
-    totalUnits: number;
-    productCount: number;
-}
+const NONE = '__none__';
 
 const columnHelper = createColumnHelper<ProductRow>();
 
-function defaultFrom() {
-    const d = new Date();
-    d.setDate(d.getDate() - 29);
-    return d.toISOString().slice(0, 10);
-}
-
-function defaultTo() {
-    return new Date().toISOString().slice(0, 10);
+function nameOptions(values: Array<string | null | undefined>) {
+    return [...new Set(values.filter((value): value is string => Boolean(value)))]
+        .sort((a, b) => a.localeCompare(b))
+        .map((value) => ({ value, label: value }));
 }
 
 export default function PurchasesByProductPage() {
     const { t, locale } = useI18n();
+    const copy = t.purchaseReports.byProduct;
+    const cols = copy.columns;
+    const ui = t.purchaseReports.listUi;
     const branch = useBranchScope();
     const [rows, setRows] = useState<ProductRow[]>([]);
-    const [summary, setSummary] = useState<Summary | null>(null);
-    const [groups, setGroups] = useState<any[]>([]);
-    const [subgroups, setSubgroups] = useState<any[]>([]);
-    const [groupId, setGroupId] = useState('');
-    const [subgroupId, setSubgroupId] = useState('');
-    const [fromDate, setFromDate] = useState(defaultFrom());
-    const [toDate, setToDate] = useState(defaultTo());
+    const [period, setPeriod] = useState<CreatedRange>(defaultReportPeriod);
+    const [search, setSearch] = useState('');
+    const [groups, setGroups] = useState<string[]>([]);
+    const [subgroups, setSubgroups] = useState<string[]>([]);
+    const [spendFilter, setSpendFilter] = useState<NumberCondition | null>(null);
+    const [unitsFilter, setUnitsFilter] = useState<NumberCondition | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        void Promise.all([load(), loadFilters()]);
-    }, []);
-
-    useEffect(() => {
         if (!branch.ready) return;
-        void load();
-    }, [branch.ready, branch.apiStoreId, groupId, subgroupId, fromDate, toDate]);
+        void loadReport();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch.ready, branch.apiStoreId, period]);
 
-    const load = async () => {
+    const loadReport = async () => {
         setLoading(true);
         try {
-            const data = await api.getPurchasesByProduct({
-                storeId: branch.apiStoreId,
-                groupId: groupId || undefined,
-                subgroupId: subgroupId || undefined,
-                from: fromDate || undefined,
-                to: toDate || undefined,
-            });
-            setSummary(data.summary);
-            setRows(data.rows);
-        } catch (err) {
-            if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
-            console.error('Failed to load purchases by product', err);
+            const data = await api.getPurchasesByProduct({ storeId: branch.apiStoreId, ...reportPeriodQuery(period) });
+            setRows(Array.isArray(data?.rows) ? data.rows : []);
+        } catch (error) {
+            setRows([]);
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
+            toast.error(error instanceof Error ? error.message : t.common.loadFailed);
         } finally {
             setLoading(false);
         }
     };
 
-    const loadFilters = async () => {
-        try {
-            const [groupData, subgroupData] = await Promise.all([
-                api.getProductGroups(),
-                api.getProductSubgroups(),
-            ]);
-            setGroups(groupData);
-            setSubgroups(subgroupData);
-        } catch (err) {
-            console.error('Failed to load filters', err);
-        }
-    };
+    const visible = useMemo(
+        () =>
+            rows.filter((row) => {
+                if (!matchesAnyOf(groups, row.product.group?.name ?? NONE)) return false;
+                if (!matchesAnyOf(subgroups, row.product.subgroup?.name ?? NONE)) return false;
+                if (!matchesNumberCondition(row.spend, spendFilter)) return false;
+                if (!matchesNumberCondition(row.unitsOrdered, unitsFilter)) return false;
+                return matchesSearch(search, row.product.name, row.product.sku, row.product.group?.name, row.product.subgroup?.name);
+            }),
+        [rows, groups, subgroups, spendFilter, unitsFilter, search],
+    );
 
-    const filteredSubgroups = useMemo(
-        () => subgroups.filter((s: any) => !groupId || s.group_id === groupId),
-        [subgroups, groupId],
+    const totals = useMemo(
+        () => ({
+            spend: visible.reduce((sum, row) => sum + row.spend, 0),
+            units: visible.reduce((sum, row) => sum + row.unitsOrdered, 0),
+            share: visible.reduce((sum, row) => sum + row.spendShare, 0),
+        }),
+        [visible],
     );
 
     const columns: ColumnDef<ProductRow, any>[] = useMemo(
         () => [
             columnHelper.accessor((row) => row.product.name, {
                 id: 'product',
-                header: t.purchaseReports.byProduct.columns.product,
+                header: cols.product,
+                footer: () => ui.total,
                 size: 240,
             }),
-            columnHelper.accessor((row) => row.product.sku ?? '-', {
+            columnHelper.accessor((row) => row.product.sku ?? t.shared.dash, {
                 id: 'sku',
-                header: t.purchaseReports.byProduct.columns.sku,
+                header: cols.sku,
                 size: 120,
+                meta: { hideOnMobile: true },
             }),
-            columnHelper.accessor((row) => row.product.group?.name ?? t.purchaseReports.byProduct.uncategorized, {
+            columnHelper.accessor((row) => row.product.group?.name ?? copy.uncategorized, {
                 id: 'group',
-                header: t.purchaseReports.byProduct.columns.group,
+                header: cols.group,
                 size: 160,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('unitsOrdered', {
-                header: t.purchaseReports.byProduct.columns.unitsOrdered,
-                size: 120,
+                header: cols.unitsOrdered,
+                cell: (info) => Number(info.getValue()).toLocaleString(locale),
+                footer: () => totals.units.toLocaleString(locale),
+                size: 110,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('spend', {
-                header: t.purchaseReports.byProduct.columns.spend,
+                header: cols.spend,
                 cell: (info) => formatBDT(Number(info.getValue()), { locale }),
-                size: 140,
+                footer: () => formatBDT(totals.spend, { locale }),
+                size: 130,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('spendShare', {
-                header: t.purchaseReports.byProduct.columns.share,
+                header: cols.share,
                 cell: (info) => (
                     <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-gray-100 rounded-full h-1.5 min-w-[60px]">
+                        <div className="h-1.5 min-w-[48px] flex-1 rounded-full bg-gray-100">
                             <div
-                                className="bg-blue-500 h-1.5 rounded-full"
-                                style={{ width: `${Math.min(info.getValue(), 100)}%` }}
+                                className="h-1.5 rounded-full bg-blue-600"
+                                style={{ width: `${Math.min(Number(info.getValue()), 100)}%` }}
                             />
                         </div>
-                        <span className="text-xs font-bold text-gray-600 w-12 text-end">
+                        <span className="w-12 text-end tabular-nums text-gray-600">
                             {Number(info.getValue()).toFixed(1)}%
                         </span>
                     </div>
                 ),
+                footer: () => `${totals.share.toFixed(1)}%`,
                 size: 180,
+                meta: { hideOnMobile: true },
             }),
         ],
-        [t, locale],
+        [cols, copy.uncategorized, ui.total, t.shared.dash, locale, totals],
     );
+
+    const filters = useMemo<ListFilter[]>(
+        () => [
+            reportPeriodFilter({ label: ui.period, value: period, onChange: setPeriod }),
+            {
+                id: 'group',
+                type: 'multi-select',
+                label: cols.group,
+                value: groups,
+                onChange: setGroups,
+                options: [
+                    { value: NONE, label: copy.uncategorized },
+                    ...nameOptions(rows.map((row) => row.product.group?.name)),
+                ],
+            },
+            {
+                id: 'spend',
+                type: 'number',
+                label: cols.spend,
+                value: spendFilter,
+                onChange: setSpendFilter,
+                money: true,
+            },
+            {
+                id: 'subgroup',
+                type: 'multi-select',
+                label: ui.subgroup,
+                value: subgroups,
+                onChange: setSubgroups,
+                options: [
+                    { value: NONE, label: copy.uncategorized },
+                    ...nameOptions(
+                        rows
+                            .filter((row) => matchesAnyOf(groups, row.product.group?.name ?? NONE))
+                            .map((row) => row.product.subgroup?.name),
+                    ),
+                ],
+                more: true,
+            },
+            {
+                id: 'units',
+                type: 'number',
+                label: cols.unitsOrdered,
+                value: unitsFilter,
+                onChange: setUnitsFilter,
+                more: true,
+            },
+        ],
+        [cols, ui, copy.uncategorized, period, rows, groups, subgroups, spendFilter, unitsFilter],
+    );
+
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const top = visible.reduce<ProductRow | null>((best, row) => (!best || row.spend > best.spend ? row : best), null);
+        const items: ListStat[] = [
+            { id: 'spend', icon: <Wallet aria-hidden />, label: copy.totalSpend, value: money(totals.spend) },
+            { id: 'units', icon: <Boxes aria-hidden />, label: copy.totalUnits, value: totals.units.toLocaleString(locale) },
+            { id: 'products', icon: <Package aria-hidden />, label: copy.products, value: visible.length.toLocaleString(locale) },
+            {
+                id: 'top',
+                icon: <Award aria-hidden />,
+                label: ui.topProduct,
+                value: top ? top.product.name : t.shared.dash,
+                hint: top ? formatMessage(ui.shareOfSpend, { pct: top.spendShare.toFixed(1) }) : undefined,
+            },
+        ];
+        return { items, loading, label: ui.statsLabel };
+    }, [visible, totals, loading, locale, copy, ui, t.shared.dash]);
 
     return (
         <PageShell>
-                <PageHeader
-                    title={t.purchaseReports.byProduct.title}
-                    subtitle={t.purchaseReports.byProduct.subtitle}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.purchase,
-                        t.purchaseReports.byProduct.title,
-                        'purchases',
-                    )}
-                    actions={<BranchFilter scope={branch} />}
-                />
+            <PageHeader
+                title={copy.title}
+                subtitle={copy.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.purchase,
+                    copy.title,
+                    'purchases',
+                )}
+                actions={<BranchFilter scope={branch} />}
+            />
 
-                <div className="grid md:grid-cols-3 gap-4">
-                    <div className="bg-white border border-gray-100 rounded-lg p-5">
-                        <div className="text-xs font-medium text-gray-500">{t.purchaseReports.byProduct.totalSpend}</div>
-                        <div className="text-2xl font-bold text-blue-700 mt-2">
-                            {formatBDT(Number(summary?.totalSpend ?? 0), { locale })}
-                        </div>
-                    </div>
-                    <div className="bg-white border border-gray-100 rounded-lg p-5">
-                        <div className="text-xs font-medium text-gray-500">{t.purchaseReports.byProduct.totalUnits}</div>
-                        <div className="text-2xl font-bold text-gray-900 mt-2">
-                            {summary?.totalUnits ?? 0}
-                        </div>
-                    </div>
-                    <div className="bg-white border border-gray-100 rounded-lg p-5">
-                        <div className="text-xs font-medium text-gray-500">{t.purchaseReports.byProduct.products}</div>
-                        <div className="text-2xl font-bold text-gray-900 mt-2">
-                            {summary?.productCount ?? 0}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
-                    <select
-                        value={groupId}
-                        onChange={(e) => { setGroupId(e.target.value); setSubgroupId(''); }}
-                        className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[200px]"
-                    >
-                        <option value="">{t.purchaseReports.byProduct.allGroups}</option>
-                        {groups.map((g: any) => (
-                            <option key={g.id} value={g.id}>{g.name}</option>
-                        ))}
-                    </select>
-                    <select
-                        value={subgroupId}
-                        onChange={(e) => setSubgroupId(e.target.value)}
-                        className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[200px]"
-                    >
-                        <option value="">{t.purchaseReports.byProduct.allSubgroups}</option>
-                        {filteredSubgroups.map((s: any) => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                    </select>
-                    <div className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-gray-500">{t.accountingShared.from}</span>
-                        <input
-                            type="date"
-                            value={fromDate}
-                            onChange={(e) => setFromDate(e.target.value)}
-                            className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium"
-                        />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-gray-500">{t.accountingShared.to}</span>
-                        <input
-                            type="date"
-                            value={toDate}
-                            onChange={(e) => setToDate(e.target.value)}
-                            className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium"
-                        />
-                    </div>
-                </div>
-
-                <DataTable<ProductRow>
-                    tableId="purchases-by-product"
-                    columns={columns}
-                    data={rows}
-                    title={t.purchaseReports.byProduct.tableTitle}
-                    isLoading={loading}
-                    emptyMessage={t.purchaseReports.byProduct.emptyMessage}
-                    emptyIcon={<Package className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.purchaseReports.byProduct.searchPlaceholder}
-                />
-    </PageShell>
+            <DataTable<ProductRow>
+                tableId="purchases-by-product"
+                columns={columns}
+                data={visible}
+                title={copy.tableTitle}
+                isLoading={loading}
+                emptyMessage={copy.emptyMessage}
+                emptyIcon={<Package className="w-16 h-16 text-gray-200" />}
+                searchPlaceholder={copy.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={filters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
+                getRowId={(row) => row.product.id}
+            />
+        </PageShell>
     );
 }

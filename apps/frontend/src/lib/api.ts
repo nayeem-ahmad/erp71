@@ -1130,7 +1130,15 @@ export type SalesLineItemParams = LineItemSearchParams & {
     /** Lines with something returned against them (`yes`) or nothing (`no`). */
     returned?: 'yes' | 'no';
 };
-export type PurchaseLineItemParams = LineItemSearchParams & { supplierId?: string };
+export type PurchaseLineItemParams = LineItemSearchParams & {
+    /** One supplier id or a comma-separated set; `none` is a bill with no supplier. */
+    supplierId?: string;
+    /** `gt:100`, `between:100,500` — see `numberConditionParam`. */
+    unitCost?: string;
+    quantity?: string;
+    /** Lines with something returned against them (`yes`) or nothing (`no`). */
+    returned?: 'yes' | 'no';
+};
 
 type LineItemProduct = { id: string; name: string; sku: string | null; unit_type?: string | null };
 type LineItemBranch = { id: string; name: string };
@@ -1200,7 +1208,11 @@ export interface SalesLineItemsReport {
 
 export interface PurchaseLineItemsReport {
     summary: LineItemTotals & { billCount: number };
-    filters: LineItemFilters & { supplier: PurchaseLineItemRow['supplier'] };
+    filters: LineItemFilters & {
+        supplier: PurchaseLineItemRow['supplier'];
+        suppliers?: NonNullable<PurchaseLineItemRow['supplier']>[];
+        products?: PurchaseLineItemRow['product'][];
+    };
     rows: PurchaseLineItemRow[];
     pagination: { page: number; limit: number; total: number; pages: number };
 }
