@@ -17,6 +17,7 @@ export const NAV_ROUTES: { path: string; label: string }[] = [
     { path: '/sales/orders', label: 'Sales Orders' },
     { path: '/sales/delivery', label: 'Delivery' },
     { path: '/sales/warranty-claims', label: 'Warranty Claims' },
+    { path: '/storefront', label: 'Online Orders' },
     { path: '/storefront/settings', label: 'Storefront Settings' },
     { path: '/sales/customers', label: 'Customers' },
     { path: '/sales/cashier-sessions', label: 'Cashier Sessions' },

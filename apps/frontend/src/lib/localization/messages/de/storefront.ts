@@ -153,7 +153,7 @@ export const storefrontMessages = {
     },
     dashboard: {
         orders: {
-            title: "Storefront-Bestellungen",
+            title: "Online-Bestellungen",
             description: "Online-Bestellungen aus Ihrem öffentlichen Shop",
             storeSettings: "Shop-Einstellungen",
             loading: "Bestellungen werden geladen…",

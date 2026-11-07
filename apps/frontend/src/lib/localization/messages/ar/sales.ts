@@ -311,7 +311,7 @@ export const salesMessages = {
                 customerDuesSummary: { title: "ملخص ذمم الزبائن", description: "كل زبون وما عليه الآن، حسب الفرع ومندوب المبيعات." },
                 badDebts: { title: 'الديون المعدومة', description: 'كل دين عميل تم شطبه، مع من قام بذلك وسببه.' },
                 quotes: { title: 'عروض الأسعار', description: 'جهّز التقديرات وتابع حالة كل عرض.' },
-                orders: { title: 'أوامر البيع', description: 'طلبات المعرض وطلبات المتجر الإلكتروني في مكان واحد.' },
+                orders: { title: 'أوامر البيع', description: 'طلبات الزبائن من المعرض — أكّدها، جهّزها، وحوّلها إلى عملية بيع.' },
                 delivery: { title: 'التسليم', description: 'جدولة عمليات التسليم الصادرة ومتابعتها.' },
                 returns: { title: 'مرتجعات المبيعات', description: 'نفّذ عمليات الاسترداد وأعِد الأصناف إلى المخزون.' },
                 warrantyClaims: { title: 'مطالبات الضمان', description: 'تابع طلبات الضمان من الزبائن وطريقة حلّها.' },
@@ -661,10 +661,6 @@ export const salesMessages = {
     orders: {
         title: 'أوامر البيع',
         subtitle: 'إدارة التنفيذ والدفعات المقدمة',
-        tabs: {
-            salesOrders: 'أوامر البيع',
-            onlineOrders: 'الطلبات الإلكترونية',
-        },
         newOrder: 'طلب جديد',
         statsLabel: 'ملخص أوامر البيع',
         stats: {

@@ -153,7 +153,7 @@ export const storefrontMessages = {
     },
     dashboard: {
         orders: {
-            title: "स्टोरफ़्रंट ऑर्डर",
+            title: "ऑनलाइन ऑर्डर",
             description: "आपके सार्वजनिक स्टोर से ऑनलाइन ऑर्डर",
             storeSettings: "स्टोर सेटिंग्स",
             loading: "ऑर्डर लोड हो रहे हैं…",

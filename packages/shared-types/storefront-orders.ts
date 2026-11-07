@@ -1,6 +1,6 @@
 /**
- * Where a web order is in its life. Staff move it along from the Online tab of
- * Sales › Orders; the shopper reads the same value on their account page and in
+ * Where a web order is in its life. Staff move it along from Storefront ›
+ * Online Orders; the shopper reads the same value on their account page and in
  * the email or text each move sends them.
  *
  * Ordered as an order travels, so a list of them reads as a timeline. CANCELLED

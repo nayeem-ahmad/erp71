@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
     AlarmClock,
     CheckCircle2,
@@ -35,7 +35,6 @@ import { useServerList } from '@/hooks/useServerList';
 import { useListSummary } from '@/hooks/useListSummary';
 import { customerListFilter } from '../components/customer-list-filter';
 import { toast } from '@/lib/toast';
-import StorefrontOrdersPanel from './StorefrontOrdersPanel';
 import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml, sheetPaper } from '@/lib/print';
 import type { HeaderContext, PrintSheet } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
@@ -45,10 +44,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { BranchFilter, ConfirmDialog, PageShell, StatusBadge, buttonClassName, type StatusBadgeTone } from '@/components/ui';
-import { Tabs } from '@/components/ui/compact/Tabs';
 import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
-
-type OrdersTab = 'sales' | 'online';
 
 interface SalesOrder {
     id: string;
@@ -101,7 +97,8 @@ export default function OrdersPage() {
     const paper = sheetPaper(useSalePrintPrefs().paperSize);
     const router = useRouter();
     const searchParams = useSearchParams();
-    const activeTab: OrdersTab = searchParams.get('tab') === 'online' ? 'online' : 'sales';
+    // Bookmarks from when online orders shared this page as `?tab=online`.
+    const redirectingOnline = searchParams.get('tab') === 'online';
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [deliveryRange, setDeliveryRange] = useState<CreatedRange | null>(null);
@@ -119,16 +116,9 @@ export default function OrdersPage() {
     /** A bulk step that needs a yes first: delivery moves stock, delete is final. */
     const [pendingBulk, setPendingBulk] = useState<{ kind: 'deliver' | 'delete'; rows: SalesOrder[] } | null>(null);
 
-    const setActiveTab = useCallback((tab: OrdersTab) => {
-        const params = new URLSearchParams(searchParams.toString());
-        if (tab === 'online') {
-            params.set('tab', 'online');
-        } else {
-            params.delete('tab');
-        }
-        const query = params.toString();
-        router.replace(query ? `${routes.sales.orders}?${query}` : routes.sales.orders);
-    }, [router, searchParams]);
+    useEffect(() => {
+        if (redirectingOnline) router.replace(routes.storefront.root);
+    }, [redirectingOnline, router]);
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -154,8 +144,7 @@ export default function OrdersPage() {
         ],
     );
 
-    // The online tab is the storefront's own queue; nothing here loads behind it.
-    const listEnabled = branch.ready && activeTab === 'sales';
+    const listEnabled = branch.ready && !redirectingOnline;
     const { items: orders, loading, error: listError, serverPagination, reload } = useServerList<SalesOrder>({
         tableId: 'sales-orders',
         initialSort: { id: 'created_at', desc: true },
@@ -541,39 +530,17 @@ export default function OrdersPage() {
                         'sales',
                     )}
                     actions={
-                        // The online tab is the storefront's queue, which the
-                        // branch filter does not narrow.
-                        activeTab === 'sales' ? (
-                            <>
-                                <BranchFilter scope={branch} />
-                                <Link href={routes.sales.orderNew} className={buttonClassName()}>
-                                    <Plus className="w-4 h-4" />
-                                    {t.orders.newOrder}
-                                </Link>
-                            </>
-                        ) : null
+                        <>
+                            <BranchFilter scope={branch} />
+                            <Link href={routes.sales.orderNew} className={buttonClassName()}>
+                                <Plus className="w-4 h-4" />
+                                {t.orders.newOrder}
+                            </Link>
+                        </>
                     }
                 />
 
-                <Tabs<OrdersTab>
-                    idPrefix="sales-orders"
-                    label={t.orders.title}
-                    tabs={[
-                        { key: 'sales', label: t.orders.tabs.salesOrders },
-                        { key: 'online', label: t.orders.tabs.onlineOrders },
-                    ]}
-                    value={activeTab}
-                    // Clicking the open tab keeps it open: a list page always shows one.
-                    onChange={(next) => setActiveTab(next ?? activeTab)}
-                />
-
-                {activeTab === 'online' ? (
-                    <StorefrontOrdersPanel
-                        storeId={branch.apiStoreId}
-                        // Web orders belong to the online branch; on a shop's branch say so.
-                        onShopBranch={Boolean(branch.branches.find((b) => b.id === branch.apiStoreId && !b.is_online))}
-                    />
-                ) : (
+                {redirectingOnline ? null : (
                     <DataTable<SalesOrder>
                         tableId="sales-orders"
                         columns={columns}

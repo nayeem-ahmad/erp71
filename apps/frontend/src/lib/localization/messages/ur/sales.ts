@@ -311,7 +311,7 @@ export const salesMessages = {
                 customerDuesSummary: { title: "گاہک واجبات کا خلاصہ", description: "برانچ اور سیلز نمائندے کے لحاظ سے ہر گاہک کے موجودہ واجبات۔" },
                 badDebts: { title: 'ڈوبے ہوئے قرض', description: 'بٹے کھاتے ڈالا گیا ہر گاہک قرض، کس نے اور کیوں سمیت۔' },
                 quotes: { title: 'سیلز کوٹیشنز', description: 'تخمینے تیار کریں اور کوٹیشن کی حیثیت پر نظر رکھیں۔' },
-                orders: { title: 'سیلز آرڈرز', description: 'دکان کے اور آن لائن اسٹور کے آرڈرز ایک ہی جگہ۔' },
+                orders: { title: 'سیلز آرڈرز', description: 'دکان پر لیے گئے آرڈرز — تصدیق کریں، پروسیس کریں، اور سیل میں بدلیں۔' },
                 delivery: { title: 'ترسیل', description: 'باہر جانے والی ترسیل کا شیڈول اور نگرانی کریں۔' },
                 returns: { title: 'سیلز واپسیاں', description: 'رقم واپس کریں اور واپسی سے اسٹاک بحال کریں۔' },
                 warrantyClaims: { title: 'وارنٹی کلیمز', description: 'گاہک کی وارنٹی درخواستیں اور ان کا حل دیکھیں۔' },
@@ -661,10 +661,6 @@ export const salesMessages = {
     orders: {
         title: 'سیلز آرڈرز',
         subtitle: 'تکمیل اور ڈپازٹ سنبھالیں',
-        tabs: {
-            salesOrders: 'سیلز آرڈرز',
-            onlineOrders: 'آن لائن آرڈرز',
-        },
         newOrder: 'نیا آرڈر',
         statsLabel: 'سیلز آرڈرز کا خلاصہ',
         stats: {

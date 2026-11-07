@@ -311,7 +311,7 @@ export const salesMessages = {
                     customerDuesSummary: { title: "Ringkasan Hutang Pelanggan", description: "Setiap pelanggan dengan hutang semasa, mengikut cawangan dan wakil jualan." },
                     badDebts: { title: "Hutang Lapuk", description: "Setiap hutang pelanggan yang dihapus kira, dengan siapa dan mengapa." },
                     quotes: { title: "Sebut Harga Jualan", description: "Anggaran dan status sebut harga." },
-                    orders: { title: "Pesanan Jualan", description: "Urus pesanan dan penghantaran." },
+                    orders: { title: "Pesanan Jualan", description: "Pesanan pelanggan di kedai — sahkan, proses, dan tukar kepada jualan." },
                     delivery: { title: "Penghantaran", description: "Jadual dan jejak penghantaran." },
                     returns: { title: "Pulangan Jualan", description: "Proses bayaran balik dan stok." },
                     warrantyClaims: { title: "Tuntutan Waranti", description: "Jejak tuntutan waranti pelanggan." },
@@ -661,10 +661,6 @@ export const salesMessages = {
         orders: {
             title: "Jualan Pesanan",
             subtitle: "Urus fulfillment and deposits",
-            tabs: {
-                salesOrders: "Pesanan Jualan",
-                onlineOrders: "Pesanan Dalam Talian",
-            },
             newOrder: "Baharu Pesanan",
             statsLabel: "Ringkasan pesanan jualan",
             stats: {

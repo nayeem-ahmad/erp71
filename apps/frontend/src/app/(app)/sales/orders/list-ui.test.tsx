@@ -18,8 +18,6 @@ jest.mock('next/navigation', () => ({
     useSearchParams: () => new URLSearchParams(),
 }));
 
-jest.mock('./StorefrontOrdersPanel', () => () => null);
-
 // Desktop width: the one-row filter toolbar (the phone gets a sheet instead).
 jest.mock('@/hooks/useMediaQuery', () => ({
     useMediaQuery: () => true,
