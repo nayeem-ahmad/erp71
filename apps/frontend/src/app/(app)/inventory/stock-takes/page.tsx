@@ -3,20 +3,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { ClipboardCheck, Plus } from 'lucide-react';
+import { AlertTriangle, ClipboardCheck, FolderOpen, Hash, Plus } from 'lucide-react';
 import { ContextualHelpPanel } from '@/components/ContextualHelpPanel';
 import { HelpTooltip } from '@/components/HelpTooltip';
-import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { warehouseLabel } from '@/lib/warehouse-label';
 import { STOCK_TAKES_FIELD_HELP, STOCK_TAKES_HELP } from '@/lib/help/contextual-help';
 import { api } from '@/lib/api';
-import { BranchFilter } from '@/components/ui';
+import { BranchFilter, Button, Checkbox, Field, Input, Select, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
+import { toast } from '@/lib/toast';
 
 interface StockTakeSession {
     id: string;
@@ -27,16 +29,29 @@ interface StockTakeSession {
     summary?: { countedLines: number; totalLines: number; discrepantLines: number };
 }
 
+const OPEN_STATUSES = new Set(['DRAFT', 'COUNTING', 'REVIEW']);
+
+const STATUS_TONE: Record<string, StatusBadgeTone> = {
+    DRAFT: 'neutral',
+    COUNTING: 'info',
+    REVIEW: 'warning',
+    POSTED: 'success',
+    CANCELLED: 'neutral',
+};
+
 const columnHelper = createColumnHelper<StockTakeSession>();
 
 export default function StockTakesPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
+    const copy = t.inventoryStockTakes;
+    const listUi = copy.listUi;
     const branch = useBranchScope();
     const [sessions, setSessions] = useState<StockTakeSession[]>([]);
     const [warehouses, setWarehouses] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [form, setForm] = useState<any>({ warehouseId: '', notes: '', startImmediately: true });
-    const [message, setMessage] = useState('');
+    const [formOpen, setFormOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [form, setForm] = useState({ warehouseId: '', notes: '', startImmediately: true });
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     // The new-session form's warehouses belong to the header branch, so they
@@ -72,101 +87,213 @@ export default function StockTakesPage() {
         }
     };
 
+    const openForm = () => {
+        setForm({ warehouseId: '', notes: '', startImmediately: true });
+        setFormOpen(true);
+    };
+
+    const closeForm = () => {
+        setFormOpen(false);
+    };
+
     const handleCreate = async (event: React.FormEvent) => {
         event.preventDefault();
+        if (!form.warehouseId) return;
+        setSaving(true);
         try {
             await api.createStockTake(form);
-            setMessage(t.inventoryStockTakes.sessionCreated);
+            toast.success(copy.sessionCreated);
             setForm({ warehouseId: '', notes: '', startImmediately: true });
+            setFormOpen(false);
             await loadSessions();
         } catch (error: any) {
-            setMessage(error.message || t.inventoryStockTakes.createFailed);
+            toast.error(error.message || copy.createFailed);
+        } finally {
+            setSaving(false);
         }
     };
 
+    const statusLabel = (status: string) =>
+        copy.statuses[status.toLowerCase() as keyof typeof copy.statuses] ?? status;
+
     const columns: ColumnDef<StockTakeSession, any>[] = useMemo(
         () => [
-            columnHelper.accessor('session_number', { header: t.inventoryStockTakes.columns.sessionNumber, size: 150 }),
-            columnHelper.accessor((row) => row.warehouse?.name || '-', { id: 'warehouse', header: t.inventoryStockTakes.columns.warehouse, size: 180 }),
-            columnHelper.accessor('status', { header: t.inventoryStockTakes.columns.status, size: 140 }),
-            columnHelper.accessor((row) => `${row.summary?.countedLines ?? 0}/${row.summary?.totalLines ?? 0}`, { id: 'progress', header: t.inventoryStockTakes.columns.progress, size: 120 }),
-            columnHelper.accessor((row) => row.summary?.discrepantLines ?? 0, { id: 'discrepancies', header: t.inventoryStockTakes.columns.discrepancies, size: 120 }),
+            columnHelper.accessor('session_number', { header: copy.columns.sessionNumber, size: 150 }),
+            columnHelper.accessor((row) => row.warehouse?.name || '-', { id: 'warehouse', header: copy.columns.warehouse, size: 180 }),
+            columnHelper.accessor('status', {
+                header: copy.columns.status,
+                cell: (info) => (
+                    <StatusBadge tone={STATUS_TONE[info.getValue()] ?? 'neutral'}>
+                        {statusLabel(info.getValue())}
+                    </StatusBadge>
+                ),
+                size: 140,
+            }),
+            columnHelper.accessor((row) => `${row.summary?.countedLines ?? 0}/${row.summary?.totalLines ?? 0}`, {
+                id: 'progress',
+                header: copy.columns.progress,
+                size: 120,
+            }),
+            columnHelper.accessor((row) => row.summary?.discrepantLines ?? 0, {
+                id: 'discrepancies',
+                header: copy.columns.discrepancies,
+                cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
+                size: 120,
+                meta: { align: 'end' },
+            }),
             createdAtColumn(columnHelper, { header: t.common.createdAt }),
             columnHelper.display({
                 id: 'actions',
-                header: t.inventoryStockTakes.columns.actions,
-                cell: (info) => <Link href={`/inventory/stock-takes/${info.row.original.id}`} className="text-sm font-bold text-blue-700 hover:text-blue-900">{t.inventoryStockTakes.columns.open}</Link>,
+                header: copy.columns.actions,
+                cell: (info) => (
+                    <Link
+                        href={`/inventory/stock-takes/${info.row.original.id}`}
+                        className="text-sm font-bold text-blue-700 hover:text-blue-900"
+                    >
+                        {copy.columns.open}
+                    </Link>
+                ),
                 size: 100,
             }),
         ],
-        [t],
+        [t, copy],
     );
+
+    const filters = useMemo<ListFilter[]>(
+        () => [{ id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange, operators: true }],
+        [createdRange],
+    );
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const open = sessions.filter((session) => OPEN_STATUSES.has(session.status)).length;
+        const discrepant = sessions.filter((session) => (session.summary?.discrepantLines ?? 0) > 0).length;
+        const items: ListStat[] = [
+            { id: 'sessions', icon: <Hash aria-hidden />, label: listUi.sessions, value: n(sessions.length) },
+            { id: 'open', icon: <FolderOpen aria-hidden />, label: listUi.open, value: n(open) },
+            {
+                id: 'discrepant',
+                icon: <AlertTriangle aria-hidden />,
+                label: listUi.discrepant,
+                value: n(discrepant),
+                tone: discrepant > 0 ? 'warning' : 'default',
+            },
+        ];
+        return { items, loading, label: listUi.statsLabel };
+    }, [sessions, loading, locale, listUi]);
 
     return (
         <PageShell>
                 <PageHeader
                     title={(
                         <span className="inline-flex items-center gap-2">
-                            {t.inventoryStockTakes.title}
+                            {copy.title}
                             <HelpTooltip text={STOCK_TAKES_FIELD_HELP.page} wide />
                         </span>
                     )}
-                    subtitle={t.inventoryStockTakes.subtitle}
+                    subtitle={copy.subtitle}
                     breadcrumbs={modulePageBreadcrumbs(
                         t.dashboardHome.breadcrumbHome,
                         t.sidebar.modules.inventory,
-                        t.inventoryStockTakes.title,
+                        copy.title,
                         'inventory',
                     )}
-                    actions={<BranchFilter scope={branch} />}
+                    actions={(
+                        <>
+                            <BranchFilter scope={branch} />
+                            <Button onClick={openForm} icon={<Plus className="w-4 h-4" />}>
+                                {copy.newSession}
+                            </Button>
+                        </>
+                    )}
                 />
 
                 <ContextualHelpPanel {...STOCK_TAKES_HELP} />
 
-                <form onSubmit={handleCreate} className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
-                    <div className="flex items-center gap-2">
-                        <ClipboardCheck className="w-5 h-5 text-blue-600" />
-                        <h2 className="font-bold text-lg">{t.inventoryStockTakes.newSession}</h2>
-                    </div>
-                    {message ? <div className="text-sm font-bold text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{message}</div> : null}
-                    <div className="grid md:grid-cols-3 gap-4">
-                        <label className="space-y-1">
-                            <span className="text-xs font-bold uppercase tracking-widest text-gray-400 inline-flex items-center gap-1.5">
-                                {t.inventoryStockTakes.warehouse}
-                                <HelpTooltip text={STOCK_TAKES_FIELD_HELP.warehouse} side="top" />
-                            </span>
-                            <select required value={form.warehouseId} onChange={(e) => setForm((current: any) => ({ ...current, warehouseId: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                                <option value="">{t.inventoryStockTakes.selectWarehouse}</option>
-                                {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>)}
-                            </select>
-                        </label>
-                        <input value={form.notes} onChange={(e) => setForm((current: any) => ({ ...current, notes: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium self-end" placeholder={t.inventoryStockTakes.sessionNotes} />
-                        <label className="flex items-center gap-2 text-sm font-bold text-gray-700 px-2 self-end">
-                            <input type="checkbox" checked={form.startImmediately} onChange={(e) => setForm((current: any) => ({ ...current, startImmediately: e.target.checked }))} />
-                            <span className="inline-flex items-center gap-1.5">
-                                {t.inventoryStockTakes.startImmediately}
-                                <HelpTooltip text={STOCK_TAKES_FIELD_HELP.startImmediately} side="top" />
-                            </span>
-                        </label>
-                    </div>
-                    <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg shadow-sm">
-                        <Plus className="w-4 h-4 me-2" /> {t.inventoryStockTakes.createSession}
-                    </button>
-                </form>
-
-                <div className="flex flex-wrap items-center gap-2">
-                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
-                </div>
                 <DataTable<StockTakeSession>
                     tableId="inventory-stock-takes"
                     columns={columns}
                     data={sessions}
-                    title={t.inventoryStockTakes.sessionsTitle}
+                    title={copy.sessionsTitle}
                     isLoading={loading}
-                    emptyMessage={t.inventoryStockTakes.emptyMessage}
+                    emptyMessage={copy.emptyMessage}
                     emptyIcon={<ClipboardCheck className="w-16 h-16 text-gray-200" />}
-                    searchPlaceholder={t.inventoryStockTakes.searchPlaceholder}
+                    searchPlaceholder={copy.searchPlaceholder}
+                    filters={filters}
+                    filterLayout="row"
+                    stats={stats}
+                    enableColumnFilters={false}
+                    viewOptions
                 />
+
+                {formOpen ? (
+                    <ModalShell size="md" onBackdropClick={closeForm}>
+                        <form onSubmit={handleCreate} className="flex min-h-0 flex-1 flex-col" noValidate>
+                            <ModalHeader
+                                title={(
+                                    <span className="inline-flex items-center gap-2">
+                                        <ClipboardCheck className="w-5 h-5 text-blue-600" />
+                                        {copy.newSession}
+                                    </span>
+                                )}
+                                onClose={closeForm}
+                                closeLabel={t.common.close}
+                            />
+                            <div className="flex-1 space-y-4 overflow-y-auto p-4">
+                                <Field
+                                    label={(
+                                        <span className="inline-flex items-center gap-1.5">
+                                            {copy.warehouse}
+                                            <HelpTooltip text={STOCK_TAKES_FIELD_HELP.warehouse} side="top" />
+                                        </span>
+                                    )}
+                                    required
+                                    htmlFor="stock-take-warehouse"
+                                >
+                                    <Select
+                                        id="stock-take-warehouse"
+                                        required
+                                        value={form.warehouseId}
+                                        onChange={(e) => setForm((current) => ({ ...current, warehouseId: e.target.value }))}
+                                    >
+                                        <option value="">{copy.selectWarehouse}</option>
+                                        {warehouses.map((warehouse) => (
+                                            <option key={warehouse.id} value={warehouse.id}>
+                                                {warehouseLabel(warehouse, warehouses)}
+                                            </option>
+                                        ))}
+                                    </Select>
+                                </Field>
+                                <Field label={copy.sessionNotes} htmlFor="stock-take-notes">
+                                    <Input
+                                        id="stock-take-notes"
+                                        value={form.notes}
+                                        onChange={(e) => setForm((current) => ({ ...current, notes: e.target.value }))}
+                                        placeholder={copy.sessionNotes}
+                                    />
+                                </Field>
+                                <label className="flex min-h-touch items-center gap-2 text-sm text-gray-700">
+                                    <Checkbox
+                                        checked={form.startImmediately}
+                                        onChange={(e) => setForm((current) => ({ ...current, startImmediately: e.target.checked }))}
+                                    />
+                                    <span className="inline-flex items-center gap-1.5">
+                                        {copy.startImmediately}
+                                        <HelpTooltip text={STOCK_TAKES_FIELD_HELP.startImmediately} side="top" />
+                                    </span>
+                                </label>
+                            </div>
+                            <ModalFooter>
+                                <Button variant="secondary" onClick={closeForm} disabled={saving}>
+                                    {t.common.cancel}
+                                </Button>
+                                <Button type="submit" loading={saving} icon={<Plus className="w-4 h-4" />}>
+                                    {copy.createSession}
+                                </Button>
+                            </ModalFooter>
+                        </form>
+                    </ModalShell>
+                ) : null}
     </PageShell>
     );
 }

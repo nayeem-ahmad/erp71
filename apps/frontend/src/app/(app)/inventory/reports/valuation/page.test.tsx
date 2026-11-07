@@ -23,22 +23,33 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@/components/data-table', () => ({
-    DataTable: ({
-        title,
-        emptyMessage,
-        isLoading,
-        data,
-    }: {
-        title: string;
-        emptyMessage: string;
-        isLoading: boolean;
-        data: any[];
-    }) => (
+    DataTable: ({ title, emptyMessage, isLoading, data, filters, stats, filterLayout, viewOptions }: any) => (
         <div>
             <div data-testid="data-table-title">{title}</div>
             {isLoading && <div data-testid="loading-indicator">Loading</div>}
             <div data-testid="empty-message">{emptyMessage}</div>
-            <div data-testid="row-count">{data.length}</div>
+            <div data-testid="row-count">{data?.length ?? 0}</div>
+            <div data-testid="filter-layout">{filterLayout ?? ''}</div>
+            <div data-testid="has-view-options">{viewOptions ? 'yes' : 'no'}</div>
+            <div data-testid="stats-label">{stats?.label ?? ''}</div>
+            <div data-testid="stats-count">{stats?.items?.length ?? 0}</div>
+            {(stats?.items ?? []).map((item: any) => (
+                <div key={item.id} data-testid={`stat-${item.id}`}>{item.label}</div>
+            ))}
+            {(filters ?? []).map((filter: any) => (
+                <div key={filter.id} data-testid={`filter-${filter.id}`}>
+                    <span data-testid={`filter-${filter.id}-label`}>{filter.label ?? filter.id}</span>
+                    {(filter.options ?? []).map((opt: any) => (
+                        <span key={opt.value} data-testid={`filter-${filter.id}-option-${opt.value}`}>{opt.label}</span>
+                    ))}
+                    {filter.type === 'toggle' ? (
+                        <span data-testid={`filter-${filter.id}-pressed`}>{String(Boolean(filter.pressed))}</span>
+                    ) : null}
+                    {filter.type === 'date-range' ? <span data-testid={`filter-${filter.id}-type`}>date-range</span> : null}
+                    {filter.required ? <span data-testid={`filter-${filter.id}-required`}>required</span> : null}
+                    {filter.loadOptions ? <span data-testid={`filter-${filter.id}-searchable`}>searchable</span> : null}
+                </div>
+            ))}
         </div>
     ),
 }));
@@ -143,48 +154,52 @@ describe('InventoryValuationPage', () => {
         });
     });
 
-    it('renders summary KPI cards', async () => {
+    it('renders summary KPI stats on the list', async () => {
         render(<InventoryValuationPage />);
         await waitFor(() => {
-            expect(screen.getByText('Total Stock Value')).toBeInTheDocument();
-            expect(screen.getByText('Total Quantity')).toBeInTheDocument();
-            expect(screen.getByText('Products With Stock')).toBeInTheDocument();
-            expect(screen.getByText('Average Unit Value')).toBeInTheDocument();
+            expect(screen.getByTestId('stats-label')).toHaveTextContent('Report figures');
+            expect(screen.getByTestId('stats-count')).toHaveTextContent('4');
+        });
+        expect(screen.getByTestId('stat-totalValue')).toHaveTextContent('Total Stock Value');
+        expect(screen.getByTestId('stat-totalQuantity')).toHaveTextContent('Total Quantity');
+        expect(screen.getByTestId('stat-productsWithStock')).toHaveTextContent('Products With Stock');
+        expect(screen.getByTestId('stat-averageUnitValue')).toHaveTextContent('Average Unit Value');
+        expect(screen.getByTestId('filter-layout')).toHaveTextContent('row');
+        expect(screen.getByTestId('has-view-options')).toHaveTextContent('yes');
+    });
+
+    it('renders warehouse filter chip options', async () => {
+        render(<InventoryValuationPage />);
+        await waitFor(() => {
+            expect(screen.getByTestId('filter-warehouse')).toBeInTheDocument();
         });
     });
 
-    it('renders warehouse filter dropdown', async () => {
+    it('renders group filter chip options', async () => {
         render(<InventoryValuationPage />);
         await waitFor(() => {
-            expect(screen.getByText('All Warehouses')).toBeInTheDocument();
+            expect(screen.getByTestId('filter-group')).toBeInTheDocument();
         });
     });
 
-    it('renders group filter dropdown', async () => {
+    it('renders subgroup filter chip options', async () => {
         render(<InventoryValuationPage />);
         await waitFor(() => {
-            expect(screen.getByText('All Groups')).toBeInTheDocument();
+            expect(screen.getByTestId('filter-subgroup')).toBeInTheDocument();
         });
     });
 
-    it('renders subgroup filter dropdown', async () => {
+    it('populates warehouse filter from API', async () => {
         render(<InventoryValuationPage />);
         await waitFor(() => {
-            expect(screen.getByText('All Subgroups')).toBeInTheDocument();
+            expect(screen.getByTestId('filter-warehouse-option-wh-1')).toHaveTextContent('Main Warehouse');
         });
     });
 
-    it('populates warehouse dropdown from API', async () => {
+    it('populates group filter from API', async () => {
         render(<InventoryValuationPage />);
         await waitFor(() => {
-            expect(screen.getByText('Main Warehouse')).toBeInTheDocument();
-        });
-    });
-
-    it('populates group dropdown from API', async () => {
-        render(<InventoryValuationPage />);
-        await waitFor(() => {
-            expect(screen.getByText('Electronics')).toBeInTheDocument();
+            expect(screen.getByTestId('filter-group-option-grp-1')).toHaveTextContent('Electronics');
         });
     });
 

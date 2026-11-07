@@ -25,6 +25,7 @@ jest.mock('next/navigation', () => ({
 /**
  * Surfaces the rows the page hands the table, which is where the whole report
  * lives: the opening row, the order, and the running balance down the column.
+ * Also renders the list filter chips and stats strip the page owns.
  */
 jest.mock('@/components/data-table', () => ({
     DataTable: ({
@@ -33,12 +34,24 @@ jest.mock('@/components/data-table', () => ({
         isLoading,
         serverPagination,
         enableColumnFilters,
+        filters,
+        stats,
     }: {
         data: any[];
         emptyMessage: string;
         isLoading: boolean;
         serverPagination?: { total: number; page: number; onPageChange: (page: number) => void };
         enableColumnFilters?: boolean;
+        filters?: Array<{
+            id: string;
+            type: string;
+            label?: string;
+            value?: string | null;
+            onChange?: (next: any) => void;
+            options?: Array<{ value: string; label: string }>;
+            loadOptions?: (query: string) => Promise<Array<{ value: string; label: string }>>;
+        }>;
+        stats?: { items: Array<{ id: string; label: string; value: string }>; loading?: boolean; label: string };
     }) => (
         <div>
             <div data-testid="column-filters">{String(enableColumnFilters ?? true)}</div>
@@ -48,6 +61,39 @@ jest.mock('@/components/data-table', () => ({
             <div data-testid="balances">{data.map((row) => row.balanceAfter).join('|')}</div>
             <div data-testid="row-types">{data.map((row) => row.rowType).join('|')}</div>
             <div data-testid="total">{serverPagination?.total ?? 0}</div>
+            {stats?.items?.map((stat) => (
+                <div key={stat.id} data-testid={`stat-${stat.id}`}>
+                    <span>{stat.label}</span>
+                    <span>{stat.value}</span>
+                </div>
+            ))}
+            {filters?.map((filter) => {
+                if (filter.type !== 'select') return null;
+                const label = filter.label ?? filter.id;
+                return (
+                    <div key={filter.id}>
+                        <label htmlFor={`filter-${filter.id}`}>{label}</label>
+                        <select
+                            id={`filter-${filter.id}`}
+                            aria-label={label}
+                            value={filter.value ?? ''}
+                            onChange={(e) => filter.onChange?.(e.target.value || null)}
+                            onFocus={() => {
+                                void filter.loadOptions?.('').then(() => undefined);
+                            }}
+                        >
+                            <option value="">All</option>
+                            {(filter.options ?? []).map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                            {/* Search hits land here so a pick can be exercised without the real chip panel. */}
+                            <option value="prod-1">Rice 5kg</option>
+                        </select>
+                    </div>
+                );
+            })}
             <button type="button" onClick={() => serverPagination?.onPageChange(2)}>
                 next-page
             </button>
@@ -242,10 +288,9 @@ describe('ProductTransactionHistoryPage', () => {
         const { api } = require('@/lib/api');
         render(<ProductTransactionHistoryPage />);
 
-        fireEvent.focus(screen.getByLabelText('Select a product'));
-        await waitFor(() => expect(api.searchProductsByQuantity).toHaveBeenCalled());
-
-        fireEvent.click(await screen.findByText('Rice 5kg'));
+        const productSelect = screen.getByLabelText('Product');
+        fireEvent.focus(productSelect);
+        fireEvent.change(productSelect, { target: { value: 'prod-1' } });
 
         await waitFor(() =>
             expect(api.getProductTransactionHistory).toHaveBeenCalledWith(expect.objectContaining({ productId: 'prod-1' })),

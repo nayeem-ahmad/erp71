@@ -118,7 +118,14 @@ export const inventoryExtrasMessages = {
             "duplicateProduct": "Dasselbe Produkt ist zweimal aufgeführt. Fassen Sie die Zeilen zusammen.",
             "saveFailed": "Der Bedarf konnte nicht gespeichert werden.",
             "actionFailed": "Diese Aktion konnte nicht abgeschlossen werden."
-        }
+        },
+    "listUi": {
+        "statsLabel": "Bedarfsübersicht",
+        "total": "Bedarfe",
+        "submitted": "Eingereicht",
+        "approved": "Genehmigt",
+        "open": "Offen",
+    }
     },
     "inventoryTransfers": {
         "title": "Lagerumlagerungen",
@@ -168,7 +175,14 @@ export const inventoryExtrasMessages = {
             "received": "Erhalten",
             "pendingApproval": "Genehmigung ausstehend",
             "rejected": "Abgelehnt"
-        }
+        },
+    "listUi": {
+        "statsLabel": "Transferübersicht",
+        "total": "Transfers",
+        "pendingApproval": "Wartet auf Freigabe",
+        "inTransit": "Unterwegs",
+        "received": "Empfangen",
+    }
     },
     "inventoryShrinkage": {
         "title": "Bestandsschwund",
@@ -209,7 +223,12 @@ export const inventoryExtrasMessages = {
         "addLine": "Zeile hinzufügen",
         "remove": "Entfernen",
         "notes": "Notizen",
-        "selectProduct": "Produkt auswählen"
+        "selectProduct": "Produkt auswählen",
+    "listUi": {
+        "statsLabel": "Schwundübersicht",
+        "total": "Einträge",
+        "totalQty": "Gesamtmenge",
+    }
     },
     "inventoryStockTakes": {
         "title": "Inventuren",
@@ -234,7 +253,20 @@ export const inventoryExtrasMessages = {
             "created": "Erstellt",
             "actions": "Aktionen",
             "open": "Öffnen"
-        }
+        },
+    "statuses": {
+        "draft": "Entwurf",
+        "counting": "Zählung",
+        "review": "In Prüfung",
+        "posted": "Gebucht",
+        "cancelled": "Storniert",
+    },
+    "listUi": {
+        "statsLabel": "Inventurübersicht",
+        "sessions": "Sitzungen",
+        "open": "Offen",
+        "discrepant": "Abweichend",
+    }
     },
     "inventoryLedger": {
         "title": "Bestandskonto",
@@ -352,6 +384,13 @@ export const inventoryExtrasMessages = {
         "reasonUpdateFailed": "Der Bestandsgrund konnte nicht aktualisiert werden."
     },
     "inventoryReports": {
+        "listUi": {
+            "statsLabel": "Berichtszahlen",
+            "suggestionCount": "Vorschläge",
+            "suggestedUnits": "Vorgeschlagene Einheiten",
+            "outOfStock": "Nicht vorrätig",
+            "movementCount": "Bewegungen"
+        },
         "reorder": {
             "title": "Nachbestellvorschläge",
             "subtitle": "Produkte unter dem Meldebestand mit vorgeschlagenen Bestellmengen",

@@ -1,20 +1,20 @@
 'use client';
 
-import { Suspense, useEffect, useId, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { History } from 'lucide-react';
-import { DataTable } from '@/components/data-table';
+import { ArrowDownLeft, ArrowUpRight, Flag, FlagTriangleRight, History } from 'lucide-react';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { Button, Field, Input, Select } from '@/components/ui';
-import SearchFilterPicker, { type FilterOption } from '@/components/reports/SearchFilterPicker';
 import { searchProductOptions } from '@/components/reports/filter-searches';
+import type { FilterOption } from '@/components/reports/SearchFilterPicker';
 import { api } from '@/lib/api';
 import { formatBDT, formatCalendarDate, formatDateTime } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { warehouseLabel } from '@/lib/warehouse-label';
+import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { BranchFilter } from '@/components/ui';
 import { branchOrEmpty, handleBranchForbidden, useBranchBoundState, useBranchScope } from '@/lib/branch-scope';
 
@@ -80,19 +80,22 @@ function humanizeMovementType(value: string): string {
         .join(' ');
 }
 
+function productOptionLabel(product: FilterOption): string {
+    return product.detail ? `${product.name} (${product.detail})` : product.name;
+}
+
 function ProductTransactionHistoryContent() {
     const { t, locale } = useI18n();
     const copy = t.inventoryReports.productTransactionHistory;
+    const listUi = t.inventoryReports.listUi;
     const searchParams = useSearchParams();
-    const fieldId = useId();
     const branch = useBranchScope();
 
     const [productId, setProductId] = useState(searchParams.get('productId') ?? '');
     const [selectedProduct, setSelectedProduct] = useState<FilterOption | null>(null);
     const [warehouseId, setWarehouseId] = useBranchBoundState(branch.apiStoreId, searchParams.get('warehouseId') ?? '');
     const storeId = branchOrEmpty(branch.apiStoreId);
-    const [fromDate, setFromDate] = useState('');
-    const [toDate, setToDate] = useState('');
+    const [dateRange, setDateRange] = useState<CreatedRange>({});
     const [page, setPage] = useState(1);
 
     const [report, setReport] = useState<HistoryResponse | null>(null);
@@ -120,7 +123,7 @@ function ProductTransactionHistoryContent() {
     // report.
     useEffect(() => {
         setPage(1);
-    }, [productId, warehouseId, branch.apiStoreId, fromDate, toDate]);
+    }, [productId, warehouseId, branch.apiStoreId, dateRange]);
 
     useEffect(() => {
         if (!branch.ready) return;
@@ -134,12 +137,14 @@ function ProductTransactionHistoryContent() {
         const loadReport = async () => {
             setLoading(true);
             try {
+                // History API expects `from`/`to`; applyCreatedRangeQuery yields createdFrom/createdTo.
+                const range = applyCreatedRangeQuery(dateRange);
                 const data = await api.getProductTransactionHistory({
                     productId,
                     warehouseId: warehouseId || undefined,
                     storeId: branch.apiStoreId,
-                    from: fromDate || undefined,
-                    to: toDate || undefined,
+                    from: range.createdFrom,
+                    to: range.createdTo,
                     page,
                     limit: PAGE_SIZE,
                 });
@@ -166,7 +171,7 @@ function ProductTransactionHistoryContent() {
         // `branch` itself is a fresh object each render; what the read depends
         // on is the branch it asks for.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [branch.ready, branch.apiStoreId, productId, warehouseId, fromDate, toDate, page]);
+    }, [branch.ready, branch.apiStoreId, productId, warehouseId, dateRange, page]);
 
     // A warehouse belongs to exactly one branch, so picking a branch narrows the
     // warehouse list ("All branches" offers every one). The branch filter clears
@@ -175,6 +180,8 @@ function ProductTransactionHistoryContent() {
         () => warehouses.filter((warehouse: any) => !storeId || warehouse.store_id === storeId),
         [warehouses, storeId],
     );
+
+    const fromDate = dateRange.from ?? '';
 
     const tableData = useMemo<HistoryRow[]>(() => {
         if (!report) return [];
@@ -288,31 +295,34 @@ function ProductTransactionHistoryContent() {
                 header: copy.columns.quantityIn,
                 enableSorting: false,
                 size: 90,
+                meta: { align: 'end' },
                 cell: (info) => {
                     if (info.row.original.rowType === 'opening') return muted;
                     const value = Number(info.getValue() || 0);
-                    return value > 0 ? <span className="text-sm font-semibold text-emerald-600">{value}</span> : muted;
+                    return value > 0 ? <span className="tabular-nums text-sm font-semibold text-emerald-600">{value}</span> : muted;
                 },
             }),
             columnHelper.accessor('quantityOut', {
                 header: copy.columns.quantityOut,
                 enableSorting: false,
                 size: 90,
+                meta: { align: 'end' },
                 cell: (info) => {
                     if (info.row.original.rowType === 'opening') return muted;
                     const value = Number(info.getValue() || 0);
-                    return value > 0 ? <span className="text-sm font-semibold text-red-600">{value}</span> : muted;
+                    return value > 0 ? <span className="tabular-nums text-sm font-semibold text-red-600">{value}</span> : muted;
                 },
             }),
             columnHelper.accessor('balanceAfter', {
                 header: copy.columns.balance,
                 enableSorting: false,
                 size: 110,
+                meta: { align: 'end' },
                 cell: (info) => {
                     const value = Number(info.getValue() || 0);
                     return (
                         <span
-                            className={`text-sm font-bold ${
+                            className={`tabular-nums text-sm font-bold ${
                                 info.row.original.rowType === 'opening'
                                     ? 'text-gray-800'
                                     : value < 0
@@ -330,11 +340,11 @@ function ProductTransactionHistoryContent() {
                 header: copy.columns.unitCost,
                 enableSorting: false,
                 size: 120,
-                meta: { hideOnMobile: true },
+                meta: { align: 'end', hideOnMobile: true },
                 cell: (info) => {
                     const row = info.row.original;
                     if (row.rowType === 'opening' || row.unitCost == null) return muted;
-                    return <span className="text-sm text-gray-600">{formatBDT(row.unitCost)}</span>;
+                    return <span className="tabular-nums text-sm text-gray-600">{formatBDT(row.unitCost, { locale })}</span>;
                 },
             }),
             columnHelper.accessor((row) => row.value ?? '', {
@@ -342,13 +352,13 @@ function ProductTransactionHistoryContent() {
                 header: copy.columns.value,
                 enableSorting: false,
                 size: 120,
-                meta: { hideOnMobile: true },
+                meta: { align: 'end', hideOnMobile: true },
                 cell: (info) => {
                     const row = info.row.original;
                     if (row.rowType === 'opening' || row.value == null) return muted;
                     return (
-                        <span className={`text-sm ${row.value < 0 ? 'text-red-600' : 'text-gray-700'}`}>
-                            {formatBDT(row.value)}
+                        <span className={`tabular-nums text-sm ${row.value < 0 ? 'text-red-600' : 'text-gray-700'}`}>
+                            {formatBDT(row.value, { locale })}
                         </span>
                     );
                 },
@@ -372,6 +382,88 @@ function ProductTransactionHistoryContent() {
     const summary = report?.summary ?? null;
     const showMismatch = summary?.matchesStockOnHand === false;
 
+    const filters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'product',
+                type: 'select',
+                label: copy.productLabel,
+                value: productId || null,
+                // The card cannot run without a product: Clear all leaves the
+                // current pick rather than emptying the report.
+                required: true,
+                searchable: true,
+                options: selectedProduct
+                    ? [{ value: selectedProduct.id, label: productOptionLabel(selectedProduct) }]
+                    : [],
+                loadOptions: (term) =>
+                    searchProductOptions(term).then((found) =>
+                        found.map((product) => ({
+                            value: product.id,
+                            label: productOptionLabel(product),
+                        })),
+                    ),
+                onChange: (next) => {
+                    setProductId(next ?? '');
+                    // loadOptions remembers the label for the chip; the report
+                    // fills `selectedProduct` once it returns.
+                    if (!next) setSelectedProduct(null);
+                    else if (selectedProduct?.id !== next) setSelectedProduct(null);
+                },
+            },
+            {
+                id: 'warehouse',
+                type: 'select',
+                label: copy.warehouseLabel,
+                value: warehouseId || null,
+                onChange: (v) => setWarehouseId(v ?? ''),
+                options: visibleWarehouses.map((warehouse: any) => ({
+                    value: warehouse.id,
+                    label: warehouseLabel(warehouse, visibleWarehouses),
+                })),
+            },
+            {
+                id: 'period',
+                type: 'date-range',
+                label: t.common.date,
+                value: dateRange,
+                onChange: (next) => setDateRange(next ?? {}),
+            },
+        ],
+        [copy, t.common.date, productId, selectedProduct, warehouseId, visibleWarehouses, dateRange],
+    );
+
+    const stats = useMemo(() => {
+        if (!summary) return { items: [] as ListStat[], loading, label: listUi.statsLabel };
+        const items: ListStat[] = [
+            {
+                id: 'opening',
+                icon: <Flag aria-hidden />,
+                label: copy.openingQuantity,
+                value: Number(summary.openingQuantity).toLocaleString(locale),
+            },
+            {
+                id: 'totalIn',
+                icon: <ArrowDownLeft aria-hidden />,
+                label: copy.totalIn,
+                value: Number(summary.totalIn).toLocaleString(locale),
+            },
+            {
+                id: 'totalOut',
+                icon: <ArrowUpRight aria-hidden />,
+                label: copy.totalOut,
+                value: Number(summary.totalOut).toLocaleString(locale),
+            },
+            {
+                id: 'closing',
+                icon: <FlagTriangleRight aria-hidden />,
+                label: copy.closingQuantity,
+                value: Number(summary.closingQuantity).toLocaleString(locale),
+            },
+        ];
+        return { items, loading, label: listUi.statsLabel };
+    }, [summary, loading, locale, copy, listUi]);
+
     return (
         <PageShell>
             <PageHeader
@@ -385,72 +477,6 @@ function ProductTransactionHistoryContent() {
                 )}
                 actions={<BranchFilter scope={branch} />}
             />
-
-            <div className="bg-white border border-gray-100 rounded-lg p-3 md:p-4 space-y-3">
-                <SearchFilterPicker
-                    copy={{
-                        label: copy.productLabel,
-                        placeholder: copy.searchPlaceholder,
-                        searchLabel: copy.selectProduct,
-                        clear: copy.changeProduct,
-                        searching: copy.searching,
-                        noMatches: copy.noMatches,
-                    }}
-                    selected={selectedProduct}
-                    search={searchProductOptions}
-                    onSelect={(product) => {
-                        setSelectedProduct(product);
-                        setProductId(product?.id ?? '');
-                    }}
-                    // The card cannot run without a product, so letting go of
-                    // one only ever means picking another.
-                    reopenOnClear
-                />
-
-                <div className="flex flex-wrap gap-3 items-end">
-                    <Field label={copy.warehouseLabel} htmlFor={`${fieldId}-warehouse`} className="min-w-[180px] flex-1">
-                        <Select
-                            id={`${fieldId}-warehouse`}
-                            value={warehouseId}
-                            onChange={(e) => setWarehouseId(e.target.value)}
-                        >
-                            <option value="">{copy.allWarehouses}</option>
-                            {visibleWarehouses.map((warehouse: any) => (
-                                <option key={warehouse.id} value={warehouse.id}>
-                                    {warehouseLabel(warehouse, visibleWarehouses)}
-                                </option>
-                            ))}
-                        </Select>
-                    </Field>
-                    <Field label={copy.fromLabel} htmlFor={`${fieldId}-from`} className="min-w-[150px]">
-                        <Input
-                            id={`${fieldId}-from`}
-                            type="date"
-                            value={fromDate}
-                            onChange={(e) => setFromDate(e.target.value)}
-                        />
-                    </Field>
-                    <Field label={copy.toLabel} htmlFor={`${fieldId}-to`} className="min-w-[150px]">
-                        <Input
-                            id={`${fieldId}-to`}
-                            type="date"
-                            value={toDate}
-                            onChange={(e) => setToDate(e.target.value)}
-                        />
-                    </Field>
-                    <Button
-                        variant="secondary"
-                        onClick={() => {
-                            branch.resetToHeader();
-                            setWarehouseId('');
-                            setFromDate('');
-                            setToDate('');
-                        }}
-                    >
-                        {copy.clearFilters}
-                    </Button>
-                </div>
-            </div>
 
             {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
@@ -476,67 +502,45 @@ function ProductTransactionHistoryContent() {
                 </div>
             )}
 
-            {summary && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-white border border-gray-100 rounded-lg p-3 md:p-4">
-                        <div className="text-xs font-medium text-gray-500">{copy.openingQuantity}</div>
-                        <div className="text-2xl font-bold text-gray-900 mt-1">{summary.openingQuantity}</div>
-                    </div>
-                    <div className="bg-white border border-gray-100 rounded-lg p-3 md:p-4">
-                        <div className="text-xs font-medium text-gray-500">{copy.totalIn}</div>
-                        <div className="text-2xl font-bold text-emerald-600 mt-1">{summary.totalIn}</div>
-                    </div>
-                    <div className="bg-white border border-gray-100 rounded-lg p-3 md:p-4">
-                        <div className="text-xs font-medium text-gray-500">{copy.totalOut}</div>
-                        <div className="text-2xl font-bold text-red-600 mt-1">{summary.totalOut}</div>
-                    </div>
-                    <div className="bg-white border border-gray-100 rounded-lg p-3 md:p-4">
-                        <div className="text-xs font-medium text-gray-500">{copy.closingQuantity}</div>
-                        <div className="text-2xl font-bold text-blue-700 mt-1">{summary.closingQuantity}</div>
-                    </div>
-                </div>
-            )}
+            <DataTable<HistoryRow>
+                tableId="inventory-product-transaction-history"
+                columns={columns}
+                data={productId ? tableData : []}
+                title={copy.title}
+                isLoading={loading}
+                emptyMessage={!productId ? copy.noProductSelected : error ? copy.loadErrorEmpty : copy.emptyMessage}
+                emptyIcon={<History className="w-16 h-16 text-gray-200" />}
+                showSearch={false}
+                // No per-column filters: a row's balance is the sum of every
+                // movement before it, so a card cut down to the matching rows
+                // would print balances that reconcile with nothing — and the
+                // party and reference are looked up after the query, so the
+                // server could not filter on them anyway. Product, warehouse
+                // and dates above are the filters this report takes.
+                enableColumnFilters={false}
+                filters={filters}
+                filterLayout="row"
+                stats={productId ? stats : undefined}
+                viewOptions
+                serverPagination={
+                    productId
+                        ? {
+                              total: report?.pagination.total ?? 0,
+                              page,
+                              pageSize: PAGE_SIZE,
+                              onPageChange: setPage,
+                              // Fixed: the running balance is positional, so a page
+                              // size the table could change mid-read would silently
+                              // renumber every balance below the fold.
+                              onPageSizeChange: () => {},
+                              sort: null,
+                              onSortChange: () => {},
+                          }
+                        : undefined
+                }
+            />
 
-            {!productId ? (
-                <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-400">
-                    <History className="w-16 h-16 text-gray-200" />
-                    <p className="text-sm">{copy.noProductSelected}</p>
-                </div>
-            ) : (
-                <>
-                    <DataTable<HistoryRow>
-                        tableId="inventory-product-transaction-history"
-                        columns={columns}
-                        data={tableData}
-                        title={copy.title}
-                        isLoading={loading}
-                        emptyMessage={error ? copy.loadErrorEmpty : copy.emptyMessage}
-                        emptyIcon={<History className="w-16 h-16 text-gray-200" />}
-                        showSearch={false}
-                        // No per-column filters: a row's balance is the sum of every
-                        // movement before it, so a card cut down to the matching rows
-                        // would print balances that reconcile with nothing — and the
-                        // party and reference are looked up after the query, so the
-                        // server could not filter on them anyway. Product, warehouse
-                        // and dates above are the filters this report takes.
-                        enableColumnFilters={false}
-                        serverPagination={{
-                            total: report?.pagination.total ?? 0,
-                            page,
-                            pageSize: PAGE_SIZE,
-                            onPageChange: setPage,
-                            // Fixed: the running balance is positional, so a page
-                            // size the table could change mid-read would silently
-                            // renumber every balance below the fold.
-                            onPageSizeChange: () => {},
-                            sort: null,
-                            onSortChange: () => {},
-                        }}
-                    />
-
-                    {!warehouseId && <p className="text-xs text-gray-500">{copy.allWarehousesNote}</p>}
-                </>
-            )}
+            {productId && !warehouseId && <p className="text-xs text-gray-500">{copy.allWarehousesNote}</p>}
         </PageShell>
     );
 }

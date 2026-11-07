@@ -118,7 +118,14 @@ export const inventoryExtrasMessages = {
                 duplicateProduct: "Produk yang sama disenaraikan dua kali. Gabungkan baris tersebut.",
                 saveFailed: "Gagal menyimpan permintaan.",
                 actionFailed: "Tindakan itu tidak dapat diselesaikan."
-            }
+            },
+        listUi: {
+            statsLabel: "Ringkasan permintaan",
+            total: "Permintaan",
+            submitted: "Dihantar",
+            approved: "Diluluskan",
+            open: "Terbuka",
+        }
         },
         inventoryTransfers: {
             title: "Pemindahan Gudang",
@@ -169,6 +176,13 @@ export const inventoryExtrasMessages = {
                 pendingApproval: "Menunggu Kelulusan",
                 rejected: "Ditolak",
             },
+        listUi: {
+            statsLabel: "Ringkasan pindahan",
+            total: "Pindahan",
+            pendingApproval: "Menunggu kelulusan",
+            inTransit: "Dalam transit",
+            received: "Diterima",
+        }
         },
         inventoryShrinkage: {
             title: "Susut Inventori",
@@ -210,6 +224,11 @@ export const inventoryExtrasMessages = {
             remove: "Buang",
             notes: "Nota",
             selectProduct: "Pilih produk",
+        listUi: {
+            statsLabel: "Ringkasan susut",
+            total: "Entri",
+            totalQty: "Jumlah kuantiti",
+        }
         },
         inventoryStockTakes: {
             title: "Pengiraan Stok",
@@ -235,6 +254,19 @@ export const inventoryExtrasMessages = {
                 actions: "Tindakan",
                 open: "Buka",
             },
+        statuses: {
+            draft: "Draf",
+            counting: "Mengira",
+            review: "Dalam semakan",
+            posted: "Disiarkan",
+            cancelled: "Dibatalkan",
+        },
+        listUi: {
+            statsLabel: "Ringkasan stok ambil",
+            sessions: "Sesi",
+            open: "Terbuka",
+            discrepant: "Berselisih",
+        }
         },
         inventoryLedger: {
             title: "Lejar Inventori",
@@ -352,6 +384,13 @@ export const inventoryExtrasMessages = {
             reasonUpdateFailed: "Gagal mengemas kini sebab inventori.",
         },
         inventoryReports: {
+            listUi: {
+                statsLabel: "Angka laporan",
+                suggestionCount: "Cadangan",
+                suggestedUnits: "Unit dicadangkan",
+                outOfStock: "Kehabisan stok",
+                movementCount: "Pergerakan",
+            },
             reorder: {
                 title: "Cadangan Pesanan Semula",
                 subtitle: "Produk di bawah ambang pesanan semula dengan kuantiti pembelian dicadangkan",
