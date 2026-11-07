@@ -499,6 +499,22 @@ export const purchasesMessages = {
         },
     },
     purchaseReports: {
+        listUi: {
+            period: 'Period',
+            statsLabel: 'Report figures',
+            groupBy: 'Group by',
+            groupDay: 'Day',
+            groupMonth: 'Month',
+            withReturns: 'With returns',
+            subgroup: 'Subgroup',
+            topProduct: 'Top product',
+            shareOfSpend: '{pct}% of spend',
+            returnedFilter: 'Returns',
+            someReturned: 'Something returned',
+            noneReturned: 'Nothing returned',
+            returnedUnits: '{count} units',
+            total: 'Total',
+        },
         lineItems: {
             title: "खरीद लाइन आइटम",
             subtitle: "हर खरीद की हर लाइन — अवधि, आपूर्तिकर्ता, उत्पाद या शाखा से खोजें",

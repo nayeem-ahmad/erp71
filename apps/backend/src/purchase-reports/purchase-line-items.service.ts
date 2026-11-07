@@ -17,6 +17,8 @@ import {
     type FilterableMap,
     numberEquals,
 } from '../common/column-filter.util';
+import { numberConditionFilter, readIdListQuery, readNumberConditionQuery } from '../common/number-condition.util';
+import { idsOrNoneClause } from '../common/document-list-filters';
 
 /**
  * How each sortable column orders the lines, before `lineOrder` appends the
@@ -67,6 +69,12 @@ const PURCHASE_LINE_FILTERABLE: FilterableMap<Prisma.PurchaseItemWhereInput> = {
 export function purchaseLineFilter(tenantId: string, query: GetPurchaseLineItemsDto, timezone: string) {
     const transactionAt = zonedDayRange(query.from, query.to, timezone);
     const search = searchTerm(query.search);
+    const suppliers = idsOrNoneClause('supplier_id', readIdListQuery(query.supplierId)) as
+        | Prisma.PurchaseWhereInput
+        | undefined;
+    const productIds = readIdListQuery(query.productId);
+    const unitCost = readNumberConditionQuery(query.unitCost, 'unitCost');
+    const quantity = readNumberConditionQuery(query.quantity, 'quantity');
 
     // A cancelled bill has had its stock, payable and ledger reversed, so its
     // lines are not purchases any more — the same exclusion every purchase
@@ -75,12 +83,16 @@ export function purchaseLineFilter(tenantId: string, query: GetPurchaseLineItems
         tenant_id: tenantId,
         ...ACTIVE_PURCHASE,
         ...(query.storeId ? { store_id: query.storeId } : {}),
-        ...(query.supplierId ? { supplier_id: query.supplierId } : {}),
+        ...(suppliers ?? {}),
         ...(transactionAt ? { purchase_date: transactionAt } : {}),
     };
 
     const searchLine: Prisma.PurchaseItemWhereInput = {
-        ...(query.productId ? { product_id: query.productId } : {}),
+        ...(productIds ? { product_id: productIds.length === 1 ? productIds[0] : { in: productIds } } : {}),
+        ...(unitCost ? { unit_cost: numberConditionFilter(unitCost) } : {}),
+        ...(quantity ? { quantity: numberConditionFilter(quantity) } : {}),
+        ...(query.returned === 'yes' ? { returnItems: { some: {} } } : {}),
+        ...(query.returned === 'no' ? { returnItems: { none: {} } } : {}),
         ...(search
             ? {
                   OR: [
@@ -195,28 +207,36 @@ export class PurchaseLineItemsService {
 
     /** Names for the ids the search was narrowed by, tenant-scoped. */
     private async resolveFilters(tenantId: string, query: GetPurchaseLineItemsDto) {
-        const [store, supplier, product] = await Promise.all([
+        const supplierIds = (readIdListQuery(query.supplierId) ?? []).filter((id) => id !== 'none');
+        const productIds = readIdListQuery(query.productId) ?? [];
+        const [store, suppliers, products] = await Promise.all([
             query.storeId
                 ? this.db.store.findFirst({
                       where: { id: query.storeId, tenant_id: tenantId },
                       select: { id: true, name: true },
                   })
                 : null,
-            query.supplierId
-                ? this.db.supplier.findFirst({
-                      where: { id: query.supplierId, tenant_id: tenantId },
+            supplierIds.length
+                ? this.db.supplier.findMany({
+                      where: { id: { in: supplierIds }, tenant_id: tenantId },
                       select: { id: true, name: true, phone: true },
                   })
-                : null,
-            // Not filtered on `deleted_at`: a delisted product's lines are still
-            // what someone reconciling an old bill needs to find.
-            query.productId
-                ? this.db.product.findFirst({
-                      where: { id: query.productId, tenant_id: tenantId },
+                : [],
+            productIds.length
+                ? this.db.product.findMany({
+                      where: { id: { in: productIds }, tenant_id: tenantId },
                       select: { id: true, name: true, sku: true },
                   })
-                : null,
+                : [],
         ]);
-        return { store, supplier, product };
+        const first = <T extends { id: string }>(rows: T[], ids: string[]) =>
+            ids.length ? rows.find((row) => row.id === ids[0]) ?? null : null;
+        return {
+            store,
+            supplier: first(suppliers, supplierIds),
+            product: first(products, productIds),
+            suppliers,
+            products,
+        };
     }
 }

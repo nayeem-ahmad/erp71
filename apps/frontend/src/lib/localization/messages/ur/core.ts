@@ -1716,6 +1716,7 @@ export const coreMessages = {
     },
     supplierLedger: {
         title: 'سپلائر کھاتہ',
+        statsLabel: 'کھاتے کا خلاصہ',
         ledgerTitle: 'کھاتے کے اندراجات',
         subtitle: 'قابلِ ادا بیلنس اور ادھار لین دین کی تاریخ دیکھیں۔',
         currentDue: 'موجودہ قابلِ ادا',
