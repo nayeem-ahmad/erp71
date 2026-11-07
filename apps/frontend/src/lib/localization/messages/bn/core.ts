@@ -1716,6 +1716,7 @@ export const coreMessages = {
         },
         supplierLedger: {
             title: "সরবরাহকারী লেজার",
+            statsLabel: "লেজার সারসংক্ষেপ",
             ledgerTitle: "লেজার এন্ট্রি",
             subtitle: "পাওনা ব্যালেন্স ও ক্রেডিট লেনদেনের ইতিহাস দেখুন।",
             currentDue: "বর্তমান পাওনা",

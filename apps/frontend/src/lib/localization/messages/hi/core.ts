@@ -1716,6 +1716,7 @@ export const coreMessages = {
     },
     supplierLedger: {
         title: "आपूर्तिकर्ता बहीखाता",
+        statsLabel: "बहीखाता सारांश",
         ledgerTitle: "बहीखाता प्रविष्टियाँ",
         subtitle: "देय शेष और उधार लेनदेन का इतिहास देखें।",
         currentDue: "वर्तमान देय",

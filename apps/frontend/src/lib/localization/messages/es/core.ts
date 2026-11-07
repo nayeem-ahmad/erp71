@@ -1716,6 +1716,7 @@ export const coreMessages = {
     },
     supplierLedger: {
         title: "Mayor de proveedores",
+        statsLabel: "Resumen del mayor",
         ledgerTitle: "Apuntes del mayor",
         subtitle: "Consulta los saldos a pagar y el historial de operaciones a crédito.",
         currentDue: "A pagar actualmente",

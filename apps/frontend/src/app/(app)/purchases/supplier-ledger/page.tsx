@@ -1,18 +1,21 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, BookOpen, Flag, FlagTriangleRight, ShoppingBag, Wallet } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
-import PageShell from '@/components/ui/compact/PageShell';
+import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { useI18n } from '@/lib/i18n';
+import { BranchFilter, PageShell, StatusBadge, buttonClassName, type StatusBadgeTone } from '@/components/ui';
 import PartySearchSelect from '@/components/document-entry/PartySearchSelect';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { createdRangeFromPreset, type CreatedRange } from '@/lib/created-range';
+import { matchesAnyOf, matchesSearch } from '@/lib/list-filter';
 
 type SupplierOption = {
     id: string;
@@ -42,16 +45,6 @@ type LedgerRow = {
 
 const columnHelper = createColumnHelper<LedgerRow>();
 
-function defaultFrom() {
-    const d = new Date();
-    d.setDate(1);
-    return d.toISOString().slice(0, 10);
-}
-
-function defaultTo() {
-    return new Date().toISOString().slice(0, 10);
-}
-
 function formatDateTime(value: string, locale: string) {
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return '—';
@@ -76,15 +69,22 @@ function formatOpeningDate(value: string, locale: string) {
     });
 }
 
+/** The Direction chip's values: a purchase (on credit or paid), money in, money out. */
+type Direction = 'purchase' | 'receive' | 'pay';
+const DIRECTIONS: Direction[] = ['purchase', 'receive', 'pay'];
+
+function directionOf(type: string | undefined): Direction | null {
+    if (type === 'PURCHASE' || type === 'CREDIT_PURCHASE') return 'purchase';
+    if (type === 'PAYOUT') return 'receive';
+    if (type === 'PAYMENT') return 'pay';
+    return null;
+}
+
 function directionLabel(type: string | undefined, copy: { directionReceive: string; directionPay: string; directionPurchase: string }) {
     if (type === 'PAYMENT') return copy.directionPay;
     if (type === 'PAYOUT') return copy.directionReceive;
     if (type === 'PURCHASE' || type === 'CREDIT_PURCHASE') return copy.directionPurchase;
     return type?.replace(/_/g, ' ') ?? '—';
-}
-
-function transactionRowsFromTable(table: { getFilteredRowModel: () => { rows: { original: LedgerRow }[] } }): LedgerRow[] {
-    return table.getFilteredRowModel().rows.map((row) => row.original).filter((row) => row.rowType === 'transaction');
 }
 
 function sumField(rows: LedgerRow[], key: 'purchase_total' | 'amount_paid' | 'debit' | 'credit'): number {
@@ -99,10 +99,23 @@ function moneyCell(value: number | string | null | undefined, locale: string, cl
     return <span className={className}>{formatBDT(amount, { locale })}</span>;
 }
 
+/** Paying the supplier is the line to watch; money back from them is good news. */
+function directionTone(type: string | undefined): StatusBadgeTone {
+    if (type === 'PAYOUT') return 'success';
+    if (type === 'PAYMENT') return 'danger';
+    return 'neutral';
+}
+
+/** Red while the shop owes the supplier, green when they owe the shop. */
 function balanceClass(value: number): string | undefined {
     if (value > 0) return 'text-danger';
     if (value < 0) return 'text-emerald-600';
     return undefined;
+}
+
+/** The strip's tone for a balance: amber while the shop owes. */
+function balanceTone(value: number): ListStat['tone'] {
+    return value > 0 ? 'warning' : 'default';
 }
 
 function SupplierLedgerContent() {
@@ -111,37 +124,58 @@ function SupplierLedgerContent() {
     const searchParams = useSearchParams();
     const preselectedId = searchParams.get('supplierId');
 
+    const branch = useBranchScope();
     const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
     const [loadingSuppliers, setLoadingSuppliers] = useState(true);
     const [supplierId, setSupplierId] = useState(preselectedId ?? '');
-    const [fromDate, setFromDate] = useState(defaultFrom());
-    const [toDate, setToDate] = useState(defaultTo());
+    // This month by default, on the workspace's own calendar. Cleared, the
+    // ledger runs from the supplier's first entry.
+    const [dateRange, setDateRange] = useState<CreatedRange | null>(() => createdRangeFromPreset('thisMonth'));
+    const fromDate = dateRange?.from ?? '';
+    const toDate = dateRange?.to ?? '';
     const [ledgerLoading, setLedgerLoading] = useState(false);
     const [dueBalance, setDueBalance] = useState(0);
     const [openingBalance, setOpeningBalance] = useState(0);
     const [closingBalance, setClosingBalance] = useState(0);
     const [transactions, setTransactions] = useState<LedgerRow[]>([]);
+    const [directions, setDirections] = useState<string[]>([]);
+    const [directionsExclude, setDirectionsExclude] = useState(false);
+    const [search, setSearch] = useState('');
+    // The ledger names its supplier, so a linked supplier of another branch
+    // still reads in the picker though the branch's list does not hold them.
     const [ledgerSupplier, setLedgerSupplier] = useState<SupplierOption | null>(null);
-
-    const loadSuppliers = useCallback(async () => {
-        setLoadingSuppliers(true);
-        try {
-            const items = await api.getSuppliers();
-            const list: SupplierOption[] = Array.isArray(items) ? items : [];
-            setSuppliers(list);
-            if (!preselectedId && list.length > 0) {
-                setSupplierId((prev) => prev || list[0].id);
-            }
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setLoadingSuppliers(false);
-        }
-    }, [preselectedId]);
+    // A `?supplierId=` link holds on the branch the page opened on only: once
+    // the user moves the branch, a supplier outside it gives way to its first.
+    const linkBranch = useRef<string | null>(null);
 
     useEffect(() => {
-        void loadSuppliers();
-    }, [loadSuppliers]);
+        if (!branch.ready) return;
+        let cancelled = false;
+        linkBranch.current ??= branch.value;
+        const keepLinked = linkBranch.current === branch.value ? preselectedId : null;
+        setLoadingSuppliers(true);
+        api.getSuppliers({ storeId: branch.apiStoreId })
+            .then((items: SupplierOption[]) => {
+                if (cancelled) return;
+                setSuppliers(items);
+                setSupplierId((prev) =>
+                    prev && (prev === keepLinked || items.some((s) => s.id === prev)) ? prev : items[0]?.id ?? '',
+                );
+            })
+            .catch((err) => {
+                if (cancelled) return;
+                setSuppliers([]);
+                if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
+                console.error(err);
+            })
+            .finally(() => {
+                if (!cancelled) setLoadingSuppliers(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch.ready, branch.apiStoreId]);
 
     useEffect(() => {
         if (preselectedId) setSupplierId(preselectedId);
@@ -189,6 +223,23 @@ function SupplierLedgerContent() {
         void loadLedger();
     }, [supplierId, fromDate, toDate]);
 
+    // The direction and search chips narrow the entries here; the opening
+    // balance row stays, since every running balance below starts from it.
+    const visible = useMemo(
+        () => transactions.filter((tx) => (
+            matchesAnyOf(directions, directionOf(tx.type), directionsExclude)
+            && matchesSearch(search, tx.payment_number, tx.notes, tx.creator?.name, directionLabel(tx.type, copy))
+        )),
+        [transactions, directions, directionsExclude, search, copy],
+    );
+
+    const totals = useMemo(() => ({
+        purchases: sumField(visible, 'purchase_total'),
+        paid: sumField(visible, 'amount_paid'),
+        due: sumField(visible, 'debit'),
+        payment: sumField(visible, 'credit'),
+    }), [visible]);
+
     const tableData = useMemo<LedgerRow[]>(() => {
         if (!supplierId) return [];
         const openingRow: LedgerRow = {
@@ -197,8 +248,8 @@ function SupplierLedgerContent() {
             created_at: fromDate,
             balance_after: openingBalance,
         };
-        return [openingRow, ...transactions];
-    }, [supplierId, fromDate, openingBalance, transactions]);
+        return [openingRow, ...visible];
+    }, [supplierId, fromDate, openingBalance, visible]);
 
     const columns = useMemo<ColumnDef<LedgerRow, unknown>[]>(() => [
         columnHelper.accessor('created_at', {
@@ -232,25 +283,16 @@ function SupplierLedgerContent() {
         columnHelper.accessor('type', {
             header: copy.columns.direction,
             cell: (info) => {
-                const row = info.row.original;
-                if (row.rowType === 'opening') {
-                    return (
-                        <span className="text-[10px] font-semibold text-orange-700">
-                            {copy.openingBalance}
-                        </span>
-                    );
+                if (info.row.original.rowType === 'opening') {
+                    return <StatusBadge tone="info">{copy.openingBalance}</StatusBadge>;
                 }
-                const isPayment = info.getValue() === 'PAYMENT';
-                const isPayout = info.getValue() === 'PAYOUT';
                 return (
-                    <span className={`text-[10px] font-semibold ${
-                        isPayment ? 'text-danger' : isPayout ? 'text-emerald-700' : 'text-gray-600'
-                    }`}>
+                    <StatusBadge tone={directionTone(info.getValue())}>
                         {directionLabel(info.getValue(), copy)}
-                    </span>
+                    </StatusBadge>
                 );
             },
-            size: 140,
+            size: 150,
         }),
         columnHelper.accessor((row) => row.creator?.name ?? '—', {
             id: 'recordedBy',
@@ -262,14 +304,14 @@ function SupplierLedgerContent() {
         columnHelper.accessor('purchase_total', {
             header: copy.columns.purchaseTotal,
             cell: (info) => (info.row.original.rowType === 'opening' ? dash : moneyCell(info.getValue(), locale)),
-            footer: ({ table }) => moneyCell(sumField(transactionRowsFromTable(table), 'purchase_total'), locale),
+            footer: () => moneyCell(totals.purchases, locale),
             size: 120,
             meta: { align: 'end', hideOnMobile: true },
         }),
         columnHelper.accessor('amount_paid', {
             header: copy.columns.paid,
             cell: (info) => (info.row.original.rowType === 'opening' ? dash : moneyCell(info.getValue(), locale)),
-            footer: ({ table }) => moneyCell(sumField(transactionRowsFromTable(table), 'amount_paid'), locale),
+            footer: () => moneyCell(totals.paid, locale),
             size: 110,
             meta: { align: 'end', hideOnMobile: true },
         }),
@@ -277,7 +319,7 @@ function SupplierLedgerContent() {
             id: 'due',
             header: copy.columns.due,
             cell: (info) => (info.row.original.rowType === 'opening' ? dash : moneyCell(info.getValue(), locale, 'text-danger')),
-            footer: ({ table }) => moneyCell(sumField(transactionRowsFromTable(table), 'debit'), locale, 'text-danger'),
+            footer: () => moneyCell(totals.due, locale, 'text-danger'),
             size: 110,
             meta: { align: 'end' },
         }),
@@ -285,7 +327,7 @@ function SupplierLedgerContent() {
             id: 'payment',
             header: copy.columns.payment,
             cell: (info) => (info.row.original.rowType === 'opening' ? dash : moneyCell(info.getValue(), locale, 'text-emerald-600')),
-            footer: ({ table }) => moneyCell(sumField(transactionRowsFromTable(table), 'credit'), locale, 'text-emerald-600'),
+            footer: () => moneyCell(totals.payment, locale, 'text-emerald-600'),
             size: 110,
             meta: { align: 'end' },
         }),
@@ -305,112 +347,140 @@ function SupplierLedgerContent() {
             size: 120,
             meta: { align: 'end' },
         }),
-    ], [copy, locale, closingBalance]);
+    ], [copy, locale, closingBalance, totals]);
+
+    // Page-owned: the range goes to the ledger query, and the opening balance
+    // is read at its start.
+    const filters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'date',
+                type: 'date-range',
+                label: t.common.date,
+                value: dateRange,
+                onChange: setDateRange,
+                operators: true,
+            },
+            {
+                id: 'direction',
+                type: 'multi-select',
+                label: copy.columns.direction,
+                value: directions,
+                onChange: setDirections,
+                exclude: { value: directionsExclude, onChange: setDirectionsExclude },
+                options: DIRECTIONS.map((value) => ({
+                    value,
+                    label: { purchase: copy.directionPurchase, receive: copy.directionReceive, pay: copy.directionPay }[value],
+                })),
+            },
+        ],
+        [t, copy, dateRange, directions, directionsExclude],
+    );
 
     const selectedSupplier = suppliers.find((s) => s.id === supplierId)
         ?? (ledgerSupplier?.id === supplierId ? ledgerSupplier : null);
 
+    // Opening and closing are the ledger's over the date range; the purchases,
+    // due and payment figures follow the direction and search chips, as the
+    // total row does.
+    const stats = useMemo(() => {
+        const money = (value: number) => formatBDT(value, { locale });
+        const items: ListStat[] = [
+            {
+                id: 'opening',
+                icon: <Flag aria-hidden />,
+                label: copy.openingBalance,
+                value: money(openingBalance),
+                tone: balanceTone(openingBalance),
+            },
+            { id: 'purchases', icon: <ShoppingBag aria-hidden />, label: copy.columns.purchaseTotal, value: money(totals.purchases) },
+            { id: 'due', icon: <ArrowUpRight aria-hidden />, label: copy.columns.due, value: money(totals.due) },
+            { id: 'payment', icon: <ArrowDownLeft aria-hidden />, label: copy.columns.payment, value: money(totals.payment) },
+            {
+                id: 'closing',
+                icon: <FlagTriangleRight aria-hidden />,
+                label: copy.closingBalance,
+                value: money(closingBalance),
+                tone: balanceTone(closingBalance),
+            },
+            {
+                id: 'current',
+                icon: <Wallet aria-hidden />,
+                label: copy.currentDue,
+                value: money(dueBalance),
+                tone: balanceTone(dueBalance),
+                hint: selectedSupplier?.name,
+            },
+        ];
+        return { items, loading: ledgerLoading && transactions.length === 0, label: copy.statsLabel };
+    }, [copy, locale, openingBalance, closingBalance, dueBalance, totals, selectedSupplier, ledgerLoading, transactions.length]);
+
     return (
         <PageShell>
-                <PageHeader
-                    title={copy.title}
-                    subtitle={copy.subtitle}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.purchase,
-                        copy.title,
-                        'purchases',
-                    )}
-                    actions={supplierId ? (
-                        <Link
-                            href={`/purchases/supplier-payments?supplierId=${supplierId}&new=1`}
-                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-hover"
-                        >
-                            {copy.recordPayment}
-                        </Link>
-                    ) : undefined}
-                />
-
-                <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="space-y-1">
-                            <PartySearchSelect
-                                parties={suppliers}
-                                loading={loadingSuppliers}
-                                selected={selectedSupplier}
-                                onSelect={(party) => setSupplierId(party?.id ?? '')}
-                                label={copy.pickSupplier}
-                                placeholder={copy.searchPlaceholder}
-                                emptyLabel={copy.noSuppliers}
-                                noMatchLabel={copy.noSuppliers}
-                                clearLabel={copy.clearSupplier}
-                            />
-                        </div>
-                        <label className="space-y-1">
-                            <span className="text-xs font-medium text-gray-500">{copy.dateFrom}</span>
-                            <input
-                                type="date"
-                                value={fromDate}
-                                onChange={(e) => setFromDate(e.target.value)}
-                                className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
-                            />
-                        </label>
-                        <label className="space-y-1">
-                            <span className="text-xs font-medium text-gray-500">{copy.dateTo}</span>
-                            <input
-                                type="date"
-                                value={toDate}
-                                onChange={(e) => setToDate(e.target.value)}
-                                className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
-                            />
-                        </label>
-                    </div>
-                </div>
-
-                {supplierId ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
-                            <p className="text-xs font-medium text-gray-500">{copy.openingBalance}</p>
-                            <p className={`text-2xl font-bold mt-1 ${openingBalance > 0 ? 'text-danger' : openingBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
-                                {formatBDT(openingBalance)}
-                            </p>
-                        </div>
-                        <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
-                            <p className="text-xs font-medium text-gray-500">{copy.closingBalance}</p>
-                            <p className={`text-2xl font-bold mt-1 ${closingBalance > 0 ? 'text-danger' : closingBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
-                                {formatBDT(closingBalance)}
-                            </p>
-                        </div>
-                        <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
-                            <p className="text-xs font-medium text-gray-500">{copy.currentDue}</p>
-                            <p className={`text-2xl font-bold mt-1 ${dueBalance > 0 ? 'text-danger' : dueBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
-                                {formatBDT(dueBalance)}
-                            </p>
-                            {selectedSupplier ? (
-                                <p className="text-xs text-gray-400 mt-1">{selectedSupplier.name}</p>
-                            ) : null}
-                        </div>
-                    </div>
-                ) : null}
-
-                {!supplierId ? (
-                    <div className="flex items-center justify-center py-20 text-gray-400 text-sm">
-                        {copy.selectSupplier}
-                    </div>
-                ) : ledgerLoading ? (
-                    <div className="flex items-center justify-center py-20 text-gray-400">
-                        <Loader2 className="w-6 h-6 animate-spin me-2" />
-                        {copy.loading}
-                    </div>
-                ) : (
-                    <DataTable
-                        tableId="supplier-ledger-entries"
-                        title={copy.ledgerTitle}
-                        data={tableData}
-                        columns={columns}
-                        emptyMessage={copy.noTransactions}
-                    />
+            <PageHeader
+                title={copy.title}
+                subtitle={copy.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.purchase,
+                    copy.title,
+                    'purchases',
                 )}
+                actions={
+                    <>
+                        <BranchFilter scope={branch} />
+                        {supplierId ? (
+                            <Link
+                                href={`/purchases/supplier-payments?supplierId=${supplierId}&new=1`}
+                                className={buttonClassName()}
+                            >
+                                {copy.recordPayment}
+                            </Link>
+                        ) : null}
+                    </>
+                }
+            />
+
+            {/* Which ledger to read, rather than a filter on one: the table
+                below is always one supplier's. */}
+            <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
+                <div className="max-w-md">
+                    <PartySearchSelect
+                        parties={suppliers}
+                        loading={loadingSuppliers}
+                        selected={selectedSupplier}
+                        onSelect={(party) => setSupplierId(party?.id ?? '')}
+                        label={copy.pickSupplier}
+                        placeholder={copy.searchPlaceholder}
+                        emptyLabel={copy.noSuppliers}
+                        noMatchLabel={copy.noSuppliers}
+                        clearLabel={copy.clearSupplier}
+                    />
+                </div>
+            </div>
+
+            {supplierId ? (
+                <DataTable
+                    tableId="supplier-ledger-entries"
+                    title={copy.ledgerTitle}
+                    data={tableData}
+                    columns={columns}
+                    isLoading={ledgerLoading}
+                    emptyMessage={copy.noTransactions}
+                    emptyIcon={<BookOpen className="w-16 h-16 text-gray-200" />}
+                    searchValue={search}
+                    onSearchChange={setSearch}
+                    filters={filters}
+                    filterLayout="row"
+                    stats={stats}
+                    enableColumnFilters={false}
+                    viewOptions
+                />
+            ) : (
+                <div className="rounded-lg border border-gray-100 bg-white py-16 text-center text-sm text-gray-500">
+                    {copy.selectSupplier}
+                </div>
+            )}
         </PageShell>
     );
 }

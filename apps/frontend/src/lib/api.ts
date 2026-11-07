@@ -3760,7 +3760,14 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     /** Every supplier as a flat array — for pickers and id→supplier maps. */
-    getSuppliers: () => fetchAllPages('/suppliers'),
+    getSuppliers: (params?: {
+        /** A branch id or `all`; omitted, every supplier the member may see. */
+        storeId?: string;
+    }) => {
+        const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
+        return fetchAllPages(`/suppliers${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     getSuppliersPaged: (params?: {
         page?: number;
         limit?: number;

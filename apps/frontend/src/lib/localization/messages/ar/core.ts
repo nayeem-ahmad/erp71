@@ -1716,6 +1716,7 @@ export const coreMessages = {
     },
     supplierLedger: {
         title: 'دفتر المورّد',
+        statsLabel: 'ملخص الدفتر',
         ledgerTitle: 'قيود الدفتر',
         subtitle: 'اعرض الأرصدة المستحقة للمورّدين وسجل المعاملات الآجلة.',
         currentDue: 'المستحق الحالي',
