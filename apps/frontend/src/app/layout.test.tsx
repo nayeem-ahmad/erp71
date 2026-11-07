@@ -15,6 +15,8 @@
  * container is its own fight) — the element tree the layout returns says
  * everything.
  */
+import { existsSync } from 'fs';
+import { resolve } from 'path';
 import type { ReactElement } from 'react';
 
 import RootLayout from './layout';
@@ -23,11 +25,22 @@ jest.mock('next/headers', () => ({
     cookies: async () => ({ get: () => undefined }),
 }));
 
-jest.mock('next/font/google', () => ({
-    Inter: jest.fn(() => ({ variable: 'var-inter' })),
-    Noto_Sans_Bengali: jest.fn(() => ({ variable: 'var-bengali' })),
-    Noto_Sans_Arabic: jest.fn(() => ({ variable: 'var-arabic' })),
-}));
+type LocalFontOpts = {
+    src: string | Array<{ path: string }>;
+    variable: string;
+    preload?: boolean;
+};
+
+jest.mock('next/font/local', () =>
+    jest.fn((opts: LocalFontOpts) => ({
+        variable:
+            opts.variable === '--font-inter'
+                ? 'var-inter'
+                : opts.variable === '--font-bengali'
+                  ? 'var-bengali'
+                  : 'var-arabic',
+    })),
+);
 
 async function renderTree() {
     const html = (await RootLayout({ children: null })) as ReactElement<{
@@ -61,10 +74,35 @@ describe('RootLayout', () => {
      * arrives the moment a page actually uses it.
      */
     it('preloads Inter and Bengali for everyone, but not the Arabic face', () => {
-        const fonts = jest.requireMock('next/font/google');
+        const byVariable = localFontCalls();
 
-        expect(fonts.Noto_Sans_Arabic).toHaveBeenCalledWith(expect.objectContaining({ preload: false }));
-        expect(fonts.Inter.mock.calls[0][0].preload).not.toBe(false);
-        expect(fonts.Noto_Sans_Bengali.mock.calls[0][0].preload).not.toBe(false);
+        expect(byVariable['--font-arabic'].preload).toBe(false);
+        expect(byVariable['--font-inter'].preload).not.toBe(false);
+        expect(byVariable['--font-bengali'].preload).not.toBe(false);
+    });
+
+    /*
+     * next/font/google fetches CSS from fonts.googleapis.com at `next build`.
+     * When that response is empty or HTML, the loader throws
+     * `Cannot read properties of null (reading '1')` and the whole frontend
+     * image fails — including the VPS deploy. Local files remove that fetch.
+     */
+    it('loads each face from a local woff2, so a Google Fonts outage cannot fail the build', () => {
+        const byVariable = localFontCalls();
+
+        for (const key of ['--font-inter', '--font-bengali', '--font-arabic']) {
+            const src = byVariable[key].src;
+            const paths = typeof src === 'string' ? [src] : src.map((entry) => entry.path);
+            expect(paths.length).toBeGreaterThan(0);
+            for (const filePath of paths) {
+                expect(filePath).toMatch(/\.woff2$/);
+                expect(existsSync(resolve(__dirname, filePath))).toBe(true);
+            }
+        }
     });
 });
+
+function localFontCalls(): Record<string, LocalFontOpts> {
+    const localFont = jest.requireMock('next/font/local') as jest.Mock;
+    return Object.fromEntries(localFont.mock.calls.map(([opts]: [LocalFontOpts]) => [opts.variable, opts]));
+}
