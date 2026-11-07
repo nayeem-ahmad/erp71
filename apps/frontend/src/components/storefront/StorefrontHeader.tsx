@@ -97,7 +97,7 @@ export default function StorefrontHeader({
     return (
         <header className="border-b border-gray-100 sticky top-0 bg-white/90 backdrop-blur-md z-40">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="flex items-center justify-between h-20 gap-4">
+                <div className="flex items-center justify-between h-24 gap-4">
                     <Link
                         href={`/store/${slug}`}
                         className="flex items-center gap-2 min-w-0"
@@ -109,7 +109,7 @@ export default function StorefrontHeader({
                                 // screen reader would otherwise hear the shop
                                 // named twice in the same link.
                                 alt={nameVisible ? '' : storeName}
-                                className="h-9 sm:h-11 w-auto max-w-[120px] sm:max-w-[200px] object-contain flex-shrink-0"
+                                className="h-12 sm:h-16 w-auto max-w-[180px] sm:max-w-[280px] object-contain flex-shrink-0"
                             />
                         ) : null}
                         {nameVisible ? (

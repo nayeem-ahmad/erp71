@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import ArticleMarkdown from '@/components/blog/ArticleMarkdown';
-import { fetchStorefrontPage, type StorefrontPageMenuLink } from '@/lib/storefront/pages-api';
+import StorefrontDocumentShell from '@/components/storefront/StorefrontDocumentShell';
+import { fetchStorefrontMeta } from '@/lib/storefront/storefront-meta';
+import { fetchStorefrontPage, storefrontDocumentShop } from '@/lib/storefront/pages-api';
 
 /**
  * One of a shop's standing pages — "About us", "Delivery & returns".
@@ -10,10 +12,9 @@ import { fetchStorefrontPage, type StorefrontPageMenuLink } from '@/lib/storefro
  * reason: a shop's returns policy is a page its customers search for by name,
  * and a client-rendered one is a page they never find.
  *
- * It carries its own light chrome rather than the cart-bearing
- * `StorefrontHeader`: nothing on this page can be added to a basket, and
- * pulling in that component would drag the whole cart-and-session client bundle
- * onto a static document.
+ * The article is still HTML in the first response. Banner, logo, menu and
+ * footer come from `StorefrontDocumentShell` so the page matches the shop's
+ * home rather than a narrower document layout of its own.
  */
 // Next.js parses this at build time and only accepts a literal, so the shared
 // constant cannot be used here.
@@ -60,67 +61,26 @@ function Unavailable({ shopSlug }: { shopSlug: string }) {
     );
 }
 
-function MenuLink({ link }: { link: StorefrontPageMenuLink }) {
-    const className = 'text-gray-500 transition-colors hover:text-gray-900';
-
-    // `noopener` on every external entry, not only the new-tab ones: a shopper
-    // middle-clicking a same-tab link opens it in a tab all the same.
-    return link.external ? (
-        <a
-            href={link.href}
-            target={link.open_in_new_tab ? '_blank' : undefined}
-            rel="noopener noreferrer"
-            className={className}
-        >
-            {link.label}
-        </a>
-    ) : (
-        <Link href={link.href} className={className}>
-            {link.label}
-        </Link>
-    );
-}
-
 export default async function StorefrontContentPage({ params }: { params: Promise<Params> }) {
     const { slug, pageSlug } = await params;
-    const { page, shop, menu } = await fetchStorefrontPage(slug, pageSlug);
+    const [{ page, shop, menu }, meta] = await Promise.all([
+        fetchStorefrontPage(slug, pageSlug),
+        fetchStorefrontMeta(slug),
+    ]);
 
-    if (!page) return <Unavailable shopSlug={slug} />;
+    const chrome = storefrontDocumentShop(slug, shop, meta);
+    if (!page || !chrome) return <Unavailable shopSlug={slug} />;
 
     const here = `/store/${slug}/pages/${page.slug}`;
 
     return (
-        <div className="min-h-screen bg-gray-50 font-sans">
-            <header className="border-b border-gray-100 bg-white">
-                <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-4 md:px-6">
-                    <Link href={`/store/${slug}`} className="text-lg font-bold tracking-tight text-gray-900">
-                        {shop?.name ?? 'Shop'}
-                    </Link>
-                    <nav className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm font-medium">
-                        <Link href={`/store/${slug}/shop`} className="text-gray-500 transition-colors hover:text-gray-900">
-                            Shop
-                        </Link>
-                        {menu.map((link) =>
-                            link.href === here ? (
-                                <span key={link.id} className="text-gray-900" aria-current="page">
-                                    {link.label}
-                                </span>
-                            ) : (
-                                <MenuLink key={link.id} link={link} />
-                            ),
-                        )}
-                    </nav>
+        <StorefrontDocumentShell slug={slug} shop={chrome} menuLinks={menu} activeHref={here}>
+            <article className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+                <h1 className="text-3xl font-bold leading-tight tracking-tight text-gray-900">{page.title}</h1>
+                <div className="mt-8">
+                    <ArticleMarkdown content={page.body_md ?? ''} variant="article" />
                 </div>
-            </header>
-
-            <main className="mx-auto max-w-3xl px-4 py-8 md:px-6">
-                <article className="rounded-lg border border-gray-200 bg-white p-4 md:p-6">
-                    <h1 className="text-2xl font-bold leading-tight tracking-tight text-gray-900">{page.title}</h1>
-                    <div className="mt-6">
-                        <ArticleMarkdown content={page.body_md ?? ''} />
-                    </div>
-                </article>
-            </main>
-        </div>
+            </article>
+        </StorefrontDocumentShell>
     );
 }
