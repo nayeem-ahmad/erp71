@@ -39,10 +39,12 @@
  * matters because it sits in the container start chain and runs on every deploy.
  *
  * Adding a group is therefore a deliberate act — list the permissions here once
- * they are in `ROLE_DEFAULT_PERMISSIONS`, and this carries them to existing
- * tenants. Which roles receive which permission is never decided here: it is
- * read from `ROLE_DEFAULT_PERMISSIONS`, so this file cannot drift from the
- * matrix it is backfilling.
+ * they are in `ROLE_DEFAULT_PERMISSIONS` / `TENANT_ROLE_TEMPLATES`, and this
+ * carries them to existing tenants. Which roles receive which permission is
+ * never decided here: legacy system roles (`template_key` null) read
+ * `ROLE_DEFAULT_PERMISSIONS`; template roles read their
+ * `TENANT_ROLE_TEMPLATES` entry. This file cannot drift from the matrix it is
+ * backfilling.
  *
  * Note APPROVE_VOUCHER is NOT listed: it has its own script
  * (`sync-approve-voucher-permission.ts`, called from `sync-accounting.ts`) that
@@ -62,6 +64,7 @@ import {
     ROLE_DEFAULT_PERMISSIONS,
     StorePermission,
     SYSTEM_TENANT_ROLE_TO_USER_ROLE,
+    TENANT_ROLE_TEMPLATE_BY_KEY,
 } from '@erp71/shared-types';
 
 const prisma = new PrismaClient();
@@ -237,9 +240,11 @@ export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
         // file's header.
         //
         // `ROLE_DEFAULT_PERMISSIONS` gives it to Manager (and Owner, who holds
-        // everything), matching where MANAGE_CUSTOMER_CREDIT already sits. The
-        // point of the separate permission is that an owner can take it back off
-        // a role without also stopping that role taking payments.
+        // everything); `TENANT_ROLE_TEMPLATES` gives it to Tenant Admin, Sales
+        // Manager and Accounting Manager, matching where MANAGE_CUSTOMER_CREDIT
+        // already sits. The point of the separate permission is that an owner
+        // can take it back off a role without also stopping that role taking
+        // payments.
         key: 'customer-write-off',
         permissions: [
             StorePermission.WRITE_OFF_CUSTOMER_DEBT,
@@ -268,16 +273,15 @@ export async function syncRolePermissions(
     const groups = options.groups ?? PERMISSION_BACKFILL_GROUPS;
     const dryRun = options.dryRun ?? false;
 
-    // Template roles are excluded: their permissions come from their
-    // `TENANT_ROLE_TEMPLATES` entry, never from a coarse role's defaults, and
-    // `SYSTEM_TENANT_ROLE_TO_USER_ROLE` deliberately does not map their names — so
-    // every one of them would otherwise be counted as a renamed role and reported
-    // as unmapped on every deploy. Widening a template is a change to
-    // `TENANT_ROLE_TEMPLATES` plus a group here that names the roles by permission,
-    // not a change to this query.
+    // Legacy system roles (`template_key` null) reconcile against
+    // `ROLE_DEFAULT_PERMISSIONS`. Template roles reconcile against their
+    // `TENANT_ROLE_TEMPLATES` entry — without that, a permission added to e.g.
+    // `tenant_admin` after the role was seeded reaches nobody who already
+    // exists, and the OWNER bypass hides it from whoever tests the new page.
+    // Custom (non-system) roles stay out: those are an owner's own matrix.
     const roles = await prisma.tenantRole.findMany({
-        where: { is_system: true, template_key: null },
-        select: { id: true, tenant_id: true, name: true },
+        where: { is_system: true },
+        select: { id: true, tenant_id: true, name: true, template_key: true },
     });
     if (roles.length === 0) {
         return groups.map((group) => emptyResult(group.key));
@@ -303,15 +307,11 @@ export async function syncRolePermissions(
                 result.rolesAlreadyReconciled += 1;
                 continue;
             }
-            // Deliberately not `resolveBaseUserRole`, which falls back to CASHIER
-            // for an unknown name: a renamed system role would then quietly be
-            // reconciled as a cashier. Skip and report it instead.
-            const baseRole = SYSTEM_TENANT_ROLE_TO_USER_ROLE[(role.name ?? '').trim()];
-            if (!baseRole) {
+            const defaults = defaultsForRole(role);
+            if (!defaults) {
                 result.rolesUnmapped += 1;
                 continue;
             }
-            const defaults = ROLE_DEFAULT_PERMISSIONS[baseRole] ?? [];
             const wanted = group.permissions.filter((p) => defaults.includes(p));
             if (wanted.length === 0) continue;
 
@@ -397,6 +397,23 @@ export async function syncRolePermissions(
     }
 
     return results;
+}
+
+/**
+ * The permission list a system role should be reconciled against. Template
+ * roles are keyed, so a rename of the displayed name does not lose them.
+ * Legacy roles still match on the English name `SYSTEM_TENANT_ROLE_TO_USER_ROLE`
+ * knows — deliberately not `resolveBaseUserRole`, which falls back to CASHIER
+ * for an unknown name and would quietly grant a renamed role as a cashier.
+ */
+function defaultsForRole(role: { name?: string | null; template_key?: string | null }): StorePermission[] | null {
+    if (role.template_key) {
+        const template = TENANT_ROLE_TEMPLATE_BY_KEY[role.template_key];
+        return template ? (template.permissions as StorePermission[]) : null;
+    }
+    const baseRole = SYSTEM_TENANT_ROLE_TO_USER_ROLE[(role.name ?? '').trim()];
+    if (!baseRole) return null;
+    return ROLE_DEFAULT_PERMISSIONS[baseRole] ?? [];
 }
 
 function emptyResult(key: string): GroupResult {

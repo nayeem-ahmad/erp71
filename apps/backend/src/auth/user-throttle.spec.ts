@@ -65,6 +65,10 @@ const accessToken = (userId: string, options: { expiresIn?: number } = {}) =>
 const base64url = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
 
 describe('the default rate limit, keyed on the signed-in user', () => {
+    // 601 sequential probe requests (IP ceiling + 1) miss the 5s default under
+    // CI parallel load — same shape as auth.controller.throttle.spec.ts.
+    jest.setTimeout(30_000);
+
     let app: INestApplication;
 
     beforeEach(async () => {
