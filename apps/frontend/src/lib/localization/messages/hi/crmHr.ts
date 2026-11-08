@@ -50,6 +50,8 @@ export const crmHrMessages = {
             edit: "संपादित करें",
             editTitle: "नियोजित गतिविधि संपादित करें",
             editRollupHint: "जब तक यह सबसे पहले नियोजित है, यही लीड का अगला कदम है।",
+            editCompletedTitle: "दर्ज गतिविधि संपादित करें",
+            editCompletedHint: "यह पूर्ण ही रहेगी। कब हुई और स्वीकृति, दोनों वैसे ही रहेंगे।",
             cancelled: "रद्द",
             scheduleNext: "अगली निर्धारित करें",
             inheritsHint: "जिस गतिविधि को बंद कर रहे हैं उसका उद्देश्य विरासत में लेती है।",

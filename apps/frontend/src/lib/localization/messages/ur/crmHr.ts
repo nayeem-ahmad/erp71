@@ -50,6 +50,8 @@ export const crmHrMessages = {
             edit: 'ترمیم',
             editTitle: 'منصوبہ بند سرگرمی میں ترمیم',
             editRollupHint: 'جب تک یہ سب سے پہلے منصوبہ بند ہے، یہی لیڈ کا اگلا قدم ہے۔',
+            editCompletedTitle: 'درج شدہ سرگرمی میں ترمیم',
+            editCompletedHint: 'یہ مکمل ہی رہے گی۔ یہ کب ہوئی اور منظوری، دونوں جیسے ہیں ویسے رہیں گے۔',
             cancelled: 'منسوخ',
             scheduleNext: 'اگلی شیڈول کریں',
             inheritsHint: 'جو سرگرمی بند کر رہے ہیں اس کا مقصد وراثت میں لیتی ہے۔',
