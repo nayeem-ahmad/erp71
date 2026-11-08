@@ -214,6 +214,20 @@ export const projectsMessages = {
         openInProject: "اس کے پروجیکٹ میں کھولیں",
         anyEpic: "کوئی بھی ایپک",
         noEpic: "کوئی ایپک نہیں",
+        view: "منظر",
+        viewList: "فہرست",
+        viewHierarchy: "درجہ بندی",
+        listUi: {
+            statsLabel: "اسٹوری خلاصہ",
+            stats: {
+                stories: "اسٹوریز",
+                backlog: "بیک لاگ",
+                ready: "تیار",
+                inProgress: "جاری",
+                done: "مکمل",
+                points: "پوائنٹس",
+            },
+        },
     },
 
     /**
@@ -332,6 +346,19 @@ export const projectsMessages = {
         progress: "پیش رفت",
         stories: "اسٹوریز",
         openInProject: "اس کے پروجیکٹ میں کھولیں",
+        view: "منظر",
+        viewList: "فہرست",
+        viewHierarchy: "درجہ بندی",
+        listUi: {
+            statsLabel: "ایپک خلاصہ",
+            stats: {
+                epics: "ایپکس",
+                open: "کھلے",
+                inProgress: "جاری",
+                done: "مکمل",
+                stories: "اسٹوریز",
+            },
+        },
     },
 
     task: {

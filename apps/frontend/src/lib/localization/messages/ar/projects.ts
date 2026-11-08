@@ -214,6 +214,20 @@ export const projectsMessages = {
         openInProject: "افتح في مشروعها",
         anyEpic: "أي ملحمة",
         noEpic: "بلا ملحمة",
+        view: "العرض",
+        viewList: "قائمة",
+        viewHierarchy: "تسلسل",
+        listUi: {
+            statsLabel: "ملخص القصص",
+            stats: {
+                stories: "القصص",
+                backlog: "المتراكم",
+                ready: "جاهزة",
+                inProgress: "قيد التنفيذ",
+                done: "منجزة",
+                points: "النقاط",
+            },
+        },
     },
 
     /**
@@ -332,6 +346,19 @@ export const projectsMessages = {
         progress: "التقدّم",
         stories: "القصص",
         openInProject: "افتح في مشروعها",
+        view: "العرض",
+        viewList: "قائمة",
+        viewHierarchy: "تسلسل",
+        listUi: {
+            statsLabel: "ملخص الملاحم",
+            stats: {
+                epics: "الملاحم",
+                open: "مفتوحة",
+                inProgress: "قيد التنفيذ",
+                done: "منجزة",
+                stories: "القصص",
+            },
+        },
     },
 
     task: {

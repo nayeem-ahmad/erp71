@@ -214,6 +214,20 @@ export const projectsMessages = {
         openInProject: "এর প্রকল্পে খুলুন",
         anyEpic: "যেকোনো এপিক",
         noEpic: "এপিক নেই",
+        view: "দেখুন",
+        viewList: "তালিকা",
+        viewHierarchy: "অনুক্রম",
+        listUi: {
+            statsLabel: "স্টোরি সারাংশ",
+            stats: {
+                stories: "স্টোরি",
+                backlog: "ব্যাকলগ",
+                ready: "প্রস্তুত",
+                inProgress: "চলমান",
+                done: "সম্পন্ন",
+                points: "পয়েন্ট",
+            },
+        },
     },
 
     /**
@@ -332,6 +346,19 @@ export const projectsMessages = {
         progress: "অগ্রগতি",
         stories: "স্টোরি",
         openInProject: "এর প্রকল্পে খুলুন",
+        view: "দেখুন",
+        viewList: "তালিকা",
+        viewHierarchy: "অনুক্রম",
+        listUi: {
+            statsLabel: "এপিক সারাংশ",
+            stats: {
+                epics: "এপিক",
+                open: "খোলা",
+                inProgress: "চলমান",
+                done: "সম্পন্ন",
+                stories: "স্টোরি",
+            },
+        },
     },
 
     task: {

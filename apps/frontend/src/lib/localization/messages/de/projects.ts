@@ -214,6 +214,20 @@ export const projectsMessages = {
         openInProject: "Im Projekt öffnen",
         anyEpic: "Beliebiges Epic",
         noEpic: "Kein Epic",
+        view: "Ansicht",
+        viewList: "Liste",
+        viewHierarchy: "Hierarchie",
+        listUi: {
+            statsLabel: "Story-Übersicht",
+            stats: {
+                stories: "Stories",
+                backlog: "Backlog",
+                ready: "Bereit",
+                inProgress: "In Arbeit",
+                done: "Erledigt",
+                points: "Punkte",
+            },
+        },
     },
 
     /**
@@ -332,6 +346,19 @@ export const projectsMessages = {
         progress: "Fortschritt",
         stories: "Storys",
         openInProject: "Im Projekt öffnen",
+        view: "Ansicht",
+        viewList: "Liste",
+        viewHierarchy: "Hierarchie",
+        listUi: {
+            statsLabel: "Epic-Übersicht",
+            stats: {
+                epics: "Epics",
+                open: "Offen",
+                inProgress: "In Arbeit",
+                done: "Erledigt",
+                stories: "Stories",
+            },
+        },
     },
 
     task: {
