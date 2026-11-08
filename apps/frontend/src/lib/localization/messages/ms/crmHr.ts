@@ -50,6 +50,8 @@ export const crmHrMessages = {
             edit: 'Sunting',
             editTitle: 'Sunting aktiviti dirancang',
             editRollupHint: 'Selagi ia yang terawal dirancang, inilah langkah seterusnya prospek.',
+            editCompletedTitle: 'Sunting aktiviti yang direkod',
+            editCompletedHint: 'Ia kekal selesai. Masa ia berlaku dan kelulusannya tidak berubah.',
             cancelled: 'Dibatalkan',
             scheduleNext: 'Jadualkan yang seterusnya',
             inheritsHint: 'Mewarisi tujuan aktiviti yang anda tutup.',

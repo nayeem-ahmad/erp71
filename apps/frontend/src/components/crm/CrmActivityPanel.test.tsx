@@ -46,14 +46,26 @@ const logged = {
     ...planned,
     id: 'a2',
     subject: null,
-    status: 'DONE',
+    status: 'DONE' as const,
     due_at: null,
     completed_at: '2026-02-02T10:00:00.000Z',
     summary: 'Sent the catalogue',
+    outcome: 'Left a message',
+    notes: 'Original note',
     purpose: null,
     channel: { id: 'ch-call', name: 'Call', icon: '📞' },
     // A call logged as already made lands approved: there is nothing left to hold back.
     is_approved: true,
+};
+
+const cancelled = {
+    ...planned,
+    id: 'a3',
+    subject: 'Dropped the visit',
+    status: 'CANCELLED' as const,
+    due_at: null,
+    completed_at: null,
+    purpose: null,
 };
 
 const RIFAT = { id: 'user-2', name: 'Rifat', email: 'rifat@example.com' };
@@ -63,7 +75,7 @@ beforeEach(() => {
     api.getLeadTaxonomy.mockImplementation((kind: string) =>
         Promise.resolve(kind === 'channels' ? CHANNELS : PURPOSES),
     );
-    api.getAllCrmActivities.mockResolvedValue([planned, logged]);
+    api.getAllCrmActivities.mockResolvedValue([planned, logged, cancelled]);
     api.createCrmActivity.mockResolvedValue({ id: 'new' });
     api.completeCrmActivity.mockResolvedValue({ completed: {}, next: null });
     api.cancelCrmActivity.mockResolvedValue({});
@@ -163,16 +175,21 @@ describe('CrmActivityPanel — editing a planned activity', () => {
 
     it('offers Edit on planned work', async () => {
         renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
-        await screen.findByText('Chase the invoice');
+        const subject = await screen.findByText('Chase the invoice');
+        const row = subject.closest('div')!.parentElement!;
 
-        expect(screen.getByRole('button', { name: /edit/i })).toBeInTheDocument();
+        expect(within(row).getByRole('button', { name: /edit/i })).toBeInTheDocument();
     });
 
-    it('does not offer Edit on history, which the API refuses to edit', async () => {
+    it('offers Edit on a completed log and not on a cancelled one', async () => {
         renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
-        await screen.findByText('Sent the catalogue');
+        const logged = await screen.findByText('Sent the catalogue');
+        const loggedRow = logged.closest('div')!.parentElement!.parentElement!;
+        expect(within(loggedRow).getByRole('button', { name: /edit/i })).toBeInTheDocument();
 
-        expect(screen.getAllByRole('button', { name: /edit/i })).toHaveLength(1);
+        const cancelled = screen.getByText('Dropped the visit');
+        const cancelledRow = cancelled.closest('div')!.parentElement!.parentElement!;
+        expect(within(cancelledRow).queryByRole('button', { name: /edit/i })).not.toBeInTheDocument();
     });
 
     it('prefills the form from the activity it is editing', async () => {
@@ -224,6 +241,101 @@ describe('CrmActivityPanel — editing a planned activity', () => {
         // '' rather than an omitted key: the DTO's emptyToNull turns it into an
         // explicit null, where omitting it would leave the old assignee in place.
         expect(api.updateCrmActivity.mock.calls[0][1].assigned_to).toBe('');
+    });
+});
+
+describe('CrmActivityPanel — editing a completed log', () => {
+    const openCompleted = async () => {
+        const summary = await screen.findByText('Sent the catalogue');
+        const row = summary.closest('div')!.parentElement!;
+        fireEvent.click(within(row).getByRole('button', { name: /edit/i }));
+    };
+
+    it('prefills the written record and shows the original time as text', async () => {
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
+        await openCompleted();
+
+        expect(await screen.findByRole('heading', { name: 'Edit logged activity' })).toBeInTheDocument();
+        expect(screen.getByLabelText(/What happened/)).toHaveValue('Sent the catalogue');
+        expect(screen.getByLabelText('Outcome')).toHaveValue('Left a message');
+        expect(screen.getByLabelText('Notes')).toHaveValue('Original note');
+        expect(screen.getByText(/This stays completed/)).toBeInTheDocument();
+        expect(screen.queryByLabelText('Due')).not.toBeInTheDocument();
+        expect(document.querySelector('input[type="datetime-local"]')).toBeNull();
+    });
+
+    it('patches only the details and reloads them onto the history row', async () => {
+        const corrected = {
+            ...logged,
+            summary: 'Sent the updated catalogue',
+            notes: 'He will pay Thursday',
+            outcome: 'Promised',
+        };
+        let saved = false;
+        api.getAllCrmActivities.mockImplementation(async () => [planned, saved ? corrected : logged, cancelled]);
+        api.updateCrmActivity.mockImplementation(async () => {
+            saved = true;
+            return {};
+        });
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
+        await openCompleted();
+
+        fireEvent.change(screen.getByLabelText(/What happened/), {
+            target: { value: 'Sent the updated catalogue' },
+        });
+        fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'He will pay Thursday' } });
+        fireEvent.change(screen.getByLabelText('Outcome'), { target: { value: 'Promised' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        await waitFor(() => expect(api.updateCrmActivity).toHaveBeenCalled());
+        expect(api.updateCrmActivity.mock.calls[0][0]).toBe('a2');
+        expect(api.updateCrmActivity.mock.calls[0][1]).toEqual({
+            summary: 'Sent the updated catalogue',
+            notes: 'He will pay Thursday',
+            outcome: 'Promised',
+        });
+        expect(api.createCrmActivity).not.toHaveBeenCalled();
+        expect(api.completeCrmActivity).not.toHaveBeenCalled();
+        expect(api.setCrmActivityApproval).not.toHaveBeenCalled();
+
+        expect(await screen.findByText('Sent the updated catalogue')).toBeInTheDocument();
+        expect(screen.getByText('He will pay Thursday')).toBeInTheDocument();
+        expect(screen.getByText('Promised')).toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'Edit logged activity' })).not.toBeInTheDocument();
+    });
+
+    it('cancel closes without saving', async () => {
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
+        await openCompleted();
+        fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Not saved' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+        expect(api.updateCrmActivity).not.toHaveBeenCalled();
+        expect(screen.queryByRole('heading', { name: 'Edit logged activity' })).not.toBeInTheDocument();
+        expect(screen.getByText('Original note')).toBeInTheDocument();
+        expect(screen.queryByText('Not saved')).not.toBeInTheDocument();
+    });
+
+    it('does not save a completed log with an empty summary', async () => {
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
+        await openCompleted();
+        fireEvent.change(screen.getByLabelText(/What happened/), { target: { value: '   ' } });
+
+        expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        expect(api.updateCrmActivity).not.toHaveBeenCalled();
+    });
+
+    it('keeps the history row when the server refuses the edit', async () => {
+        api.updateCrmActivity.mockRejectedValue(new Error('forbidden'));
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
+        await openCompleted();
+        fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Rejected' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalled());
+        expect(screen.getByRole('heading', { name: 'Edit logged activity' })).toBeInTheDocument();
+        expect(screen.getByText('Original note')).toBeInTheDocument();
     });
 });
 

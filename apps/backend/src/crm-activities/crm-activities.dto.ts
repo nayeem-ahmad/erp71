@@ -72,6 +72,15 @@ export class UpdateCrmActivityDto {
     @IsOptional() @Transform(trim) @IsString() notes?: string;
     /** `emptyToNull`, not `emptyToUndefined`: handing an activity back to nobody is a real edit. */
     @IsOptional() @Transform(emptyToNull) @IsUUID() assigned_to?: string | null;
+
+    /**
+     * The written record of a completed activity. Planned edits ignore these;
+     * a DONE row accepts them and nothing else. `summary` cannot be cleared —
+     * a completed log still has to say what happened. `outcome` may be blank,
+     * which the service stores as null.
+     */
+    @IsOptional() @Transform(trim) @IsString() @Length(1, 5000) summary?: string;
+    @IsOptional() @Transform(trim) @IsString() @Length(0, 5000) outcome?: string;
 }
 
 export class CreateNextActivityDto {

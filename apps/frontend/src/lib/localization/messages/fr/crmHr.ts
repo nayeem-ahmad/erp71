@@ -50,6 +50,8 @@ export const crmHrMessages = {
             edit: 'Modifier',
             editTitle: 'Modifier l\'activité planifiée',
             editRollupHint: 'Tant qu\'elle est la plus proche, elle est la prochaine étape du prospect.',
+            editCompletedTitle: 'Modifier l\'activité consignée',
+            editCompletedHint: 'Elle reste terminée. Le moment où elle a eu lieu et son approbation ne changent pas.',
             cancelled: "Annulée",
             scheduleNext: "Planifier la suivante",
             inheritsHint: 'Hérite de l\'objet de l\'activité que vous clôturez.',

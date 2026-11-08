@@ -50,6 +50,8 @@ export const crmHrMessages = {
             edit: "Bearbeiten",
             editTitle: "Geplante Aktivität bearbeiten",
             editRollupHint: "Solange dies die früheste geplante ist, ist sie der nächste Schritt des Leads.",
+            editCompletedTitle: "Erfasste Aktivität bearbeiten",
+            editCompletedHint: "Sie bleibt erledigt. Zeitpunkt und Freigabe ändern sich nicht.",
             cancelled: "Abgebrochen",
             scheduleNext: "Die nächste planen",
             inheritsHint: "Übernimmt den Zweck der Aktivität, die Sie abschließen.",

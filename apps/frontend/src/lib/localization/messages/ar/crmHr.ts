@@ -50,6 +50,8 @@ export const crmHrMessages = {
             edit: 'تعديل',
             editTitle: 'تعديل النشاط المخطط',
             editRollupHint: 'هذه هي الخطوة التالية للعميل المحتمل ما دامت الأقرب موعداً.',
+            editCompletedTitle: 'تعديل النشاط المسجّل',
+            editCompletedHint: 'يبقى مكتملاً. وقت حدوثه وموافقته لا يتغيران.',
             cancelled: 'ملغى',
             scheduleNext: 'جدولة التالي',
             inheritsHint: 'يرث غرض النشاط الذي تُغلقه.',
