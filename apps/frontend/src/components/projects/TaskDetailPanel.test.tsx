@@ -2483,7 +2483,9 @@ describe('TaskDetailPanel attachments', () => {
         });
 
         await waitFor(() =>
-            expect(toast.error).toHaveBeenCalledWith('Use a JPEG, PNG, WebP or PDF.'),
+            expect(toast.error).toHaveBeenCalledWith(
+                'Use a JPEG, PNG, WebP, PDF or an audio recording.',
+            ),
         );
         expect(addTaskAttachment).not.toHaveBeenCalled();
     });
@@ -2496,6 +2498,28 @@ describe('TaskDetailPanel attachments', () => {
         fireEvent.change(input, { target: { files: [file('spec.pdf', 'application/pdf')] } });
 
         await waitFor(() => expect(addTaskAttachment).toHaveBeenCalled());
+    });
+
+    it('plays a voice note inline with who recorded it, when, and how long', async () => {
+        getTaskAttachments.mockResolvedValue([
+            {
+                id: 'voice-1',
+                file_url: 'https://cdn.example/note.webm',
+                file_name: 'voice-note.webm',
+                mime_type: 'audio/webm',
+                file_size: 12_000,
+                duration_ms: 83_000,
+                created_at: '2026-11-08T10:00:00Z',
+                creator: { id: 'u1', name: 'Rafi', email: 'rafi@example.com' },
+            },
+        ]);
+        panel();
+        await openTab(/^Attachments/);
+
+        expect(await screen.findByText('Voice note')).toBeInTheDocument();
+        expect(screen.getByText(/Recorded by Rafi/)).toBeInTheDocument();
+        expect(screen.getByText(/1:23/)).toBeInTheDocument();
+        expect(document.querySelector('audio[src="https://cdn.example/note.webm"]')).toBeTruthy();
     });
 
     it('removes an attachment', async () => {

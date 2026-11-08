@@ -1164,6 +1164,13 @@ export class CreateAttachmentDto {
 
     @IsOptional() @IsString() @MaxLength(100)
     mimeType?: string;
+
+    /**
+     * Voice-note length in ms. Capped at five minutes — the same ceiling the
+     * browser recorder enforces — so a forged client cannot store nonsense.
+     */
+    @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(5 * 60_000)
+    durationMs?: number;
 }
 
 export class CreateCommentDto {

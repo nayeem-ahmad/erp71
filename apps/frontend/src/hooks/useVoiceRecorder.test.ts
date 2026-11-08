@@ -56,6 +56,9 @@ describe('useVoiceRecorder', () => {
         const file: File = onRecorded.mock.calls[0][0];
         expect(file.type).toBe('audio/webm');
         expect(file.name).toMatch(/^voice-note-.*\.webm$/);
+        expect(onRecorded.mock.calls[0][1]).toEqual(
+            expect.objectContaining({ durationMs: expect.any(Number) }),
+        );
     });
 
     it('reports a refused microphone', async () => {
