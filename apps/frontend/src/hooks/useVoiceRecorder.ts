@@ -30,11 +30,16 @@ export function voiceNoteExtension(mimeType: string): string {
 
 export type VoiceRecorderError = 'unsupported' | 'denied' | 'failed';
 
+export type VoiceRecordingInfo = {
+    /** Elapsed time when the take stopped — for history, not for playback. */
+    durationMs: number;
+};
+
 export function useVoiceRecorder({
     onRecorded,
     maxMs = MAX_VOICE_NOTE_MS,
 }: {
-    onRecorded: (file: File) => void;
+    onRecorded: (file: File, info: VoiceRecordingInfo) => void;
     maxMs?: number;
 }) {
     const [supported, setSupported] = useState(false);
@@ -102,6 +107,7 @@ export function useVoiceRecorder({
                 if (event.data.size > 0) chunksRef.current.push(event.data);
             };
             recorder.onstop = () => {
+                const durationMs = Math.max(0, Date.now() - startedAtRef.current);
                 release();
                 recorderRef.current = null;
                 setRecording(false);
@@ -116,6 +122,7 @@ export function useVoiceRecorder({
                 const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
                 onRecordedRef.current(
                     new File([blob], `voice-note-${stamp}.${voiceNoteExtension(type)}`, { type }),
+                    { durationMs },
                 );
             };
 

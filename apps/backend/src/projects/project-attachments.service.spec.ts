@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
     ProjectAttachmentsService,
+    PROJECT_ATTACHMENT_MIME_TYPES,
     attachmentStorageName,
     parseAttachmentUpload,
     resourceTypeFor,
@@ -40,6 +41,22 @@ describe('parseAttachmentUpload', () => {
         );
     });
 
+    // Import documents stay image/PDF; task attachments opt into audio.
+    it('accepts audio only when the caller allows it', () => {
+        expect(() => parseAttachmentUpload(png, 'audio/webm')).toThrow(BadRequestException);
+        const { mimeType } = parseAttachmentUpload(png, 'audio/webm', PROJECT_ATTACHMENT_MIME_TYPES);
+        expect(mimeType).toBe('audio/webm');
+    });
+
+    it('strips a codec suffix before checking the type', () => {
+        const { mimeType } = parseAttachmentUpload(
+            `data:audio/webm;codecs=opus;base64,${png}`,
+            undefined,
+            PROJECT_ATTACHMENT_MIME_TYPES,
+        );
+        expect(mimeType).toBe('audio/webm');
+    });
+
     it('refuses an empty payload', () => {
         expect(() => parseAttachmentUpload('')).toThrow(BadRequestException);
     });
@@ -58,9 +75,11 @@ describe('parseAttachmentUpload', () => {
 });
 
 describe('resourceTypeFor', () => {
-    // A PDF through Cloudinary's image pipeline is rejected or mangled.
-    it('stores a PDF raw and everything else as an image', () => {
+    // A PDF through Cloudinary's image pipeline is rejected or mangled; audio
+    // lives under `video` or the player gets nothing playable.
+    it('stores a PDF raw, audio as video, and images as images', () => {
         expect(resourceTypeFor('application/pdf')).toBe('raw');
+        expect(resourceTypeFor('audio/webm')).toBe('video');
         expect(resourceTypeFor('image/png')).toBe('image');
         expect(resourceTypeFor('')).toBe('image');
     });
@@ -172,6 +191,48 @@ describe('ProjectAttachmentsService', () => {
             'tenant-1/project-tasks',
             expect.stringMatching(/^spec-[a-f0-9]{8}$/),
             'raw',
+        );
+    });
+
+    it('uploads a voice note as a video asset and keeps its duration', async () => {
+        await service.create(OWNER, 'task-1', {
+            fileBase64: png,
+            fileName: 'voice-note-2026-11-08.webm',
+            mimeType: 'audio/webm',
+            durationMs: 12_500,
+        } as never);
+
+        expect(assets.uploadBuffer).toHaveBeenCalledWith(
+            expect.anything(),
+            'tenant-1/project-tasks',
+            expect.stringMatching(/^voice-note-2026-11-08-[a-f0-9]{8}$/),
+            'video',
+        );
+        expect(db.projectAttachment.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({
+                    mime_type: 'audio/webm',
+                    duration_ms: 12_500,
+                }),
+            }),
+        );
+    });
+
+    it('ignores a duration stamped on a non-audio file', async () => {
+        await service.create(OWNER, 'task-1', {
+            fileBase64: png,
+            fileName: 'plan.png',
+            mimeType: 'image/png',
+            durationMs: 12_500,
+        } as never);
+
+        expect(db.projectAttachment.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({
+                    mime_type: 'image/png',
+                    duration_ms: null,
+                }),
+            }),
         );
     });
 

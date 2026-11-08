@@ -212,6 +212,8 @@ export interface Attachment {
     file_name: string;
     mime_type?: string | null;
     file_size?: number | null;
+    /** Voice-note length in ms when the recorder (or audio metadata) knew it. */
+    duration_ms?: number | null;
     created_at: string;
     creator?: { id: string; name?: string | null; email: string } | null;
 }
