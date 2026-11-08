@@ -21,9 +21,11 @@
  */
 
 export interface AuditRowLike {
+    id?: string | null;
     action: string;
     entity: string;
     entity_id?: string | null;
+    created_at?: string | null;
     payload?: Record<string, unknown> | null;
     user?: { email?: string; name?: string | null } | null;
 }
@@ -193,6 +195,10 @@ const ACTION_PHRASES: Record<string, string> = {
     'accounting.settings.update': 'Changed accounting settings',
     'accounting.posting_rule.update': 'Changed an accounting posting rule',
 
+    // Completed-log correction. Distinct from `crm.activities.update`, which
+    // is only the request body (the new text) recorded by the route auditor.
+    'crm.activity_details_updated': 'Corrected the text of a completed activity',
+
     // Platform-admin actions. A tenant user never sees these rows, but the
     // platform audit page reads through the same formatter.
     'tenant.suspend': 'Suspended a workspace',
@@ -341,4 +347,128 @@ export function auditDetails(
     }
 
     return details;
+}
+
+/** The hand-written row for a completed-log correction. Not the route auditor's request body. */
+export const ACTIVITY_DETAILS_ACTION = 'crm.activity_details_updated';
+export const ACTIVITY_DETAILS_ENTITY = 'CrmActivity';
+export const ACTIVITY_DETAIL_FIELDS = ['summary', 'notes', 'outcome'] as const;
+export type ActivityDetailField = (typeof ACTIVITY_DETAIL_FIELDS)[number];
+
+/**
+ * How one side of a field was stored.
+ *
+ * `missing` means the key is not in this audit row — it is not a recovered
+ * value. `null` and `empty` are values that were stored. `text` is the exact
+ * string, including spaces and newlines. `nontext` is something other than a
+ * string and is not shown as wording.
+ */
+export type ActivityTextKind = 'missing' | 'null' | 'empty' | 'text' | 'nontext';
+
+export interface ActivityTextValue {
+    kind: ActivityTextKind;
+    /** Set only when `kind` is `text`. */
+    text?: string;
+}
+
+export interface ActivityFieldChange {
+    field: ActivityDetailField;
+    /** False when this field was not part of the recorded change. */
+    recorded: boolean;
+    from: ActivityTextValue;
+    to: ActivityTextValue;
+}
+
+export interface ActivityDetailsAuditView {
+    /** `truncated` and `absent` do not contain recoverable wording. */
+    mode: 'changes' | 'truncated' | 'absent';
+    action: string;
+    entity: string;
+    auditId: string | null;
+    entityId: string | null;
+    createdAt: string | null;
+    fields: ActivityFieldChange[];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readSide(change: Record<string, unknown>, side: 'from' | 'to'): ActivityTextValue {
+    if (!Object.prototype.hasOwnProperty.call(change, side)) return { kind: 'missing' };
+    const value = change[side];
+    if (value === null) return { kind: 'null' };
+    if (value === undefined) return { kind: 'missing' };
+    if (typeof value !== 'string') return { kind: 'nontext' };
+    if (value.length === 0) return { kind: 'empty' };
+    return { kind: 'text', text: value };
+}
+
+const UNRECORDED: Pick<ActivityFieldChange, 'recorded' | 'from' | 'to'> = {
+    recorded: false,
+    from: { kind: 'missing' },
+    to: { kind: 'missing' },
+};
+
+/**
+ * The before/after text for one completed-log correction, or null when this
+ * row is a different kind of audit event.
+ *
+ * Only `summary`, `notes` and `outcome` are read. A truncated row, or a row
+ * whose `changes` object is missing, reports that fact and does not invent text.
+ */
+export function readActivityDetailsAudit(row: AuditRowLike): ActivityDetailsAuditView | null {
+    if (row.action !== ACTIVITY_DETAILS_ACTION || row.entity !== ACTIVITY_DETAILS_ENTITY) return null;
+
+    const payload = isRecord(row.payload) ? row.payload : null;
+    const truncated = payload?._truncated === true;
+    const changes = payload && isRecord(payload.changes) ? payload.changes : null;
+    const mode: ActivityDetailsAuditView['mode'] = truncated ? 'truncated' : changes ? 'changes' : 'absent';
+
+    const fields: ActivityFieldChange[] = ACTIVITY_DETAIL_FIELDS.map((field) => {
+        if (mode !== 'changes' || !changes || !Object.prototype.hasOwnProperty.call(changes, field)) {
+            return { field, ...UNRECORDED };
+        }
+        const change = changes[field];
+        if (!isRecord(change)) return { field, ...UNRECORDED };
+        return { field, recorded: true, from: readSide(change, 'from'), to: readSide(change, 'to') };
+    });
+
+    return {
+        mode,
+        action: row.action,
+        entity: row.entity,
+        auditId: typeof row.id === 'string' && row.id.length ? row.id : null,
+        entityId: typeof row.entity_id === 'string' && row.entity_id.length ? row.entity_id : null,
+        createdAt: typeof row.created_at === 'string' && row.created_at.length ? row.created_at : null,
+        fields,
+    };
+}
+
+/**
+ * An exact instant: wall-clock time in `timeZone` (or UTC), the zone name,
+ * and the UTC ISO string. Returns null when `iso` is not a time.
+ */
+export function formatAuditInstant(iso: string | null, timeZone: string | undefined): string | null {
+    if (!iso) return null;
+    const at = new Date(iso);
+    if (Number.isNaN(at.getTime())) return null;
+    const zone = timeZone && timeZone.length ? timeZone : 'UTC';
+    let local = at.toISOString();
+    try {
+        local = new Intl.DateTimeFormat('en-GB', {
+            timeZone: zone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hourCycle: 'h23',
+            timeZoneName: 'shortOffset',
+        }).format(at);
+    } catch {
+        local = at.toISOString();
+    }
+    return `${local} (${zone}) · ${at.toISOString()}`;
 }
