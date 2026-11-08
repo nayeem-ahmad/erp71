@@ -214,6 +214,20 @@ export const projectsMessages = {
         openInProject: "इसकी परियोजना में खोलें",
         anyEpic: "कोई भी एपिक",
         noEpic: "कोई एपिक नहीं",
+        view: "दृश्य",
+        viewList: "सूची",
+        viewHierarchy: "पदानुक्रम",
+        listUi: {
+            statsLabel: "स्टोरी सारांश",
+            stats: {
+                stories: "स्टोरी",
+                backlog: "बैकलॉग",
+                ready: "तैयार",
+                inProgress: "प्रगति पर",
+                done: "पूर्ण",
+                points: "पॉइंट",
+            },
+        },
     },
 
     /**
@@ -332,6 +346,19 @@ export const projectsMessages = {
         progress: "प्रगति",
         stories: "स्टोरी",
         openInProject: "इसके प्रोजेक्ट में खोलें",
+        view: "दृश्य",
+        viewList: "सूची",
+        viewHierarchy: "पदानुक्रम",
+        listUi: {
+            statsLabel: "एपिक सारांश",
+            stats: {
+                epics: "एपिक",
+                open: "खुले",
+                inProgress: "प्रगति पर",
+                done: "पूर्ण",
+                stories: "स्टोरी",
+            },
+        },
     },
 
     task: {
@@ -496,7 +523,7 @@ export const projectsMessages = {
         uploadFailed: "वह फ़ाइल संलग्न नहीं हो सकी",
         deleteFile: "संलग्नक हटाएँ",
         preview: "पूर्वावलोकन",
-        hint: "JPEG, PNG, WebP या PDF, 5 MB तक।",
+        hint: 'JPEG, PNG, WebP, PDF या ऑडियो, अधिकतम 5 MB। वॉइस नोट अधिकतम 5 मिनट।',
         dropHint: "फ़ाइलें यहाँ छोड़ें, या एक छवि पेस्ट करें।",
         linked: "विवरण या टिप्पणी में पेस्ट की गई छवि यहाँ भी दिखती है। उसे पाठ से हटाएँ और फ़ाइल भी हट जाएगी।",
         inDescription: "विवरण में",
@@ -508,7 +535,15 @@ export const projectsMessages = {
         removeUsedBoth: "{name} विवरण और एक टिप्पणी में दिख रहा है। फ़ाइल हटाने से वह दोनों से हट जाएगा।",
         removeFailed: "वह फ़ाइल नहीं हटाई जा सकी",
         tooLarge: "वह फ़ाइल 5 MB से बड़ी है।",
-        unsupported: "JPEG, PNG, WebP या PDF उपयोग करें।",
+        unsupported: 'JPEG, PNG, WebP, PDF या ऑडियो रिकॉर्डिंग उपयोग करें।',
+        record: 'वॉइस रिकॉर्ड करें',
+        stopRecording: 'रोकें',
+        recording: 'रिकॉर्ड हो रहा है {time}',
+        voiceNote: 'वॉइस नोट',
+        recordedBy: '{name} ने रिकॉर्ड किया',
+        micDenied: 'माइक्रोफ़ोन एक्सेस ब्लॉक है। रिकॉर्ड करने के लिए ब्राउज़र में अनुमति दें।',
+        micUnsupported: 'इस ब्राउज़र में वॉइस रिकॉर्डिंग समर्थित नहीं है।',
+        micFailed: 'ऑडियो रिकॉर्ड नहीं हो सका। फिर से कोशिश करें।',
     },
 
     cover: {

@@ -214,6 +214,20 @@ export const projectsMessages = {
         openInProject: "اس کے پروجیکٹ میں کھولیں",
         anyEpic: "کوئی بھی ایپک",
         noEpic: "کوئی ایپک نہیں",
+        view: "منظر",
+        viewList: "فہرست",
+        viewHierarchy: "درجہ بندی",
+        listUi: {
+            statsLabel: "اسٹوری خلاصہ",
+            stats: {
+                stories: "اسٹوریز",
+                backlog: "بیک لاگ",
+                ready: "تیار",
+                inProgress: "جاری",
+                done: "مکمل",
+                points: "پوائنٹس",
+            },
+        },
     },
 
     /**
@@ -332,6 +346,19 @@ export const projectsMessages = {
         progress: "پیش رفت",
         stories: "اسٹوریز",
         openInProject: "اس کے پروجیکٹ میں کھولیں",
+        view: "منظر",
+        viewList: "فہرست",
+        viewHierarchy: "درجہ بندی",
+        listUi: {
+            statsLabel: "ایپک خلاصہ",
+            stats: {
+                epics: "ایپکس",
+                open: "کھلے",
+                inProgress: "جاری",
+                done: "مکمل",
+                stories: "اسٹوریز",
+            },
+        },
     },
 
     task: {
@@ -496,7 +523,7 @@ export const projectsMessages = {
         uploadFailed: "وہ فائل منسلک نہیں ہو سکی",
         deleteFile: "منسلک ہٹائیں",
         preview: "پیش منظر",
-        hint: "JPEG، PNG، WebP یا PDF، 5 MB تک۔",
+        hint: 'JPEG، PNG، WebP، PDF یا آڈیو، 5 MB تک۔ وائس نوٹ 5 منٹ تک۔',
         dropHint: "فائلیں یہاں چھوڑیں، یا تصویر پیسٹ کریں۔",
         linked: "تفصیل یا تبصرے میں پیسٹ کی گئی تصویر یہاں بھی نظر آتی ہے۔ متن سے ہٹائیں تو فائل بھی ساتھ جاتی ہے۔",
         inDescription: "تفصیل میں",
@@ -508,7 +535,15 @@ export const projectsMessages = {
         removeUsedBoth: "{name} تفصیل اور ایک تبصرے میں دکھائی دے رہی ہے۔ فائل ہٹانے سے وہ دونوں سے نکل جائے گی۔",
         removeFailed: "وہ فائل نہیں ہٹائی جا سکی",
         tooLarge: "وہ فائل 5 MB سے بڑی ہے۔",
-        unsupported: "JPEG، PNG، WebP یا PDF استعمال کریں۔",
+        unsupported: 'JPEG، PNG، WebP، PDF یا آڈیو ریکارڈنگ استعمال کریں۔',
+        record: 'وائس ریکارڈ کریں',
+        stopRecording: 'روکیں',
+        recording: 'ریکارڈ ہو رہا ہے {time}',
+        voiceNote: 'وائس نوٹ',
+        recordedBy: '{name} نے ریکارڈ کیا',
+        micDenied: 'مائیکروفون تک رسائی بلاک ہے۔ ریکارڈ کرنے کے لیے براؤزر میں اجازت دیں۔',
+        micUnsupported: 'اس براؤزر میں وائس ریکارڈنگ سپورٹ نہیں ہے۔',
+        micFailed: 'آڈیو ریکارڈ نہیں ہو سکا۔ دوبارہ کوشش کریں۔',
     },
 
     cover: {

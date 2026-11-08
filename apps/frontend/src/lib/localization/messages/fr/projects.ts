@@ -214,6 +214,20 @@ export const projectsMessages = {
         openInProject: "Ouvrir dans son projet",
         anyEpic: "Toute épopée",
         noEpic: "Sans épopée",
+        view: "Vue",
+        viewList: "Liste",
+        viewHierarchy: "Hiérarchie",
+        listUi: {
+            statsLabel: "Résumé des stories",
+            stats: {
+                stories: "Stories",
+                backlog: "Backlog",
+                ready: "Prêtes",
+                inProgress: "En cours",
+                done: "Terminées",
+                points: "Points",
+            },
+        },
     },
 
     /**
@@ -332,6 +346,19 @@ export const projectsMessages = {
         progress: "Avancement",
         stories: "Stories",
         openInProject: "Ouvrir dans son projet",
+        view: "Vue",
+        viewList: "Liste",
+        viewHierarchy: "Hiérarchie",
+        listUi: {
+            statsLabel: "Résumé des épopées",
+            stats: {
+                epics: "Épopées",
+                open: "Ouvertes",
+                inProgress: "En cours",
+                done: "Terminées",
+                stories: "Stories",
+            },
+        },
     },
 
     task: {
@@ -496,7 +523,7 @@ export const projectsMessages = {
         uploadFailed: "Impossible de joindre ce fichier",
         deleteFile: "Retirer la pièce jointe",
         preview: "Aperçu",
-        hint: "JPEG, PNG, WebP ou PDF, jusqu'à 5 Mo.",
+        hint: 'JPEG, PNG, WebP, PDF ou audio, jusqu’à 5 Mo. Notes vocales jusqu’à 5 minutes.',
         dropHint: "Déposez des fichiers ici, ou collez une image.",
         linked: "Une image collée dans la description ou un commentaire apparaît aussi ici. Retirez-la du texte et le fichier part avec elle.",
         inDescription: "Dans la description",
@@ -508,7 +535,15 @@ export const projectsMessages = {
         removeUsedBoth: "{name} est affiché dans la description et dans un commentaire. Retirer le fichier le retire des deux.",
         removeFailed: "Impossible de retirer ce fichier",
         tooLarge: "Ce fichier dépasse 5 Mo.",
-        unsupported: "Utilisez un fichier JPEG, PNG, WebP ou PDF.",
+        unsupported: 'Utilisez un JPEG, PNG, WebP, PDF ou un enregistrement audio.',
+        record: 'Enregistrer une note',
+        stopRecording: 'Arrêter',
+        recording: 'Enregistrement {time}',
+        voiceNote: 'Note vocale',
+        recordedBy: 'Enregistré par {name}',
+        micDenied: 'L’accès au micro est bloqué. Autorisez-le dans le navigateur pour enregistrer.',
+        micUnsupported: 'L’enregistrement vocal n’est pas pris en charge dans ce navigateur.',
+        micFailed: 'Impossible d’enregistrer l’audio. Veuillez réessayer.',
     },
 
     cover: {

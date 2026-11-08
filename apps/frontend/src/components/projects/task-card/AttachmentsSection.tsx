@@ -1,22 +1,31 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { File as FileIcon, FileText, Paperclip, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { File as FileIcon, FileText, Mic, Paperclip, Square, Trash2 } from 'lucide-react';
 import { ImagePreviewModal } from '@/components/ui/ImagePreviewModal';
 import { sizedImageUrl } from '@/components/ui/image-width';
-import { ConfirmDialog } from '@/components/ui';
+import { Button, ConfirmDialog } from '@/components/ui';
+import { formatDateTime } from '@/lib/format';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
+import { formatRecordingTime, useVoiceRecorder } from '@/hooks/useVoiceRecorder';
 import type { Attachment } from './model';
-import { ACCEPTED_TYPES, MAX_BYTES, THUMBNAIL_WIDTH, readAsDataUrl } from './task-image-upload';
+import {
+    ACCEPTED_TYPES,
+    MAX_BYTES,
+    THUMBNAIL_WIDTH,
+    isAudioMime,
+    readAsDataUrl,
+    readAudioDurationMs,
+} from './task-image-upload';
 import { imageKey, imagePlace, imageUrlsIn, withoutImages, type ImagePlace } from './task-image-refs';
 import { useTaskFiles } from './task-files';
 
 type CommentRow = { id: string; body?: string | null };
 
 /**
- * The task's files.
+ * The task's files and voice notes.
  *
  * One inventory. An image pasted into the description or a comment is the
  * same file, drawn in the text and listed here — the caption under the tile
@@ -24,6 +33,10 @@ type CommentRow = { id: string; body?: string | null };
  * takes it out of the text, so the description is not left pointing at a
  * file that no longer exists. A file added here, and never pasted into the
  * text, lives only here.
+ *
+ * Voice notes record and play on this same tab. Each note keeps who recorded
+ * it, when, and how long — history the Attachments list shows next to the
+ * player, rather than burying it in the activity feed.
  */
 export default function AttachmentsSection({
     taskId,
@@ -34,7 +47,7 @@ export default function AttachmentsSection({
     description: string;
     onDescriptionSaved: (updated: unknown) => Promise<unknown>;
 }) {
-    const { t, fmt } = useI18n();
+    const { t, fmt, locale } = useI18n();
     const m = t.projects.attachments;
     const { revision, bump, stripDescriptionDraft } = useTaskFiles();
 
@@ -78,7 +91,7 @@ export default function AttachmentsSection({
     }, [load, revision]);
 
     const uploadMany = useCallback(
-        async (files: Iterable<File>) => {
+        async (files: Iterable<File>, durations?: Map<File, number>) => {
             const list = Array.from(files);
             if (list.length === 0) return;
             setBusy(true);
@@ -87,7 +100,7 @@ export default function AttachmentsSection({
                 for (const file of list) {
                     // Checked before reading: no point turning 20 MB into base64
                     // to be told no, and the message is clearer than a 400.
-                    if (!ACCEPTED_TYPES.includes(file.type)) {
+                    if (!(ACCEPTED_TYPES as readonly string[]).includes(file.type)) {
                         toast.error(m.unsupported);
                         continue;
                     }
@@ -96,10 +109,14 @@ export default function AttachmentsSection({
                         continue;
                     }
                     try {
+                        const durationMs =
+                            durations?.get(file)
+                            ?? (isAudioMime(file.type) ? await readAudioDurationMs(file) : undefined);
                         await api.addTaskAttachment(taskId, {
                             fileBase64: await readAsDataUrl(file),
                             fileName: file.name,
                             mimeType: file.type,
+                            ...(typeof durationMs === 'number' ? { durationMs } : {}),
                         });
                         added += 1;
                     } catch (error) {
@@ -113,6 +130,17 @@ export default function AttachmentsSection({
         },
         [taskId, m.unsupported, m.tooLarge, m.uploadFailed, bump],
     );
+
+    const recorder = useVoiceRecorder({
+        onRecorded: (file, info) => {
+            void uploadMany([file], new Map([[file, info.durationMs]]));
+        },
+    });
+    const recorderError =
+        recorder.error === 'denied' ? m.micDenied
+        : recorder.error === 'unsupported' ? m.micUnsupported
+        : recorder.error === 'failed' ? m.micFailed
+        : '';
 
     // Paste lands here when this tab is open and the paste was not into the
     // description. The description editor takes its own paste; this must not
@@ -214,6 +242,26 @@ export default function AttachmentsSection({
           )
         : '';
 
+    const voiceNotes = useMemo(
+        () => items.filter((item) => isAudioMime(item.mime_type)),
+        [items],
+    );
+    const files = useMemo(
+        () => items.filter((item) => !isAudioMime(item.mime_type)),
+        [items],
+    );
+    const previewItems = files;
+
+    const voiceMeta = (item: Attachment) => {
+        const name = item.creator?.name || item.creator?.email;
+        const parts = [
+            name ? fmt(m.recordedBy, { name }) : null,
+            formatDateTime(item.created_at, locale),
+            typeof item.duration_ms === 'number' ? formatRecordingTime(item.duration_ms) : null,
+        ].filter(Boolean);
+        return parts.join(' · ');
+    };
+
     return (
         // No box or heading of its own: the tab it sits in names it, and the
         // one it used to draw was a second "Attachments" inside that tab.
@@ -245,7 +293,7 @@ export default function AttachmentsSection({
                             aria-label={m.add}
                             accept={ACCEPTED_TYPES.join(',')}
                             multiple
-                            disabled={busy}
+                            disabled={busy || recorder.recording}
                             onChange={(e) => {
                                 void uploadMany(e.target.files ?? []);
                                 // Clear it, or picking the same file twice fires nothing.
@@ -253,8 +301,43 @@ export default function AttachmentsSection({
                             }}
                         />
                     </label>
-                    <p className="text-xs text-gray-500">{m.dropHint}</p>
+                    {recorder.recording ? (
+                        <Button
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            onClick={recorder.stop}
+                            disabled={busy}
+                            icon={<Square className="h-3.5 w-3.5" aria-hidden />}
+                        >
+                            {m.stopRecording}
+                        </Button>
+                    ) : (
+                        recorder.supported && (
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => void recorder.start()}
+                                disabled={busy}
+                                icon={<Mic className="h-4 w-4" aria-hidden />}
+                            >
+                                {m.record}
+                            </Button>
+                        )
+                    )}
+                    {recorder.recording ? (
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-red-600" role="status">
+                            <span className="h-2 w-2 animate-pulse rounded-full bg-red-600" aria-hidden />
+                            {fmt(m.recording, { time: formatRecordingTime(recorder.elapsedMs) })}
+                        </span>
+                    ) : (
+                        <p className="text-xs text-gray-500">{m.dropHint}</p>
+                    )}
                 </div>
+                {recorderError && (
+                    <p role="alert" className="mt-1 text-xs text-danger">{recorderError}</p>
+                )}
                 <p className="mt-1 text-xs text-gray-500">{m.hint}</p>
                 <p className="mt-1 text-xs text-gray-500">{m.linked}</p>
             </div>
@@ -264,72 +347,114 @@ export default function AttachmentsSection({
             ) : items.length === 0 ? (
                 <p className="mt-3 text-sm text-gray-500">{m.empty}</p>
             ) : (
-                <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                    {items.map((item, at) => {
-                        const place = placeOf(item);
-                        const where = caption(place);
-                        return (
-                            <li key={item.id} className="group relative">
-                                <button
-                                    type="button"
-                                    aria-label={`${m.preview} ${item.file_name}`}
-                                    onClick={() => setPreviewAt(at)}
-                                    className="block w-full overflow-hidden rounded-md border border-gray-200 hover:border-blue-600"
+                <div className="mt-3 space-y-3">
+                    {voiceNotes.length > 0 && (
+                        <ul className="space-y-2">
+                            {voiceNotes.map((item) => (
+                                <li
+                                    key={item.id}
+                                    className="rounded-md border border-gray-200 bg-gray-50 p-2"
                                 >
-                                    {item.mime_type?.startsWith('image/') ? (
-                                        /* The thumbnail is the file itself, asked for
-                                           small: a screenshot is recognisable long
-                                           before its name is. */
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                            src={sizedImageUrl(item.file_url, THUMBNAIL_WIDTH)}
-                                            alt={item.file_name}
-                                            loading="lazy"
-                                            referrerPolicy="no-referrer"
-                                            className="h-24 w-full bg-gray-50 object-cover"
-                                        />
-                                    ) : (
-                                        <span className="flex h-24 w-full items-center justify-center bg-gray-50 text-gray-400">
-                                            {item.mime_type === 'application/pdf' ? (
-                                                <FileText className="h-8 w-8" aria-hidden />
-                                            ) : (
-                                                <FileIcon className="h-8 w-8" aria-hidden />
-                                            )}
+                                    <div className="flex items-start gap-2">
+                                        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded bg-white text-gray-400">
+                                            <Mic className="h-4 w-4" aria-hidden />
                                         </span>
-                                    )}
-                                </button>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-xs font-medium text-gray-700">
+                                                {m.voiceNote}
+                                            </p>
+                                            <p className="text-xs text-gray-500">{voiceMeta(item)}</p>
+                                            <audio
+                                                controls
+                                                preload="metadata"
+                                                src={item.file_url}
+                                                className="mt-1 h-9 w-full max-w-md"
+                                            />
+                                        </div>
+                                        <button
+                                            type="button"
+                                            aria-label={`${m.deleteFile} ${m.voiceNote}`}
+                                            className="max-md:min-h-touch shrink-0 px-1 text-red-600 disabled:opacity-40"
+                                            disabled={busy || recorder.recording}
+                                            onClick={() => askRemove(item)}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
 
-                                <div className="mt-1 flex items-start gap-1">
-                                    <span className="min-w-0 flex-1">
-                                        <span className="block truncate text-xs text-gray-700">
-                                            {item.file_name}
-                                        </span>
-                                        <span className="text-xs text-gray-400">
-                                            {Math.max(1, Math.round((item.file_size ?? 0) / 1024))} KB
-                                        </span>
-                                        {where && (
-                                            <span className="block text-xs text-gray-500">{where}</span>
-                                        )}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        aria-label={`${m.deleteFile} ${item.file_name}`}
-                                        className="max-md:min-h-touch shrink-0 px-1 text-red-600 disabled:opacity-40"
-                                        disabled={busy}
-                                        onClick={() => askRemove(item)}
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </button>
-                                </div>
-                            </li>
-                        );
-                    })}
-                </ul>
+                    {files.length > 0 && (
+                        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                            {files.map((item, at) => {
+                                const place = placeOf(item);
+                                const where = caption(place);
+                                return (
+                                    <li key={item.id} className="group relative">
+                                        <button
+                                            type="button"
+                                            aria-label={`${m.preview} ${item.file_name}`}
+                                            onClick={() => setPreviewAt(at)}
+                                            className="block w-full overflow-hidden rounded-md border border-gray-200 hover:border-blue-600"
+                                        >
+                                            {item.mime_type?.startsWith('image/') ? (
+                                                /* The thumbnail is the file itself, asked for
+                                                   small: a screenshot is recognisable long
+                                                   before its name is. */
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img
+                                                    src={sizedImageUrl(item.file_url, THUMBNAIL_WIDTH)}
+                                                    alt={item.file_name}
+                                                    loading="lazy"
+                                                    referrerPolicy="no-referrer"
+                                                    className="h-24 w-full bg-gray-50 object-cover"
+                                                />
+                                            ) : (
+                                                <span className="flex h-24 w-full items-center justify-center bg-gray-50 text-gray-400">
+                                                    {item.mime_type === 'application/pdf' ? (
+                                                        <FileText className="h-8 w-8" aria-hidden />
+                                                    ) : (
+                                                        <FileIcon className="h-8 w-8" aria-hidden />
+                                                    )}
+                                                </span>
+                                            )}
+                                        </button>
+
+                                        <div className="mt-1 flex items-start gap-1">
+                                            <span className="min-w-0 flex-1">
+                                                <span className="block truncate text-xs text-gray-700">
+                                                    {item.file_name}
+                                                </span>
+                                                <span className="text-xs text-gray-400">
+                                                    {Math.max(1, Math.round((item.file_size ?? 0) / 1024))} KB
+                                                </span>
+                                                {where && (
+                                                    <span className="block text-xs text-gray-500">{where}</span>
+                                                )}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                aria-label={`${m.deleteFile} ${item.file_name}`}
+                                                className="max-md:min-h-touch shrink-0 px-1 text-red-600 disabled:opacity-40"
+                                                disabled={busy || recorder.recording}
+                                                onClick={() => askRemove(item)}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
+                </div>
             )}
 
             {previewAt !== null && (
                 <ImagePreviewModal
-                    items={items.map((item) => ({
+                    items={previewItems.map((item) => ({
                         url: item.file_url,
                         name: item.file_name,
                         mimeType: item.mime_type,

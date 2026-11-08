@@ -10,7 +10,7 @@ import {
     type StatusBadgeTone,
 } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
-import { LABEL_COLORS } from '@/components/projects/board-tasks';
+import { LABEL_COLORS, labelClass } from '@/components/projects/board-tasks';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -60,6 +60,18 @@ export const EPIC_STATUS_TONE: Record<string, StatusBadgeTone> = {
     DONE: 'success',
     CANCELLED: 'neutral',
 };
+
+/** The epic's code as a coloured chip, as it appears beside a story or list row. */
+export function EpicBadge({ epic, className = '' }: { epic: EpicChip; className?: string }) {
+    return (
+        <span
+            title={`${epic.code} · ${epic.title}`}
+            className={`inline-flex max-w-[10rem] shrink-0 items-center truncate rounded px-1.5 py-0.5 text-xs font-medium ${labelClass(epic.color)} ${className}`}
+        >
+            {epic.code}
+        </span>
+    );
+}
 
 /** A project the modal can file a new epic under, when it is not opened from one. */
 export interface EpicProjectOption {

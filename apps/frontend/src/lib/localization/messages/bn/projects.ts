@@ -214,6 +214,20 @@ export const projectsMessages = {
         openInProject: "এর প্রকল্পে খুলুন",
         anyEpic: "যেকোনো এপিক",
         noEpic: "এপিক নেই",
+        view: "দেখুন",
+        viewList: "তালিকা",
+        viewHierarchy: "অনুক্রম",
+        listUi: {
+            statsLabel: "স্টোরি সারাংশ",
+            stats: {
+                stories: "স্টোরি",
+                backlog: "ব্যাকলগ",
+                ready: "প্রস্তুত",
+                inProgress: "চলমান",
+                done: "সম্পন্ন",
+                points: "পয়েন্ট",
+            },
+        },
     },
 
     /**
@@ -332,6 +346,19 @@ export const projectsMessages = {
         progress: "অগ্রগতি",
         stories: "স্টোরি",
         openInProject: "এর প্রকল্পে খুলুন",
+        view: "দেখুন",
+        viewList: "তালিকা",
+        viewHierarchy: "অনুক্রম",
+        listUi: {
+            statsLabel: "এপিক সারাংশ",
+            stats: {
+                epics: "এপিক",
+                open: "খোলা",
+                inProgress: "চলমান",
+                done: "সম্পন্ন",
+                stories: "স্টোরি",
+            },
+        },
     },
 
     task: {
@@ -496,7 +523,7 @@ export const projectsMessages = {
         uploadFailed: 'ফাইলটি সংযুক্ত করা যায়নি',
         deleteFile: 'সংযুক্তি সরান',
         preview: "প্রিভিউ",
-        hint: 'JPEG, PNG, WebP বা PDF, সর্বোচ্চ ৫ এমবি।',
+        hint: 'JPEG, PNG, WebP, PDF বা অডিও, সর্বোচ্চ ৫ এমবি। ভয়েস নোট সর্বোচ্চ ৫ মিনিট।',
         dropHint: 'ফাইল এখানে ছাড়ুন, অথবা একটি ছবি পেস্ট করুন।',
         linked: 'বিবরণ বা মন্তব্যে পেস্ট করা ছবি এখানেও থাকে। লেখা থেকে সরালে ফাইলটিও সরে যায়।',
         inDescription: 'বিবরণে',
@@ -508,7 +535,15 @@ export const projectsMessages = {
         removeUsedBoth: '{name} বিবরণে ও একটি মন্তব্যে দেখা যাচ্ছে। ফাইল সরালে সেটি দুই জায়গা থেকেই সরবে।',
         removeFailed: 'ফাইলটি সরানো যায়নি',
         tooLarge: 'ফাইলটি ৫ এমবির চেয়ে বড়।',
-        unsupported: 'JPEG, PNG, WebP বা PDF ব্যবহার করুন।',
+        unsupported: 'JPEG, PNG, WebP, PDF বা অডিও রেকর্ডিং ব্যবহার করুন।',
+        record: 'ভয়েস রেকর্ড',
+        stopRecording: 'থামুন',
+        recording: 'রেকর্ড হচ্ছে {time}',
+        voiceNote: 'ভয়েস নোট',
+        recordedBy: '{name} রেকর্ড করেছেন',
+        micDenied: 'মাইক্রোফোন অ্যাক্সেস ব্লক করা আছে। রেকর্ড করতে ব্রাউজারে অনুমতি দিন।',
+        micUnsupported: 'এই ব্রাউজারে ভয়েস রেকর্ডিং সমর্থিত নয়।',
+        micFailed: 'অডিও রেকর্ড করা যায়নি। আবার চেষ্টা করুন।',
     },
 
     cover: {

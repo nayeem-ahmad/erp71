@@ -13,6 +13,7 @@ jest.mock('next/link', () => {
 jest.mock('@/lib/api', () => ({
     api: {
         getAllProjectsBacklog: jest.fn(),
+        getProjectEpics: jest.fn(),
         getProjects: jest.fn(),
         createProjectEpic: jest.fn(),
         importProjectEpics: jest.fn(),
@@ -41,37 +42,70 @@ const backlog = () => ({
     tasks: [],
 });
 
+const epicList = () => [
+    {
+        id: 'e1',
+        code: 'PRJ-0001-E1',
+        title: 'Online payments',
+        status: 'IN_PROGRESS',
+        priority: 'HIGH',
+        color: 'PURPLE',
+        project: { id: 'p1', code: 'PRJ-0001', name: 'Till rebuild' },
+        progress: {
+            storyCount: 2,
+            doneStoryCount: 1,
+            storyPoints: 8,
+            doneStoryPoints: 3,
+            taskCount: 0,
+            doneTaskCount: 0,
+            percentComplete: 50,
+        },
+    },
+    {
+        id: 'e2',
+        code: 'PRJ-0001-E2',
+        title: 'Reporting',
+        status: 'OPEN',
+        priority: 'LOW',
+        color: 'BLUE',
+        project: { id: 'p1', code: 'PRJ-0001', name: 'Till rebuild' },
+        progress: {
+            storyCount: 0,
+            doneStoryCount: 0,
+            storyPoints: 0,
+            doneStoryPoints: 0,
+            taskCount: 0,
+            doneTaskCount: 0,
+            percentComplete: 0,
+        },
+    },
+];
+
 beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
     (api.getAllProjectsBacklog as jest.Mock).mockResolvedValue(backlog());
+    (api.getProjectEpics as jest.Mock).mockResolvedValue(epicList());
     (api.getProjects as jest.Mock).mockResolvedValue({ items: [{ id: 'p1', code: 'PRJ-0001', name: 'Till rebuild' }] });
     (api.reorderBacklogScope as jest.Mock).mockResolvedValue({ success: true });
 });
 
 const rowOf = (text: string) => screen.getByText(text).closest('[role="treeitem"]') as HTMLElement;
 
-describe('ProjectEpicsPage', () => {
-    it('folds the tree to the epics, each with its story rollup', async () => {
+const chooseView = (name: 'List' | 'Hierarchy') => {
+    fireEvent.click(screen.getByRole('button', { name: 'View options' }));
+    const menu = screen.getByRole('dialog', { name: 'View options' });
+    fireEvent.click(within(menu).getByRole('button', { name }));
+};
+
+describe('ProjectEpicsPage — list view', () => {
+    it('draws the Sales-style list with a stats strip and filter row', async () => {
         render(<ProjectEpicsPage />);
         expect(await screen.findByText('Online payments')).toBeInTheDocument();
-        expect(screen.queryByText('Pay with bKash')).not.toBeInTheDocument();
-        const row = rowOf('Online payments');
-        expect(within(row).getByText('1/2 stories')).toBeInTheDocument();
-        expect(within(row).getByText('3/8 pts')).toBeInTheDocument();
-    });
-
-    it('reorders epics from the keyboard', async () => {
-        render(<ProjectEpicsPage />);
-        await screen.findByText('Online payments');
-        fireEvent.keyDown(rowOf('Online payments'), { key: 'ArrowDown', altKey: true });
-        await waitFor(() =>
-            expect(api.reorderBacklogScope).toHaveBeenCalledWith('p1', {
-                kind: 'epic',
-                id: 'e1',
-                orderedIds: ['e2', 'e1'],
-            }),
-        );
+        expect(screen.getByText('Reporting')).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Epics summary' })).toBeInTheDocument();
+        expect(api.getProjectEpics).toHaveBeenCalled();
+        expect(api.getAllProjectsBacklog).not.toHaveBeenCalled();
     });
 
     it('asks for a project, then creates the epic', async () => {
@@ -102,5 +136,50 @@ describe('ProjectEpicsPage', () => {
         await screen.findByText('Online payments');
         fireEvent.click(screen.getByRole('button', { name: /Import/ }));
         expect(await screen.findByText('Drag & drop or click to browse')).toBeInTheDocument();
+    });
+
+    it('switches to the hierarchy tree from View options', async () => {
+        render(<ProjectEpicsPage />);
+        await screen.findByText('Online payments');
+        chooseView('Hierarchy');
+        expect(await screen.findByRole('tree')).toBeInTheDocument();
+        expect(api.getAllProjectsBacklog).toHaveBeenCalled();
+    });
+});
+
+describe('ProjectEpicsPage — hierarchy view', () => {
+    beforeEach(() => {
+        localStorage.setItem('project-epics-view', 'hierarchy');
+    });
+
+    it('folds the tree to the epics, each with its story rollup', async () => {
+        render(<ProjectEpicsPage />);
+        expect(await screen.findByText('Online payments')).toBeInTheDocument();
+        expect(screen.queryByText('Pay with bKash')).not.toBeInTheDocument();
+        const row = rowOf('Online payments');
+        expect(within(row).getByText('1/2 stories')).toBeInTheDocument();
+        expect(within(row).getByText('3/8 pts')).toBeInTheDocument();
+    });
+
+    it('reorders epics from the keyboard', async () => {
+        render(<ProjectEpicsPage />);
+        await screen.findByText('Online payments');
+        fireEvent.keyDown(rowOf('Online payments'), { key: 'ArrowDown', altKey: true });
+        await waitFor(() =>
+            expect(api.reorderBacklogScope).toHaveBeenCalledWith('p1', {
+                kind: 'epic',
+                id: 'e1',
+                orderedIds: ['e2', 'e1'],
+            }),
+        );
+    });
+
+    it('can switch back to the list from View options', async () => {
+        render(<ProjectEpicsPage />);
+        await screen.findByText('Online payments');
+        expect(screen.getByRole('tree')).toBeInTheDocument();
+        chooseView('List');
+        await waitFor(() => expect(api.getProjectEpics).toHaveBeenCalled());
+        expect(await screen.findByRole('region', { name: 'Epics summary' })).toBeInTheDocument();
     });
 });

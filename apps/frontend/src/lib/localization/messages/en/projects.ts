@@ -214,6 +214,21 @@ export const projectsMessages = {
         openInProject: 'Open in its project',
         anyEpic: "Any epic",
         noEpic: "No epic",
+        /** List vs the backlog tree — remembered per browser, like hour logs. */
+        view: 'View',
+        viewList: 'List',
+        viewHierarchy: 'Hierarchy',
+        listUi: {
+            statsLabel: 'Stories summary',
+            stats: {
+                stories: 'Stories',
+                backlog: 'Backlog',
+                ready: 'Ready',
+                inProgress: 'In progress',
+                done: 'Done',
+                points: 'Points',
+            },
+        },
     },
 
     /**
@@ -332,6 +347,20 @@ export const projectsMessages = {
         progress: "Progress",
         stories: "Stories",
         openInProject: "Open in its project",
+        /** List vs the backlog tree — remembered per browser, like hour logs. */
+        view: "View",
+        viewList: "List",
+        viewHierarchy: "Hierarchy",
+        listUi: {
+            statsLabel: "Epics summary",
+            stats: {
+                epics: "Epics",
+                open: "Open",
+                inProgress: "In progress",
+                done: "Done",
+                stories: "Stories",
+            },
+        },
     },
 
     task: {
@@ -496,7 +525,7 @@ export const projectsMessages = {
         uploadFailed: 'Could not attach that file',
         deleteFile: 'Remove attachment',
         preview: "Preview",
-        hint: 'JPEG, PNG, WebP or PDF, up to 5 MB.',
+        hint: 'JPEG, PNG, WebP, PDF or audio, up to 5 MB. Voice notes up to 5 minutes.',
         dropHint: 'Drop files here, or paste an image.',
         linked: 'An image pasted into the description or a comment is listed here too. Remove it from the text and the file goes with it.',
         inDescription: 'In the description',
@@ -508,7 +537,15 @@ export const projectsMessages = {
         removeUsedBoth: '{name} is shown in the description and in a comment. Removing the file takes it out of both.',
         removeFailed: 'Could not remove that file',
         tooLarge: 'That file is larger than 5 MB.',
-        unsupported: 'Use a JPEG, PNG, WebP or PDF.',
+        unsupported: 'Use a JPEG, PNG, WebP, PDF or an audio recording.',
+        record: 'Record voice',
+        stopRecording: 'Stop',
+        recording: 'Recording {time}',
+        voiceNote: 'Voice note',
+        recordedBy: 'Recorded by {name}',
+        micDenied: 'Microphone access is blocked. Allow it in your browser to record.',
+        micUnsupported: 'Voice recording is not supported in this browser.',
+        micFailed: 'Could not record audio. Please try again.',
     },
 
     cover: {

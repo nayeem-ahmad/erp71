@@ -9087,6 +9087,10 @@ model ProjectAttachment {
   file_name   String
   mime_type   String?
   file_size   Int?
+  /// Length of a voice note in milliseconds. Null for images/PDFs and for
+  /// older rows recorded before duration was kept. The client sends it from
+  /// the MediaRecorder timer (or audio metadata for an attached clip).
+  duration_ms Int?
   /// Cloudinary's handle for the stored asset. `file_url` cannot be turned back
   /// into one, so without this the row could be deleted while the file stayed —
   /// billed forever. Nullable only because rows predating Phase 3D have none.

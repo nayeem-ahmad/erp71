@@ -214,6 +214,20 @@ export const projectsMessages = {
         openInProject: "Buka dalam projeknya",
         anyEpic: "Mana-mana epik",
         noEpic: "Tiada epik",
+        view: "Paparan",
+        viewList: "Senarai",
+        viewHierarchy: "Hierarki",
+        listUi: {
+            statsLabel: "Ringkasan cerita",
+            stats: {
+                stories: "Cerita",
+                backlog: "Backlog",
+                ready: "Sedia",
+                inProgress: "Dalam proses",
+                done: "Selesai",
+                points: "Mata",
+            },
+        },
     },
 
     /**
@@ -332,6 +346,19 @@ export const projectsMessages = {
         progress: "Kemajuan",
         stories: "Cerita",
         openInProject: "Buka dalam projeknya",
+        view: "Paparan",
+        viewList: "Senarai",
+        viewHierarchy: "Hierarki",
+        listUi: {
+            statsLabel: "Ringkasan epik",
+            stats: {
+                epics: "Epik",
+                open: "Terbuka",
+                inProgress: "Dalam proses",
+                done: "Selesai",
+                stories: "Cerita",
+            },
+        },
     },
 
     task: {
@@ -496,7 +523,7 @@ export const projectsMessages = {
         uploadFailed: 'Fail itu tidak dapat dilampirkan',
         deleteFile: 'Buang lampiran',
         preview: "Pratonton",
-        hint: 'JPEG, PNG, WebP atau PDF, sehingga 5 MB.',
+        hint: 'JPEG, PNG, WebP, PDF atau audio, sehingga 5 MB. Nota suara sehingga 5 minit.',
         dropHint: 'Lepaskan fail di sini, atau tampal imej.',
         linked: 'Imej yang ditampal dalam penerangan atau komen turut disenaraikan di sini. Keluarkan ia daripada teks dan fail itu turut pergi.',
         inDescription: 'Dalam penerangan',
@@ -508,7 +535,15 @@ export const projectsMessages = {
         removeUsedBoth: '{name} dipaparkan dalam penerangan dan dalam komen. Membuang fail itu mengeluarkannya daripada kedua-duanya.',
         removeFailed: 'Fail itu tidak dapat dibuang',
         tooLarge: 'Fail itu lebih besar daripada 5 MB.',
-        unsupported: 'Gunakan JPEG, PNG, WebP atau PDF.',
+        unsupported: 'Gunakan JPEG, PNG, WebP, PDF atau rakaman audio.',
+        record: 'Rakam suara',
+        stopRecording: 'Berhenti',
+        recording: 'Merakam {time}',
+        voiceNote: 'Nota suara',
+        recordedBy: 'Dirakam oleh {name}',
+        micDenied: 'Akses mikrofon disekat. Benarkannya dalam pelayar untuk merakam.',
+        micUnsupported: 'Rakaman suara tidak disokong dalam pelayar ini.',
+        micFailed: 'Tidak dapat merakam audio. Sila cuba lagi.',
     },
 
     cover: {

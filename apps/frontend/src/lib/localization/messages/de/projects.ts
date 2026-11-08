@@ -214,6 +214,20 @@ export const projectsMessages = {
         openInProject: "Im Projekt öffnen",
         anyEpic: "Beliebiges Epic",
         noEpic: "Kein Epic",
+        view: "Ansicht",
+        viewList: "Liste",
+        viewHierarchy: "Hierarchie",
+        listUi: {
+            statsLabel: "Story-Übersicht",
+            stats: {
+                stories: "Stories",
+                backlog: "Backlog",
+                ready: "Bereit",
+                inProgress: "In Arbeit",
+                done: "Erledigt",
+                points: "Punkte",
+            },
+        },
     },
 
     /**
@@ -332,6 +346,19 @@ export const projectsMessages = {
         progress: "Fortschritt",
         stories: "Storys",
         openInProject: "Im Projekt öffnen",
+        view: "Ansicht",
+        viewList: "Liste",
+        viewHierarchy: "Hierarchie",
+        listUi: {
+            statsLabel: "Epic-Übersicht",
+            stats: {
+                epics: "Epics",
+                open: "Offen",
+                inProgress: "In Arbeit",
+                done: "Erledigt",
+                stories: "Stories",
+            },
+        },
     },
 
     task: {
@@ -496,7 +523,7 @@ export const projectsMessages = {
         uploadFailed: "Diese Datei konnte nicht angehängt werden",
         deleteFile: "Anhang entfernen",
         preview: "Vorschau",
-        hint: "JPEG, PNG, WebP oder PDF, bis 5 MB.",
+        hint: 'JPEG, PNG, WebP, PDF oder Audio, bis 5 MB. Sprachnachrichten bis 5 Minuten.',
         dropHint: "Dateien hier ablegen oder ein Bild einfügen.",
         linked: "Ein Bild, das in die Beschreibung oder einen Kommentar eingefügt wurde, steht auch hier. Entfernen Sie es aus dem Text, geht die Datei mit.",
         inDescription: "In der Beschreibung",
@@ -508,7 +535,15 @@ export const projectsMessages = {
         removeUsedBoth: "{name} wird in der Beschreibung und in einem Kommentar angezeigt. Die Datei zu entfernen nimmt sie aus beiden.",
         removeFailed: "Die Datei konnte nicht entfernt werden",
         tooLarge: "Diese Datei ist größer als 5 MB.",
-        unsupported: "Verwenden Sie JPEG, PNG, WebP oder PDF.",
+        unsupported: 'Verwenden Sie JPEG, PNG, WebP, PDF oder eine Audioaufnahme.',
+        record: 'Sprachnachricht aufnehmen',
+        stopRecording: 'Stopp',
+        recording: 'Aufnahme {time}',
+        voiceNote: 'Sprachnachricht',
+        recordedBy: 'Aufgenommen von {name}',
+        micDenied: 'Mikrofonzugriff ist blockiert. Erlauben Sie ihn im Browser zum Aufnehmen.',
+        micUnsupported: 'Sprachnachrichten werden in diesem Browser nicht unterstützt.',
+        micFailed: 'Audio konnte nicht aufgenommen werden. Bitte erneut versuchen.',
     },
 
     cover: {

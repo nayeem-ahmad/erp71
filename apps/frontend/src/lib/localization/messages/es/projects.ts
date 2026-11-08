@@ -214,6 +214,20 @@ export const projectsMessages = {
         openInProject: "Abrir en su proyecto",
         anyEpic: "Cualquier épica",
         noEpic: "Sin épica",
+        view: "Vista",
+        viewList: "Lista",
+        viewHierarchy: "Jerarquía",
+        listUi: {
+            statsLabel: "Resumen de historias",
+            stats: {
+                stories: "Historias",
+                backlog: "Backlog",
+                ready: "Listas",
+                inProgress: "En curso",
+                done: "Hechas",
+                points: "Puntos",
+            },
+        },
     },
 
     /**
@@ -332,6 +346,19 @@ export const projectsMessages = {
         progress: "Progreso",
         stories: "Historias",
         openInProject: "Abrir en su proyecto",
+        view: "Vista",
+        viewList: "Lista",
+        viewHierarchy: "Jerarquía",
+        listUi: {
+            statsLabel: "Resumen de épicas",
+            stats: {
+                epics: "Épicas",
+                open: "Abiertas",
+                inProgress: "En curso",
+                done: "Hechas",
+                stories: "Historias",
+            },
+        },
     },
 
     task: {
@@ -496,7 +523,7 @@ export const projectsMessages = {
         uploadFailed: "No se pudo adjuntar ese archivo",
         deleteFile: "Quitar adjunto",
         preview: "Vista previa",
-        hint: "JPEG, PNG, WebP o PDF, hasta 5 MB.",
+        hint: 'JPEG, PNG, WebP, PDF o audio, hasta 5 MB. Notas de voz hasta 5 minutos.',
         dropHint: "Suelta archivos aquí, o pega una imagen.",
         linked: "Una imagen pegada en la descripción o en un comentario también aparece aquí. Quítala del texto y el archivo se va con ella.",
         inDescription: "En la descripción",
@@ -508,7 +535,15 @@ export const projectsMessages = {
         removeUsedBoth: "{name} se muestra en la descripción y en un comentario. Quitar el archivo lo quita de ambos.",
         removeFailed: "No se pudo quitar ese archivo",
         tooLarge: "Ese archivo supera los 5 MB.",
-        unsupported: "Use un archivo JPEG, PNG, WebP o PDF.",
+        unsupported: 'Use JPEG, PNG, WebP, PDF o una grabación de audio.',
+        record: 'Grabar voz',
+        stopRecording: 'Detener',
+        recording: 'Grabando {time}',
+        voiceNote: 'Nota de voz',
+        recordedBy: 'Grabado por {name}',
+        micDenied: 'El acceso al micrófono está bloqueado. Permítalo en el navegador para grabar.',
+        micUnsupported: 'La grabación de voz no es compatible con este navegador.',
+        micFailed: 'No se pudo grabar el audio. Inténtalo de nuevo.',
     },
 
     cover: {

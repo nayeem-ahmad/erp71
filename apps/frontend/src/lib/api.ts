@@ -7077,7 +7077,7 @@ export const api = {
     getTaskAttachments: (taskId: string) => fetchWithAuth(`/project-tasks/${taskId}/attachments`),
     addTaskAttachment: (
         taskId: string,
-        data: { fileBase64: string; fileName?: string; mimeType?: string },
+        data: { fileBase64: string; fileName?: string; mimeType?: string; durationMs?: number },
     ) =>
         fetchWithAuth(`/project-tasks/${taskId}/attachments`, {
             method: 'POST',

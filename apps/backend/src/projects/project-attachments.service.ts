@@ -8,13 +8,19 @@ import { DatabaseService } from '../database/database.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { AssetsService } from '../assets/assets.service';
 import { CreateAttachmentDto } from './project.dto';
-import { parseAttachmentUpload, resourceTypeFor } from '../common/file-upload.util';
+import {
+    PROJECT_ATTACHMENT_MIME_TYPES,
+    parseAttachmentUpload,
+    resourceTypeFor,
+} from '../common/file-upload.util';
 
 // Moved to common/file-upload.util.ts when import documents needed the same
 // three helpers. Re-exported so existing importers and tests are untouched.
 export {
     ATTACHMENT_MIME_TYPES,
+    AUDIO_ATTACHMENT_MIME_TYPES,
     MAX_ATTACHMENT_BASE64_LENGTH,
+    PROJECT_ATTACHMENT_MIME_TYPES,
     parseAttachmentUpload,
     resourceTypeFor,
 } from '../common/file-upload.util';
@@ -27,9 +33,19 @@ const ATTACHMENT_INCLUDE = {
  * A clipboard screenshot is always `image.png`. Those names, and a file the
  * caller did not name, must not be the stored id: `uploadBuffer` uses it as
  * the Cloudinary public_id and will not overwrite, so a second paste comes
- * back as the first file.
+ * back as the first file. Voice notes from the recorder are `voice-note-…`.
  */
-const GENERIC_STEM = /^(image|pasted-image|attachment)$/i;
+const GENERIC_STEM = /^(image|pasted-image|attachment|voice-note)$/i;
+
+/** File extension shown on the row — audio needs friendlier names than `mpeg`. */
+function attachmentExtension(mimeType: string): string {
+    if (mimeType === 'application/pdf') return 'pdf';
+    if (mimeType === 'audio/mpeg') return 'mp3';
+    if (mimeType === 'audio/mp4' || mimeType === 'audio/x-m4a') return 'm4a';
+    if (mimeType === 'audio/wav' || mimeType === 'audio/x-wav') return 'wav';
+    if (mimeType.startsWith('audio/')) return mimeType.split('/')[1] ?? 'webm';
+    return mimeType.split('/')[1] ?? 'jpg';
+}
 
 /**
  * Where an attachment is stored, and the name shown for it.
@@ -44,7 +60,7 @@ export function attachmentStorageName(
 ): { publicId: string; fileName: string } {
     const stem = (fileName ?? 'attachment').replace(/\.[^.]+$/, '').slice(0, 80);
     const safeStem = stem.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'attachment';
-    const extension = mimeType === 'application/pdf' ? 'pdf' : (mimeType.split('/')[1] ?? 'jpg');
+    const extension = attachmentExtension(mimeType);
     const publicId = `${safeStem}-${randomBytes(4).toString('hex')}`;
     return {
         publicId,
@@ -81,7 +97,11 @@ export class ProjectAttachmentsService {
         const tenantId = viewer.tenantId;
         const userId = viewer.userId;
         const task = await this.assertTask(viewer, taskId);
-        const { buffer, mimeType } = parseAttachmentUpload(dto.fileBase64, dto.mimeType);
+        const { buffer, mimeType } = parseAttachmentUpload(
+            dto.fileBase64,
+            dto.mimeType,
+            PROJECT_ATTACHMENT_MIME_TYPES,
+        );
 
         if (!this.assets.isEnabled()) {
             // Distinguishable from a transient failure: this will not fix itself
@@ -105,6 +125,13 @@ export class ProjectAttachmentsService {
             throw new ServiceUnavailableException('The attachment could not be uploaded.');
         }
 
+        // Duration only makes sense for audio; ignore it on an image/PDF so a
+        // forged client cannot stamp a screenshot with a fake length.
+        const durationMs =
+            mimeType.startsWith('audio/') && typeof dto.durationMs === 'number'
+                ? dto.durationMs
+                : null;
+
         return this.db.projectAttachment.create({
             data: {
                 tenant_id: tenantId,
@@ -114,6 +141,7 @@ export class ProjectAttachmentsService {
                 file_name: storedName.fileName,
                 mime_type: mimeType,
                 file_size: stored.bytes ?? buffer.byteLength,
+                duration_ms: durationMs,
                 storage_key: stored.publicId,
                 created_by: userId,
             },
