@@ -5,9 +5,11 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import {
     auditDetails,
     describeAuditRow,
+    readActivityDetailsAudit,
     type AuditRowLike,
 } from '@/lib/audit-description';
 import { formatBDT } from '@/lib/format';
+import ActivityDetailsAuditPanel from './ActivityDetailsAuditPanel';
 
 interface AuditDescriptionCellProps {
     row: AuditRowLike;
@@ -32,13 +34,15 @@ export default function AuditDescriptionCell({
     const [open, setOpen] = useState(false);
 
     const description = describeAuditRow(row, { formatAmount: formatBDT });
-    const details = auditDetails(row, { formatAmount: formatBDT });
+    const activity = readActivityDetailsAudit(row);
+    const details = activity ? [] : auditDetails(row, { formatAmount: formatBDT });
 
     return (
         <div className="space-y-1">
             <span className="text-sm text-gray-800">{description}</span>
+            {activity && <ActivityDetailsAuditPanel view={activity} />}
 
-            {details.length > 0 ? (
+            {!activity && details.length > 0 ? (
                 <>
                     <button
                         type="button"
@@ -65,7 +69,7 @@ export default function AuditDescriptionCell({
                         </dl>
                     )}
                 </>
-            ) : (
+            ) : activity ? null : (
                 <span className="block text-xs text-gray-400">{noDetailsLabel}</span>
             )}
         </div>
