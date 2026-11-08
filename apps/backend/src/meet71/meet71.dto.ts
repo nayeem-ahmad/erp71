@@ -58,6 +58,10 @@ export class CreateMeet71RoomDto {
 
     @IsEmail()
     createdByEmail: string;
+
+    @IsOptional()
+    @IsBoolean()
+    standing?: boolean;
 }
 
 export class PatchMeet71RoomDto {
@@ -70,6 +74,10 @@ export class PatchMeet71RoomDto {
     @IsEmail({}, { each: true })
     @ArrayMaxSize(10)
     coHostEmails?: string[];
+
+    @IsOptional()
+    @IsBoolean()
+    standing?: boolean;
 }
 
 export class AddMeet71AllowlistDto {

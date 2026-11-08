@@ -46,14 +46,18 @@ export type Meet71RoomView = {
     createdByEmail: string;
     createdAt: Date;
     coHostEmails: string[];
+    standing: boolean;
 };
 
 export type Meet71RoomPatch = {
     createdByEmail?: string;
     coHostEmails?: string[];
+    standing?: boolean;
 };
 
 const MAX_CO_HOSTS = 10;
+// The company's own standing rooms; always standing, whatever the column says.
+const FIXED_STANDING_ROOMS = ['otb', 'ishraak'];
 
 type MemberRow = {
     display_name: string | null;
@@ -288,10 +292,16 @@ export class Meet71MembershipService {
     }
 
     async patchRoom(code: string, patch: Meet71RoomPatch, actor: Meet71Actor): Promise<Meet71RoomView> {
-        if (patch.createdByEmail === undefined && patch.coHostEmails === undefined) {
+        if (patch.createdByEmail === undefined && patch.coHostEmails === undefined && patch.standing === undefined) {
             throw new BadRequestException({
                 code: 'MEET71_ROOM_PATCH_EMPTY',
-                message: 'createdByEmail or coHostEmails is required',
+                message: 'createdByEmail, coHostEmails or standing is required',
+            });
+        }
+        if (patch.standing === false && FIXED_STANDING_ROOMS.includes(code)) {
+            throw new BadRequestException({
+                code: 'MEET71_ROOM_FIXED_STANDING',
+                message: 'otb and ishraak are always standing rooms.',
             });
         }
 
@@ -321,7 +331,10 @@ export class Meet71MembershipService {
         const row = await this.db.$transaction(async (tx) => {
             const updated = await tx.meet71Room.update({
                 where: { code },
-                data: { created_by_email: owner },
+                data: {
+                    created_by_email: owner,
+                    ...(patch.standing !== undefined ? { standing: patch.standing } : {}),
+                },
             });
             await tx.meet71RoomHost.deleteMany({ where: { room_code: code } });
             if (coHostEmails.length) {
@@ -336,9 +349,27 @@ export class Meet71MembershipService {
             code: row.code,
             createdByEmail: owner,
             coHostEmails,
+            standing: row.standing,
             actorEmail: actor.email ?? null,
         });
-        return { code: row.code, createdByEmail: owner, createdAt: row.created_at, coHostEmails };
+        return {
+            code: row.code,
+            createdByEmail: owner,
+            createdAt: row.created_at,
+            coHostEmails,
+            standing: row.standing || FIXED_STANDING_ROOMS.includes(row.code),
+        };
+    }
+
+    // Standing rooms other than otb and ishraak, for room creators' home page.
+    async listStandingRooms(): Promise<{ code: string; createdByEmail: string }[]> {
+        const rows = await this.db.meet71Room.findMany({
+            where: { standing: true },
+            orderBy: { created_at: 'asc' },
+        });
+        return rows
+            .filter((row) => !FIXED_STANDING_ROOMS.includes(row.code))
+            .map((row) => ({ code: row.code, createdByEmail: row.created_by_email.trim().toLowerCase() }));
     }
 
     private async isAllowed(email: string): Promise<boolean> {
@@ -368,6 +399,7 @@ export class Meet71MembershipService {
         code: string;
         created_by_email: string;
         created_at: Date;
+        standing?: boolean;
         hosts?: { email: string }[];
     }): Meet71RoomView {
         const createdByEmail = row.created_by_email.trim().toLowerCase();
@@ -378,6 +410,7 @@ export class Meet71MembershipService {
             coHostEmails: uniqueEmails((row.hosts ?? []).map((host) => host.email)).filter(
                 (email) => email !== createdByEmail,
             ),
+            standing: row.standing === true || FIXED_STANDING_ROOMS.includes(row.code),
         };
     }
 

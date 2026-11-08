@@ -41,6 +41,7 @@ describe('Meet71InternalController', () => {
         removeDenial: jest.fn(),
         patchRoom: jest.fn(),
         getRoom: jest.fn(),
+        listStandingRooms: jest.fn(),
     };
     const sso = { mint: jest.fn(), exchange: jest.fn() };
     const invites = { invite: jest.fn() };
@@ -96,6 +97,67 @@ describe('Meet71InternalController', () => {
             .set('X-Meet71-Service-Key', 'nope')
             .expect(401);
         expect(membership.evaluate).not.toHaveBeenCalled();
+    });
+
+    it('POST rooms saves standing when asked, and defaults to a meeting', async () => {
+        db.meet71Room.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+            code: data.code,
+            created_by_email: data.created_by_email,
+            created_at: new Date('2026-11-08'),
+            standing: data.standing,
+        }));
+
+        const standing = await request(app.getHttpServer())
+            .post('/internal/meet71/rooms')
+            .set('X-Meet71-Service-Key', SECRET)
+            .send({ code: 'kxp-4n2m-q8r', createdByEmail: 'sara@erp71.com', standing: true })
+            .expect(200);
+        expect(standing.body.data.standing).toBe(true);
+
+        const meeting = await request(app.getHttpServer())
+            .post('/internal/meet71/rooms')
+            .set('X-Meet71-Service-Key', SECRET)
+            .send({ code: 'abc-defg-hij', createdByEmail: 'sara@erp71.com' })
+            .expect(200);
+        expect(meeting.body.data.standing).toBe(false);
+    });
+
+    it('POST rooms with a taken name is 409 MEET71_ROOM_TAKEN', async () => {
+        db.meet71Room.create.mockRejectedValue(Object.assign(new Error('Unique constraint'), { code: 'P2002' }));
+
+        const res = await request(app.getHttpServer())
+            .post('/internal/meet71/rooms')
+            .set('X-Meet71-Service-Key', SECRET)
+            .send({ code: 'weekly-standup', createdByEmail: 'sara@erp71.com' })
+            .expect(409);
+
+        expect(JSON.stringify(res.body)).toContain('MEET71_ROOM_TAKEN');
+    });
+
+    it('POST rooms rejects a non-boolean standing', async () => {
+        await request(app.getHttpServer())
+            .post('/internal/meet71/rooms')
+            .set('X-Meet71-Service-Key', SECRET)
+            .send({ code: 'kxp-4n2m-q8r', createdByEmail: 'sara@erp71.com', standing: 'yes' })
+            .expect(400);
+        expect(db.meet71Room.create).not.toHaveBeenCalled();
+    });
+
+    it('GET rooms?standing=true lists standing rooms', async () => {
+        membership.listStandingRooms.mockResolvedValue([{ code: 'kxp-4n2m-q8r', createdByEmail: 'sara@erp71.com' }]);
+
+        const res = await request(app.getHttpServer())
+            .get('/internal/meet71/rooms')
+            .query({ standing: 'true' })
+            .set('X-Meet71-Service-Key', SECRET)
+            .expect(200);
+
+        expect(res.body.data).toEqual([{ code: 'kxp-4n2m-q8r', createdByEmail: 'sara@erp71.com' }]);
+    });
+
+    it('GET rooms without ?standing=true is 400', async () => {
+        await request(app.getHttpServer()).get('/internal/meet71/rooms').set('X-Meet71-Service-Key', SECRET).expect(400);
+        expect(membership.listStandingRooms).not.toHaveBeenCalled();
     });
 
     it('GET membership does not create a Meet71Member', async () => {

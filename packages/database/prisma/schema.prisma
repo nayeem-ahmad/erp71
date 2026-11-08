@@ -9834,6 +9834,8 @@ model Meet71Room {
   code             String           @unique
   created_by_email String
   created_at       DateTime         @default(now())
+  /// Standing rooms stay listed for room creators (otb, ishraak, and any an admin marks).
+  standing         Boolean          @default(false)
   hosts            Meet71RoomHost[]
 
   @@index([created_by_email])

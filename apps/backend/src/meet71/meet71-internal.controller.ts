@@ -1,6 +1,7 @@
 import {
     BadRequestException,
     Body,
+    ConflictException,
     Controller,
     Delete,
     Get,
@@ -68,13 +69,37 @@ export class Meet71InternalController {
     @Post('rooms')
     @HttpCode(HttpStatus.OK)
     async createRoom(@Body() dto: CreateMeet71RoomDto) {
-        const row = await this.db.meet71Room.create({
-            data: {
-                code: dto.code,
-                created_by_email: dto.createdByEmail.trim().toLowerCase(),
-            },
-        });
-        return { code: row.code, createdByEmail: row.created_by_email, createdAt: row.created_at, coHostEmails: [] };
+        let row;
+        try {
+            row = await this.db.meet71Room.create({
+                data: {
+                    code: dto.code,
+                    created_by_email: dto.createdByEmail.trim().toLowerCase(),
+                    standing: dto.standing === true,
+                },
+            });
+        } catch (err: any) {
+            // Room codes are unique, so a named room (meet.erp71.com/room/<name>) can't reuse a name.
+            if (err?.code === 'P2002') {
+                throw new ConflictException({ code: 'MEET71_ROOM_TAKEN', message: 'That room name is already taken.' });
+            }
+            throw err;
+        }
+        return {
+            code: row.code,
+            createdByEmail: row.created_by_email,
+            createdAt: row.created_at,
+            coHostEmails: [],
+            standing: row.standing,
+        };
+    }
+
+    @Get('rooms')
+    listRooms(@Query('standing') standing?: string) {
+        if (standing !== 'true') {
+            throw new BadRequestException({ code: 'MEET71_ROOMS_FILTER', message: 'Only ?standing=true is supported' });
+        }
+        return this.membership.listStandingRooms();
     }
 
     @Get('rooms/:code')
