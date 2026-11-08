@@ -54,6 +54,8 @@ export const crmHrMessages = {
             edit: 'Edit',
             editTitle: 'Edit planned activity',
             editRollupHint: 'This is the lead\'s next step while it is the earliest one planned.',
+            editCompletedTitle: 'Edit logged activity',
+            editCompletedHint: 'This stays completed. When it happened, and whether it was approved, stay as they are.',
             cancelled: 'Cancelled',
             scheduleNext: 'Schedule the next one',
             inheritsHint: 'Inherits the purpose of the activity you are closing.',

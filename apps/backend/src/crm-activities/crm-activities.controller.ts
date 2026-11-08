@@ -133,7 +133,7 @@ export class CrmActivitiesController {
         @Param('id') id: string,
         @Body() dto: UpdateCrmActivityDto,
     ) {
-        return this.service.update(tenant.tenantId, id, dto, tenant.timezone);
+        return this.service.update(tenant.tenantId, id, dto, tenant.timezone, tenant.userId);
     }
 
     /**

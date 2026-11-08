@@ -8,11 +8,14 @@ import { AppLogger } from '../common/app-logger.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
+import { AuditService } from '../audit/audit.service';
 
 describe('CrmActivitiesService', () => {
     let service: CrmActivitiesService;
     let db: any;
     let taxonomy: any;
+    let audit: { log: jest.Mock };
+    let notifications: { create: jest.Mock };
 
     beforeEach(async () => {
         db = {
@@ -37,6 +40,8 @@ describe('CrmActivitiesService', () => {
             $transaction: jest.fn(async (fn: any) => fn(db)),
         };
         taxonomy = { resolveByIdOrCode: jest.fn() };
+        audit = { log: jest.fn().mockResolvedValue(undefined) };
+        notifications = { create: jest.fn().mockResolvedValue(undefined) };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -51,7 +56,8 @@ describe('CrmActivitiesService', () => {
                     provide: JobTrackerService,
                     useValue: { track: (_n: string, fn: () => Promise<unknown>) => fn() },
                 },
-                { provide: NotificationsService, useValue: { create: jest.fn().mockResolvedValue(undefined) } },
+                { provide: NotificationsService, useValue: notifications },
+                { provide: AuditService, useValue: audit },
                 {
                     provide: TenantTimezoneService,
                     useValue: {
@@ -962,11 +968,136 @@ describe('CrmActivitiesService', () => {
             expect(db.lead.update).toHaveBeenCalled();
         });
 
-        it('refuses to edit a completed activity', async () => {
+        it('refuses to rewrite the plan fields of a completed activity', async () => {
             db.crmActivity.findFirst.mockResolvedValue({ id: 'a1', tenant_id: 't1', status: 'DONE' });
             await expect(service.update('t1', 'a1', { subject: 'x' } as any, 'Asia/Dhaka')).rejects.toThrow(
                 BadRequestException,
             );
+            expect(db.crmActivity.update).not.toHaveBeenCalled();
+            expect(db.crmActivity.updateMany).not.toHaveBeenCalled();
+            expect(db.crmActivity.create).not.toHaveBeenCalled();
+        });
+
+        it('refuses a completed edit that also tries to reschedule', async () => {
+            db.crmActivity.findFirst.mockResolvedValue({
+                id: 'a1', tenant_id: 't1', status: 'DONE', summary: 'Spoke', notes: null, outcome: null,
+            });
+            await expect(
+                service.update('t1', 'a1', { notes: 'corrected', due_at: '2026-09-01T00:00:00Z' } as any, 'Asia/Dhaka'),
+            ).rejects.toThrow(BadRequestException);
+            expect(db.crmActivity.updateMany).not.toHaveBeenCalled();
+        });
+
+        const completed = {
+            id: 'a1',
+            tenant_id: 't1',
+            lead_id: 'l1',
+            customer_id: null,
+            status: 'DONE',
+            summary: 'Sent the catalogue',
+            notes: 'Original note',
+            outcome: 'Left a message',
+            completed_at: new Date('2026-02-02T10:00:00.000Z'),
+            created_at: new Date('2026-02-02T10:05:00.000Z'),
+            is_approved: true,
+            approved_by: 'manager-1',
+            approved_at: new Date('2026-02-02T09:00:00.000Z'),
+        };
+
+        it('saves notes, summary and outcome on a completed activity and audits the change', async () => {
+            db.crmActivity.findFirst
+                .mockResolvedValueOnce(completed)
+                .mockResolvedValueOnce({ ...completed, notes: 'He will pay Thursday', summary: 'Sent the updated catalogue' });
+            db.crmActivity.updateMany.mockResolvedValue({ count: 1 });
+
+            const saved = await service.update('t1', 'a1', {
+                notes: 'He will pay Thursday',
+                summary: 'Sent the updated catalogue',
+                outcome: '',
+            } as any, 'Asia/Dhaka', 'u1');
+
+            expect(db.crmActivity.updateMany).toHaveBeenCalledWith({
+                where: { id: 'a1', tenant_id: 't1', status: 'DONE' },
+                data: {
+                    notes: 'He will pay Thursday',
+                    summary: 'Sent the updated catalogue',
+                    outcome: null,
+                },
+            });
+            expect(db.crmActivity.update).not.toHaveBeenCalled();
+            expect(db.crmActivity.create).not.toHaveBeenCalled();
+            expect(db.lead.update).not.toHaveBeenCalled();
+            expect(db.customer.update).not.toHaveBeenCalled();
+            expect(notifications.create).not.toHaveBeenCalled();
+            expect(audit.log).toHaveBeenCalledWith(
+                'crm.activity_details_updated',
+                'CrmActivity',
+                { userId: 'u1', tenantId: 't1' },
+                'a1',
+                {
+                    status: 'DONE',
+                    changes: {
+                        notes: { from: 'Original note', to: 'He will pay Thursday' },
+                        summary: { from: 'Sent the catalogue', to: 'Sent the updated catalogue' },
+                        outcome: { from: 'Left a message', to: null },
+                    },
+                },
+            );
+            expect(saved.status).toBe('DONE');
+            expect(saved.completed_at).toEqual(completed.completed_at);
+            expect(saved.is_approved).toBe(true);
+            expect(saved.approved_by).toBe('manager-1');
+            expect(saved.approved_at).toEqual(completed.approved_at);
+        });
+
+        it('does not write or audit when the completed text is unchanged', async () => {
+            db.crmActivity.findFirst.mockResolvedValue(completed);
+
+            await service.update('t1', 'a1', { notes: 'Original note', summary: 'Sent the catalogue' } as any, 'Asia/Dhaka', 'u1');
+
+            expect(db.crmActivity.updateMany).not.toHaveBeenCalled();
+            expect(audit.log).not.toHaveBeenCalled();
+            expect(db.lead.update).not.toHaveBeenCalled();
+        });
+
+        it('refuses to blank the summary of a completed activity', async () => {
+            db.crmActivity.findFirst.mockResolvedValue(completed);
+            await expect(
+                service.update('t1', 'a1', { summary: '   ' } as any, 'Asia/Dhaka', 'u1'),
+            ).rejects.toThrow(BadRequestException);
+            expect(db.crmActivity.updateMany).not.toHaveBeenCalled();
+            expect(audit.log).not.toHaveBeenCalled();
+        });
+
+        it('does not edit a completed activity that belongs to another business', async () => {
+            db.crmActivity.findFirst.mockResolvedValue(null);
+            await expect(
+                service.update('t-other', 'a1', { notes: 'cross' } as any, 'Asia/Dhaka', 'u1'),
+            ).rejects.toThrow(NotFoundException);
+            expect(db.crmActivity.findFirst).toHaveBeenCalledWith({
+                where: { id: 'a1', tenant_id: 't-other' },
+            });
+            expect(db.crmActivity.updateMany).not.toHaveBeenCalled();
+            expect(db.crmActivity.update).not.toHaveBeenCalled();
+            expect(audit.log).not.toHaveBeenCalled();
+        });
+
+        it('leaves a planned edit on the planned path, without an audit row', async () => {
+            db.crmActivity.findFirst
+                .mockResolvedValueOnce({ id: 'a1', tenant_id: 't1', lead_id: 'l1', status: 'PLANNED' })
+                .mockResolvedValue(null);
+            db.crmActivity.update.mockResolvedValue({ id: 'a1', lead_id: 'l1' });
+
+            await service.update('t1', 'a1', { subject: 'Chase it again', notes: 'bring the ledger' } as any, 'Asia/Dhaka', 'u1');
+
+            expect(db.crmActivity.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: { subject: 'Chase it again', notes: 'bring the ledger' },
+                }),
+            );
+            expect(db.crmActivity.updateMany).not.toHaveBeenCalled();
+            expect(audit.log).not.toHaveBeenCalled();
+            expect(db.crmActivity.create).not.toHaveBeenCalled();
         });
 
         it('404s an unknown id', async () => {

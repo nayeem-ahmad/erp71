@@ -125,6 +125,8 @@ export default function CrmActivityPanel({
 
     const [editing, setEditing] = useState<CrmActivity | null>(null);
     const [edit, setEdit] = useState(emptyEdit);
+    const [editingCompleted, setEditingCompleted] = useState<CrmActivity | null>(null);
+    const [completedEdit, setCompletedEdit] = useState({ summary: '', outcome: '', notes: '' });
 
     const { options: memberOptions, currentUserId } = useTeamMemberOptions(m.fields.me);
 
@@ -133,6 +135,9 @@ export default function CrmActivityPanel({
     const canApprove = useCanApproveCrmActivity();
 
     const editAssigneeId = useId();
+    const completedSummaryId = useId();
+    const completedOutcomeId = useId();
+    const completedNotesId = useId();
     const completeChannelId = useId();
     const completeSummaryId = useId();
     const completeOutcomeId = useId();
@@ -263,11 +268,21 @@ export default function CrmActivityPanel({
         });
     };
 
+    const openCompletedEdit = (row: CrmActivity) => {
+        setEditingCompleted(row);
+        setCompletedEdit({
+            summary: row.summary ?? '',
+            outcome: row.outcome ?? '',
+            notes: row.notes ?? '',
+        });
+    };
+
     /**
-     * The only caller of PATCH /crm/activities/:id in the app, and so the only
-     * way to move a lead's `next_step`, `next_step_date` and
-     * `next_step_assigned_to` — those three are a read-only rollup of the
-     * earliest planned activity, recalculated by the server on every write here.
+     * Edits a planned activity. This is the write that moves a lead's
+     * `next_step`, `next_step_date` and `next_step_assigned_to` — those three
+     * are a read-only rollup of the earliest planned activity, recalculated by
+     * the server on every write here. A completed log uses `saveCompletedEdit`
+     * and sends only its written record, which does not move the rollup.
      */
     const saveEdit = async () => {
         if (!editing || !edit.subject.trim()) return;
@@ -283,6 +298,31 @@ export default function CrmActivityPanel({
                 assigned_to: edit.assigned_to,
             });
             setEditing(null);
+            toast.success(m.toast.updated);
+            await load();
+            onChanged?.();
+        } catch {
+            toast.error(m.toast.failed);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    /**
+     * Corrects the written record of a completed log. The request carries only
+     * summary, outcome and notes — never a new status, a new time, or a plan
+     * field — so saving cannot complete the activity again or schedule another.
+     */
+    const saveCompletedEdit = async () => {
+        if (!editingCompleted || !completedEdit.summary.trim()) return;
+        setSaving(true);
+        try {
+            await api.updateCrmActivity(editingCompleted.id, {
+                summary: completedEdit.summary.trim(),
+                outcome: completedEdit.outcome,
+                notes: completedEdit.notes,
+            });
+            setEditingCompleted(null);
             toast.success(m.toast.updated);
             await load();
             onChanged?.();
@@ -415,28 +455,42 @@ export default function CrmActivityPanel({
                                     key={row.id}
                                     className={`rounded-lg border border-gray-100 bg-white p-3 ${row.status === 'CANCELLED' ? 'opacity-60' : ''}`}
                                 >
-                                    <div className="mb-0.5 flex items-center gap-2">
-                                        {row.channel && (
-                                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                                                {row.channel.icon ? `${row.channel.icon} ` : ''}{row.channel.name}
-                                            </span>
-                                        )}
-                                        {row.status === 'CANCELLED' && (
-                                            <span className="text-xs text-gray-400">{m.cancelled}</span>
+                                    <div className="flex items-start gap-3">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="mb-0.5 flex items-center gap-2">
+                                                {row.channel && (
+                                                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                                                        {row.channel.icon ? `${row.channel.icon} ` : ''}{row.channel.name}
+                                                    </span>
+                                                )}
+                                                {row.status === 'CANCELLED' && (
+                                                    <span className="text-xs text-gray-400">{m.cancelled}</span>
+                                                )}
+                                            </div>
+                                            {/* A logged touch has no separate title, so the summary is the
+                                                headline; a completed plan keeps the subject it was scheduled under. */}
+                                            <p className={`text-sm text-gray-800 ${row.status === 'CANCELLED' ? 'line-through' : ''}`}>
+                                                {row.subject ?? row.summary}
+                                            </p>
+                                            {row.subject && row.summary && (
+                                                <p className="mt-0.5 text-xs text-gray-500">{row.summary}</p>
+                                            )}
+                                            {row.outcome && <p className="mt-0.5 text-xs text-gray-500">{row.outcome}</p>}
+                                            {row.notes && <p className="mt-0.5 text-xs text-gray-500">{row.notes}</p>}
+                                            <p className="mt-0.5 text-xs text-gray-400">
+                                                {row.completed_at ? formatDateTime(row.completed_at) : ''}
+                                            </p>
+                                        </div>
+                                        {row.status === 'DONE' && (
+                                            <Button
+                                                size="sm"
+                                                variant="secondary"
+                                                onClick={() => openCompletedEdit(row)}
+                                                aria-label={m.edit}
+                                                icon={<Pencil className="w-3.5 h-3.5" />}
+                                            />
                                         )}
                                     </div>
-                                    {/* A logged touch has no separate title, so the summary is the
-                                        headline; a completed plan keeps the subject it was scheduled under. */}
-                                    <p className={`text-sm text-gray-800 ${row.status === 'CANCELLED' ? 'line-through' : ''}`}>
-                                        {row.subject ?? row.summary}
-                                    </p>
-                                    {row.subject && row.summary && (
-                                        <p className="mt-0.5 text-xs text-gray-500">{row.summary}</p>
-                                    )}
-                                    {row.outcome && <p className="mt-0.5 text-xs text-gray-500">{row.outcome}</p>}
-                                    <p className="mt-0.5 text-xs text-gray-400">
-                                        {row.completed_at ? formatDateTime(row.completed_at) : ''}
-                                    </p>
                                 </div>
                             ))
                         )}
@@ -610,6 +664,56 @@ export default function CrmActivityPanel({
                     <ModalFooter>
                         <Button variant="secondary" onClick={() => setEditing(null)}>{t.common.cancel}</Button>
                         <Button onClick={saveEdit} loading={saving} disabled={!edit.subject.trim()}>
+                            {m.fields.save}
+                        </Button>
+                    </ModalFooter>
+                </ModalShell>
+            )}
+
+            {editingCompleted && (
+                <ModalShell onBackdropClick={() => setEditingCompleted(null)}>
+                    <ModalHeader title={m.editCompletedTitle} onClose={() => setEditingCompleted(null)} />
+                    <div className="space-y-3 p-4">
+                        <p className="text-sm font-medium text-gray-700">
+                            {editingCompleted.subject ?? editingCompleted.summary}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                            {m.fields.completedAt}
+                            {editingCompleted.completed_at ? `: ${formatDateTime(editingCompleted.completed_at)}` : ''}
+                        </p>
+                        <Field label={m.fields.summary} required htmlFor={completedSummaryId}>
+                            <Textarea
+                                id={completedSummaryId}
+                                rows={3}
+                                value={completedEdit.summary}
+                                onChange={(e) => setCompletedEdit({ ...completedEdit, summary: e.target.value })}
+                                placeholder={m.fields.summaryPlaceholder}
+                            />
+                        </Field>
+                        <Field label={m.fields.outcome} htmlFor={completedOutcomeId}>
+                            <Input
+                                id={completedOutcomeId}
+                                value={completedEdit.outcome}
+                                onChange={(e) => setCompletedEdit({ ...completedEdit, outcome: e.target.value })}
+                            />
+                        </Field>
+                        <Field label={m.fields.notes} htmlFor={completedNotesId}>
+                            <Textarea
+                                id={completedNotesId}
+                                rows={2}
+                                value={completedEdit.notes}
+                                onChange={(e) => setCompletedEdit({ ...completedEdit, notes: e.target.value })}
+                            />
+                        </Field>
+                        <p className="text-xs text-gray-400">{m.editCompletedHint}</p>
+                    </div>
+                    <ModalFooter>
+                        <Button variant="secondary" onClick={() => setEditingCompleted(null)}>{t.common.cancel}</Button>
+                        <Button
+                            onClick={saveCompletedEdit}
+                            loading={saving}
+                            disabled={!completedEdit.summary.trim()}
+                        >
                             {m.fields.save}
                         </Button>
                     </ModalFooter>

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service';
 import { Cron } from '@nestjs/schedule';
 import { DatabaseService } from '../database/database.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
@@ -39,6 +40,13 @@ import {
  */
 function leadIdOf(target: { lead_id?: string } | { customer_id?: string }): string | null {
     return 'lead_id' in target ? (target.lead_id ?? null) : null;
+}
+
+/** Empty and whitespace-only text are the same as no text. */
+function blankToNull(value: string | null | undefined): string | null {
+    if (value == null) return null;
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
 }
 
 export const ACTIVITY_INCLUDES = {
@@ -198,6 +206,7 @@ export class CrmActivitiesService {
         private readonly notifications: NotificationsService,
         private readonly jobTracker: JobTrackerService,
         private readonly timezones: TenantTimezoneService,
+        private readonly audit: AuditService,
     ) {}
 
     /**
@@ -524,9 +533,18 @@ export class CrmActivitiesService {
         });
     }
 
-    async update(tenantId: string, id: string, dto: UpdateCrmActivityDto, timezone: string) {
+    async update(
+        tenantId: string,
+        id: string,
+        dto: UpdateCrmActivityDto,
+        timezone: string,
+        actorUserId?: string,
+    ) {
         const existing = await this.db.crmActivity.findFirst({ where: { id, tenant_id: tenantId } });
         if (!existing) throw new NotFoundException('Activity not found');
+        if (existing.status === 'DONE') {
+            return this.updateCompletedDetails(tenantId, existing, dto, actorUserId);
+        }
         if (existing.status !== 'PLANNED') {
             throw new BadRequestException('Only a planned activity can be edited.');
         }
@@ -552,6 +570,95 @@ export class CrmActivitiesService {
         // contact — nobody has spoken to anyone by editing a plan.
         await touchLeadActivity(this.db, existing.lead_id);
         await this.recalculateRollup(this.db, tenantId, target);
+        return updated;
+    }
+
+    /**
+     * Correct the written record of a call that already happened.
+     *
+     * A DONE row is history. The plan fields (subject, due date, purpose,
+     * assignee) stay as they were, and so do the facts that make it history:
+     * status, when it happened, who approved it, and which lead or customer it
+     * belongs to. Nothing here completes the activity again, schedules a next
+     * one, notifies anyone, or moves last-contacted / next-step rollups — those
+     * would make a note correction look like a new touch.
+     *
+     * The edit itself is an audit row with the previous and next text, so the
+     * original wording is still recoverable after the column changes.
+     */
+    private async updateCompletedDetails(
+        tenantId: string,
+        existing: {
+            id: string;
+            summary: string | null;
+            notes: string | null;
+            outcome: string | null;
+        },
+        dto: UpdateCrmActivityDto,
+        actorUserId?: string,
+    ) {
+        const structural = (['subject', 'due_at', 'purpose', 'assigned_to'] as const).filter(
+            (key) => dto[key] !== undefined,
+        );
+        if (structural.length > 0) {
+            throw new BadRequestException(
+                'Only the notes, summary, and outcome of a completed activity can be edited.',
+            );
+        }
+
+        const data: { summary?: string; notes?: string | null; outcome?: string | null } = {};
+        const changes: Record<string, { from: string | null; to: string | null }> = {};
+
+        if (dto.summary !== undefined) {
+            const next = blankToNull(dto.summary);
+            if (!next) {
+                throw new BadRequestException('A completed activity needs a summary of what happened.');
+            }
+            const previous = blankToNull(existing.summary);
+            if (next !== previous) {
+                data.summary = next;
+                changes.summary = { from: previous, to: next };
+            }
+        }
+        if (dto.notes !== undefined) {
+            const next = blankToNull(dto.notes);
+            const previous = blankToNull(existing.notes);
+            if (next !== previous) {
+                data.notes = next;
+                changes.notes = { from: previous, to: next };
+            }
+        }
+        if (dto.outcome !== undefined) {
+            const next = blankToNull(dto.outcome);
+            const previous = blankToNull(existing.outcome);
+            if (next !== previous) {
+                data.outcome = next;
+                changes.outcome = { from: previous, to: next };
+            }
+        }
+
+        if (Object.keys(data).length === 0) {
+            return this.findOne(tenantId, existing.id);
+        }
+
+        // `status: DONE` in the where, not in the data: a row that was completed
+        // again or cancelled between the read and the write is left alone, and
+        // the status column itself is never part of this update. `tenant_id`
+        // repeats the read's scope so a stale id cannot land in another business.
+        const written = await this.db.crmActivity.updateMany({
+            where: { id: existing.id, tenant_id: tenantId, status: 'DONE' },
+            data,
+        });
+        if (written.count !== 1) throw new NotFoundException('Activity not found');
+
+        const updated = await this.findOne(tenantId, existing.id);
+        await this.audit.log(
+            'crm.activity_details_updated',
+            'CrmActivity',
+            { userId: actorUserId, tenantId },
+            existing.id,
+            { status: 'DONE', changes },
+        );
         return updated;
     }
 

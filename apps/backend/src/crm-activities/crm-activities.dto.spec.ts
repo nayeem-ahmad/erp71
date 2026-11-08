@@ -63,6 +63,27 @@ describe('UpdateCrmActivityDto', () => {
         const result: any = await pipe.transform({ subject: 'Chase it' }, metadata);
         expect(result).not.toHaveProperty('assigned_to');
     });
+
+    it('accepts the written record of a completed activity', async () => {
+        const result: any = await pipe.transform(
+            { summary: '  Spoke to Karim  ', outcome: '  ', notes: '  Pays Thursday  ' },
+            metadata,
+        );
+        expect(result.summary).toBe('Spoke to Karim');
+        expect(result.outcome).toBe('');
+        expect(result.notes).toBe('Pays Thursday');
+    });
+
+    it('rejects a blank summary, which would erase what happened', async () => {
+        await expect(pipe.transform({ summary: '   ' }, metadata)).rejects.toThrow();
+    });
+
+    it('rejects fields that would move the completion, the approval, or the clock', async () => {
+        await expect(pipe.transform({ notes: 'x', status: 'PLANNED' }, metadata)).rejects.toThrow();
+        await expect(pipe.transform({ notes: 'x', completed_at: '2026-01-01T00:00:00Z' }, metadata)).rejects.toThrow();
+        await expect(pipe.transform({ notes: 'x', is_approved: false }, metadata)).rejects.toThrow();
+        await expect(pipe.transform({ notes: 'x', approved_at: '2026-01-01T00:00:00Z' }, metadata)).rejects.toThrow();
+    });
 });
 
 /**
