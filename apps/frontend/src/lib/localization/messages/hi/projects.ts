@@ -214,6 +214,20 @@ export const projectsMessages = {
         openInProject: "इसकी परियोजना में खोलें",
         anyEpic: "कोई भी एपिक",
         noEpic: "कोई एपिक नहीं",
+        view: "दृश्य",
+        viewList: "सूची",
+        viewHierarchy: "पदानुक्रम",
+        listUi: {
+            statsLabel: "स्टोरी सारांश",
+            stats: {
+                stories: "स्टोरी",
+                backlog: "बैकलॉग",
+                ready: "तैयार",
+                inProgress: "प्रगति पर",
+                done: "पूर्ण",
+                points: "पॉइंट",
+            },
+        },
     },
 
     /**
@@ -332,6 +346,19 @@ export const projectsMessages = {
         progress: "प्रगति",
         stories: "स्टोरी",
         openInProject: "इसके प्रोजेक्ट में खोलें",
+        view: "दृश्य",
+        viewList: "सूची",
+        viewHierarchy: "पदानुक्रम",
+        listUi: {
+            statsLabel: "एपिक सारांश",
+            stats: {
+                epics: "एपिक",
+                open: "खुले",
+                inProgress: "प्रगति पर",
+                done: "पूर्ण",
+                stories: "स्टोरी",
+            },
+        },
     },
 
     task: {

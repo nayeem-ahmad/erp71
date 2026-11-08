@@ -214,6 +214,21 @@ export const projectsMessages = {
         openInProject: 'Open in its project',
         anyEpic: "Any epic",
         noEpic: "No epic",
+        /** List vs the backlog tree — remembered per browser, like hour logs. */
+        view: 'View',
+        viewList: 'List',
+        viewHierarchy: 'Hierarchy',
+        listUi: {
+            statsLabel: 'Stories summary',
+            stats: {
+                stories: 'Stories',
+                backlog: 'Backlog',
+                ready: 'Ready',
+                inProgress: 'In progress',
+                done: 'Done',
+                points: 'Points',
+            },
+        },
     },
 
     /**
@@ -332,6 +347,20 @@ export const projectsMessages = {
         progress: "Progress",
         stories: "Stories",
         openInProject: "Open in its project",
+        /** List vs the backlog tree — remembered per browser, like hour logs. */
+        view: "View",
+        viewList: "List",
+        viewHierarchy: "Hierarchy",
+        listUi: {
+            statsLabel: "Epics summary",
+            stats: {
+                epics: "Epics",
+                open: "Open",
+                inProgress: "In progress",
+                done: "Done",
+                stories: "Stories",
+            },
+        },
     },
 
     task: {

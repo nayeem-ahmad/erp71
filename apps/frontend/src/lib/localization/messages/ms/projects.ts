@@ -214,6 +214,20 @@ export const projectsMessages = {
         openInProject: "Buka dalam projeknya",
         anyEpic: "Mana-mana epik",
         noEpic: "Tiada epik",
+        view: "Paparan",
+        viewList: "Senarai",
+        viewHierarchy: "Hierarki",
+        listUi: {
+            statsLabel: "Ringkasan cerita",
+            stats: {
+                stories: "Cerita",
+                backlog: "Backlog",
+                ready: "Sedia",
+                inProgress: "Dalam proses",
+                done: "Selesai",
+                points: "Mata",
+            },
+        },
     },
 
     /**
@@ -332,6 +346,19 @@ export const projectsMessages = {
         progress: "Kemajuan",
         stories: "Cerita",
         openInProject: "Buka dalam projeknya",
+        view: "Paparan",
+        viewList: "Senarai",
+        viewHierarchy: "Hierarki",
+        listUi: {
+            statsLabel: "Ringkasan epik",
+            stats: {
+                epics: "Epik",
+                open: "Terbuka",
+                inProgress: "Dalam proses",
+                done: "Selesai",
+                stories: "Cerita",
+            },
+        },
     },
 
     task: {

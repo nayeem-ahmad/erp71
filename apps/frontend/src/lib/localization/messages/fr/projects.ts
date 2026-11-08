@@ -214,6 +214,20 @@ export const projectsMessages = {
         openInProject: "Ouvrir dans son projet",
         anyEpic: "Toute épopée",
         noEpic: "Sans épopée",
+        view: "Vue",
+        viewList: "Liste",
+        viewHierarchy: "Hiérarchie",
+        listUi: {
+            statsLabel: "Résumé des stories",
+            stats: {
+                stories: "Stories",
+                backlog: "Backlog",
+                ready: "Prêtes",
+                inProgress: "En cours",
+                done: "Terminées",
+                points: "Points",
+            },
+        },
     },
 
     /**
@@ -332,6 +346,19 @@ export const projectsMessages = {
         progress: "Avancement",
         stories: "Stories",
         openInProject: "Ouvrir dans son projet",
+        view: "Vue",
+        viewList: "Liste",
+        viewHierarchy: "Hiérarchie",
+        listUi: {
+            statsLabel: "Résumé des épopées",
+            stats: {
+                epics: "Épopées",
+                open: "Ouvertes",
+                inProgress: "En cours",
+                done: "Terminées",
+                stories: "Stories",
+            },
+        },
     },
 
     task: {
