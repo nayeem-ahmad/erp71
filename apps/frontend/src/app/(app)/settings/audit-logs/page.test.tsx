@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AuditLogsPage from './page';
 import { ApiError } from '@/lib/api';
+import { setActiveTimeZone } from '@/lib/format';
 
 jest.mock('@/lib/api', () => {
     class ApiError extends Error {
@@ -127,5 +128,85 @@ describe('AuditLogsPage', () => {
             expect(consoleError).toHaveBeenCalled();
         });
         expect(screen.queryByText('Audit logs restricted')).not.toBeInTheDocument();
+    });
+
+    const notes = 'line one\n  indented  \n<img src=x onerror=alert(1)>';
+    const correction = {
+        id: 'audit-1',
+        action: 'crm.activity_details_updated',
+        entity: 'CrmActivity',
+        entity_id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+        created_at: '2026-11-08T13:20:15.000Z',
+        ip_address: '203.0.113.9',
+        payload: {
+            status: 'DONE',
+            changes: {
+                notes: { from: notes, to: '=HYPERLINK("http://evil")' },
+                summary: { from: null, to: '' },
+            },
+        },
+        user: { id: 'u1', email: 'owner@example.com', name: 'Owner' },
+    };
+
+    it('shows the before-and-after text, and not a request-body row, without executing markup', async () => {
+        setActiveTimeZone('Asia/Dhaka');
+        api.getAuditLogs.mockResolvedValue({
+            rows: [
+                correction,
+                {
+                    id: 'audit-2',
+                    action: 'crm.activities.update',
+                    entity: 'crm',
+                    entity_id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+                    created_at: '2026-11-08T13:20:16.000Z',
+                    payload: { notes: '<img src=x onerror=alert(1)>' },
+                    user: { id: 'u1', email: 'owner@example.com', name: 'Owner' },
+                },
+            ],
+            total: 2,
+        });
+
+        render(<AuditLogsPage />);
+
+        await waitFor(() => {
+            expect(screen.getByText('Corrected the text of a completed activity')).toBeInTheDocument();
+        });
+        expect(screen.getByText('Updated crm activities')).toBeInTheDocument();
+        expect(screen.getAllByRole('button', { name: 'Before and after' })).toHaveLength(1);
+        expect(screen.getByText('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee')).toBeInTheDocument();
+        expect(screen.getByText('audit-1')).toBeInTheDocument();
+        expect(screen.getByText(/2026-11-08T13:20:15\.000Z/)).toBeInTheDocument();
+        expect(screen.getByText(/Asia\/Dhaka/)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Before and after' }));
+
+        expect(screen.getByTestId('activity-notes-before').textContent).toBe(notes);
+        expect(screen.getByTestId('activity-notes-after').textContent).toBe('=HYPERLINK("http://evil")');
+        expect(screen.getByTestId('activity-summary-before')).toHaveAttribute('data-kind', 'null');
+        expect(screen.getByTestId('activity-summary-after')).toHaveAttribute('data-kind', 'empty');
+        expect(screen.getByTestId('activity-outcome-missing')).toHaveTextContent('Not in this audit');
+        expect(document.querySelector('img')).toBeNull();
+        expect(api.getAuditLogs).toHaveBeenCalled();
+    });
+
+    it('does not show truncated before-and-after text as the original', async () => {
+        api.getAuditLogs.mockResolvedValue({
+            rows: [{
+                ...correction,
+                payload: {
+                    _truncated: true,
+                    _bytes: 9000,
+                    changes: { notes: { from: 'SECRET ORIGINAL', to: 'x' } },
+                },
+            }],
+            total: 1,
+        });
+
+        render(<AuditLogsPage />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Before and after' }));
+
+        expect(screen.getByRole('alert')).toHaveTextContent(/does not contain the before-and-after text/);
+        expect(screen.queryByText('SECRET ORIGINAL')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('activity-notes-before')).not.toBeInTheDocument();
     });
 });
