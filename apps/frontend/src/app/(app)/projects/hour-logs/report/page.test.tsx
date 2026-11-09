@@ -105,8 +105,9 @@ describe('Hour log report page', () => {
         render(<HourLogReportPage />);
         await waitFor(() => expect(getProjectTimeReport).toHaveBeenCalledTimes(1));
 
-        fireEvent.click(chip(/^Date/));
+        fireEvent.click(chip(/^Date:/));
         fireEvent.change(screen.getByLabelText('From'), { target: { value: '2099-01-01' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
 
         expect(await screen.findByText(/From must be on or before To/i)).toBeInTheDocument();
         expect(getProjectTimeReport).toHaveBeenCalledTimes(1);
