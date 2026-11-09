@@ -13,6 +13,7 @@
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
+    "test:catalog-harvest": "tsx --test scripts/catalog-harvest/*.spec.ts",
     "prepare": "bash scripts/setup-git-hooks.sh"
   },
   "devDependencies": {

@@ -64,6 +64,9 @@ next-env.d.ts
 # Extra docker networks to attach after every Caddy recreate (written at cutover)
 /caddy-extra-networks
 
+# Catalog harvest JSONL sidecars (never commit — live scrape output)
+scripts/catalog-harvest/raw/
+
 # Local DB dumps (never commit — contains live customer data)
 /backups/
 *.dump
