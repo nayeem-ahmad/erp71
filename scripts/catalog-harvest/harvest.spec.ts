@@ -114,6 +114,21 @@ const SPEC_ROOTS = [
   '/desktops',
   '/monitor',
   '/networking',
+  '/ssd',
+  '/component/hard-disk-drive',
+  '/accessories/keyboards',
+  '/accessories/mouse',
+  '/accessories/headphone',
+  '/accessories/speaker-and-home-theater',
+  '/accessories/webcam',
+  '/printer',
+  '/office-equipment/scanner',
+  '/ups',
+  '/hdmi-cable',
+  '/usb-cable',
+  '/hub-and-dock',
+  '/pen-drive',
+  '/memory-card',
 ];
 
 function hrefOf(input: RequestInfo | URL): string {
@@ -195,9 +210,18 @@ describe('harvest constants', () => {
     assert.equal(MIN_DELAY_MS, 1000);
     assert.equal(BASE_URL, 'https://www.startech.com.bd');
     assert.equal(CATEGORY_ALIASES.processor, '/component/processor');
+    assert.equal(CATEGORY_ALIASES.ssd, '/ssd');
+    assert.equal(CATEGORY_ALIASES.hdd, '/component/hard-disk-drive');
+    assert.equal(CATEGORY_ALIASES.keyboard, '/accessories/keyboards');
+    assert.equal(CATEGORY_ALIASES.ups, '/ups');
+    assert.equal(CATEGORY_ALIASES['pen-drive'], '/pen-drive');
     for (const root of SPEC_ROOTS) {
       assert.ok(ALLOWLIST_ROOTS.includes(root), root);
       assert.ok(Object.values(CATEGORY_ALIASES).includes(root), root);
+    }
+    const banned = ['/air-conditioner', '/refrigerator', '/television', '/portable-power-station'];
+    for (const root of banned) {
+      assert.equal(ALLOWLIST_ROOTS.includes(root), false, root);
     }
   });
 });
