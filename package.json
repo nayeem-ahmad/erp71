@@ -16,7 +16,9 @@
     "prepare": "bash scripts/setup-git-hooks.sh"
   },
   "devDependencies": {
+    "node-html-parser": "^9.0.7",
     "playwright": "^1.60.0",
-    "prisma": "^5.22.0"
+    "prisma": "^5.22.0",
+    "tsx": "^4.23.15"
   }
 }
