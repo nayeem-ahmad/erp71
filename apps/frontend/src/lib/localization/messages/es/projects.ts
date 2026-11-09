@@ -13,6 +13,16 @@ export const projectsMessages = {
     deleteFailed: "No se pudo eliminar el proyecto",
     deleteProject: "Eliminar proyecto",
     deletePrompt: "¿Eliminar {name}?\n\nSus tareas y las horas ya imputadas se conservan; solo el proyecto desaparece de sus listas.",
+    listUi: {
+        statsLabel: 'Projects summary',
+        stats: {
+            projects: 'Projects',
+            active: 'Active',
+            onHold: 'On hold',
+            completed: 'Completed',
+        },
+    },
+
 
     fields: {
         code: "Código",
@@ -97,6 +107,16 @@ export const projectsMessages = {
         bulkApply: "{count, plural, one {Aplicar a # tarea} other {Aplicar a # tareas}}",
         updatedCount: "{count, plural, one {# tarea actualizada} other {# tareas actualizadas}}",
         updateFailedCount: "{count, plural, one {No se pudo actualizar # tarea} other {No se pudieron actualizar # tareas}}: {reason}",
+        listUi: {
+            statsLabel: 'Tasks summary',
+            stats: {
+                tasks: 'Tasks',
+                todo: 'To do',
+                inProgress: 'In progress',
+                done: 'Done',
+            },
+        },
+
     },
 
     tabs: {
@@ -736,6 +756,16 @@ export const projectsMessages = {
         view: 'Vista',
         viewDay: 'Vista por día',
         viewList: 'Vista de lista',
+        listUi: {
+            statsLabel: 'Hour logs summary',
+            stats: {
+                hours: 'Hours',
+                entries: 'Entries',
+                days: 'Days',
+                people: 'People',
+            },
+        },
+
     },
 
     hourLogReport: {
@@ -765,6 +795,19 @@ export const projectsMessages = {
         loadFailed: "No se pudo cargar el informe.",
         rangeHint: "Los totales cubren el trabajo fechado dentro del rango, con independencia de cuándo se registrara.",
         multiTagged: "{count} entradas llevan más de una etiqueta, por lo que los porcentajes suman más del 100%.",
+        listUi: {
+            statsLabel: 'Hour log report summary',
+            stats: {
+                hours: 'Total hours',
+                avgPerDay: 'Average per day',
+                entries: 'Entries',
+                days: 'Days',
+                people: 'People',
+                tasks: 'Tasks',
+                projects: 'Projects',
+            },
+        },
+
     },
 
     board: {
@@ -971,6 +1014,17 @@ export const projectsMessages = {
         outcomeReturned: "Devuelta al backlog",
         outcomeRemoved: "Sacada del sprint",
         carriedBadge: "→ {name}",
+        listUi: {
+            statsLabel: 'Sprints summary',
+            stats: {
+                sprints: 'Sprints',
+                planned: 'Planned',
+                active: 'Active',
+                completed: 'Completed',
+                tasks: 'Tasks',
+            },
+        },
+
     },
 
     burndown: {
@@ -1131,6 +1185,16 @@ export const projectsMessages = {
         allBoards: "Todos los tableros",
         withCards: "Con tarjetas",
         emptyOnly: "Tableros vacíos",
+        listUi: {
+            statsLabel: 'Boards summary',
+            stats: {
+                boards: 'Boards',
+                withCards: 'With cards',
+                empty: 'Empty',
+                cards: 'Cards',
+            },
+        },
+
 
         background: {
             title: "Fondo",

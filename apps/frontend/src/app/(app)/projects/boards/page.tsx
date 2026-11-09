@@ -2,18 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Trash2 } from 'lucide-react';
+import { LayoutGrid, Plus, Trash2 } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
     Button,
     Input,
-    Select,
     Textarea,
     Field,
     ConfirmDialog,
 } from '@/components/ui';
-import DataTable from '@/components/data-table/DataTable';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -36,9 +36,12 @@ interface BoardSummary {
 /** `''` is every board; the other two split on whether the board holds cards. */
 type CardsFilter = '' | 'with' | 'empty';
 
+const TABLE_ID = 'project-boards';
+
 export default function BoardsPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const m = t.projects.boards;
+    const listUi = m.listUi;
 
     const [boards, setBoards] = useState<BoardSummary[]>([]);
     const [loading, setLoading] = useState(true);
@@ -134,6 +137,54 @@ export default function BoardsPage() {
         }
     };
 
+    const listFilters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'cards',
+                type: 'select',
+                label: m.cards,
+                value: cardsFilter || null,
+                onChange: (next) => setFilter('cardsFilter', (next ?? '') as CardsFilter),
+                options: [
+                    { value: 'with', label: m.withCards },
+                    { value: 'empty', label: m.emptyOnly },
+                ],
+            },
+        ],
+        [m, cardsFilter, setFilter],
+    );
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const items: ListStat[] = [
+            {
+                id: 'count',
+                icon: <LayoutGrid aria-hidden />,
+                label: listUi.stats.boards,
+                value: n(filtered.length),
+            },
+            {
+                id: 'withCards',
+                icon: <LayoutGrid aria-hidden />,
+                label: listUi.stats.withCards,
+                value: n(filtered.filter((board) => board.card_count > 0).length),
+            },
+            {
+                id: 'empty',
+                icon: <LayoutGrid aria-hidden />,
+                label: listUi.stats.empty,
+                value: n(filtered.filter((board) => board.card_count === 0).length),
+            },
+            {
+                id: 'cards',
+                icon: <LayoutGrid aria-hidden />,
+                label: listUi.stats.cards,
+                value: n(filtered.reduce((sum, board) => sum + board.card_count, 0)),
+            },
+        ];
+        return { items, loading: loading || !filtersReady, label: listUi.statsLabel };
+    }, [filtered, loading, filtersReady, locale, listUi]);
+
     const columns = useMemo(
         () => [
             {
@@ -167,28 +218,33 @@ export default function BoardsPage() {
                 id: 'card_count',
                 header: m.cards,
                 accessorKey: 'card_count',
-                cell: ({ row }: { row: { original: BoardSummary } }) => row.original.card_count,
+                meta: { align: 'end' as const },
+                cell: ({ row }: { row: { original: BoardSummary } }) => (
+                    <span className="tabular-nums">{row.original.card_count}</span>
+                ),
             },
             {
                 id: 'actions',
                 header: t.projects.fields.actions,
+                enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
                 cell: ({ row }: { row: { original: BoardSummary } }) => (
-                    <div className="flex items-center justify-end">
-                        <button
-                            type="button"
-                            aria-label={t.common.delete}
-                            title={m.deleteBoard}
+                    <RowActions>
+                        <RowActionButton
+                            icon={<Trash2 />}
+                            label={m.deleteBoard}
+                            intent="danger"
                             onClick={() => setPendingDelete(row.original)}
-                            className="min-h-touch min-w-touch rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-50"
-                        >
-                            <Trash2 className="mx-auto h-4 w-4" />
-                        </button>
-                    </div>
+                        />
+                    </RowActions>
                 ),
             },
         ],
-        [m, t.common.delete, t.projects.fields.actions],
+        [m, t.projects.fields.actions],
     );
+
+    const anyFilter = Boolean(search.trim() || cardsFilter);
 
     return (
         <PageShell>
@@ -209,37 +265,27 @@ export default function BoardsPage() {
                 }
             />
 
-            <div className="flex flex-col gap-2 md:flex-row md:items-center">
-                <Input
-                    value={search}
-                    onChange={(event) => setFilter('search', event.target.value)}
-                    placeholder={m.searchPlaceholder}
-                    className="md:max-w-xs"
-                />
-                <Select
-                    value={cardsFilter}
-                    onChange={(event) => setFilter('cardsFilter', event.target.value as CardsFilter)}
-                    className="md:w-44"
-                >
-                    <option value="">{m.allBoards}</option>
-                    <option value="with">{m.withCards}</option>
-                    <option value="empty">{m.emptyOnly}</option>
-                </Select>
-            </div>
-
             {/* The table stays on screen with nothing in it: an empty workspace still
                 shows the columns, the filters and the toolbar rather than one line of grey text. */}
             <DataTable
                 title={m.title}
-                tableId="project-boards"
+                tableId={TABLE_ID}
                 columns={columns as never}
                 data={filtered}
                 // Filtering happens here rather than on the server, so the rows are
                 // held in the loading state until the remembered filters are in —
                 // otherwise the unfiltered list paints first.
                 isLoading={loading || !filtersReady}
-                showSearch={false}
-                emptyMessage={search.trim() || cardsFilter ? m.emptyFiltered : m.empty}
+                emptyMessage={anyFilter ? m.emptyFiltered : m.empty}
+                emptyIcon={<LayoutGrid className="h-16 w-16 text-gray-200" />}
+                searchPlaceholder={m.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={(value) => setFilter('search', value)}
+                filters={listFilters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
             />
 
             {creating ? (

@@ -13,6 +13,16 @@ export const projectsMessages = {
     deleteFailed: "প্রকল্প মুছে ফেলা যায়নি",
     deleteProject: "প্রকল্প মুছুন",
     deletePrompt: "{name} মুছবেন?\n\nএর কাজ ও লগ করা ঘণ্টা রেখে দেওয়া হবে — শুধু প্রকল্পটি তালিকা থেকে সরানো হবে।",
+    listUi: {
+        statsLabel: 'Projects summary',
+        stats: {
+            projects: 'Projects',
+            active: 'Active',
+            onHold: 'On hold',
+            completed: 'Completed',
+        },
+    },
+
 
     fields: {
         code: 'কোড',
@@ -97,6 +107,16 @@ export const projectsMessages = {
         bulkApply: "{count, plural, one {# টি কাজে প্রয়োগ করুন} other {# টি কাজে প্রয়োগ করুন}}",
         updatedCount: "{count, plural, one {# টি কাজ হালনাগাদ হয়েছে} other {# টি কাজ হালনাগাদ হয়েছে}}",
         updateFailedCount: "{count, plural, one {# টি কাজ হালনাগাদ করা যায়নি} other {# টি কাজ হালনাগাদ করা যায়নি}}: {reason}",
+        listUi: {
+            statsLabel: 'Tasks summary',
+            stats: {
+                tasks: 'Tasks',
+                todo: 'To do',
+                inProgress: 'In progress',
+                done: 'Done',
+            },
+        },
+
     },
 
     tabs: {
@@ -736,6 +756,16 @@ export const projectsMessages = {
         view: 'ভিউ',
         viewDay: 'দিনভিত্তিক ভিউ',
         viewList: 'তালিকা ভিউ',
+        listUi: {
+            statsLabel: 'Hour logs summary',
+            stats: {
+                hours: 'Hours',
+                entries: 'Entries',
+                days: 'Days',
+                people: 'People',
+            },
+        },
+
     },
 
     hourLogReport: {
@@ -765,6 +795,19 @@ export const projectsMessages = {
         loadFailed: 'রিপোর্ট লোড করা যায়নি।',
         rangeHint: 'যেকোনো সময়ে এন্ট্রি হলেও, সময়সীমার ভেতরে তারিখ পড়া কাজই মোটে ধরা হয়।',
         multiTagged: '{count}টি এন্ট্রিতে একাধিক ট্যাগ আছে, তাই অংশগুলোর যোগফল ১০০%-এর বেশি হয়।',
+        listUi: {
+            statsLabel: 'Hour log report summary',
+            stats: {
+                hours: 'Total hours',
+                avgPerDay: 'Average per day',
+                entries: 'Entries',
+                days: 'Days',
+                people: 'People',
+                tasks: 'Tasks',
+                projects: 'Projects',
+            },
+        },
+
     },
 
     board: {
@@ -971,6 +1014,17 @@ export const projectsMessages = {
         outcomeReturned: "ব্যাকলগে ফেরত গেছে",
         outcomeRemoved: "স্প্রিন্ট থেকে সরানো হয়েছে",
         carriedBadge: "→ {name}",
+        listUi: {
+            statsLabel: 'Sprints summary',
+            stats: {
+                sprints: 'Sprints',
+                planned: 'Planned',
+                active: 'Active',
+                completed: 'Completed',
+                tasks: 'Tasks',
+            },
+        },
+
     },
 
     burndown: {
@@ -1131,6 +1185,16 @@ export const projectsMessages = {
         allBoards: 'সব বোর্ড',
         withCards: 'কার্ড আছে এমন',
         emptyOnly: 'খালি বোর্ড',
+        listUi: {
+            statsLabel: 'Boards summary',
+            stats: {
+                boards: 'Boards',
+                withCards: 'With cards',
+                empty: 'Empty',
+                cards: 'Cards',
+            },
+        },
+
 
         background: {
             title: 'ব্যাকগ্রাউন্ড',

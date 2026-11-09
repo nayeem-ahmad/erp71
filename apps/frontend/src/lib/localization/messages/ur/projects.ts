@@ -13,6 +13,16 @@ export const projectsMessages = {
     deleteFailed: "پروجیکٹ حذف نہیں ہو سکا",
     deleteProject: "پروجیکٹ حذف کریں",
     deletePrompt: "{name} حذف کریں؟\n\nاس کے ٹاسک اور اُن پر درج گھنٹے محفوظ رہیں گے — صرف پروجیکٹ آپ کی فہرستوں سے ہٹے گا۔",
+    listUi: {
+        statsLabel: 'Projects summary',
+        stats: {
+            projects: 'Projects',
+            active: 'Active',
+            onHold: 'On hold',
+            completed: 'Completed',
+        },
+    },
+
 
     fields: {
         code: "کوڈ",
@@ -97,6 +107,16 @@ export const projectsMessages = {
         bulkApply: "{count, plural, one {# ٹاسک پر لاگو کریں} other {# ٹاسک پر لاگو کریں}}",
         updatedCount: "{count, plural, one {# ٹاسک اپ ڈیٹ ہو گیا} other {# ٹاسک اپ ڈیٹ ہو گئے}}",
         updateFailedCount: "{count, plural, one {# ٹاسک اپ ڈیٹ نہیں ہو سکا} other {# ٹاسک اپ ڈیٹ نہیں ہو سکے}}: {reason}",
+        listUi: {
+            statsLabel: 'Tasks summary',
+            stats: {
+                tasks: 'Tasks',
+                todo: 'To do',
+                inProgress: 'In progress',
+                done: 'Done',
+            },
+        },
+
     },
 
     tabs: {
@@ -736,6 +756,16 @@ export const projectsMessages = {
         view: 'منظر',
         viewDay: 'روزانہ منظر',
         viewList: 'فہرست منظر',
+        listUi: {
+            statsLabel: 'Hour logs summary',
+            stats: {
+                hours: 'Hours',
+                entries: 'Entries',
+                days: 'Days',
+                people: 'People',
+            },
+        },
+
     },
 
     hourLogReport: {
@@ -765,6 +795,19 @@ export const projectsMessages = {
         loadFailed: "رپورٹ لوڈ نہیں ہو سکی۔",
         rangeHint: "میزان اُس کام کا ہے جس کی تاریخ اس مدت میں آتی ہے، چاہے وہ کبھی بھی درج ہوا ہو۔",
         multiTagged: "{count} اندراجات پر ایک سے زیادہ ٹیگ ہیں، اس لیے حصص مل کر 100% سے زیادہ بنتے ہیں۔",
+        listUi: {
+            statsLabel: 'Hour log report summary',
+            stats: {
+                hours: 'Total hours',
+                avgPerDay: 'Average per day',
+                entries: 'Entries',
+                days: 'Days',
+                people: 'People',
+                tasks: 'Tasks',
+                projects: 'Projects',
+            },
+        },
+
     },
 
     board: {
@@ -971,6 +1014,17 @@ export const projectsMessages = {
         outcomeReturned: "بیک لاگ میں واپس",
         outcomeRemoved: "اسپرنٹ سے نکالا گیا",
         carriedBadge: "← {name}",
+        listUi: {
+            statsLabel: 'Sprints summary',
+            stats: {
+                sprints: 'Sprints',
+                planned: 'Planned',
+                active: 'Active',
+                completed: 'Completed',
+                tasks: 'Tasks',
+            },
+        },
+
     },
 
     burndown: {
@@ -1131,6 +1185,16 @@ export const projectsMessages = {
         allBoards: "تمام بورڈز",
         withCards: "کارڈ والے",
         emptyOnly: "خالی بورڈز",
+        listUi: {
+            statsLabel: 'Boards summary',
+            stats: {
+                boards: 'Boards',
+                withCards: 'With cards',
+                empty: 'Empty',
+                cards: 'Cards',
+            },
+        },
+
 
         background: {
             title: "پس منظر",

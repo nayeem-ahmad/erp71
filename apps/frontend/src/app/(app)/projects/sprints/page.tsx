@@ -2,18 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Trash2 } from 'lucide-react';
+import { CheckCircle2, CircleDashed, Plus, Timer, Trash2 } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
     Button,
     Input,
-    Select,
     Field,
     StatusBadge,
     ConfirmDialog,
 } from '@/components/ui';
-import DataTable from '@/components/data-table/DataTable';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import CompleteSprintModal from '@/components/projects/CompleteSprintModal';
 import { api } from '@/lib/api';
@@ -44,9 +44,12 @@ const TONE: Record<string, 'neutral' | 'info' | 'success'> = {
     COMPLETED: 'success',
 };
 
+const TABLE_ID = 'project-sprints';
+
 export default function SprintsPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const m = t.projects;
+    const listUi = m.sprint.listUi;
 
     const [sprints, setSprints] = useState<Sprint[]>([]);
     const [loading, setLoading] = useState(true);
@@ -152,6 +155,72 @@ export default function SprintsPage() {
         setPendingDelete(null);
     };
 
+    const listFilters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'status',
+                type: 'select',
+                label: m.fields.status,
+                value: status || null,
+                onChange: (next) => setFilter('status', next ?? ''),
+                options: [
+                    { value: 'PLANNED', label: m.sprint.planned },
+                    { value: 'ACTIVE', label: m.sprint.active },
+                    { value: 'COMPLETED', label: m.sprint.completed },
+                ],
+            },
+            {
+                id: 'project',
+                type: 'select',
+                label: m.fields.project,
+                value: projectId || null,
+                onChange: (next) => setFilter('projectId', next ?? ''),
+                options: projects.map((project) => ({
+                    value: project.id,
+                    label: `${project.code} · ${project.name}`,
+                })),
+            },
+        ],
+        [m, status, projectId, projects, setFilter],
+    );
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const items: ListStat[] = [
+            {
+                id: 'count',
+                icon: <Timer aria-hidden />,
+                label: listUi.stats.sprints,
+                value: n(filtered.length),
+            },
+            {
+                id: 'planned',
+                icon: <CircleDashed aria-hidden />,
+                label: listUi.stats.planned,
+                value: n(filtered.filter((sprint) => sprint.status === 'PLANNED').length),
+            },
+            {
+                id: 'active',
+                icon: <Timer aria-hidden />,
+                label: listUi.stats.active,
+                value: n(filtered.filter((sprint) => sprint.status === 'ACTIVE').length),
+            },
+            {
+                id: 'completed',
+                icon: <CheckCircle2 aria-hidden />,
+                label: listUi.stats.completed,
+                value: n(filtered.filter((sprint) => sprint.status === 'COMPLETED').length),
+            },
+            {
+                id: 'tasks',
+                icon: <Timer aria-hidden />,
+                label: listUi.stats.tasks,
+                value: n(filtered.reduce((sum, sprint) => sum + (sprint._count?.tasks ?? 0), 0)),
+            },
+        ];
+        return { items, loading: loading || !filtersReady, label: listUi.statsLabel };
+    }, [filtered, loading, filtersReady, locale, listUi]);
+
     const columns = useMemo(
         () => [
             {
@@ -207,19 +276,26 @@ export default function SprintsPage() {
                 id: 'tasks',
                 header: m.fields.tasks,
                 accessorFn: (row: Sprint) => row._count?.tasks ?? 0,
-                meta: { hideOnMobile: true },
-                cell: ({ row }: { row: { original: Sprint } }) => row.original._count?.tasks ?? 0,
+                meta: { hideOnMobile: true, align: 'end' as const },
+                cell: ({ row }: { row: { original: Sprint } }) => (
+                    <span className="tabular-nums">{row.original._count?.tasks ?? 0}</span>
+                ),
             },
             {
                 id: 'remaining',
                 header: m.overview.remaining,
                 accessorFn: (row: Sprint) => row.remaining_hours,
-                meta: { hideOnMobile: true },
-                cell: ({ row }: { row: { original: Sprint } }) => `${row.original.remaining_hours}h`,
+                meta: { hideOnMobile: true, align: 'end' as const },
+                cell: ({ row }: { row: { original: Sprint } }) => (
+                    <span className="tabular-nums">{row.original.remaining_hours}h</span>
+                ),
             },
             {
                 id: 'actions',
                 header: m.fields.actions,
+                enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
                 cell: ({ row }: { row: { original: Sprint } }) => (
                     <div className="flex flex-wrap items-center justify-end gap-2">
                         {row.original.status === 'PLANNED' && (
@@ -240,22 +316,23 @@ export default function SprintsPage() {
                                 {m.sprint.complete}
                             </Button>
                         )}
-                        <button
-                            type="button"
-                            aria-label={t.common.delete}
-                            title={m.sprint.deleteSprint}
-                            onClick={() => setPendingDelete(row.original)}
-                            className="min-h-touch min-w-touch rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-50"
-                        >
-                            <Trash2 className="mx-auto h-4 w-4" />
-                        </button>
+                        <RowActions>
+                            <RowActionButton
+                                icon={<Trash2 />}
+                                label={m.sprint.deleteSprint}
+                                intent="danger"
+                                onClick={() => setPendingDelete(row.original)}
+                            />
+                        </RowActions>
                     </div>
                 ),
             },
         ],
         // `act` closes over `load`, which changes with the project filter.
-        [m, t.common.delete, act],
+        [m, act],
     );
+
+    const anyFilter = Boolean(search.trim() || status || projectId);
 
     return (
         <PageShell>
@@ -276,43 +353,24 @@ export default function SprintsPage() {
                 }
             />
 
-            <div className="flex flex-col gap-2 md:flex-row md:items-center">
-                <Input
-                    value={search}
-                    onChange={(e) => setFilter('search', e.target.value)}
-                    placeholder={m.sprint.searchPlaceholder}
-                    className="md:max-w-xs"
-                />
-                <Select value={status} onChange={(e) => setFilter('status', e.target.value)} className="md:w-44">
-                    <option value="">{m.sprint.anyStatus}</option>
-                    <option value="PLANNED">{m.sprint.planned}</option>
-                    <option value="ACTIVE">{m.sprint.active}</option>
-                    <option value="COMPLETED">{m.sprint.completed}</option>
-                </Select>
-                <Select
-                    value={projectId}
-                    onChange={(e) => setFilter('projectId', e.target.value)}
-                    className="md:w-52"
-                >
-                    <option value="">{m.sprint.allProjects}</option>
-                    {projects.map((project) => (
-                        <option key={project.id} value={project.id}>
-                            {project.code} · {project.name}
-                        </option>
-                    ))}
-                </Select>
-            </div>
-
             {/* Empty stays a table: the columns, filters and toolbar are what tell a
                 first-time viewer what a sprint list holds. */}
             <DataTable
                 title={m.sprint.sprints}
-                tableId="project-sprints"
+                tableId={TABLE_ID}
                 columns={columns as never}
                 data={filtered}
-                isLoading={loading}
-                showSearch={false}
-                emptyMessage={search.trim() || status || projectId ? m.sprint.emptyFiltered : m.sprint.empty}
+                isLoading={loading || !filtersReady}
+                emptyMessage={anyFilter ? m.sprint.emptyFiltered : m.sprint.empty}
+                emptyIcon={<Timer className="h-16 w-16 text-gray-200" />}
+                searchPlaceholder={m.sprint.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={(value) => setFilter('search', value)}
+                filters={listFilters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
             />
 
             {creating && (

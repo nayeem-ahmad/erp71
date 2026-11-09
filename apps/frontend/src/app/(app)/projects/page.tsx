@@ -2,9 +2,19 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Lock, Pencil, Plus, Trash2 } from 'lucide-react';
-import { PageShell, PageHeader, Button, Input, Select, StatusBadge, ConfirmDialog } from '@/components/ui';
-import DataTable from '@/components/data-table/DataTable';
+import {
+    CheckCircle2,
+    CircleDashed,
+    FolderKanban,
+    Lock,
+    PauseCircle,
+    Pencil,
+    Plus,
+    Trash2,
+} from 'lucide-react';
+import { PageShell, PageHeader, Button, StatusBadge, ConfirmDialog } from '@/components/ui';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
 import { useServerList } from '@/hooks/useServerList';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -12,6 +22,7 @@ import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { useRememberedFilters } from '@/lib/use-remembered-filters';
 import { formatBDT, formatDate } from '@/lib/format';
+import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 interface ProjectRow {
     id: string;
@@ -37,9 +48,12 @@ const STATUS_TONE: Record<string, 'neutral' | 'success' | 'warning' | 'danger' |
     CANCELLED: 'danger',
 };
 
+const TABLE_ID = 'projects';
+
 export default function ProjectsPage() {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const m = t.projects;
+    const listUi = m.listUi;
 
     /**
      * Remembered for the tab, so opening a project and coming back returns to
@@ -80,7 +94,7 @@ export default function ProjectsPage() {
     }, []);
 
     const { items, loading, serverPagination, reload } = useServerList<ProjectRow>({
-        tableId: 'projects',
+        tableId: TABLE_ID,
         // Nothing is fetched until the remembered filters are in, so a return
         // visit does not request the whole list and then replace it.
         enabled: filtersReady,
@@ -96,6 +110,11 @@ export default function ProjectsPage() {
                 visibility: visibility || undefined,
             }),
     });
+
+    const typeSearch = (next: string) => {
+        setTyping(true);
+        setFilter('search', next);
+    };
 
     const confirmDelete = async () => {
         if (!pendingDelete) return;
@@ -113,6 +132,68 @@ export default function ProjectsPage() {
             setDeleting(false);
         }
     };
+
+    const listFilters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'status',
+                type: 'select',
+                label: m.fields.status,
+                value: status || null,
+                onChange: (next) => setFilter('status', next ?? ''),
+                options: Object.entries(m.status).map(([key, label]) => ({ value: key, label })),
+            },
+            {
+                id: 'type',
+                type: 'select',
+                label: m.fields.type,
+                value: typeId || null,
+                onChange: (next) => setFilter('typeId', next ?? ''),
+                options: types.map((type) => ({ value: type.id, label: type.name })),
+            },
+            {
+                id: 'visibility',
+                type: 'select',
+                label: m.fields.visibility,
+                value: visibility || null,
+                onChange: (next) => setFilter('visibility', next ?? ''),
+                options: Object.entries(m.visibility).map(([key, label]) => ({ value: key, label })),
+            },
+        ],
+        [m, status, typeId, visibility, types, setFilter],
+    );
+
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const total = serverPagination.total;
+        const items_stat: ListStat[] = [
+            {
+                id: 'count',
+                icon: <FolderKanban aria-hidden />,
+                label: listUi.stats.projects,
+                value: n(total),
+            },
+            {
+                id: 'active',
+                icon: <CircleDashed aria-hidden />,
+                label: listUi.stats.active,
+                value: n(items.filter((row) => row.status === 'ACTIVE').length),
+            },
+            {
+                id: 'onHold',
+                icon: <PauseCircle aria-hidden />,
+                label: listUi.stats.onHold,
+                value: n(items.filter((row) => row.status === 'ON_HOLD').length),
+            },
+            {
+                id: 'completed',
+                icon: <CheckCircle2 aria-hidden />,
+                label: listUi.stats.completed,
+                value: n(items.filter((row) => row.status === 'COMPLETED').length),
+            },
+        ];
+        return { items: items_stat, loading: loading || !filtersReady, label: listUi.statsLabel };
+    }, [items, loading, filtersReady, locale, listUi, serverPagination.total]);
 
     const columns = useMemo(
         () => [
@@ -148,14 +229,14 @@ export default function ProjectsPage() {
             {
                 id: 'customer',
                 header: m.fields.customer,
-                hideOnMobile: true,
+                meta: { hideOnMobile: true },
                 cell: ({ row }: { row: { original: ProjectRow } }) =>
                     row.original.customer?.name ?? '—',
             },
             {
                 id: 'type',
                 header: m.fields.type,
-                hideOnMobile: true,
+                meta: { hideOnMobile: true },
                 cell: ({ row }: { row: { original: ProjectRow } }) =>
                     row.original.projectType?.name ?? '—',
             },
@@ -172,57 +253,66 @@ export default function ProjectsPage() {
             {
                 id: 'tasks',
                 header: m.fields.tasks,
-                hideOnMobile: true,
-                cell: ({ row }: { row: { original: ProjectRow } }) => row.original._count?.tasks ?? 0,
+                meta: { hideOnMobile: true, align: 'end' as const },
+                cell: ({ row }: { row: { original: ProjectRow } }) => (
+                    <span className="tabular-nums">{row.original._count?.tasks ?? 0}</span>
+                ),
             },
             {
                 id: 'target_end_date',
                 header: m.fields.targetEndDate,
                 accessorKey: 'target_end_date',
                 enableColumnFilter: false,
-                hideOnMobile: true,
+                meta: { hideOnMobile: true },
                 cell: ({ row }: { row: { original: ProjectRow } }) =>
                     formatDate(row.original.target_end_date),
             },
             {
                 id: 'budget',
                 header: m.fields.budget,
-                hideOnMobile: true,
+                meta: { hideOnMobile: true, align: 'end' as const },
                 cell: ({ row }: { row: { original: ProjectRow } }) =>
                     row.original.budget_amount ? formatBDT(Number(row.original.budget_amount)) : '—',
             },
             {
                 id: 'actions',
                 header: m.fields.actions,
+                enableSorting: false,
+                enableColumnFilter: false,
+                enableResizing: false,
                 cell: ({ row }: { row: { original: ProjectRow } }) => (
-                    <div className="flex items-center justify-end gap-1">
-                        <Link
+                    <RowActions>
+                        <RowActionButton
+                            icon={<Pencil />}
+                            label={m.editProject}
                             href={routes.projects.edit(row.original.id)}
-                            className="rounded-lg p-1.5 text-blue-600 transition-colors hover:bg-blue-50"
-                            title={m.editProject}
-                        >
-                            <Pencil className="h-4 w-4" />
-                        </Link>
-                        <button
-                            type="button"
+                        />
+                        <RowActionButton
+                            icon={<Trash2 />}
+                            label={m.deleteProject}
+                            intent="danger"
                             onClick={() => setPendingDelete(row.original)}
-                            className="rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-50"
-                            title={m.deleteProject}
-                        >
-                            <Trash2 className="h-4 w-4" />
-                        </button>
-                    </div>
+                        />
+                    </RowActions>
                 ),
             },
         ],
         [m],
     );
 
+    const anyFilter = Boolean(effectiveSearch || status || typeId || visibility);
+
     return (
         <PageShell>
             <PageHeader
                 title={m.title}
                 subtitle={m.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.projects,
+                    m.title,
+                    'projects',
+                )}
                 actions={
                     <Link href={routes.projects.new}>
                         <Button className="min-h-touch">
@@ -233,56 +323,23 @@ export default function ProjectsPage() {
                 }
             />
 
-            <div className="flex flex-col gap-2 md:flex-row md:items-center">
-                <Input
-                    value={search}
-                    onChange={(e) => {
-                        setTyping(true);
-                        setFilter('search', e.target.value);
-                    }}
-                    placeholder={m.searchPlaceholder}
-                    className="md:max-w-xs"
-                />
-                <Select value={status} onChange={(e) => setFilter('status', e.target.value)} className="md:w-44">
-                    <option value="">{m.fields.status}</option>
-                    {Object.entries(m.status).map(([key, label]) => (
-                        <option key={key} value={key}>
-                            {label}
-                        </option>
-                    ))}
-                </Select>
-                <Select value={typeId} onChange={(e) => setFilter('typeId', e.target.value)} className="md:w-44">
-                    <option value="">{m.fields.type}</option>
-                    {types.map((type) => (
-                        <option key={type.id} value={type.id}>
-                            {type.name}
-                        </option>
-                    ))}
-                </Select>
-                <Select
-                    value={visibility}
-                    onChange={(e) => setFilter('visibility', e.target.value)}
-                    className="md:w-40"
-                >
-                    <option value="">{m.fields.visibility}</option>
-                    {Object.entries(m.visibility).map(([key, label]) => (
-                        <option key={key} value={key}>
-                            {label}
-                        </option>
-                    ))}
-                </Select>
-            </div>
-
             <DataTable
                 title={m.title}
-                tableId="projects"
+                tableId={TABLE_ID}
                 columns={columns as never}
                 data={items}
                 isLoading={loading || !filtersReady}
                 serverPagination={serverPagination}
-                emptyMessage={
-                    effectiveSearch || status || typeId || visibility ? m.emptyFiltered : m.empty
-                }
+                emptyMessage={anyFilter ? m.emptyFiltered : m.empty}
+                emptyIcon={<FolderKanban className="h-16 w-16 text-gray-200" />}
+                searchPlaceholder={m.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={typeSearch}
+                filters={listFilters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
+                viewOptions
             />
 
             <ConfirmDialog
