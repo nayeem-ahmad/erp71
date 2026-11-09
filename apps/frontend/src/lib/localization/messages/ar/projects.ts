@@ -13,6 +13,16 @@ export const projectsMessages = {
     deleteFailed: "تعذّر حذف المشروع",
     deleteProject: "حذف المشروع",
     deletePrompt: "حذف {name}؟\n\nتبقى مهامه والساعات المسجّلة عليها — ولا يُحذف سوى المشروع من قوائمك.",
+    listUi: {
+        statsLabel: 'Projects summary',
+        stats: {
+            projects: 'Projects',
+            active: 'Active',
+            onHold: 'On hold',
+            completed: 'Completed',
+        },
+    },
+
 
     fields: {
         code: "الرمز",
@@ -97,6 +107,16 @@ export const projectsMessages = {
         bulkApply: "{count, plural, zero {تطبيق على # مهمة} one {تطبيق على مهمة واحدة} two {تطبيق على مهمتين} few {تطبيق على # مهام} many {تطبيق على # مهمة} other {تطبيق على # مهمة}}",
         updatedCount: "{count, plural, zero {لم تُحدَّث أي مهمة} one {تم تحديث مهمة واحدة} two {تم تحديث مهمتين} few {تم تحديث # مهام} many {تم تحديث # مهمة} other {تم تحديث # مهمة}}",
         updateFailedCount: "{count, plural, zero {لم يتعذّر تحديث أي مهمة} one {تعذّر تحديث مهمة واحدة} two {تعذّر تحديث مهمتين} few {تعذّر تحديث # مهام} many {تعذّر تحديث # مهمة} other {تعذّر تحديث # مهمة}}: {reason}",
+        listUi: {
+            statsLabel: 'Tasks summary',
+            stats: {
+                tasks: 'Tasks',
+                todo: 'To do',
+                inProgress: 'In progress',
+                done: 'Done',
+            },
+        },
+
     },
 
     tabs: {
@@ -736,6 +756,16 @@ export const projectsMessages = {
         view: 'العرض',
         viewDay: 'عرض يومي',
         viewList: 'عرض قائمة',
+        listUi: {
+            statsLabel: 'Hour logs summary',
+            stats: {
+                hours: 'Hours',
+                entries: 'Entries',
+                days: 'Days',
+                people: 'People',
+            },
+        },
+
     },
 
     hourLogReport: {
@@ -765,6 +795,19 @@ export const projectsMessages = {
         loadFailed: "تعذّر تحميل التقرير.",
         rangeHint: "تشمل الإجماليات العمل المؤرَّخ داخل الفترة، أيًّا كان وقت إدخاله.",
         multiTagged: "{count} من السجلات تحمل أكثر من وسم واحد، لذا تتجاوز النسب مجموع 100%.",
+        listUi: {
+            statsLabel: 'Hour log report summary',
+            stats: {
+                hours: 'Total hours',
+                avgPerDay: 'Average per day',
+                entries: 'Entries',
+                days: 'Days',
+                people: 'People',
+                tasks: 'Tasks',
+                projects: 'Projects',
+            },
+        },
+
     },
 
     board: {
@@ -971,6 +1014,17 @@ export const projectsMessages = {
         outcomeReturned: "أُعيدت إلى قائمة الانتظار",
         outcomeRemoved: "أُخرجت من السبرنت",
         carriedBadge: "← {name}",
+        listUi: {
+            statsLabel: 'Sprints summary',
+            stats: {
+                sprints: 'Sprints',
+                planned: 'Planned',
+                active: 'Active',
+                completed: 'Completed',
+                tasks: 'Tasks',
+            },
+        },
+
     },
 
     burndown: {
@@ -1131,6 +1185,16 @@ export const projectsMessages = {
         allBoards: "كل اللوحات",
         withCards: "التي بها بطاقات",
         emptyOnly: "اللوحات الفارغة",
+        listUi: {
+            statsLabel: 'Boards summary',
+            stats: {
+                boards: 'Boards',
+                withCards: 'With cards',
+                empty: 'Empty',
+                cards: 'Cards',
+            },
+        },
+
 
         background: {
             title: "الخلفية",

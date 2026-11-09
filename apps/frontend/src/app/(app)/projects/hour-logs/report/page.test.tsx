@@ -11,6 +11,21 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+// Desktop: Sales-style filter chips sit inline rather than in the phone sheet.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
+}));
+
+/** A filter chip in the toolbar — the column headers' sort buttons share its name. */
+function chip(name: string | RegExp): HTMLElement {
+    const found = screen
+        .getAllByRole('button', { name })
+        .find((button) => button.getAttribute('aria-haspopup') === 'dialog');
+    if (!found) throw new Error(`No filter chip named ${String(name)}`);
+    return found;
+}
+
 const report = (overrides: Record<string, unknown> = {}) => ({
     groupBy: 'task',
     summary: {
@@ -50,11 +65,12 @@ describe('Hour log report page', () => {
         expect(params.from <= params.to).toBe(true);
     });
 
-    it('shows the range totals alongside the breakdown', async () => {
+    it('shows the range totals in the Sales-style summary strip', async () => {
         render(<HourLogReportPage />);
 
-        expect(await screen.findByText('10.00')).toBeInTheDocument();
-        expect(screen.getByText('Painting')).toBeInTheDocument();
+        const strip = await screen.findByRole('region', { name: 'Hour log report summary' });
+        expect(strip).toHaveTextContent('10.00');
+        expect(await screen.findByText('Painting')).toBeInTheDocument();
         // The share bar rides in a hideOnMobile column, so the hours are what
         // every viewport is guaranteed to show.
         expect(screen.getByText('6.00')).toBeInTheDocument();
@@ -85,13 +101,15 @@ describe('Hour log report page', () => {
         await waitFor(() => expect(screen.getAllByText('Person').length).toBeGreaterThan(0));
     });
 
-    it('refuses a backwards range instead of asking the server for one', async () => {
+    it('refuses a backwards range in the date chip instead of asking the server for one', async () => {
         render(<HourLogReportPage />);
         await waitFor(() => expect(getProjectTimeReport).toHaveBeenCalledTimes(1));
 
+        fireEvent.click(chip(/^Date:/));
         fireEvent.change(screen.getByLabelText('From'), { target: { value: '2099-01-01' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
 
-        expect(await screen.findByText(/start date must fall on or before/i)).toBeInTheDocument();
+        expect(await screen.findByText(/From must be on or before To/i)).toBeInTheDocument();
         expect(getProjectTimeReport).toHaveBeenCalledTimes(1);
     });
 });

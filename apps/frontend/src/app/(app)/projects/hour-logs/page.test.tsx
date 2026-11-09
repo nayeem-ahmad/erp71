@@ -149,8 +149,8 @@ const isoDay = (date: Date): string =>
 /** Toolbar filters are named by their label. */
 const filterByName = (name: string) => screen.getByRole('combobox', { name }) as HTMLSelectElement;
 
-/** The date chip reads "Date · <range>". */
-const rangeChip = () => screen.getByRole('button', { name: /^Date ·/ });
+/** The Sales-style row chip reads "Date: <range>" (PopoverChip), not "Date · …". */
+const rangeChip = () => screen.getByRole('button', { name: /^Date:/ });
 
 /** Picks the day ledger or the flat list in View options, then closes the menu. */
 const chooseView = (name: 'Day view' | 'List view') => {

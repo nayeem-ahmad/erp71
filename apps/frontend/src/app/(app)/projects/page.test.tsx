@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 // `@testing-library/user-event` is NOT installed in this repo — the house pattern
 // is fireEvent from @testing-library/react. See ShortLinkManager.test.tsx.
@@ -13,6 +13,12 @@ jest.mock('next/link', () => {
 
 jest.mock('@/lib/api', () => ({
     api: { getProjects: jest.fn(), getProjectTypes: jest.fn(), deleteProject: jest.fn() },
+}));
+
+// Desktop: Sales-style filter chips sit inline rather than in the phone sheet.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
 }));
 
 const project = (overrides: Record<string, unknown> = {}) => ({
@@ -37,24 +43,34 @@ beforeEach(() => {
     ]);
 });
 
-describe('Projects page — remembered filters', () => {
-    // The table's advanced filters go to the server, so their matches are paged
-    // together rather than left wherever they fell in the unfiltered list.
+describe('Projects page — Sales list UI', () => {
+    it('puts filters in the toolbar row with a summary strip', async () => {
+        render(<ProjectsPage />);
+        await screen.findByText('Shop fit-out');
+
+        expect(screen.getByRole('region', { name: 'Projects summary' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'View options' })).toBeInTheDocument();
+        expect(screen.getByLabelText('Status')).toBeInTheDocument();
+        expect(screen.getByLabelText('Type')).toBeInTheDocument();
+        expect(screen.getByLabelText('Visibility')).toBeInTheDocument();
+    });
+
     it('filters on the server, from page 1, rather than within the rows on screen', async () => {
         render(<ProjectsPage />);
         await screen.findByText('Shop fit-out');
 
-        fireEvent.click(screen.getByRole('button', { name: /filters/i }));
-        fireEvent.change(screen.getByPlaceholderText(/^Filter Name/), { target: { value: 'shop' } });
+        fireEvent.change(screen.getByPlaceholderText(/search code, name or customer/i), {
+            target: { value: 'shop' },
+        });
 
-        await waitFor(() => expect(lastCall()).toEqual(expect.objectContaining({ page: 1, filters: { name: 'shop' } })));
+        await waitFor(() => expect(lastCall()).toEqual(expect.objectContaining({ page: 1, search: 'shop' })));
     });
 
     it('comes back to the status the last visit left set', async () => {
         const first = render(<ProjectsPage />);
         await screen.findByText('Shop fit-out');
 
-        fireEvent.change(screen.getByDisplayValue('Status'), { target: { value: 'ON_HOLD' } });
+        fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'ON_HOLD' } });
         await waitFor(() => expect(lastCall().status).toBe('ON_HOLD'));
         first.unmount();
 
@@ -62,7 +78,7 @@ describe('Projects page — remembered filters', () => {
         render(<ProjectsPage />);
         await screen.findByText('Shop fit-out');
 
-        expect((screen.getByDisplayValue('On hold') as HTMLSelectElement).value).toBe('ON_HOLD');
+        expect((screen.getByLabelText('Status') as HTMLSelectElement).value).toBe('ON_HOLD');
         // Never the unfiltered list on the way — no flash of everything.
         for (const call of (api.getProjects as jest.Mock).mock.calls) {
             expect(call[0].status).toBe('ON_HOLD');
@@ -73,8 +89,8 @@ describe('Projects page — remembered filters', () => {
         const first = render(<ProjectsPage />);
         await screen.findByText('Shop fit-out');
 
-        fireEvent.change(screen.getByDisplayValue('Type'), { target: { value: 'ty1' } });
-        fireEvent.change(screen.getByDisplayValue('Visibility'), { target: { value: 'PRIVATE' } });
+        fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'ty1' } });
+        fireEvent.change(screen.getByLabelText('Visibility'), { target: { value: 'PRIVATE' } });
         await waitFor(() => expect(lastCall().visibility).toBe('PRIVATE'));
         first.unmount();
 
@@ -118,7 +134,8 @@ describe('Projects page — remembered filters', () => {
             search: undefined,
             status: undefined,
             projectTypeId: undefined,
-            visibility: undefined,
         });
+        const strip = screen.getByRole('region', { name: 'Projects summary' });
+        expect(within(strip).getByText('Projects').parentElement).toHaveTextContent('1');
     });
 });

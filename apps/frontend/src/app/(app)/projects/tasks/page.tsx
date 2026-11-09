@@ -2,7 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Link2, Pencil, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
+import {
+    CheckCircle2,
+    CircleDashed,
+    Link2,
+    ListTodo,
+    Pencil,
+    Plus,
+    RefreshCw,
+    Trash2,
+    Upload,
+} from 'lucide-react';
 import {
     PageShell,
     PageHeader,
@@ -12,7 +22,7 @@ import {
 import DataTable from '@/components/data-table/DataTable';
 import { createdAtColumn } from '@/components/data-table/created-at-column';
 import { createColumnHelper } from '@tanstack/react-table';
-import type { BulkAction, ListFilter } from '@/components/data-table';
+import type { BulkAction, ListFilter, ListStat } from '@/components/data-table';
 import { RowActions, RowActionButton } from '@/components/table';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
@@ -147,8 +157,9 @@ const num = (value: unknown): number => (value == null ? 0 : Number(value));
 const assigneeLabel = (task: TaskRow): string => assigneeLabelOf(task);
 
 export default function TasksPage() {
-    const { t, fmt, localeInfo } = useI18n();
+    const { t, fmt, locale, localeInfo } = useI18n();
     const m = t.projects;
+    const listUi = m.tasks.listUi;
 
     const [filters, setFilter, filtersReady] = useRememberedFilters('project-tasks', DEFAULT_FILTERS);
     const { search, assignee, projectId, statusCategory, priority, createdRange } = filters;
@@ -671,6 +682,37 @@ export default function TasksPage() {
         },
     ], [m, ownRecordsOnly, assignee, assignees, projectId, projects, statusCategory, priority, createdRange, setFilter]);
 
+    const stats = useMemo(() => {
+        const n = (value: number) => value.toLocaleString(locale);
+        const itemsStat: ListStat[] = [
+            {
+                id: 'count',
+                icon: <ListTodo aria-hidden />,
+                label: listUi.stats.tasks,
+                value: n(serverPagination.total),
+            },
+            {
+                id: 'todo',
+                icon: <CircleDashed aria-hidden />,
+                label: listUi.stats.todo,
+                value: n(items.filter((task) => task.status?.category === 'TODO').length),
+            },
+            {
+                id: 'inProgress',
+                icon: <ListTodo aria-hidden />,
+                label: listUi.stats.inProgress,
+                value: n(items.filter((task) => task.status?.category === 'IN_PROGRESS').length),
+            },
+            {
+                id: 'done',
+                icon: <CheckCircle2 aria-hidden />,
+                label: listUi.stats.done,
+                value: n(items.filter((task) => task.status?.category === 'DONE').length),
+            },
+        ];
+        return { items: itemsStat, loading: loading || !ready, label: listUi.statsLabel };
+    }, [items, loading, ready, locale, listUi, serverPagination.total]);
+
     const bulkActions: BulkAction<TaskRow>[] = useMemo(
         () => [
             {
@@ -759,13 +801,16 @@ export default function TasksPage() {
                 tableId="project-tasks"
                 columns={columns as never}
                 data={items}
-                isLoading={loading}
+                isLoading={loading || !ready}
                 serverPagination={serverPagination}
                 // The table's box searches the server; a remembered term shows in it.
                 searchPlaceholder={m.tasks.searchPlaceholder}
                 onSearchChange={typeSearch}
                 searchValue={search}
                 filters={listFilters}
+                filterLayout="row"
+                stats={stats}
+                enableColumnFilters={false}
                 viewOptions
                 enableRowSelection
                 getRowId={(row) => row.id}
@@ -773,6 +818,7 @@ export default function TasksPage() {
                 bulkActions={bulkActions}
                 bulkActionsDisabled={busy}
                 emptyMessage={filtered ? m.tasks.empty : m.task.noTasks}
+                emptyIcon={<ListTodo className="h-16 w-16 text-gray-200" />}
             />
 
             <ImportDialog

@@ -113,16 +113,21 @@ beforeEach(() => {
 });
 
 describe('Tasks page', () => {
-    // The table's advanced filters go to the server, so their matches are paged
-    // together rather than left wherever they fell in the unfiltered list.
-    it('filters on the server, from page 1, rather than within the rows on screen', async () => {
+    // The toolbar search goes to the server, so matches are paged together
+    // rather than left wherever they fell in the unfiltered list.
+    it('searches on the server, from page 1, through the Sales-style toolbar', async () => {
         render(<TasksPage />);
         await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
 
-        fireEvent.click(await screen.findByRole('button', { name: /filters/i }));
-        fireEvent.change(screen.getByPlaceholderText(/^Filter Task/), { target: { value: 'roof' } });
+        fireEvent.change(screen.getByPlaceholderText(/search task titles/i), {
+            target: { value: 'roof' },
+        });
 
-        await waitFor(() => expect(lastQuery()).toEqual(expect.objectContaining({ page: 1, filters: { title: 'roof' } })));
+        await waitFor(() =>
+            expect(lastQuery()).toEqual(expect.objectContaining({ page: 1, search: 'roof' })),
+        );
+        expect(screen.getByRole('region', { name: 'Tasks summary' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'View options' })).toBeInTheDocument();
     });
 
     it('opens on the signed-in user’s tasks, preserving what My Tasks used to show', async () => {

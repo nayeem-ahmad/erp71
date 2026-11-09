@@ -13,6 +13,16 @@ export const projectsMessages = {
     deleteFailed: "परियोजना हटाई नहीं जा सकी",
     deleteProject: "परियोजना हटाएँ",
     deletePrompt: "{name} हटाएँ?\n\nइसके कार्य और उन पर दर्ज घंटे बने रहते हैं — केवल परियोजना आपकी सूचियों से हटती है।",
+    listUi: {
+        statsLabel: 'Projects summary',
+        stats: {
+            projects: 'Projects',
+            active: 'Active',
+            onHold: 'On hold',
+            completed: 'Completed',
+        },
+    },
+
 
     fields: {
         code: "कोड",
@@ -97,6 +107,16 @@ export const projectsMessages = {
         bulkApply: "{count, plural, one {# कार्य पर लागू करें} other {# कार्यों पर लागू करें}}",
         updatedCount: "{count, plural, one {# कार्य अपडेट हुआ} other {# कार्य अपडेट हुए}}",
         updateFailedCount: "{count, plural, one {# कार्य अपडेट नहीं हो सका} other {# कार्य अपडेट नहीं हो सके}}: {reason}",
+        listUi: {
+            statsLabel: 'Tasks summary',
+            stats: {
+                tasks: 'Tasks',
+                todo: 'To do',
+                inProgress: 'In progress',
+                done: 'Done',
+            },
+        },
+
     },
 
     tabs: {
@@ -736,6 +756,16 @@ export const projectsMessages = {
         view: 'दृश्य',
         viewDay: 'दिनवार दृश्य',
         viewList: 'सूची दृश्य',
+        listUi: {
+            statsLabel: 'Hour logs summary',
+            stats: {
+                hours: 'Hours',
+                entries: 'Entries',
+                days: 'Days',
+                people: 'People',
+            },
+        },
+
     },
 
     hourLogReport: {
@@ -765,6 +795,19 @@ export const projectsMessages = {
         loadFailed: "रिपोर्ट लोड नहीं हो सकी।",
         rangeHint: "कुल में सीमा के भीतर की तिथि वाला काम शामिल है, चाहे वह कभी भी दर्ज हुआ हो।",
         multiTagged: "{count} प्रविष्टियों पर एक से अधिक टैग हैं, इसलिए हिस्से मिलकर 100% से ज़्यादा होते हैं।",
+        listUi: {
+            statsLabel: 'Hour log report summary',
+            stats: {
+                hours: 'Total hours',
+                avgPerDay: 'Average per day',
+                entries: 'Entries',
+                days: 'Days',
+                people: 'People',
+                tasks: 'Tasks',
+                projects: 'Projects',
+            },
+        },
+
     },
 
     board: {
@@ -971,6 +1014,17 @@ export const projectsMessages = {
         outcomeReturned: "बैकलॉग में लौटाया गया",
         outcomeRemoved: "स्प्रिंट से हटाया गया",
         carriedBadge: "→ {name}",
+        listUi: {
+            statsLabel: 'Sprints summary',
+            stats: {
+                sprints: 'Sprints',
+                planned: 'Planned',
+                active: 'Active',
+                completed: 'Completed',
+                tasks: 'Tasks',
+            },
+        },
+
     },
 
     burndown: {
@@ -1131,6 +1185,16 @@ export const projectsMessages = {
         allBoards: "सभी बोर्ड",
         withCards: "कार्ड वाले",
         emptyOnly: "खाली बोर्ड",
+        listUi: {
+            statsLabel: 'Boards summary',
+            stats: {
+                boards: 'Boards',
+                withCards: 'With cards',
+                empty: 'Empty',
+                cards: 'Cards',
+            },
+        },
+
 
         background: {
             title: "पृष्ठभूमि",
