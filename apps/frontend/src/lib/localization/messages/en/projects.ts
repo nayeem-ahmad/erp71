@@ -14,6 +14,16 @@ export const projectsMessages = {
     deleteProject: 'Delete project',
     deletePrompt: 'Delete {name}?\n\nIts tasks and the hours already logged against them are kept — only the project is removed from your lists.',
 
+    listUi: {
+        statsLabel: 'Projects summary',
+        stats: {
+            projects: 'Projects',
+            active: 'Active',
+            onHold: 'On hold',
+            completed: 'Completed',
+        },
+    },
+
     fields: {
         code: 'Code',
         codeHint: "Task keys are built from it — {code}-14. Suggested from the name; change it if you like.",
@@ -97,6 +107,15 @@ export const projectsMessages = {
         bulkApply: '{count, plural, one {Apply to # task} other {Apply to # tasks}}',
         updatedCount: '{count, plural, one {# task updated} other {# tasks updated}}',
         updateFailedCount: '{count, plural, one {# task could not be updated} other {# tasks could not be updated}}: {reason}',
+        listUi: {
+            statsLabel: 'Tasks summary',
+            stats: {
+                tasks: 'Tasks',
+                todo: 'To do',
+                inProgress: 'In progress',
+                done: 'Done',
+            },
+        },
     },
 
     tabs: {
@@ -742,6 +761,15 @@ export const projectsMessages = {
         view: 'View',
         viewDay: 'Day view',
         viewList: 'List view',
+        listUi: {
+            statsLabel: 'Hour logs summary',
+            stats: {
+                hours: 'Hours',
+                entries: 'Entries',
+                days: 'Days',
+                people: 'People',
+            },
+        },
     },
 
     hourLogReport: {
@@ -771,6 +799,18 @@ export const projectsMessages = {
         loadFailed: 'Could not load the report.',
         rangeHint: 'Totals cover work dated inside the range, whenever it was entered.',
         multiTagged: '{count} entries carry more than one tag, so the shares add to more than 100%.',
+        listUi: {
+            statsLabel: 'Hour log report summary',
+            stats: {
+                hours: 'Total hours',
+                avgPerDay: 'Average per day',
+                entries: 'Entries',
+                days: 'Days',
+                people: 'People',
+                tasks: 'Tasks',
+                projects: 'Projects',
+            },
+        },
     },
 
     board: {
@@ -977,6 +1017,16 @@ export const projectsMessages = {
         outcomeReturned: "Returned to the backlog",
         outcomeRemoved: "Taken out of the sprint",
         carriedBadge: "→ {name}",
+        listUi: {
+            statsLabel: 'Sprints summary',
+            stats: {
+                sprints: 'Sprints',
+                planned: 'Planned',
+                active: 'Active',
+                completed: 'Completed',
+                tasks: 'Tasks',
+            },
+        },
     },
 
     burndown: {
@@ -1142,6 +1192,15 @@ export const projectsMessages = {
         allBoards: 'All boards',
         withCards: 'With cards',
         emptyOnly: 'Empty boards',
+        listUi: {
+            statsLabel: 'Boards summary',
+            stats: {
+                boards: 'Boards',
+                withCards: 'With cards',
+                empty: 'Empty',
+                cards: 'Cards',
+            },
+        },
 
         // The board's own background — a colour or an uploaded picture. Unlike
         // `board.view` above, which is this browser's preference, this is stored

@@ -38,7 +38,9 @@ describe('BoardsPage', () => {
     it('lists boards with their card counts', async () => {
         render(<BoardsPage />);
         expect(await screen.findByText('Release 4')).toBeInTheDocument();
-        expect(screen.getByText(/7/)).toBeInTheDocument();
+        const strip = screen.getByRole('region', { name: 'Boards summary' });
+        expect(strip).toHaveTextContent('7');
+        expect(screen.getByRole('cell', { name: '7' })).toBeInTheDocument();
     });
 
     it('keeps the table, its search box and its filters when there are no boards', async () => {
@@ -49,7 +51,8 @@ describe('BoardsPage', () => {
 
         expect(await screen.findByText(/no boards yet/i)).toBeInTheDocument();
         expect(screen.getByPlaceholderText(/search board name or description/i)).toBeInTheDocument();
-        expect(screen.getByDisplayValue('All boards')).toBeInTheDocument();
+        expect(screen.getByLabelText('Cards')).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Boards summary' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /new board/i })).toBeInTheDocument();
     });
 
@@ -79,7 +82,7 @@ describe('BoardsPage', () => {
         render(<BoardsPage />);
         await screen.findByText('Release 4');
 
-        fireEvent.change(screen.getByDisplayValue('All boards'), { target: { value: 'empty' } });
+        fireEvent.change(screen.getByLabelText('Cards'), { target: { value: 'empty' } });
 
         expect(screen.getByText('Support queue')).toBeInTheDocument();
         expect(screen.queryByText('Release 4')).not.toBeInTheDocument();
@@ -114,14 +117,14 @@ describe('BoardsPage', () => {
         fireEvent.change(screen.getByPlaceholderText(/search board name or description/i), {
             target: { value: 'queue' },
         });
-        fireEvent.change(screen.getByDisplayValue('All boards'), { target: { value: 'empty' } });
+        fireEvent.change(screen.getByLabelText('Cards'), { target: { value: 'empty' } });
         first.unmount();
 
         render(<BoardsPage />);
 
         expect(await screen.findByText('Support queue')).toBeInTheDocument();
         expect(screen.queryByText('Release 4')).not.toBeInTheDocument();
-        expect(screen.getByDisplayValue('Empty boards')).toBeInTheDocument();
+        expect((screen.getByLabelText('Cards') as HTMLSelectElement).value).toBe('empty');
         expect(
             (screen.getByPlaceholderText(/search board name or description/i) as HTMLInputElement).value,
         ).toBe('queue');

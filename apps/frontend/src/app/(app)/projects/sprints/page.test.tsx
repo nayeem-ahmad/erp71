@@ -68,8 +68,9 @@ describe('Sprints page', () => {
 
         expect(await screen.findByText(/no sprints yet/i)).toBeInTheDocument();
         expect(screen.getByPlaceholderText(/search sprint name or goal/i)).toBeInTheDocument();
-        expect(screen.getByDisplayValue('Any status')).toBeInTheDocument();
-        expect(screen.getByDisplayValue('All projects')).toBeInTheDocument();
+        expect(screen.getByLabelText('Status')).toBeInTheDocument();
+        expect(screen.getByLabelText('Project')).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Sprints summary' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /new sprint/i })).toBeInTheDocument();
     });
 
@@ -98,7 +99,7 @@ describe('Sprints page', () => {
         render(<SprintsPage />);
         await screen.findByText('Sprint 12');
 
-        fireEvent.change(screen.getByDisplayValue('Any status'), { target: { value: 'ACTIVE' } });
+        fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'ACTIVE' } });
 
         expect(screen.getByText('Hardening')).toBeInTheDocument();
         expect(screen.queryByText('Sprint 12')).not.toBeInTheDocument();
@@ -108,7 +109,7 @@ describe('Sprints page', () => {
         render(<SprintsPage />);
         await screen.findByText('Sprint 12');
 
-        fireEvent.change(screen.getByDisplayValue('All projects'), { target: { value: 'p1' } });
+        fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'p1' } });
 
         await waitFor(() => expect(api.getSprints).toHaveBeenCalledWith('p1'));
     });
@@ -127,8 +128,8 @@ describe('Sprints page', () => {
         const first = render(<SprintsPage />);
         await screen.findByText('Sprint 12');
 
-        fireEvent.change(screen.getByDisplayValue('Any status'), { target: { value: 'ACTIVE' } });
-        fireEvent.change(screen.getByDisplayValue('All projects'), { target: { value: 'p1' } });
+        fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'ACTIVE' } });
+        fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'p1' } });
         await waitFor(() => expect(api.getSprints).toHaveBeenCalledWith('p1'));
         first.unmount();
 
@@ -137,7 +138,7 @@ describe('Sprints page', () => {
 
         expect(await screen.findByText('Hardening')).toBeInTheDocument();
         expect(screen.queryByText('Sprint 12')).not.toBeInTheDocument();
-        expect(screen.getByDisplayValue('Active')).toBeInTheDocument();
+        expect((screen.getByLabelText('Status') as HTMLSelectElement).value).toBe('ACTIVE');
         // And never a first request for every project's sprints.
         for (const call of (api.getSprints as jest.Mock).mock.calls) {
             expect(call[0]).toBe('p1');

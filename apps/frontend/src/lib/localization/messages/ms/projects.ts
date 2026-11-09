@@ -13,6 +13,16 @@ export const projectsMessages = {
     deleteFailed: "Tidak dapat memadam projek",
     deleteProject: "Padam projek",
     deletePrompt: "Padam {name}?\n\nTugasan dan jam yang telah dilog dikekalkan — hanya projek dibuang daripada senarai anda.",
+    listUi: {
+        statsLabel: 'Projects summary',
+        stats: {
+            projects: 'Projects',
+            active: 'Active',
+            onHold: 'On hold',
+            completed: 'Completed',
+        },
+    },
+
 
     fields: {
         code: 'Kod',
@@ -97,6 +107,16 @@ export const projectsMessages = {
         bulkApply: "{count, plural, other {Guna pada # tugasan}}",
         updatedCount: "{count, plural, other {# tugasan dikemas kini}}",
         updateFailedCount: "{count, plural, other {# tugasan tidak dapat dikemas kini}}: {reason}",
+        listUi: {
+            statsLabel: 'Tasks summary',
+            stats: {
+                tasks: 'Tasks',
+                todo: 'To do',
+                inProgress: 'In progress',
+                done: 'Done',
+            },
+        },
+
     },
 
     tabs: {
@@ -736,6 +756,16 @@ export const projectsMessages = {
         view: 'Paparan',
         viewDay: 'Paparan harian',
         viewList: 'Paparan senarai',
+        listUi: {
+            statsLabel: 'Hour logs summary',
+            stats: {
+                hours: 'Hours',
+                entries: 'Entries',
+                days: 'Days',
+                people: 'People',
+            },
+        },
+
     },
 
     hourLogReport: {
@@ -765,6 +795,19 @@ export const projectsMessages = {
         loadFailed: 'Tidak dapat memuatkan laporan.',
         rangeHint: 'Jumlah merangkumi kerja bertarikh dalam julat ini, bila-bila ia dimasukkan.',
         multiTagged: '{count} entri membawa lebih daripada satu tag, jadi bahagiannya berjumlah lebih 100%.',
+        listUi: {
+            statsLabel: 'Hour log report summary',
+            stats: {
+                hours: 'Total hours',
+                avgPerDay: 'Average per day',
+                entries: 'Entries',
+                days: 'Days',
+                people: 'People',
+                tasks: 'Tasks',
+                projects: 'Projects',
+            },
+        },
+
     },
 
     board: {
@@ -971,6 +1014,17 @@ export const projectsMessages = {
         outcomeReturned: "Dikembalikan ke backlog",
         outcomeRemoved: "Dikeluarkan dari sprint",
         carriedBadge: "→ {name}",
+        listUi: {
+            statsLabel: 'Sprints summary',
+            stats: {
+                sprints: 'Sprints',
+                planned: 'Planned',
+                active: 'Active',
+                completed: 'Completed',
+                tasks: 'Tasks',
+            },
+        },
+
     },
 
     burndown: {
@@ -1131,6 +1185,16 @@ export const projectsMessages = {
         allBoards: 'Semua papan',
         withCards: 'Ada kad',
         emptyOnly: 'Papan kosong',
+        listUi: {
+            statsLabel: 'Boards summary',
+            stats: {
+                boards: 'Boards',
+                withCards: 'With cards',
+                empty: 'Empty',
+                cards: 'Cards',
+            },
+        },
+
 
         background: {
             title: 'Latar belakang',

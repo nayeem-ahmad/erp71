@@ -4,11 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
     BarChart3,
+    CalendarDays,
     ChevronLeft,
     ChevronRight,
     Clock,
     Timer,
     Upload,
+    Users,
 } from 'lucide-react';
 import {
     PageShell,
@@ -33,7 +35,13 @@ import {
     exportToPDF,
     type ExportColumnSpec,
 } from '@/components/data-table/export-utils';
-import { DataTable, ListToolbar, type ResolvedListFilter } from '@/components/data-table';
+import {
+    DataTable,
+    ListStats,
+    ListToolbar,
+    type ListStat,
+    type ResolvedListFilter,
+} from '@/components/data-table';
 import type { TableViewLayout } from '@/components/table';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import HourLogDayList, { type DayTotal } from '@/components/projects/HourLogDayList';
@@ -224,6 +232,7 @@ export default function HourLogsPage() {
     const { t } = useI18n();
     const m = t.projects;
     const hl = m.hourLogs;
+    const listUi = hl.listUi;
 
     const [view, setView] = useRememberedView();
 
@@ -501,6 +510,36 @@ export default function HourLogsPage() {
     const days = useMemo(() => groupByDay(items), [items]);
     // Only worth a column when there is more than one person to tell apart.
     const showPerson = !personId && (summary?.people ?? 0) > 1;
+
+    const stats = useMemo(() => {
+        const itemsStat: ListStat[] = [
+            {
+                id: 'hours',
+                icon: <Clock aria-hidden />,
+                label: listUi.stats.hours,
+                value: (summary?.totalHours ?? 0).toFixed(2),
+            },
+            {
+                id: 'entries',
+                icon: <Timer aria-hidden />,
+                label: listUi.stats.entries,
+                value: String(summary?.entries ?? 0),
+            },
+            {
+                id: 'days',
+                icon: <CalendarDays aria-hidden />,
+                label: listUi.stats.days,
+                value: String(summary?.days ?? 0),
+            },
+            {
+                id: 'people',
+                icon: <Users aria-hidden />,
+                label: listUi.stats.people,
+                value: String(summary?.people ?? 0),
+            },
+        ];
+        return { items: itemsStat, loading: listLoading, label: listUi.statsLabel };
+    }, [summary, listLoading, listUi]);
 
     // ── The toolbar ────────────────────────────────────────────────────────
 
@@ -854,12 +893,7 @@ export default function HourLogsPage() {
                 }
             />
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <SummaryTile label={m.time.totalHours} value={(summary?.totalHours ?? 0).toFixed(2)} accent />
-                <SummaryTile label={m.hourLogReport.entries} value={String(summary?.entries ?? 0)} />
-                <SummaryTile label={m.hourLogReport.days} value={String(summary?.days ?? 0)} />
-                <SummaryTile label={m.hourLogReport.people} value={String(summary?.people ?? 0)} />
-            </div>
+            <ListStats stats={stats.items} loading={stats.loading} label={stats.label} />
 
             {!valid && <p className="text-sm text-red-600">{hl.rangeInvalid}</p>}
 
@@ -868,6 +902,7 @@ export default function HourLogsPage() {
                     <ListToolbar
                         tableId={TABLE_ID}
                         filters={listFilters}
+                        filterLayout="row"
                         search={{ value: search, onChange: typeSearch, placeholder: hl.searchPlaceholder }}
                         layout={viewLayout}
                         onExport={() => setExportOpen(true)}
@@ -918,6 +953,8 @@ export default function HourLogsPage() {
                     onSearchChange={typeSearch}
                     searchValue={search}
                     filters={listFilters}
+                    filterLayout="row"
+                    // Stats sit above both views so day/list share one strip.
                     // The server filters by the toolbar, not by column.
                     enableColumnFilters={false}
                     viewOptions
@@ -1189,15 +1226,3 @@ export default function HourLogsPage() {
     );
 }
 
-function SummaryTile({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-    return (
-        <div className="rounded-lg border border-gray-100 bg-white p-3">
-            <div className="text-xs font-medium text-gray-500">{label}</div>
-            <div
-                className={`mt-1 text-xl font-semibold tabular-nums ${accent ? 'text-blue-600' : 'text-gray-900'}`}
-            >
-                {value}
-            </div>
-        </div>
-    );
-}
