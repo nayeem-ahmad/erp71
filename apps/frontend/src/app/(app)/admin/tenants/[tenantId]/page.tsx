@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, LogIn } from 'lucide-react';
-import { PlatformRole, TENANT_OVERRIDABLE_FEATURE_KEYS } from '@erp71/shared-types';
+import { BUSINESS_TYPE_LABELS, PlatformRole, TENANT_OVERRIDABLE_FEATURE_KEYS, type BusinessType } from '@erp71/shared-types';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { PageShell, Button, Alert, ConfirmDialog } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -37,6 +37,7 @@ type PendingConfirm =
     | { kind: 'delete' }
     | { kind: 'clearData'; mode: ClearDataMode; branch: ClearDataBranch | null }
     | { kind: 'importCatalog' }
+    | { kind: 'saveBusinessType' }
     | { kind: 'resetNav' }
     | { kind: 'demoData'; prompt: string }
     | { kind: 'revokeAddon'; code: string; name: string };
@@ -368,6 +369,7 @@ export default function AdminTenantDetailPage() {
                 action.mode === 'all' ? keptGroups(action.branch ? 'branch' : 'tenant', clearGroups) : [],
             );
             case 'importCatalog': return void importCatalog();
+            case 'saveBusinessType': return void saveAll();
             case 'resetNav': return void resetNav();
             case 'demoData': return void startDemoData();
             case 'revokeAddon': return void revokeAddon(action.code);
@@ -435,6 +437,15 @@ export default function AdminTenantDetailPage() {
                     confirmLabel: bt.import,
                     loading: isImportingCatalog,
                 };
+            case 'saveBusinessType':
+                return {
+                    title: bt.save,
+                    prompt: formatMessage(bt.typeChangeKeepsProducts, {
+                        label: BUSINESS_TYPE_LABELS[detail.businessType as BusinessType] ?? detail.businessType,
+                    }),
+                    confirmLabel: dp.saveChanges,
+                    loading: isSaving,
+                };
             case 'resetNav':
                 return {
                     title: nc.reset,
@@ -458,8 +469,9 @@ export default function AdminTenantDetailPage() {
                     loading: revokingAddonCode === pending.code,
                 };
         }
-    }, [pending, tenant, m, bt, nc, dd, ac, cd, dp.typeToConfirm, isSuspending, isDeleting, clearing, clearGroups,
-        isImportingCatalog, isResettingNav, isStartingDemo, revokingAddonCode]);
+    }, [pending, tenant, m, bt, nc, dd, ac, cd, dp.typeToConfirm, dp.saveChanges, isSuspending, isDeleting, clearing,
+        clearGroups, isImportingCatalog, isResettingNav, isStartingDemo, revokingAddonCode, isSaving,
+        detail.businessType]);
 
     const tabs: Array<{ id: TabId; label: string; danger?: boolean }> = readOnly
         ? [{ id: 'overview', label: dp.tabs.overview }]
@@ -635,7 +647,14 @@ export default function AdminTenantDetailPage() {
                         <Button variant="secondary" onClick={detail.resetDrafts} disabled={isSaving}>
                             {dp.discard}
                         </Button>
-                        <Button onClick={() => void saveAll()} disabled={isSaving} loading={isSaving}>
+                        <Button
+                            onClick={() => {
+                                if (detail.businessTypeDirty) setPending({ kind: 'saveBusinessType' });
+                                else void saveAll();
+                            }}
+                            disabled={isSaving}
+                            loading={isSaving}
+                        >
                             {dp.saveChanges}
                         </Button>
                     </div>

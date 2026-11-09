@@ -306,6 +306,7 @@ export const adminMessages = {
             save: "Guardar tipo de negocio",
             saved: "Tipo de negocio actualizado.",
             saveFailed: "No se pudo actualizar el tipo de negocio.",
+            typeChangeKeepsProducts: "Guardar {label} no elimina los productos existentes de esta tienda. Importar el catálogo añadirá los SKU de ese tipo junto a los que ya hay. Los duplicados (mismo SKU) se omiten.",
             import: "Importar catálogo",
             importConfirm: "¿Importar el catálogo inicial para {name}? Puede tardar unos segundos.",
             imported: "Se importaron {created} productos ({skipped} ya existían).",

@@ -306,6 +306,7 @@ export const adminMessages = {
             save: "Branche speichern",
             saved: "Branche aktualisiert.",
             saveFailed: "Die Branche konnte nicht aktualisiert werden.",
+            typeChangeKeepsProducts: "Speichern von {label} entfernt die vorhandenen Produkte dieses Shops nicht. Der Katalogimport fügt die SKUs dieses Typs neben den bereits vorhandenen hinzu. Duplikate (gleiche SKU) werden übersprungen.",
             import: "Katalog importieren",
             importConfirm: "Den Starterkatalog für {name} importieren? Das kann einige Sekunden dauern.",
             imported: "{created} Produkte importiert ({skipped} waren bereits vorhanden).",

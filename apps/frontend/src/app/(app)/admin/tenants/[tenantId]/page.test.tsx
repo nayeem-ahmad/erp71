@@ -365,4 +365,91 @@ describe('AdminTenantDetailPage', () => {
             });
         });
     });
+
+    describe('business-type save confirmation', () => {
+        it('opens a keep-products dialog, cancel writes nothing, confirm saves the type', async () => {
+            tabParam = 'configuration';
+            const { api } = require('@/lib/api');
+            api.setAdminTenantBusinessType.mockResolvedValue({});
+
+            render(<AdminTenantDetailPage />);
+            await waitFor(() => screen.getByText('Feature access'));
+
+            fireEvent.change(screen.getByLabelText('Business type'), {
+                target: { value: 'COMPUTER_HARDWARE' },
+            });
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+            const dialog = screen.getByRole('dialog');
+            expect(dialog).toHaveTextContent(/does not remove this shop/i);
+            expect(dialog).toHaveTextContent(/Computer Hardware/);
+            expect(api.setAdminTenantBusinessType).not.toHaveBeenCalled();
+
+            fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }));
+            expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+            expect(api.setAdminTenantBusinessType).not.toHaveBeenCalled();
+            expect(screen.getByText('1 unsaved change')).toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+            fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /save changes/i }));
+
+            await waitFor(() => {
+                expect(api.setAdminTenantBusinessType).toHaveBeenCalledWith('tenant1', 'COMPUTER_HARDWARE');
+            });
+        });
+
+        it('does not open the type-change dialog for a subscription-only edit', async () => {
+            tabParam = 'subscription';
+            const { api } = require('@/lib/api');
+            api.updateAdminTenantSubscription.mockResolvedValue({});
+
+            render(<AdminTenantDetailPage />);
+            await waitFor(() => screen.getByRole('heading', { name: 'Acme Corp' }));
+
+            fireEvent.change(screen.getByDisplayValue('Basic'), { target: { value: 'PREMIUM' } });
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+            expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+            await waitFor(() => {
+                expect(api.updateAdminTenantSubscription).toHaveBeenCalled();
+            });
+            expect(api.setAdminTenantBusinessType).not.toHaveBeenCalled();
+        });
+
+        it('opens the type-change dialog when the plan is also dirty, then saves both on confirm', async () => {
+            tabParam = 'configuration';
+            const { api } = require('@/lib/api');
+            api.setAdminTenantBusinessType.mockResolvedValue({});
+            api.updateAdminTenantSubscription.mockResolvedValue({});
+
+            const { rerender } = render(<AdminTenantDetailPage />);
+            await waitFor(() => screen.getByText('Feature access'));
+
+            fireEvent.change(screen.getByLabelText('Business type'), {
+                target: { value: 'COMPUTER_HARDWARE' },
+            });
+
+            tabParam = 'subscription';
+            rerender(<AdminTenantDetailPage />);
+            await waitFor(() => screen.getByDisplayValue('Basic'));
+
+            fireEvent.change(screen.getByDisplayValue('Basic'), { target: { value: 'PREMIUM' } });
+            expect(screen.getByText('2 unsaved changes')).toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+            expect(screen.getByRole('dialog')).toHaveTextContent(/does not remove this shop/i);
+            expect(api.setAdminTenantBusinessType).not.toHaveBeenCalled();
+            expect(api.updateAdminTenantSubscription).not.toHaveBeenCalled();
+
+            fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /save changes/i }));
+
+            await waitFor(() => {
+                expect(api.updateAdminTenantSubscription).toHaveBeenCalledWith(
+                    'tenant1',
+                    expect.objectContaining({ planCode: 'PREMIUM' }),
+                );
+                expect(api.setAdminTenantBusinessType).toHaveBeenCalledWith('tenant1', 'COMPUTER_HARDWARE');
+            });
+        });
+    });
 });

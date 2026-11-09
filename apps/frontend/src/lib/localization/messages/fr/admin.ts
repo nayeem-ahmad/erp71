@@ -306,6 +306,7 @@ export const adminMessages = {
             save: "Enregistrer le secteur",
             saved: "Secteur d'activité mis à jour.",
             saveFailed: "Impossible de mettre à jour le secteur d'activité.",
+            typeChangeKeepsProducts: "Enregistrer {label} ne supprime pas les produits existants de cette boutique. L'importation du catalogue ajoutera les SKU de ce type à côté de ceux déjà présents. Les doublons (même SKU) sont ignorés.",
             import: "Importer le catalogue",
             importConfirm: "Importer le catalogue de départ pour {name} ? Cela peut prendre quelques secondes.",
             imported: "{created} produits importés ({skipped} existaient déjà).",
