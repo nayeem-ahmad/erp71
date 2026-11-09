@@ -1,7 +1,8 @@
 # Computer hardware starter catalog
 
 **Date:** 2026-11-09
-**Status:** Draft pending review
+**Status:** Approved 2026-11-09
+**Plan:** `docs/superpowers/plans/2026-11-09-computer-hardware-catalog.md`
 **Asked as:** download product info from startech.com.bd for ERP71 as a
 default product catalogue for hardware stores. Plan-only conversation
 approved the approach below; this spec is the written form.
