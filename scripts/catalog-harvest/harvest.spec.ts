@@ -2,8 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import {
   ALLOWLIST_ROOTS,
   BASE_URL,
@@ -13,14 +12,83 @@ import {
   runHarvest,
 } from './harvest';
 
-const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
+/** Walker tests keep a tiny synthetic listing so they do not depend on live HTML. */
+const LISTING_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Processor</title>
+</head>
+<body>
+  <div class="main-content">
+    <div class="p-item">
+      <div class="p-item-inner">
+        <h4 class="p-item-name">
+          <a href="/amd-ryzen-5-5600">AMD Ryzen 5 5600 Processor</a>
+        </h4>
+      </div>
+    </div>
+    <div class="p-item">
+      <div class="p-item-inner">
+        <h4 class="p-item-name">
+          <a href="/aoc-25g4k">AOC 25G4K Gaming Monitor</a>
+        </h4>
+      </div>
+    </div>
+    <ul class="pagination">
+      <li class="active"><span>1</span></li>
+      <li><a href="?page=2">2</a></li>
+      <li><a href="?page=2">&gt;</a></li>
+    </ul>
+  </div>
+</body>
+</html>
+`;
 
-function readFixture(name: string): string {
-  return readFileSync(join(fixturesDir, name), 'utf8');
-}
-
-const LISTING_HTML = readFixture('listing-processor.html');
-const PRODUCT_HTML = readFixture('product-aoc-25g4k.html');
+const PRODUCT_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>AOC 25G4K Gaming Monitor</title>
+</head>
+<body>
+  <ul class="breadcrumb">
+    <li><a href="/">Home</a></li>
+    <li><a href="/monitor">Monitor</a></li>
+    <li><a href="/aoc-monitor">AOC</a></li>
+  </ul>
+  <div class="product-details">
+    <h1>AOC 25G4K Gaming Monitor Price in Bangladesh</h1>
+    <table class="data-table">
+      <tr>
+        <td>Product Code</td>
+        <td>50472</td>
+      </tr>
+      <tr>
+        <td>Brand</td>
+        <td>AOC</td>
+      </tr>
+      <tr>
+        <td>Status</td>
+        <td>In Stock</td>
+      </tr>
+      <tr>
+        <td>Warranty</td>
+        <td>3 years</td>
+      </tr>
+    </table>
+    <div class="short-description">
+      <h2>Key Features</h2>
+      <ul>
+        <li>Model: 25G4K</li>
+        <li>Display: 24.5" FHD</li>
+        <li>Warranty: 3 years</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>
+`;
 
 const ROBOTS_TXT = [
   'User-agent: *',

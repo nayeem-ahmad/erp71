@@ -12,17 +12,17 @@ function readFixture(name: string): string {
 }
 
 describe('parseProductPage', () => {
-  it('reads brand, model, stock, breadcrumbs, and product code from the AOC fixture', () => {
-    const html = readFixture('product-aoc-25g4k.html');
-    const product = parseProductPage(html, '/aoc-25g4k');
+  it('reads brand, model, stock, breadcrumbs, and product code from the live processor fixture', () => {
+    const html = readFixture('product-amd-ryzen-5-5600.html');
+    const product = parseProductPage(html, '/amd-ryzen-5-5600-processor');
 
-    assert.equal(product.brand, 'AOC');
-    assert.equal(product.model, '25G4K');
+    assert.equal(product.brand, 'AMD');
+    assert.equal(product.model, 'Ryzen 5 5600 (Tray Box)');
     assert.equal(product.inStock, true);
-    assert.ok(product.breadcrumbs.includes('Monitor'));
-    assert.ok(product.breadcrumbs.includes('AOC'));
-    assert.equal(product.productCode, '50472');
-    assert.equal(product.title, 'AOC 25G4K Gaming Monitor');
+    assert.ok(product.breadcrumbs.includes('Processor'));
+    assert.ok(product.breadcrumbs.includes('AMD'));
+    assert.equal(product.productCode, '23200');
+    assert.equal(product.title, 'AMD Ryzen 5 5600 Processor');
     assert.doesNotMatch(product.title, /Price in Bangladesh/i);
   });
 });
@@ -33,7 +33,7 @@ describe('parseListingPage', () => {
     const listing = parseListingPage(html, '/component/processor');
 
     assert.ok(listing.productUrls.some((url) => url.includes('/amd-ryzen-5-5600')));
-    assert.ok(listing.productUrls.some((url) => url.includes('/aoc-25g4k')));
+    assert.ok(listing.productUrls.some((url) => url.includes('/amd-ryzen-5-7500f')));
     assert.ok(listing.nextPage && listing.nextPage.includes('page=2'));
   });
 });

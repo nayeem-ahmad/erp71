@@ -5,9 +5,9 @@ export type { HarvestProduct };
 
 /** CSS selectors for OpenCart-like listing and product pages. */
 const SELECTORS = {
-  title: 'h1',
+  title: 'h1.product-name, h1',
   breadcrumbs: 'ul.breadcrumb li',
-  infoRows: 'table.data-table tr',
+  infoRows: 'table.product-info-table tr, table.data-table tr',
   keyFeatures: '.short-description li',
   productLinks: '.p-item .p-item-name a',
   pagination: '.pagination a',
@@ -31,7 +31,7 @@ function labeledFromRows(root: HTMLElement, label: string): string | null {
     const cells = tr.querySelectorAll('td, th');
     if (cells.length < 2) continue;
     const key = textOf(cells[0]).replace(/:$/, '').toLowerCase();
-    if (key !== want) continue;
+    if (key !== want && !key.endsWith(` ${want}`)) continue;
     const value = textOf(cells[1]);
     return value || null;
   }
