@@ -27,9 +27,21 @@ jest.mock('@/components/data-table', () => ({
             <div data-testid="stats-count">{stats?.items?.length ?? 0}</div>
             {(data ?? []).map((row: any) => {
                 const actionsCol = (columns ?? []).find((column: any) => column.id === 'actions');
+                const productsCol = (columns ?? []).find((column: any) => column.id === 'products');
+                const productsValue = (row.items ?? [])
+                    .map((item: any) => item.product?.name)
+                    .filter(Boolean)
+                    .join(', ');
                 return (
-                    <div key={row.id} data-testid={`row-actions-${row.id}`}>
-                        {actionsCol?.cell?.({ row: { original: row } })}
+                    <div key={row.id}>
+                        <div data-testid={`row-actions-${row.id}`}>
+                            {actionsCol?.cell?.({ row: { original: row } })}
+                        </div>
+                        <div data-testid={`products-cell-${row.id}`}>
+                            {productsCol?.cell
+                                ? productsCol.cell({ getValue: () => productsValue, row: { original: row } })
+                                : productsValue}
+                        </div>
                     </div>
                 );
             })}
@@ -218,6 +230,15 @@ describe('InventoryTransfersPage', () => {
             expect(screen.getByTestId('data-table')).toBeInTheDocument();
             expect(screen.getByTestId('data-table').textContent).toContain('2');
         });
+    });
+
+    it('wraps product names in the products column instead of overflowing neighbours', async () => {
+        render(<InventoryTransfersPage />);
+        const cell = await screen.findByTestId('products-cell-t1');
+        const text = cell.querySelector('span') ?? cell;
+        expect(cell).toHaveTextContent('Widget A');
+        expect(text).toHaveClass('break-words');
+        expect(text).not.toHaveClass('truncate');
     });
 
     it('renders 0 rows in table when no transfers', async () => {
