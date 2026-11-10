@@ -7024,6 +7024,12 @@
               "name": "ASUS ExpertCenter P500 Core 7 240H 32GB Mini Tower Brand PC",
               "purchasePrice": 0,
               "brand": "Asus"
+            },
+            {
+              "sku": "AMD-RYZEN-3-3200G-BUDGET-DESKTOP-PC",
+              "name": "AMD Ryzen 3 3200G Budget Desktop PC With Monitor",
+              "purchasePrice": 0,
+              "brand": "AMD"
             }
           ]
         }
@@ -7035,36 +7041,6 @@
         {
           "name": "Office",
           "products": [
-            {
-              "sku": "AMD-RYZEN-3-3200G-BUDGET-DESKTOP-PC",
-              "name": "AMD Ryzen 3 3200G Budget Desktop PC With Monitor",
-              "purchasePrice": 0,
-              "brand": "AMD"
-            },
-            {
-              "sku": "AUDIO-TECHNICA-AUDIO-TECHNICA-ATH-M40X",
-              "name": "Audio technica ATH-M40x Professional Studio Monitor Headphone",
-              "purchasePrice": 0,
-              "brand": "Audio Technica"
-            },
-            {
-              "sku": "AUDIO-TECHNICA-ATH-M50X",
-              "name": "Audio technica ATH-M50x Professional Studio Monitor Headphone",
-              "purchasePrice": 0,
-              "brand": "Audio Technica"
-            },
-            {
-              "sku": "AUDIO-TECHNICA-AUDIO-TECHNICA-ATH-M70X",
-              "name": "Audio Technica ATH-M70x Professional Studio Monitor Headphone",
-              "purchasePrice": 0,
-              "brand": "Audio Technica"
-            },
-            {
-              "sku": "AUDIO-TECHNICA-ATH-M20XBT",
-              "name": "Audio Technica ATH-R30x Professional Studio Monitor Headphone",
-              "purchasePrice": 0,
-              "brand": "Audio Technica"
-            },
             {
               "sku": "GIGASONIC-RDA-1707W",
               "name": "Gigasonic RDA-1707W 17 Inch LED Square Monitor",
@@ -9059,6 +9035,30 @@
               "name": "Fantech GS306 Beat Pro 2:0 Mini Speaker",
               "purchasePrice": 0,
               "brand": "Fantech"
+            },
+            {
+              "sku": "AUDIO-TECHNICA-AUDIO-TECHNICA-ATH-M40X",
+              "name": "Audio technica ATH-M40x Professional Studio Monitor Headphone",
+              "purchasePrice": 0,
+              "brand": "Audio Technica"
+            },
+            {
+              "sku": "AUDIO-TECHNICA-ATH-M50X",
+              "name": "Audio technica ATH-M50x Professional Studio Monitor Headphone",
+              "purchasePrice": 0,
+              "brand": "Audio Technica"
+            },
+            {
+              "sku": "AUDIO-TECHNICA-AUDIO-TECHNICA-ATH-M70X",
+              "name": "Audio Technica ATH-M70x Professional Studio Monitor Headphone",
+              "purchasePrice": 0,
+              "brand": "Audio Technica"
+            },
+            {
+              "sku": "AUDIO-TECHNICA-ATH-M20XBT",
+              "name": "Audio Technica ATH-R30x Professional Studio Monitor Headphone",
+              "purchasePrice": 0,
+              "brand": "Audio Technica"
             }
           ]
         },
@@ -14522,36 +14522,6 @@
           "name": "Switches",
           "products": [
             {
-              "sku": "ONTEN-OTN-5302",
-              "name": "Onten OTN-5302 4-Port USB 2.0 Hub with Switch",
-              "purchasePrice": 0,
-              "brand": "Onten"
-            },
-            {
-              "sku": "ONTEN-OTN-5301",
-              "name": "Onten OTN-5301 4-Port USB 3.0 Hub with Switch",
-              "purchasePrice": 0,
-              "brand": "Onten"
-            },
-            {
-              "sku": "YUANXIN-X-3171",
-              "name": "Yuanxin X-3171 Multiport 7 in 1 USB Hub with Switch",
-              "purchasePrice": 0,
-              "brand": "Yuanxin"
-            },
-            {
-              "sku": "ONTEN-OTN-5308",
-              "name": "Onten OTN-5308 10 Port USB Hub With Power Switch",
-              "purchasePrice": 0,
-              "brand": "Onten"
-            },
-            {
-              "sku": "ORICO-CT2U3-13AB",
-              "name": "Orico CT2U3-13AB 13 Port USB 3.0 Hub With Individual Switch",
-              "purchasePrice": 0,
-              "brand": "ORICO"
-            },
-            {
               "sku": "GENATA-GNT-E9005EL",
               "name": "Genata GNT-E9005EL 5-Port Desktop Switch",
               "purchasePrice": 0,
@@ -18196,6 +18166,36 @@
               "name": "Ugreen Multi function 5-Port USB Docking Station HUB #20653",
               "purchasePrice": 0,
               "brand": "UGREEN"
+            },
+            {
+              "sku": "ONTEN-OTN-5302",
+              "name": "Onten OTN-5302 4-Port USB 2.0 Hub with Switch",
+              "purchasePrice": 0,
+              "brand": "Onten"
+            },
+            {
+              "sku": "ONTEN-OTN-5301",
+              "name": "Onten OTN-5301 4-Port USB 3.0 Hub with Switch",
+              "purchasePrice": 0,
+              "brand": "Onten"
+            },
+            {
+              "sku": "YUANXIN-X-3171",
+              "name": "Yuanxin X-3171 Multiport 7 in 1 USB Hub with Switch",
+              "purchasePrice": 0,
+              "brand": "Yuanxin"
+            },
+            {
+              "sku": "ONTEN-OTN-5308",
+              "name": "Onten OTN-5308 10 Port USB Hub With Power Switch",
+              "purchasePrice": 0,
+              "brand": "Onten"
+            },
+            {
+              "sku": "ORICO-CT2U3-13AB",
+              "name": "Orico CT2U3-13AB 13 Port USB 3.0 Hub With Individual Switch",
+              "purchasePrice": 0,
+              "brand": "ORICO"
             }
           ]
         }
