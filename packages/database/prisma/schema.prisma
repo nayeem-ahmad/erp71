@@ -1110,6 +1110,7 @@ model Tenant {
   paymentMethods             PaymentMethod[]
   paymentMethodStores        PaymentMethodStore[]
   salesSettings              SalesSettings?
+  customerSegmentSettings    CustomerSegmentSettings?
   accountingSettings         AccountingSettings?
   printTemplates             PrintTemplate[]
   preferenceProfiles         PreferenceProfile[]
@@ -3343,6 +3344,22 @@ model Customer {
   @@index([tenant_id, deleted_at])
   @@index([tenant_id, email])
   @@index([tenant_id, store_id])
+}
+
+/// Per-tenant rules for automatic customer segments (New / Regular / At-Risk / VIP).
+/// Absent means the platform defaults: VIP above ৳50,000 lifetime spend, at-risk
+/// after 30 quiet days, New for an account 30 days old or less with no purchase.
+model CustomerSegmentSettings {
+  tenant_id        String   @id
+  vip_spend_bdt    Decimal  @default(50000) @db.Decimal(12, 2)
+  at_risk_days     Int      @default(30)
+  new_account_days Int      @default(30)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@map("customer_segment_settings")
 }
 
 model CustomerGroup {

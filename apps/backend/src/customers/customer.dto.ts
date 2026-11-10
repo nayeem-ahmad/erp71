@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsEmail, IsEnum, IsUUID, IsNumber, IsBoolean, IsDateString, Min, Max, MaxLength, Matches, ValidateIf } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsString, IsOptional, IsEmail, IsEnum, IsUUID, IsNumber, IsBoolean, IsDateString, IsInt, Min, Max, MaxLength, Matches, ValidateIf } from 'class-validator';
 import { PaginationDto } from '../common/pagination.dto';
 import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 
@@ -415,6 +416,27 @@ export class NextCustomerPaymentNumberQueryDto {
     @IsOptional()
     @IsEnum(CustomerPaymentDirectionDto)
     direction?: CustomerPaymentDirectionDto;
+}
+
+/** The three numbers that assign New / Regular / At-Risk / VIP. */
+export class UpdateSegmentSettingsDto {
+    @Type(() => Number)
+    @IsNumber({ maxDecimalPlaces: 2 })
+    @Min(0)
+    @Max(100_000_000)
+    vip_spend_bdt: number;
+
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    @Max(3650)
+    at_risk_days: number;
+
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    @Max(3650)
+    new_account_days: number;
 }
 
 export class ListCustomerCreditPaymentsQueryDto extends PaginationDto {
