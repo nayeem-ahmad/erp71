@@ -306,6 +306,7 @@ export const adminMessages = {
                 save: 'Simpan jenis perniagaan',
                 saved: 'Jenis perniagaan dikemas kini.',
                 saveFailed: 'Gagal mengemas kini jenis perniagaan.',
+                typeChangeKeepsProducts: 'Menyimpan {label} tidak membuang produk sedia ada kedai ini. Import katalog akan menambah SKU jenis itu di samping yang sudah ada. Pendua (SKU yang sama) akan dilangkau.',
                 import: 'Import katalog',
                 importConfirm: 'Import katalog permulaan untuk {name}? Ini mungkin mengambil masa beberapa saat.',
                 imported: '{created} produk telah diimport ({skipped} sudah wujud).',

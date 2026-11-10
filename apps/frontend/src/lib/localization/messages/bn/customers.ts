@@ -44,6 +44,9 @@ export const customersMessages = {
                 segment: "সেগমেন্ট",
                 registered: "নিবন্ধিত",
                 lastSale: "সর্বশেষ বিক্রয়",
+                lastSaleDate: "সর্বশেষ বিক্রয়ের তারিখ",
+                lastSaleAmount: "সর্বশেষ বিক্রয়ের পরিমাণ",
+                lastSaleInvoice: "সর্বশেষ চালান",
                 noSales: "এখনও কোনো বিক্রয় নেই",
             },
             filters: {

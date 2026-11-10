@@ -44,6 +44,9 @@ export const customersMessages = {
             "segment": "الشريحة",
             "registered": "تاريخ التسجيل",
             "lastSale": "آخر عملية بيع",
+            "lastSaleDate": "تاريخ آخر عملية بيع",
+            "lastSaleAmount": "مبلغ آخر عملية بيع",
+            "lastSaleInvoice": "آخر فاتورة",
             "noSales": "لا توجد مبيعات بعد"
         },
         "filters": {
