@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { Users, Plus, Eye, Pencil, BookOpen, RefreshCw, Crown, AlertTriangle, Upload, UserPlus, HandCoins, Wallet } from 'lucide-react';
+import { Users, Plus, Eye, Pencil, BookOpen, RefreshCw, Crown, AlertTriangle, Upload, UserPlus, HandCoins, Wallet, SlidersHorizontal } from 'lucide-react';
 import { api, type CustomerListFilterParams, type CustomerListSummary } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import CustomerFormModal from './CustomerFormModal';
+import SegmentRulesModal from './SegmentRulesModal';
+import { toast } from '@/lib/toast';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable, createdAtColumn, type ListFilter, type ListFilterOption, type ListStat } from '@/components/data-table';
 import { RowActions, RowActionButton } from '@/components/table';
@@ -87,12 +89,13 @@ const NONE = 'none';
 const columnHelper = createColumnHelper<Customer>();
 
 export default function CustomersPage() {
-    const { t, locale } = useI18n();
+    const { t, locale, fmt } = useI18n();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editTarget, setEditTarget] = useState<Customer | null>(null);
     const [importOpen, setImportOpen] = useState(false);
     const [importBranch, setImportBranch] = useState('');
     const [runningSegmentation, setRunningSegmentation] = useState(false);
+    const [segmentRulesOpen, setSegmentRulesOpen] = useState(false);
     // The tenant admin's Sales Settings switch: adds each customer's credit
     // limit under their due. Off until it reads true, so the limit never
     // flashes in for a shop that has it off.
@@ -193,10 +196,11 @@ export default function CustomersPage() {
     const handleRunSegmentation = async () => {
         setRunningSegmentation(true);
         try {
-            await api.runCustomerSegmentation();
+            const result = await api.runCustomerSegmentation();
+            toast.success(fmt(t.customers.segmentationComplete, { count: Number(result?.updated ?? 0) }));
             await refresh();
-        } catch (error) {
-            console.error('Failed to run segmentation', error);
+        } catch (error: any) {
+            toast.error(error?.message || t.customers.evaluateFailed);
         } finally {
             setRunningSegmentation(false);
         }
@@ -508,6 +512,15 @@ export default function CustomersPage() {
                             <Button
                                 type="button"
                                 variant="secondary"
+                                onClick={() => setSegmentRulesOpen(true)}
+                                title={t.customers.segmentRulesTitle}
+                                icon={<SlidersHorizontal className="w-4 h-4" />}
+                            >
+                                {t.customers.segmentRules}
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="secondary"
                                 onClick={handleRunSegmentation}
                                 disabled={runningSegmentation}
                                 title={t.customers.runSegmentationTitle}
@@ -538,6 +551,12 @@ export default function CustomersPage() {
                     branches={branch.hidden ? undefined : branch.branches}
                     canSetBranch={branch.canSeeAll}
                     defaultBranchId={branch.headerBranchId}
+                />
+
+                <SegmentRulesModal
+                    open={segmentRulesOpen}
+                    onClose={() => setSegmentRulesOpen(false)}
+                    onSaved={refresh}
                 />
 
                 <ImportDialog
