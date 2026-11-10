@@ -22,6 +22,9 @@ jest.mock('@/lib/api', () => ({
         getTerritories: jest.fn(),
         getSalesSettings: jest.fn(),
         getCustomersListSummary: jest.fn(),
+        getCustomerSegmentSettings: jest.fn(),
+        updateCustomerSegmentSettings: jest.fn(),
+        runCustomerSegmentation: jest.fn(),
     },
 }));
 
@@ -96,6 +99,11 @@ describe('CustomersPage — Customer Management', () => {
         api.getTerritories.mockResolvedValue([{ id: 'ter-1', name: 'Dhaka North', parent: null }]);
         api.getSalesSettings.mockResolvedValue({ show_customer_credit: false });
         api.getCustomersListSummary.mockResolvedValue(SUMMARY);
+        api.getCustomerSegmentSettings.mockResolvedValue({
+            vip_spend_bdt: 50000,
+            at_risk_days: 30,
+            new_account_days: 30,
+        });
         // An owner: customers start on every branch.
         mockBranchScope({ value: 'all', defaultValue: 'all' });
     });
@@ -114,6 +122,13 @@ describe('CustomersPage — Customer Management', () => {
         expect(within(strip).getByText(formatBDT(18250, { minimumFractionDigits: 0, maximumFractionDigits: 0 }))).toHaveClass('text-amber-700');
         // The old per-segment cards gave way to the strip.
         expect(screen.queryByText('Total Customers')).not.toBeInTheDocument();
+    });
+
+    it('opens segment rules from the header', async () => {
+        render(<CustomersPage />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Segment rules' }));
+        expect(await screen.findByText(/These numbers decide who is VIP/)).toBeInTheDocument();
+        expect(await screen.findByLabelText(/At-Risk after/)).toBeInTheDocument();
     });
 
     it('filters by group — "No group" included — on the server, for rows and strip alike', async () => {

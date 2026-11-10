@@ -2838,6 +2838,16 @@ export const api = {
         fetchWithAuth(`/customers/segment-stats${storeId ? `?storeId=${encodeURIComponent(storeId)}` : ''}`),
     runCustomerSegmentation: () => fetchWithAuth('/customers/run-segmentation', { method: 'POST' }),
     evaluateCustomerSegments: () => fetchWithAuth('/customers/segments/evaluate', { method: 'POST' }),
+    getCustomerSegmentSettings: () => fetchWithAuth('/customers/segment-settings'),
+    updateCustomerSegmentSettings: (data: {
+        vip_spend_bdt: number;
+        at_risk_days: number;
+        new_account_days: number;
+    }) => fetchWithAuth('/customers/segment-settings', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     createCustomer: (data: any) => fetchWithAuth('/customers', {
         method: 'POST',
         body: JSON.stringify(data),
