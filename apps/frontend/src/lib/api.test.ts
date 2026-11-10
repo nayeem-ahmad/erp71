@@ -1322,6 +1322,28 @@ describe('api.evaluateCustomerSegments', () => {
     });
 });
 
+describe('api.getCustomerSegmentSettings', () => {
+    it('fetches /customers/segment-settings', async () => {
+        mockOk({ data: {} });
+        await api.getCustomerSegmentSettings();
+        expect(lastUrl()).toContain('/customers/segment-settings');
+    });
+});
+
+describe('api.updateCustomerSegmentSettings', () => {
+    it('patches /customers/segment-settings', async () => {
+        mockOk({ data: {} });
+        await api.updateCustomerSegmentSettings({ vip_spend_bdt: 25000, at_risk_days: 45, new_account_days: 14 });
+        expect(lastOpts().method).toBe('PATCH');
+        expect(lastUrl()).toContain('/customers/segment-settings');
+        expect(JSON.parse(String(lastOpts().body))).toEqual({
+            vip_spend_bdt: 25000,
+            at_risk_days: 45,
+            new_account_days: 14,
+        });
+    });
+});
+
 describe('api.createCustomer', () => {
     it('posts to /customers', async () => {
         mockOk({ data: {} });

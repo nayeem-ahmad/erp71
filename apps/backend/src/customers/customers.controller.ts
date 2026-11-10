@@ -11,6 +11,7 @@ import {
     ListCustomerCreditPaymentsQueryDto,
     WriteOffCustomerDebtDto,
     ListCustomerWriteOffsQueryDto,
+    UpdateSegmentSettingsDto,
 } from './customer.dto';
 import { StorePermission } from '@erp71/shared-types';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -61,6 +62,35 @@ export class CustomersController {
     @Get('segment-stats')
     async getSegmentStats(@Tenant() tenant: TenantContext, @Query('storeId') storeId?: string) {
         return this.customersService.getSegmentStats(tenant.tenantId, await this.scope(tenant, storeId));
+    }
+
+    @RequireAnyStorePermission(...CUSTOMER_READ)
+    @Get('segment-settings')
+    async getSegmentSettings(@Tenant() tenant: TenantContext) {
+        const thresholds = await this.segmentsService.getThresholdsForTenant(tenant.tenantId);
+        return {
+            vip_spend_bdt: thresholds.VIP_SPEND_BDT,
+            at_risk_days: thresholds.AT_RISK_DAYS,
+            new_account_days: thresholds.NEW_ACCOUNT_DAYS,
+        };
+    }
+
+    @RequireAnyStorePermission(...CUSTOMER_WRITE)
+    @Patch('segment-settings')
+    async updateSegmentSettings(@Tenant() tenant: TenantContext, @Body() dto: UpdateSegmentSettingsDto) {
+        const thresholds = await this.segmentsService.updateThresholdsForTenant(tenant.tenantId, {
+            VIP_SPEND_BDT: dto.vip_spend_bdt,
+            AT_RISK_DAYS: dto.at_risk_days,
+            NEW_ACCOUNT_DAYS: dto.new_account_days,
+        });
+        const result = await this.segmentsService.runForTenant(tenant.tenantId);
+        return {
+            vip_spend_bdt: thresholds.VIP_SPEND_BDT,
+            at_risk_days: thresholds.AT_RISK_DAYS,
+            new_account_days: thresholds.NEW_ACCOUNT_DAYS,
+            updated: result.updated,
+            total: result.total,
+        };
     }
 
     @RequireAnyStorePermission(...CUSTOMER_WRITE)

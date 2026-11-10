@@ -19,6 +19,11 @@ describe('SegmentsService', () => {
             sale: {
                 groupBy: jest.fn(),
             },
+            customerSegmentSettings: {
+                findUnique: jest.fn().mockResolvedValue(null),
+                findMany: jest.fn().mockResolvedValue([]),
+                upsert: jest.fn(),
+            },
         };
 
         const mockLogger = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() };
@@ -107,6 +112,52 @@ describe('SegmentsService', () => {
                 now: NOW,
             })).toBe('Regular');
         });
+
+        it('classifies At-Risk using the tenant quiet-days window', () => {
+            const lastPurchase = new Date('2026-04-01'); // 37 days before NOW
+            expect(service.classifyCustomer({
+                totalSpent: 1000,
+                lastPurchaseDate: lastPurchase,
+                accountCreatedAt: new Date('2025-01-01'),
+                now: NOW,
+                thresholds: { ...SEGMENT_THRESHOLDS, AT_RISK_DAYS: 45 },
+            })).toBe('Regular');
+            expect(service.classifyCustomer({
+                totalSpent: 1000,
+                lastPurchaseDate: lastPurchase,
+                accountCreatedAt: new Date('2025-01-01'),
+                now: NOW,
+                thresholds: { ...SEGMENT_THRESHOLDS, AT_RISK_DAYS: 30 },
+            })).toBe('At-Risk');
+        });
+
+        it('classifies VIP using the tenant spend threshold', () => {
+            expect(service.classifyCustomer({
+                totalSpent: 20000,
+                lastPurchaseDate: new Date('2026-04-25'),
+                accountCreatedAt: new Date('2025-01-01'),
+                now: NOW,
+                thresholds: { ...SEGMENT_THRESHOLDS, VIP_SPEND_BDT: 10000 },
+            })).toBe('VIP');
+        });
+
+        it('classifies New using the tenant new-account window', () => {
+            const tenDaysOld = new Date('2026-04-28');
+            expect(service.classifyCustomer({
+                totalSpent: 0,
+                lastPurchaseDate: null,
+                accountCreatedAt: tenDaysOld,
+                now: NOW,
+                thresholds: { ...SEGMENT_THRESHOLDS, NEW_ACCOUNT_DAYS: 7 },
+            })).toBe('Regular');
+            expect(service.classifyCustomer({
+                totalSpent: 0,
+                lastPurchaseDate: null,
+                accountCreatedAt: tenDaysOld,
+                now: NOW,
+                thresholds: { ...SEGMENT_THRESHOLDS, NEW_ACCOUNT_DAYS: 14 },
+            })).toBe('New');
+        });
     });
 
     describe('runForTenant()', () => {
@@ -173,6 +224,91 @@ describe('SegmentsService', () => {
             await service.runForTenant('tenant-abc', NOW);
             const call = db.sale.groupBy.mock.calls[0][0];
             expect(call._max).toEqual({ sale_date: true });
+        });
+
+        it('keeps a 37-day quiet customer Regular when the tenant uses a 45-day window', async () => {
+            db.customerSegmentSettings.findUnique.mockResolvedValue({
+                vip_spend_bdt: 50000,
+                at_risk_days: 45,
+                new_account_days: 30,
+            });
+            db.customer.findMany.mockResolvedValue([
+                { id: 'c1', tenant_id: 't1', total_spent: 1000, segment_category: 'Regular', created_at: new Date('2025-01-01') },
+            ]);
+            db.sale.groupBy.mockResolvedValue([
+                { customer_id: 'c1', _max: { sale_date: new Date('2026-04-01') } },
+            ]);
+
+            const result = await service.runForTenant('t1', NOW);
+
+            expect(db.customer.update).not.toHaveBeenCalled();
+            expect(result).toEqual({ updated: 0, total: 1 });
+        });
+
+        it('uses each tenant\'s own rules when evaluating every tenant', async () => {
+            db.customerSegmentSettings.findMany.mockResolvedValue([
+                { tenant_id: 't1', vip_spend_bdt: 50000, at_risk_days: 45, new_account_days: 30 },
+                { tenant_id: 't2', vip_spend_bdt: 50000, at_risk_days: 30, new_account_days: 30 },
+            ]);
+            db.customer.findMany.mockResolvedValue([
+                { id: 'c1', tenant_id: 't1', total_spent: 1000, segment_category: 'Regular', created_at: new Date('2025-01-01') },
+                { id: 'c2', tenant_id: 't2', total_spent: 1000, segment_category: 'Regular', created_at: new Date('2025-01-01') },
+            ]);
+            db.sale.groupBy.mockResolvedValue([
+                { customer_id: 'c1', _max: { sale_date: new Date('2026-04-01') } },
+                { customer_id: 'c2', _max: { sale_date: new Date('2026-04-01') } },
+            ]);
+            db.customer.update.mockResolvedValue({});
+
+            await service.runForTenant(null, NOW);
+
+            expect(db.customer.update).toHaveBeenCalledTimes(1);
+            expect(db.customer.update).toHaveBeenCalledWith({
+                where: { id: 'c2' },
+                data: { segment_category: 'At-Risk' },
+            });
+        });
+    });
+
+    describe('getThresholdsForTenant()', () => {
+        it('returns platform defaults when the tenant has never set rules', async () => {
+            await expect(service.getThresholdsForTenant('t1')).resolves.toEqual(SEGMENT_THRESHOLDS);
+        });
+
+        it('returns the tenant\'s stored rules', async () => {
+            db.customerSegmentSettings.findUnique.mockResolvedValue({
+                vip_spend_bdt: 25000,
+                at_risk_days: 45,
+                new_account_days: 14,
+            });
+            await expect(service.getThresholdsForTenant('t1')).resolves.toEqual({
+                VIP_SPEND_BDT: 25000,
+                AT_RISK_DAYS: 45,
+                NEW_ACCOUNT_DAYS: 14,
+            });
+        });
+    });
+
+    describe('updateThresholdsForTenant()', () => {
+        it('upserts the three rules and returns them', async () => {
+            db.customerSegmentSettings.upsert.mockResolvedValue({
+                vip_spend_bdt: 25000,
+                at_risk_days: 45,
+                new_account_days: 14,
+            });
+            const result = await service.updateThresholdsForTenant('t1', {
+                VIP_SPEND_BDT: 25000,
+                AT_RISK_DAYS: 45,
+                NEW_ACCOUNT_DAYS: 14,
+            });
+            expect(db.customerSegmentSettings.upsert).toHaveBeenCalledWith(expect.objectContaining({
+                where: { tenant_id: 't1' },
+            }));
+            expect(result).toEqual({
+                VIP_SPEND_BDT: 25000,
+                AT_RISK_DAYS: 45,
+                NEW_ACCOUNT_DAYS: 14,
+            });
         });
     });
 });
