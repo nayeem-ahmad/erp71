@@ -44,6 +44,9 @@ export const customersMessages = {
             "segment": "Segment",
             "registered": "Registriert",
             "lastSale": "Letzter Verkauf",
+            "lastSaleDate": "Letztes Verkaufsdatum",
+            "lastSaleAmount": "Letzter Verkaufsbetrag",
+            "lastSaleInvoice": "Letzte Rechnung",
             "noSales": "Noch keine Verkäufe"
         },
         "filters": {

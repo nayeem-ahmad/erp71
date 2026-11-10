@@ -292,29 +292,42 @@ export default function CustomersPage() {
                 meta: { align: 'end' },
             }),
             columnHelper.accessor((row) => row.last_sale?.sale_date ?? '', {
-                id: 'last_sale',
-                header: t.customers.columns.lastSale,
-                // Computed per page on the server, not a customer column, so
-                // it cannot be sorted there.
-                enableSorting: false,
+                id: 'last_sale_date',
+                header: t.customers.columns.lastSaleDate,
                 cell: (info) => {
                     const sale = info.row.original.last_sale;
                     if (!sale) return <span className="text-gray-400">{t.customers.columns.noSales}</span>;
+                    return formatDate(sale.sale_date, locale);
+                },
+                size: 130,
+                meta: { hideOnMobile: true },
+            }),
+            columnHelper.accessor((row) => row.last_sale?.total_amount ?? '', {
+                id: 'last_sale_amount',
+                header: t.customers.columns.lastSaleAmount,
+                enableSorting: false,
+                cell: (info) => {
+                    const sale = info.row.original.last_sale;
+                    if (!sale) return <span className="text-gray-400">—</span>;
+                    return formatBDT(Number(sale.total_amount || 0), { locale });
+                },
+                size: 130,
+                meta: { hideOnMobile: true, align: 'end' },
+            }),
+            columnHelper.accessor((row) => row.last_sale?.serial_number ?? '', {
+                id: 'last_sale_invoice',
+                header: t.customers.columns.lastSaleInvoice,
+                enableSorting: false,
+                cell: (info) => {
+                    const sale = info.row.original.last_sale;
+                    if (!sale) return <span className="text-gray-400">—</span>;
                     return (
-                        <>
-                            <span className="block">
-                                {formatDate(sale.sale_date, locale)} · {formatBDT(Number(sale.total_amount || 0), { locale })}
-                            </span>
-                            <Link
-                                href={routes.sales.detail(sale.id)}
-                                className="block text-blue-600 hover:underline"
-                            >
-                                {sale.serial_number}
-                            </Link>
-                        </>
+                        <Link href={routes.sales.detail(sale.id)} className="text-blue-600 hover:underline">
+                            {sale.serial_number}
+                        </Link>
                     );
                 },
-                size: 170,
+                size: 140,
                 meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('due_balance', {
