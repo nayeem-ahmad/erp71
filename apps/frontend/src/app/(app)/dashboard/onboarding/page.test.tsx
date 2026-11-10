@@ -118,6 +118,21 @@ describe('OnboardingPage', () => {
         });
     });
 
+    it('enables Computer Hardware with the committed catalog count and keeps Pharmacy disabled', async () => {
+        const { api } = require('@/lib/api');
+        api.getMe.mockResolvedValue({ tenants: [] });
+
+        render(<OnboardingPage />);
+
+        expect(await screen.findByText('Create your store')).toBeInTheDocument();
+
+        const computerHardware = screen.getByRole('button', { name: /computer hardware/i });
+        expect(computerHardware).toBeEnabled();
+        expect(computerHardware).toHaveTextContent('3,000 products pre-loaded');
+
+        expect(screen.getByRole('button', { name: /pharmacy/i })).toBeDisabled();
+    });
+
     it('creates store when user has no tenant', async () => {
         const { api } = require('@/lib/api');
         api.getMe.mockResolvedValue({ tenants: [] });

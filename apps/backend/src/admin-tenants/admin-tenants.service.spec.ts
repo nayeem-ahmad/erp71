@@ -1438,6 +1438,17 @@ describe('AdminTenantsService', () => {
           expect(seedBusinessTypeTemplate).not.toHaveBeenCalled();
       });
 
+      it('runs the seeder for COMPUTER_HARDWARE', async () => {
+          db.tenant.findFirst.mockResolvedValue(makeTenant({ id: 't1', business_type: 'COMPUTER_HARDWARE' }));
+          (seedBusinessTypeTemplate as jest.Mock).mockResolvedValue({
+              created: 3000, skipped: 0, groups: 9, subgroups: 0, brands: 0,
+          });
+
+          await service.importCatalog('t1', 'admin1');
+
+          expect(seedBusinessTypeTemplate).toHaveBeenCalledWith(db, 't1', 'COMPUTER_HARDWARE');
+      });
+
       it('throws BadRequestException when the business type has no template', async () => {
           db.tenant.findFirst.mockResolvedValue(makeTenant({ id: 't1', business_type: 'PHARMACY' }));
 

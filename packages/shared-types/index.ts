@@ -1195,7 +1195,10 @@ export type BusinessType = (typeof BusinessType)[keyof typeof BusinessType];
 export const BUSINESS_TYPE_VALUES = Object.values(BusinessType) as BusinessType[];
 
 /** Business types that have a starter product catalog under packages/database/prisma/templates/. */
-export const BUSINESS_TYPES_WITH_TEMPLATE: BusinessType[] = [BusinessType.SURGICAL_MEDICAL];
+export const BUSINESS_TYPES_WITH_TEMPLATE: BusinessType[] = [
+  BusinessType.SURGICAL_MEDICAL,
+  BusinessType.COMPUTER_HARDWARE,
+];
 
 export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
   SURGICAL_MEDICAL: 'Surgical / Medical',

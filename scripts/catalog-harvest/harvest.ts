@@ -24,8 +24,9 @@ export const CATEGORY_ALIASES: Record<string, string> = {
   'power-supply': '/component/power-supply',
   'cpu-cooler': '/component/cpu-cooler',
   casing: '/component/casing',
-  ssd: '/component/ssd',
-  hdd: '/component/hdd',
+  // Live listings; /component/ssd and /component/hdd 404.
+  ssd: '/ssd',
+  hdd: '/component/hard-disk-drive',
   laptop: '/laptop-notebook/laptop',
   'gaming-laptop': '/gaming-laptop',
   ultrabook: '/laptop-notebook/ultrabook',
@@ -33,6 +34,20 @@ export const CATEGORY_ALIASES: Record<string, string> = {
   desktops: '/desktops',
   monitor: '/monitor',
   networking: '/networking',
+  // Discovered from Star Tech homepage nav; in-scope spec groups only.
+  keyboard: '/accessories/keyboards',
+  mouse: '/accessories/mouse',
+  headset: '/accessories/headphone',
+  speaker: '/accessories/speaker-and-home-theater',
+  webcam: '/accessories/webcam',
+  printer: '/printer',
+  scanner: '/office-equipment/scanner',
+  ups: '/ups',
+  'hdmi-cable': '/hdmi-cable',
+  'usb-cable': '/usb-cable',
+  hub: '/hub-and-dock',
+  'pen-drive': '/pen-drive',
+  'memory-card': '/memory-card',
 };
 
 export const ALLOWLIST_ROOTS: string[] = [...new Set(Object.values(CATEGORY_ALIASES))];
