@@ -44,6 +44,9 @@ export const customersMessages = {
             "segment": "درجہ",
             "registered": "رجسٹرڈ",
             "lastSale": "آخری فروخت",
+            "lastSaleDate": "آخری فروخت کی تاریخ",
+            "lastSaleAmount": "آخری فروخت کی رقم",
+            "lastSaleInvoice": "آخری انوائس",
             "noSales": "ابھی تک کوئی فروخت نہیں"
         },
         "filters": {

@@ -1,7 +1,7 @@
 'use client';
 import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import CustomersPage from './page';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 import { mockBranchScope } from '@/test-utils/branch-scope';
 
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
@@ -282,16 +282,36 @@ describe('CustomersPage — Customer Management', () => {
         });
     });
 
-    it('shows each customer\'s last sale amount, linked to that sale', async () => {
+    it('shows last sale date, amount, and invoice in three columns', async () => {
         render(<CustomersPage />);
         await screen.findByText('Alice Smith');
 
-        expect(screen.getByRole('columnheader', { name: /Last Sale/ })).toBeInTheDocument();
-        const link = screen.getByRole('link', { name: 'INV-2627-00042' });
+        expect(screen.getByRole('columnheader', { name: 'Last Sale Date' })).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: 'Last Sale Amount' })).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: 'Last Invoice' })).toBeInTheDocument();
+
+        const row = screen.getByText('Alice Smith').closest('tr')!;
+        expect(within(row).getByText(formatDate('2026-10-30T09:15:00.000Z'))).toBeInTheDocument();
+        expect(within(row).getByText(formatBDT(1250.5))).toBeInTheDocument();
+        const link = within(row).getByRole('link', { name: 'INV-2627-00042' });
         expect(link).toHaveAttribute('href', '/sales/sale-42');
-        expect(screen.getByText(new RegExp(formatBDT(1250.5).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))).toBeInTheDocument();
-        // A customer with no sales says so rather than leaving a blank.
-        expect(screen.getByText('No sales yet')).toBeInTheDocument();
+
+        const empty = screen.getByText('TechCorp Ltd').closest('tr')!;
+        expect(within(empty).getByText('No sales yet')).toBeInTheDocument();
+    });
+
+    it('asks the server to sort by last sale date when that column is clicked', async () => {
+        const { api } = require('@/lib/api');
+        render(<CustomersPage />);
+        await screen.findByText('Alice Smith');
+
+        fireEvent.click(screen.getByText('Last Sale Date'));
+
+        await waitFor(() =>
+            expect(api.getCustomersPaged).toHaveBeenLastCalledWith(
+                expect.objectContaining({ sortBy: 'last_sale_date', sortDir: 'asc' }),
+            ),
+        );
     });
 
     it('shows New Customer button', () => {

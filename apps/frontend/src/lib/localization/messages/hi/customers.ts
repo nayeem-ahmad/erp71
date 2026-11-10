@@ -44,6 +44,9 @@ export const customersMessages = {
             "segment": "वर्ग",
             "registered": "पंजीकृत",
             "lastSale": "अंतिम बिक्री",
+            "lastSaleDate": "अंतिम बिक्री तिथि",
+            "lastSaleAmount": "अंतिम बिक्री राशि",
+            "lastSaleInvoice": "अंतिम चालान",
             "noSales": "अभी तक कोई बिक्री नहीं"
         },
         "filters": {

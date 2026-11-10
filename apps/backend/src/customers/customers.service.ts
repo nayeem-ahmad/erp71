@@ -55,6 +55,15 @@ const CUSTOMER_SORTABLE: SortableMap = {
     due_balance: (dir) => ({ due_balance: dir }),
 };
 const CUSTOMER_DEFAULT_ORDER = { created_at: 'desc' as const };
+/** Not a Customer column — findAll sorts this from each row's last_sale. */
+const LAST_SALE_DATE_SORT = 'last_sale_date';
+
+const CUSTOMER_LIST_INCLUDE = {
+    customerGroup: true,
+    territory: true,
+    salesRep: { select: SALES_REP_SELECT },
+    store: { select: { id: true, name: true } },
+} as const;
 
 /** Amounts below this are rounding dust, not money. Matches customer-credit.utils. */
 /** A customer's most recent sale, as the customer list shows it. */
@@ -442,18 +451,24 @@ export class CustomersService {
         const skip = (page - 1) * limit;
 
         const filtered = customerListWhere(tenantId, { ...opts, timezone: opts?.timezone as string });
+        const scope = opts?.scope ?? null;
+
+        if (opts?.sortBy === LAST_SALE_DATE_SORT) {
+            return this.findAllByLastSaleDate(tenantId, filtered, {
+                page,
+                limit,
+                skip,
+                sortDir: opts.sortDir,
+                scope,
+            });
+        }
 
         const [items, total] = await Promise.all([
             this.db.customer.findMany({
                 where: filtered,
                 // The rep travels with the customer so the sale screen can
                 // credit the sale to them on picking the customer.
-                include: {
-                    customerGroup: true,
-                    territory: true,
-                    salesRep: { select: SALES_REP_SELECT },
-                    store: { select: { id: true, name: true } },
-                },
+                include: CUSTOMER_LIST_INCLUDE,
                 orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, CUSTOMER_SORTABLE, CUSTOMER_DEFAULT_ORDER),
                 skip,
                 take: limit,
@@ -461,12 +476,54 @@ export class CustomersService {
             this.db.customer.count({ where: filtered }),
         ]);
 
-        const lastSales = await this.lastSalesFor(tenantId, items.map(c => c.id), opts?.scope ?? null);
+        const lastSales = await this.lastSalesFor(tenantId, items.map(c => c.id), scope);
         return paginate(
             items.map(c => ({ ...this.decryptCustomer(c), last_sale: lastSales.get(c.id) ?? null })),
             total,
             page,
             limit,
+        );
+    }
+
+    /**
+     * Last sale date is computed from Sale, so Prisma cannot orderBy it. Load
+     * matching ids, rank them by the same last-sale query the list column uses,
+     * then fetch the page in that order. Never-sold sorts as the oldest date.
+     */
+    private async findAllByLastSaleDate(
+        tenantId: string,
+        filtered: Prisma.CustomerWhereInput,
+        opts: { page: number; limit: number; skip: number; sortDir?: string; scope: CustomerScope },
+    ) {
+        const [matching, total] = await Promise.all([
+            this.db.customer.findMany({ where: filtered, select: { id: true } }),
+            this.db.customer.count({ where: filtered }),
+        ]);
+        const lastSales = await this.lastSalesFor(tenantId, matching.map((c) => c.id), opts.scope);
+        const dir = opts.sortDir === 'desc' ? -1 : 1;
+        const saleTime = (id: string) => lastSales.get(id)?.sale_date?.getTime() ?? 0;
+        const pageIds = matching
+            .map((c) => c.id)
+            .sort((a, b) => {
+                const diff = (saleTime(a) - saleTime(b)) * dir;
+                if (diff !== 0) return diff;
+                return a < b ? -dir : a > b ? dir : 0;
+            })
+            .slice(opts.skip, opts.skip + opts.limit);
+        if (pageIds.length === 0) {
+            return paginate([], total, opts.page, opts.limit);
+        }
+        const items = await this.db.customer.findMany({
+            where: { id: { in: pageIds } },
+            include: CUSTOMER_LIST_INCLUDE,
+        });
+        const byId = new Map(items.map((c) => [c.id, c]));
+        const ordered = pageIds.map((id) => byId.get(id)).filter((c): c is (typeof items)[number] => Boolean(c));
+        return paginate(
+            ordered.map((c) => ({ ...this.decryptCustomer(c), last_sale: lastSales.get(c.id) ?? null })),
+            total,
+            opts.page,
+            opts.limit,
         );
     }
 

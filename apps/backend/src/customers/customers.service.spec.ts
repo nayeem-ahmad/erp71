@@ -445,6 +445,59 @@ describe('CustomersService', () => {
       expect(flat).toContain('branch-a');
       expect(flat).toContain('store_id IN');
     });
+
+    it('orders the page by last sale date, never-sold last when newest first', async () => {
+      const older = new Date('2026-01-01T00:00:00.000Z');
+      const newer = new Date('2026-11-01T00:00:00.000Z');
+      db.customer.findMany.mockImplementation((args: { select?: { id?: true }; include?: unknown }) => {
+        if (args.select?.id && !args.include) {
+          return Promise.resolve([{ id: 'c-none' }, { id: 'c-old' }, { id: 'c-new' }]);
+        }
+        return Promise.resolve([{ id: 'c-old' }, { id: 'c-new' }]);
+      });
+      db.customer.count.mockResolvedValue(3);
+      db.$queryRaw.mockResolvedValueOnce([
+        { id: 's-old', customer_id: 'c-old', serial_number: 'INV-1', reference_number: null, sale_date: older, total_amount: '10' },
+        { id: 's-new', customer_id: 'c-new', serial_number: 'INV-2', reference_number: null, sale_date: newer, total_amount: '20' },
+      ]);
+
+      const res = await service.findAll('t1', {
+        timezone: 'Asia/Dhaka',
+        sortBy: 'last_sale_date',
+        sortDir: 'desc',
+        page: 1,
+        limit: 2,
+      });
+
+      expect(res.items.map((row: { id: string }) => row.id)).toEqual(['c-new', 'c-old']);
+      expect(res.total).toBe(3);
+      expect(db.customer.findMany).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ where: { id: { in: ['c-new', 'c-old'] } } }),
+      );
+    });
+
+    it('puts customers with no sale first when last sale date is oldest first', async () => {
+      const older = new Date('2026-01-01T00:00:00.000Z');
+      db.customer.findMany.mockImplementation((args: { select?: { id?: true }; include?: unknown }) => {
+        if (args.select?.id && !args.include) {
+          return Promise.resolve([{ id: 'c-old' }, { id: 'c-none' }]);
+        }
+        return Promise.resolve([{ id: 'c-old' }, { id: 'c-none' }]);
+      });
+      db.customer.count.mockResolvedValue(2);
+      db.$queryRaw.mockResolvedValueOnce([
+        { id: 's-old', customer_id: 'c-old', serial_number: 'INV-1', reference_number: null, sale_date: older, total_amount: '10' },
+      ]);
+
+      const res = await service.findAll('t1', {
+        timezone: 'Asia/Dhaka',
+        sortBy: 'last_sale_date',
+        sortDir: 'asc',
+      });
+
+      expect(res.items.map((row: { id: string }) => row.id)).toEqual(['c-none', 'c-old']);
+    });
   });
 
   it('findAll() should filter created_at to the inclusive Dhaka day range', async () => {

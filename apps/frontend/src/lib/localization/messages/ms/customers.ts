@@ -44,6 +44,9 @@ export const customersMessages = {
                 segment: "Segmen",
                 registered: "Didaftarkan",
                 lastSale: "Jualan Terakhir",
+                lastSaleDate: "Tarikh Jualan Terakhir",
+                lastSaleAmount: "Jumlah Jualan Terakhir",
+                lastSaleInvoice: "Invois Terakhir",
                 noSales: "Tiada jualan lagi",
             },
             filters: {
