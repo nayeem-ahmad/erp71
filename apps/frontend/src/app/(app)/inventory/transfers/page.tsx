@@ -390,7 +390,9 @@ export default function InventoryTransfersPage() {
             columnHelper.accessor((row) => row.items.map((item) => item.product?.name).filter(Boolean).join(', '), {
                 id: 'products',
                 header: t.nav.products,
-                cell: (info) => <span className="truncate text-sm text-gray-600">{info.getValue() || '-'}</span>,
+                // Comfortable density wraps; compact still ellipsizes via `.dt-single-line`.
+                // `truncate` is nowrap and overflows the next column when the cell is not clipped.
+                cell: (info) => <span className="break-words">{info.getValue() || '-'}</span>,
                 size: 260,
             }),
             columnHelper.accessor((row) => row.items.reduce((sum, item) => sum + (item.quantity_sent - item.quantity_received), 0), {
