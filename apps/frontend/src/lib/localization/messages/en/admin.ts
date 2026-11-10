@@ -306,6 +306,7 @@ export const adminMessages = {
             save: 'Save business type',
             saved: 'Business type updated.',
             saveFailed: 'Failed to update business type.',
+            typeChangeKeepsProducts: 'Saving {label} does not remove this shop’s existing products. Import catalog will add that type’s SKUs next to what is already there. Duplicates (same SKU) are skipped.',
             import: 'Import catalog',
             importConfirm: 'Import the starter catalog for {name}? This may take a few seconds.',
             imported: 'Imported {created} products ({skipped} already existed).',

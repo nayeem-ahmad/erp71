@@ -67,7 +67,7 @@ const BUSINESS_TYPE_DISPLAY: Record<BusinessType, { icon: typeof Stethoscope; de
     SURGICAL_MEDICAL: { icon: Stethoscope, description: '1,173 products pre-loaded' },
     PHARMACY: { icon: Pill, description: 'Coming soon' },
     GROCERY: { icon: ShoppingBag, description: 'Coming soon' },
-    COMPUTER_HARDWARE: { icon: Computer, description: 'Coming soon' },
+    COMPUTER_HARDWARE: { icon: Computer, description: '3,000 products pre-loaded' },
 };
 
 const BUSINESS_TYPES = BUSINESS_TYPE_VALUES.map((value) => ({

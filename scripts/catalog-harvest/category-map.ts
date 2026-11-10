@@ -111,11 +111,11 @@ const RULES: Rule[] = [
   { test: (i) => anywhere(i, 'mini pc'), group: 'Desktop', subgroup: 'Mini PC' },
   { test: (i) => anywhere(i, 'all in one', 'aio'), group: 'Desktop', subgroup: 'All-in-One' },
 
+  { test: (i) => anywhere(i, 'headset', 'headphone', 'speaker'), group: 'Peripherals', subgroup: 'Audio' },
   { test: (i) => isMonitor(i) && isGaming(i), group: 'Monitors', subgroup: 'Gaming' },
   { test: (i) => isMonitor(i), group: 'Monitors', subgroup: 'Office' },
 
   { test: (i) => anywhere(i, 'keyboard', 'mouse'), group: 'Peripherals', subgroup: 'Input Devices' },
-  { test: (i) => anywhere(i, 'headset', 'speaker'), group: 'Peripherals', subgroup: 'Audio' },
   { test: (i) => anywhere(i, 'webcam'), group: 'Peripherals', subgroup: 'Cameras' },
   { test: (i) => anywhere(i, 'printer', 'scanner'), group: 'Peripherals', subgroup: 'Printers' },
 

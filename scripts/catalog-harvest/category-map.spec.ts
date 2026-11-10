@@ -27,6 +27,17 @@ describe('mapCategory', () => {
     );
   });
 
+  it('studio-monitor headphone → Peripherals/Audio, not Monitors', () => {
+    assert.deepEqual(
+      mapCategory({
+        breadcrumbs: ['Accessories', 'Headphone'],
+        url: 'https://www.startech.com.bd/audio-technica-ath-m40x-professional-studio-monitor-headphone',
+        title: 'Audio technica ATH-M40x Professional Studio Monitor Headphone',
+      }),
+      { group: 'Peripherals', subgroup: 'Audio' },
+    );
+  });
+
   it('AC breadcrumb → null', () => {
     assert.equal(
       mapCategory({ breadcrumbs: ['Home Appliance', 'Air Conditioner'] }),
@@ -173,6 +184,16 @@ describe('mapCategory locked hits', () => {
     {
       name: 'headset',
       input: { breadcrumbs: ['Accessories', 'Headset'] },
+      expected: { group: 'Peripherals', subgroup: 'Audio' },
+    },
+    {
+      name: 'headphone',
+      input: { breadcrumbs: ['Accessories', 'Headphone'] },
+      expected: { group: 'Peripherals', subgroup: 'Audio' },
+    },
+    {
+      name: 'headphone harvest root',
+      input: { breadcrumbs: [], url: 'https://www.startech.com.bd/accessories/headphone' },
       expected: { group: 'Peripherals', subgroup: 'Audio' },
     },
     {
