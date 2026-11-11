@@ -286,6 +286,28 @@ export const helpMessages = {
                 },
             ],
         },
+        meetings: {
+            title: 'Reuniones y actas',
+            icon: '📝',
+            faqs: [
+                {
+                    q: '¿Cómo registro el acta de una reunión?',
+                    a: 'Abra Meetings → Meetings y pulse New meeting. Complete título, fecha y asistentes, y añada cada debate con su título, notas, una decisión opcional y los puntos de acción que salieron de él. Guarde como borrador mientras escribe; Finalize cuando el acta esté lista. Los borradores no envían correo.',
+                },
+                {
+                    q: '¿Cómo funcionan los puntos de acción y los recordatorios?',
+                    a: 'Cada punto de acción pertenece a un debate y tiene una persona responsable más un plazo. Puede ser un miembro del equipo o un externo (nombre y correo). Tras finalizar se avisa a los responsables. Cada mañana a las 09:00 hora de Bangladés el sistema envía un recordatorio el día anterior al plazo, luego el día siguiente al vencimiento y semanalmente hasta que esté hecho. Las reuniones canceladas detienen los recordatorios. Los responsables pueden marcar sus puntos como hechos aunque el acta esté bloqueada.',
+                },
+                {
+                    q: '¿Cómo comparto o imprimo el acta?',
+                    a: 'En una reunión finalizada use Print para una copia A4 con la tabla y las firmas, Share para un enlace público de solo lectura que puede revocar después, o Email minutes para enviar la tabla a los asistentes. Un borrador se imprime con marca de agua DRAFT.',
+                },
+                {
+                    q: '¿Quién puede ver una reunión?',
+                    a: 'El organizador, los asistentes y quien tenga un punto de acción asignado pueden abrirla. El permiso "view all meetings" (propietarios y administradores) muestra todas. My action points lista lo asignado a usted; All action points necesita el permiso de ver todas. Las tiendas solo de contabilidad no tienen el módulo Meetings.',
+                },
+            ],
+        },
         security: {
             title: "Seguridad y cuenta",
             icon: '🔒',

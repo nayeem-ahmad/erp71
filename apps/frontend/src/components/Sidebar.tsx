@@ -41,6 +41,7 @@ import {
 } from '@/lib/sidebar-nav-filter';
 import { routes } from '@/lib/routes';
 import { collectNavLinkTargets, isNavLinkActive } from '@/lib/app-shell';
+import { useOverdueMeetingActionsCount } from '@/hooks/useOverdueMeetingActionsCount';
 import { usePendingVoucherCount } from '@/hooks/usePendingVoucherCount';
 
 /* ------------------------------------------------------------------ */
@@ -70,6 +71,7 @@ export default function Sidebar({
     canAccessPremiumCrm = false,
     canAccessManufacturing = false,
     canAccessProjects = false,
+    canAccessMeetings = false,
     canAccessPlatformAccounting = false,
     canAccessAdmin = false,
     platformRole = null,
@@ -99,6 +101,7 @@ export default function Sidebar({
     canAccessPremiumCrm?: boolean;
     canAccessManufacturing?: boolean;
     canAccessProjects?: boolean;
+    canAccessMeetings?: boolean;
     /** The platform's own books in the admin console — its own platform switch. */
     canAccessPlatformAccounting?: boolean;
     canAccessAdmin?: boolean;
@@ -241,6 +244,7 @@ export default function Sidebar({
             canAccessPremiumCrm,
             canAccessManufacturing,
             canAccessProjects,
+            canAccessMeetings,
             canAccessPlatformAccounting,
             canAccessAdmin,
             platformRole,
@@ -273,6 +277,7 @@ export default function Sidebar({
         canAccessPremiumCrm,
         canAccessManufacturing,
         canAccessProjects,
+        canAccessMeetings,
         canAccessPlatformAccounting,
         canAccessAdmin,
         platformRole,
@@ -498,8 +503,14 @@ export default function Sidebar({
     // The approval queue is just the voucher list filtered to PENDING, so the
     // badge hangs off the vouchers link rather than a nav entry of its own.
     const { count: pendingVoucherCount } = usePendingVoucherCount();
-    const pendingBadgeFor = (href: string) =>
-        href === routes.accounting.vouchers ? pendingVoucherCount : 0;
+    const { count: overdueMeetingActions } = useOverdueMeetingActionsCount();
+    const pendingBadgeFor = (href: string) => {
+        if (href === routes.accounting.vouchers) return pendingVoucherCount;
+        if (href === routes.meetings.actions) return overdueMeetingActions;
+        return 0;
+    };
+    const pendingBadgeTitle = (href: string) =>
+        href === routes.meetings.actions ? t.meetings.overdueBadge : t.vouchers.approval.queueBadge;
 
     const linkCls = (active: boolean) =>
         `relative flex items-center rounded-xl transition-all duration-150 group ${
@@ -764,7 +775,7 @@ export default function Sidebar({
                                         isSearching={isSearching}
                                         compactNav={compactNav}
                                         badgeFor={pendingBadgeFor}
-                                        badgeTitle={t.vouchers.approval.queueBadge}
+                                        badgeTitle={pendingBadgeTitle}
                                     />
                                 )}
                             </div>

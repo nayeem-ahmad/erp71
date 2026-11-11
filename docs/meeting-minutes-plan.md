@@ -1,6 +1,6 @@
 # Meeting minutes — design plan
 
-Status: **agreed scope, 2026-10-30. Nothing here is built.** Written in answer to
+Status: **built 2026-11-11** (agreed 2026-10-30). Written in answer to
 "suggest a basic meeting minutes management module", then narrowed by the owner
 to: *record meeting discussions and action points with assignee and deadline,
 share and print the minutes in a good format, and email reminders to assignees.

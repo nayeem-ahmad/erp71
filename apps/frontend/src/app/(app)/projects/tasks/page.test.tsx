@@ -4,6 +4,16 @@ import { toast } from '@/lib/toast';
 
 const getProjectTasks = jest.fn();
 
+/** Reassigned per test to deep-link the list at a staffing slice. */
+let searchParams = new URLSearchParams();
+
+jest.mock('next/navigation', () => ({
+    useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: jest.fn() }),
+    usePathname: () => '/projects/tasks',
+    useSearchParams: () => searchParams,
+    useParams: () => ({}),
+}));
+
 // jsdom answers no media query, so `useIsMdUp` reads false and `DataTable`
 // drops every `hideOnMobile` column — assignee and remaining among them. These
 // suites are about a desktop list, so say so once here.
@@ -77,6 +87,7 @@ beforeEach(() => {
     const { api } = jest.requireMock('@/lib/api');
     // Filters are remembered per tab; a leftover slice would decide the next test.
     sessionStorage.clear();
+    searchParams = new URLSearchParams();
     getProjectTasks.mockReset();
     getProjectTasks.mockResolvedValue({ items: [task()], total: 1, page: 1, limit: 25, pages: 1 });
     api.getProjects.mockResolvedValue({ items: [{ id: 'p1', code: 'PRJ-0001', name: 'P1' }] });
@@ -136,6 +147,23 @@ describe('Tasks page', () => {
         await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
         expect(getProjectTasks).toHaveBeenCalledWith(
             expect.objectContaining({ assigneeId: 'user-me' }),
+        );
+    });
+
+    // Staffing cells and person names link here with projectId + assignee. A
+    // leftover "me" from the last visit must not replace the slice the cell
+    // counted — same contract as CRM leads' URL-seeded filters.
+    it('opens the staffing deep link, not a remembered My Tasks slice', async () => {
+        sessionStorage.setItem(
+            'filters:project-tasks',
+            JSON.stringify({ assignee: 'me', projectId: '' }),
+        );
+        searchParams = new URLSearchParams('projectId=p1&assignee=user:rina');
+        render(<TasksPage />);
+
+        await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
+        expect(lastQuery()).toEqual(
+            expect.objectContaining({ projectId: 'p1', assigneeId: 'rina' }),
         );
     });
 

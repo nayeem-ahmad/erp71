@@ -17,7 +17,7 @@ export interface NavModuleChildrenProps {
     compactNav?: boolean;
     /** The count a link carries (the voucher approval queue), 0 for none. */
     badgeFor: (href: string) => number;
-    badgeTitle: string;
+    badgeTitle: string | ((href: string) => string);
     /**
      * Links sit directly under the app's heading (the app panel) rather than
      * under a module header (the classic tree), so they indent one step less.
@@ -45,6 +45,7 @@ export default function NavModuleChildren({
     const navLabelCls = `${navText} font-normal tracking-tight whitespace-nowrap`;
     const indent = flat ? '' : 'ms-4';
     const nestedIndent = flat ? 'ms-4' : 'ms-8';
+    const titleFor = (href: string) => (typeof badgeTitle === 'function' ? badgeTitle(href) : badgeTitle);
 
     const childLinkCls = (active: boolean, nested = false) =>
         `flex items-center rounded-lg transition-all duration-150 group space-x-2.5 rtl:space-x-reverse px-2.5 ${compactNav ? 'py-1' : 'py-1.5'} ${navText} ${
@@ -96,7 +97,7 @@ export default function NavModuleChildren({
                                             <Link key={href} href={href} className={childLinkCls(active, true)}>
                                                 <LinkIcon className={`flex-shrink-0 w-3.5 h-3.5 ${active ? 'text-blue-600' : ''}`} />
                                                 <span className={navLabelCls}>{label}</span>
-                                                <NavCountBadge count={badgeFor(href)} title={badgeTitle} />
+                                                <NavCountBadge count={badgeFor(href)} title={titleFor(href)} />
                                             </Link>
                                         );
                                     })}
@@ -120,7 +121,7 @@ export default function NavModuleChildren({
                     <Link key={href} href={href} className={childLinkCls(active)}>
                         <ChildIcon className={`flex-shrink-0 w-4 h-4 ${active ? 'text-blue-600' : ''}`} />
                         <span className={navLabelCls}>{label}</span>
-                        <NavCountBadge count={badgeFor(href)} title={badgeTitle} />
+                        <NavCountBadge count={badgeFor(href)} title={titleFor(href)} />
                     </Link>
                 );
             })}

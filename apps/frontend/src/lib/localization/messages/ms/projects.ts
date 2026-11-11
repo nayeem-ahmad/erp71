@@ -768,6 +768,33 @@ export const projectsMessages = {
 
     },
 
+    staffing: {
+        title: 'Kepegawaian',
+        subtitle: 'Orang merentas projek, dengan jam tinggal pada tugasan terbuka',
+        empty: 'Tiada projek kelihatan untuk dipaparkan.',
+        loadFailed: 'Tidak dapat memuatkan kepegawaian.',
+        person: 'Orang',
+        remaining: 'Tinggal',
+        unassigned: 'Tiada penerima',
+        noLogin: 'Tiada log masuk',
+        assignedNotOnTeam: 'Ditugaskan, bukan dalam pasukan',
+        hideIdle: 'Sembunyikan yang terbiar',
+        statusActive: 'Aktif & ditangguh',
+        statusAll: 'Semua',
+        overloaded: 'Pada 3+ projek',
+        legend: 'Jam tinggal berbanding sel paling sibuk',
+        listUi: {
+            statsLabel: 'Ringkasan kepegawaian',
+            stats: {
+                people: 'Orang',
+                projects: 'Projek',
+                remaining: 'Jam tinggal',
+                unassigned: 'Jam tidak ditugaskan',
+                overloaded: 'Pada 3+ projek',
+            },
+        },
+    },
+
     hourLogReport: {
         title: 'Laporan Log Jam',
         subtitle: 'Jam yang dilog dalam julat tarikh, diringkaskan',

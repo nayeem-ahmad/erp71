@@ -286,6 +286,28 @@ export const helpMessages = {
                 },
             ],
         },
+        meetings: {
+            title: 'Meetings & Minutes',
+            icon: '📝',
+            faqs: [
+                {
+                    q: 'How do I record meeting minutes?',
+                    a: 'Open Meetings → Meetings and click New meeting. Fill in the title, date and attendees, then add each discussion with its title, notes, an optional decision, and any action points that came out of it. Save as a draft while you write; Finalize when the minutes are ready. Drafts never email anyone.',
+                },
+                {
+                    q: 'How do action points and reminders work?',
+                    a: 'Every action point sits under a discussion and has one person responsible plus a deadline. That person can be a team member or an outsider (name and email). After you finalize, assignees are notified. Each morning at 09:00 Bangladesh time the system emails a reminder the day before a deadline, then again the day after it is overdue and weekly until it is done. Cancelled meetings stop reminders. Assignees can mark their own points done even after the minutes are locked.',
+                },
+                {
+                    q: 'How do I share or print minutes?',
+                    a: 'On a finalized meeting use Print for an A4 copy with the minutes table and signature lines, Share for a read-only public link you can revoke later, or Email minutes to send the table to attendees. A draft prints with a DRAFT watermark.',
+                },
+                {
+                    q: 'Who can see a meeting?',
+                    a: 'The organizer, attendees, and anyone assigned an action point can open it. A "view all meetings" permission (owners and admins) shows every meeting. My action points lists what is assigned to you; All action points needs the view-all permission. Accounting-only shops do not get the Meetings module.',
+                },
+            ],
+        },
         security: {
             title: 'Security & Account',
             icon: '🔒',

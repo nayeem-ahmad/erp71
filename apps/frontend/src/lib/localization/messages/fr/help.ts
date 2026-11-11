@@ -286,6 +286,28 @@ export const helpMessages = {
                 },
             ],
         },
+        meetings: {
+            title: 'Réunions et comptes rendus',
+            icon: '📝',
+            faqs: [
+                {
+                    q: 'Comment consigner un compte rendu de réunion ?',
+                    a: 'Ouvrez Meetings → Meetings puis New meeting. Renseignez le titre, la date et les participants, puis ajoutez chaque discussion avec son titre, ses notes, une décision facultative et les points d’action qui en sont issus. Enregistrez en brouillon pendant la rédaction ; Finalize lorsque le compte rendu est prêt. Les brouillons n’envoient aucun e-mail.',
+                },
+                {
+                    q: 'Comment fonctionnent les points d’action et les rappels ?',
+                    a: 'Chaque point d’action appartient à une discussion et a une personne responsable plus une échéance. Ce peut être un membre de l’équipe ou un externe (nom et e-mail). Après finalisation, les responsables sont informés. Chaque matin à 09:00 heure du Bangladesh, le système envoie un rappel la veille de l’échéance, puis le lendemain du retard et chaque semaine jusqu’à clôture. Les réunions annulées arrêtent les rappels. Les responsables peuvent marquer leurs points comme terminés même après verrouillage du compte rendu.',
+                },
+                {
+                    q: 'Comment partager ou imprimer le compte rendu ?',
+                    a: 'Sur une réunion finalisée, utilisez Print pour une copie A4 avec le tableau et les signatures, Share pour un lien public en lecture seule révocable plus tard, ou Email minutes pour envoyer le tableau aux participants. Un brouillon s’imprime avec un filigrane DRAFT.',
+                },
+                {
+                    q: 'Qui peut voir une réunion ?',
+                    a: 'L’organisateur, les participants et toute personne assignée à un point d’action peuvent l’ouvrir. La permission "view all meetings" (propriétaires et administrateurs) affiche toutes les réunions. My action points liste ce qui vous est assigné ; All action points exige la permission de tout voir. Les boutiques comptabilité seule n’ont pas le module Meetings.',
+                },
+            ],
+        },
         security: {
             title: "Sécurité et compte",
             icon: '🔒',

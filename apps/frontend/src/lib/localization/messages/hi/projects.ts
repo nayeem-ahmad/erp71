@@ -768,6 +768,33 @@ export const projectsMessages = {
 
     },
 
+    staffing: {
+        title: "स्टाफिंग",
+        subtitle: "परियोजनाओं पर लोग, खुले कार्यों के शेष घंटों के साथ",
+        empty: "दिखाने के लिए कोई दृश्य परियोजना नहीं।",
+        loadFailed: "स्टाफिंग लोड नहीं हो सकी।",
+        person: "व्यक्ति",
+        remaining: "शेष",
+        unassigned: "अनिर्दिष्ट",
+        noLogin: "लॉगिन नहीं",
+        assignedNotOnTeam: "काम है, टीम में नहीं",
+        hideIdle: "निष्क्रिय छिपाएँ",
+        statusActive: "सक्रिय और रुकी हुई",
+        statusAll: "सभी",
+        overloaded: "३+ परियोजनाओं पर",
+        legend: "शेष घंटे, सबसे व्यस्त सेल के सापेक्ष",
+        listUi: {
+            statsLabel: "स्टाफिंग सारांश",
+            stats: {
+                people: "लोग",
+                projects: "परियोजनाएँ",
+                remaining: "शेष घंटे",
+                unassigned: "अनिर्दिष्ट घंटे",
+                overloaded: "३+ परियोजनाओं पर",
+            },
+        },
+    },
+
     hourLogReport: {
         title: "घंटा लॉग रिपोर्ट",
         subtitle: "तिथि सीमा में दर्ज घंटे, सारांशित",

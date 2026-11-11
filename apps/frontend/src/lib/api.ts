@@ -4143,6 +4143,53 @@ export const api = {
     shareQuotation: (id: string) => fetchWithAuth(`/sales-quotations/${id}/share`, { method: 'POST' }),
     /** Clears the share token, killing every link ever sent for this quotation. */
     revokeQuotationShare: (id: string) => fetchWithAuth(`/sales-quotations/${id}/share`, { method: 'DELETE' }),
+
+    getMeetings: (params?: { status?: string; type?: string; search?: string; from?: string; to?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.status) query.set('status', params.status);
+        if (params?.type) query.set('type', params.type);
+        if (params?.search) query.set('search', params.search);
+        if (params?.from) query.set('from', params.from);
+        if (params?.to) query.set('to', params.to);
+        const suffix = query.toString();
+        return fetchWithAuth(`/meetings${suffix ? `?${suffix}` : ''}`);
+    },
+    getMeeting: (id: string) => fetchWithAuth(`/meetings/${id}`),
+    createMeeting: (data: unknown) => fetchWithAuth('/meetings', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateMeeting: (id: string, data: unknown) => fetchWithAuth(`/meetings/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    finalizeMeeting: (id: string) => fetchWithAuth(`/meetings/${id}/finalize`, { method: 'POST' }),
+    cancelMeeting: (id: string) => fetchWithAuth(`/meetings/${id}/cancel`, { method: 'POST' }),
+    shareMeeting: (id: string) => fetchWithAuth(`/meetings/${id}/share`, { method: 'POST' }),
+    revokeMeetingShare: (id: string) => fetchWithAuth(`/meetings/${id}/share`, { method: 'DELETE' }),
+    emailMeeting: (id: string, data: { attendeeIds?: string[] } = {}) => fetchWithAuth(`/meetings/${id}/email`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    getMeetingActions: (params?: { scope?: 'mine' | 'all'; status?: string; overdue?: boolean; assignee?: string; meeting?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.scope) query.set('scope', params.scope);
+        if (params?.status) query.set('status', params.status);
+        if (params?.overdue !== undefined) query.set('overdue', String(params.overdue));
+        if (params?.assignee) query.set('assignee', params.assignee);
+        if (params?.meeting) query.set('meeting', params.meeting);
+        const suffix = query.toString();
+        return fetchWithAuth(`/meeting-actions${suffix ? `?${suffix}` : ''}`);
+    },
+    getMeetingActionsOverdueCount: () => fetchWithAuth('/meeting-actions/overdue-count'),
+    updateMeetingAction: (id: string, data: { status?: string; completionNote?: string }) => fetchWithAuth(`/meeting-actions/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     getShortLinks: () => fetchWithAuth('/short-links'),
     createShortLink: (data: { target_url: string; label?: string }) =>
         fetchWithAuth('/short-links', {
@@ -6865,6 +6912,14 @@ export const api = {
         // fetchWithAuth returns the unwrapped `data` — a bare array with no
         // `.items`, which every caller here reads.
         return fetchPaginated(`/projects?${query}`);
+    },
+    /** People × projects remaining-hours matrix. Empty `status` lets the API default. */
+    getProjectStaffing: (params?: { status?: string }) => {
+        const query = new URLSearchParams();
+        for (const [key, value] of Object.entries(params ?? {})) {
+            if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+        }
+        return fetchWithAuth(`/projects/staffing?${query}`);
     },
     getProject: (id: string) => fetchWithAuth(`/projects/${id}`),
     /** A free code proposed from a project name — the create form prefills it. */

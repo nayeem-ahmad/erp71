@@ -768,6 +768,33 @@ export const projectsMessages = {
 
     },
 
+    staffing: {
+        title: "اسٹافنگ",
+        subtitle: "پروجیکٹس پر لوگ، کھلے کاموں کے باقی گھنٹوں کے ساتھ",
+        empty: "دکھانے کے لیے کوئی نظر آنے والا پروجیکٹ نہیں۔",
+        loadFailed: "اسٹافنگ لوڈ نہیں ہو سکی۔",
+        person: "شخص",
+        remaining: "باقی",
+        unassigned: "غیر تفویض شدہ",
+        noLogin: "لاگ اِن نہیں",
+        assignedNotOnTeam: "کام ہے، ٹیم میں نہیں",
+        hideIdle: "بیکار چھپائیں",
+        statusActive: "فعال اور معطل",
+        statusAll: "سب",
+        overloaded: "۳+ پروجیکٹس پر",
+        legend: "باقی گھنٹے، سب سے مصروف خانے کے مقابل",
+        listUi: {
+            statsLabel: "اسٹافنگ خلاصہ",
+            stats: {
+                people: "لوگ",
+                projects: "پروجیکٹس",
+                remaining: "باقی گھنٹے",
+                unassigned: "غیر تفویض شدہ گھنٹے",
+                overloaded: "۳+ پروجیکٹس پر",
+            },
+        },
+    },
+
     hourLogReport: {
         title: "گھنٹوں کی رپورٹ",
         subtitle: "کسی مدت میں درج گھنٹے، خلاصے کے ساتھ",

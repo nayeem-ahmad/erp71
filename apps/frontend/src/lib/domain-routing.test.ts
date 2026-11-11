@@ -68,6 +68,12 @@ describe('isAppOnlyPath', () => {
         }
     });
 
+    it('claims the signed-in meetings app and leaves the public minutes share alone', () => {
+        expect(isAppOnlyPath('/meetings')).toBe(true);
+        expect(isAppOnlyPath('/meetings/actions')).toBe(true);
+        expect(isAppOnlyPath('/m/abc123')).toBe(false);
+    });
+
     it('leaves the public storefront and the shortener alone', () => {
         expect(isAppOnlyPath('/store/rahim-electronics')).toBe(false);
         expect(isAppOnlyPath('/q/abc123')).toBe(false);

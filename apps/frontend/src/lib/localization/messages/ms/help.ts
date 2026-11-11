@@ -286,6 +286,28 @@ export const helpMessages = {
                 },
             ],
         },
+        meetings: {
+            title: 'Mesyuarat & minit',
+            icon: '📝',
+            faqs: [
+                {
+                    q: 'Bagaimana saya merekod minit mesyuarat?',
+                    a: 'Buka Meetings → Meetings dan klik New meeting. Isi tajuk, tarikh dan hadirin, kemudian tambah setiap perbincangan dengan tajuk, nota, keputusan pilihan, dan titik tindakan yang timbul. Simpan sebagai draf semasa menulis; Finalize apabila minit sedia. Draf tidak pernah menghantar e-mel.',
+                },
+                {
+                    q: 'Bagaimana titik tindakan dan peringatan berfungsi?',
+                    a: 'Setiap titik tindakan berada di bawah perbincangan dan mempunyai seorang yang bertanggungjawab plus tarikh akhir. Orang itu boleh jadi ahli pasukan atau orang luar (nama dan e-mel). Selepas dimuktamadkan, penerima tugas dimaklumkan. Setiap pagi jam 09:00 waktu Bangladesh sistem e-mel peringatan sehari sebelum tarikh akhir, kemudian sehari selepas tertunggak dan setiap minggu sehingga selesai. Mesyuarat yang dibatalkan menghentikan peringatan. Penerima tugas boleh menanda titik mereka selesai walaupun minit dikunci.',
+                },
+                {
+                    q: 'Bagaimana saya berkongsi atau mencetak minit?',
+                    a: 'Pada mesyuarat yang dimuktamadkan gunakan Print untuk salinan A4 dengan jadual minit dan baris tandatangan, Share untuk pautan awam baca sahaja yang boleh ditarik balik kemudian, atau Email minutes untuk menghantar jadual kepada hadirin. Draf dicetak dengan tera air DRAFT.',
+                },
+                {
+                    q: 'Siapa boleh melihat mesyuarat?',
+                    a: 'Penganjur, hadirin, dan sesiapa yang diberi titik tindakan boleh membukanya. Kebenaran "view all meetings" (pemilik dan pentadbir) menunjukkan setiap mesyuarat. My action points menyenaraikan tugasan anda; All action points memerlukan kebenaran lihat semua. Kedai perakaunan sahaja tidak mendapat modul Meetings.',
+                },
+            ],
+        },
         security: {
             title: 'Keselamatan & Akaun',
             icon: '🔒',

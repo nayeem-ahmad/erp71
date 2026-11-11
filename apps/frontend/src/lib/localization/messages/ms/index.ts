@@ -14,6 +14,7 @@ import { componentsMessages } from './components';
 import { helpMessages } from './help';
 import { projectsMessages } from './projects';
 import { chatMessages } from './chat';
+import { meetingsMessages } from './meetings';
 import { accountingVouchersUiMessages } from './accountingListUi/vouchers';
 import { accountingMastersUiMessages } from './accountingListUi/masters';
 import { accountingFinanceUiMessages } from './accountingListUi/finance';
@@ -42,4 +43,5 @@ export const msMessages = {
     help: helpMessages,
     projects: projectsMessages,
     chat: chatMessages,
+    meetings: meetingsMessages,
 } as const;

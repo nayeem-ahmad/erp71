@@ -208,6 +208,17 @@ export const routes = {
         leadTaxonomy: '/crm/settings/lead-taxonomy',
     },
 
+    meetings: {
+        root: '/meetings',
+        new: '/meetings/new',
+        detail: (id: string) => `/meetings/${id}` as const,
+        edit: (id: string) => `/meetings/${id}/edit` as const,
+        print: (id: string) => `/meetings/${id}/print` as const,
+        actions: '/meetings/actions',
+        actionsAll: '/meetings/actions/all',
+        public: (token: string) => `/m/${token}` as const,
+    },
+
     projects: {
         root: '/projects',
         new: '/projects/new' as const,
@@ -243,6 +254,7 @@ export const routes = {
         sprintDetail: (id: string) => `/projects/sprints/${id}` as const,
         hourLogs: '/projects/hour-logs',
         hourLogReport: '/projects/hour-logs/report',
+        staffing: '/projects/staffing',
         settings: '/projects/settings',
     },
 

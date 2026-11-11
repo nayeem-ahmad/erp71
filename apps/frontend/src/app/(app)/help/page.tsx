@@ -34,6 +34,7 @@ export default function HelpPage() {
             h.sections.aiAssistant,
             h.sections.billing,
             h.sections.storefront,
+            h.sections.meetings,
             h.sections.security,
         ],
         [h],

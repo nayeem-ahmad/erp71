@@ -228,6 +228,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
 
   projects: { id: 'projects', kind: 'module', icon: 'FolderKanban', labelKey: 'sidebar.modules.projects', moduleKey: 'projects' },
   'projects.list': { id: 'projects.list', kind: 'link', icon: 'FolderKanban', labelKey: 'sidebar.items.projectsList', href: '/projects', exact: true },
+  'projects.staffing': { id: 'projects.staffing', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.projectsStaffing', href: '/projects/staffing' },
   'projects.boards': { id: 'projects.boards', kind: 'link', icon: 'KanbanSquare', labelKey: 'sidebar.items.projectsBoards', href: '/projects/boards' },
   'projects.tasks': { id: 'projects.tasks', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.projectsTasks', href: '/projects/tasks' },
   // The cross-project backlog. The per-project one lives on the project page
@@ -241,6 +242,12 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'projects.hour-logs': { id: 'projects.hour-logs', kind: 'link', icon: 'Clock', labelKey: 'sidebar.items.projectsHourLogs', href: '/projects/hour-logs', exact: true },
   'projects.hour-log-report': { id: 'projects.hour-log-report', kind: 'link', icon: 'BarChart3', labelKey: 'sidebar.items.projectsHourLogReport', href: '/projects/hour-logs/report' },
   'projects.setup': { id: 'projects.setup', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.projectsSetup', href: '/projects/settings' },
+
+  meetings: { id: 'meetings', kind: 'module', icon: 'CalendarDays', labelKey: 'sidebar.modules.meetings', moduleKey: 'meetings' },
+  'meetings.list': { id: 'meetings.list', kind: 'link', icon: 'CalendarDays', labelKey: 'sidebar.items.meetingsList', href: '/meetings', exact: true },
+  'meetings.actions': { id: 'meetings.actions', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.meetingActions', href: '/meetings/actions', exact: true },
+  'meetings.actions-all': { id: 'meetings.actions-all', kind: 'link', icon: 'ClipboardList', labelKey: 'sidebar.items.meetingActionsAll', href: '/meetings/actions/all' },
+
   crm: { id: 'crm', kind: 'module', icon: 'Users', labelKey: 'sidebar.modules.crm', moduleKey: 'crm' },
   'crm.overview': { id: 'crm.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/crm', exact: true },
   'crm.leads': { id: 'crm.leads', kind: 'link', icon: 'UserPlus', labelKey: 'sidebar.items.crmLeads', href: '/crm/leads', premiumOnly: true },
@@ -509,6 +516,10 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
   // is useless without its own management permission carries a tag.
   'projects.setup': ['MANAGE_PROJECT_SETTINGS'],
 
+  // Meetings is gated by APP_REGISTRY `VIEW_MEETINGS`, like Projects. Only the
+  // all-actions list needs its own tag: VIEW_ALL_MEETINGS is owner/admin-only.
+  'meetings.actions-all': ['VIEW_ALL_MEETINGS'],
+
   crm: CRM_ANY,
 
   hr: HR_ANY,
@@ -564,6 +575,8 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
  *
  * The 2026-09-24 epics added `projects.epics` the same way:
  * `npx tsx prisma/sync-nav-layout.ts --nodes=projects.epics`.
+ *
+ * `npx tsx prisma/sync-nav-layout.ts --nodes=projects.staffing`.
  *
  * The 2026-09-26 line-item searches added one leaf to each of the two report
  * subgroups, again with no reset needed:
@@ -725,14 +738,15 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
 
   layoutNode('projects', null, 9),
   layoutNode('projects.list', 'projects', 0),
-  layoutNode('projects.boards', 'projects', 1),
-  layoutNode('projects.tasks', 'projects', 2),
-  layoutNode('projects.epics', 'projects', 3),
-  layoutNode('projects.stories', 'projects', 4),
-  layoutNode('projects.sprints', 'projects', 5),
-  layoutNode('projects.hour-logs', 'projects', 6),
-  layoutNode('projects.hour-log-report', 'projects', 7),
-  layoutNode('projects.setup', 'projects', 8),
+  layoutNode('projects.staffing', 'projects', 1),
+  layoutNode('projects.boards', 'projects', 2),
+  layoutNode('projects.tasks', 'projects', 3),
+  layoutNode('projects.epics', 'projects', 4),
+  layoutNode('projects.stories', 'projects', 5),
+  layoutNode('projects.sprints', 'projects', 6),
+  layoutNode('projects.hour-logs', 'projects', 7),
+  layoutNode('projects.hour-log-report', 'projects', 8),
+  layoutNode('projects.setup', 'projects', 9),
 
   layoutNode('manufacturing', null, 10),
   layoutNode('manufacturing.boms', 'manufacturing', 0),
@@ -768,16 +782,21 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('hr.setup.designationLevels', 'hr.setup', 2),
   layoutNode('hr.setup.schedules', 'hr.setup', 3),
 
-  layoutNode('account-settings', null, 12),
+  layoutNode('meetings', null, 12),
+  layoutNode('meetings.list', 'meetings', 0),
+  layoutNode('meetings.actions', 'meetings', 1),
+  layoutNode('meetings.actions-all', 'meetings', 2),
+
+  layoutNode('account-settings', null, 13),
   layoutNode('account-settings.overview', 'account-settings', 0),
   layoutNode('account-settings.profile', 'account-settings', 1),
   layoutNode('account-settings.team', 'account-settings', 2),
   layoutNode('account-settings.billing', 'account-settings', 3),
   layoutNode('account-settings.url-shortener', 'account-settings', 4),
 
-  layoutNode('chat', null, 13),
-  layoutNode('support', null, 14),
-  layoutNode('admin', null, 15),
+  layoutNode('chat', null, 14),
+  layoutNode('support', null, 15),
+  layoutNode('admin', null, 16),
   layoutNode('admin.overview', 'admin', 0),
   layoutNode('admin.tenant-management', 'admin', 1),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
@@ -791,8 +810,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.url-shortener', 'admin', 5),
   layoutNode('admin.blog', 'admin', 6),
   layoutNode('admin.social-media', 'admin', 7),
-  layoutNode('whats-new', null, 16),
-  layoutNode('help', null, 17),
+  layoutNode('whats-new', null, 17),
+  layoutNode('help', null, 18),
 ];
 
 /**
@@ -883,14 +902,15 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   // sidebar. Hidden unless the `platformProjects` switch is on.
   layoutNode('projects', null, 1),
   layoutNode('projects.list', 'projects', 0),
-  layoutNode('projects.boards', 'projects', 1),
-  layoutNode('projects.tasks', 'projects', 2),
-  layoutNode('projects.epics', 'projects', 3),
-  layoutNode('projects.stories', 'projects', 4),
-  layoutNode('projects.sprints', 'projects', 5),
-  layoutNode('projects.hour-logs', 'projects', 6),
-  layoutNode('projects.hour-log-report', 'projects', 7),
-  layoutNode('projects.setup', 'projects', 8),
+  layoutNode('projects.staffing', 'projects', 1),
+  layoutNode('projects.boards', 'projects', 2),
+  layoutNode('projects.tasks', 'projects', 3),
+  layoutNode('projects.epics', 'projects', 4),
+  layoutNode('projects.stories', 'projects', 5),
+  layoutNode('projects.sprints', 'projects', 6),
+  layoutNode('projects.hour-logs', 'projects', 7),
+  layoutNode('projects.hour-log-report', 'projects', 8),
+  layoutNode('projects.setup', 'projects', 9),
 
   layoutNode('whats-new', null, 2),
   layoutNode('help', null, 3),

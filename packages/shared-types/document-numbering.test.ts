@@ -183,6 +183,7 @@ describe('document types', () => {
     expect(renderDocumentNumber(DEFAULT_DOCUMENT_NUMBERING.QUOTE, 42, october2026)).toBe('QT-2627-00042');
     expect(renderDocumentNumber(DEFAULT_DOCUMENT_NUMBERING.PROFORMA, 42, october2026)).toBe('PI-2627-00042');
     expect(renderDocumentNumber(DEFAULT_DOCUMENT_NUMBERING.IMPORT_SHIPMENT, 7, october2026)).toBe('IMP-2627-00007');
+    expect(renderDocumentNumber(DEFAULT_DOCUMENT_NUMBERING.MEETING, 12, october2026)).toBe('MIN-2026-0012');
   });
 
   it('keeps the sales-invoice presets as they were and prefixes the others', () => {
