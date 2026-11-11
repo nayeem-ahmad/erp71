@@ -259,7 +259,7 @@ export function mergeStaffing(input: MergeStaffingInput): StaffingResponse {
                 isManager: cell.isManager,
                 remainingHours: cell.remainingHours,
                 openTasks: cell.openTasks,
-                assignedNotOnTeam: !cell.onTeam,
+                assignedNotOnTeam: person.kind !== 'unassigned' && !cell.onTeam,
             };
             remainingHours += cell.remainingHours;
             openTasks += cell.openTasks;

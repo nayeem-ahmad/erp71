@@ -33,7 +33,9 @@ describe('mergeStaffing', () => {
         });
         expect(out.people.find((p) => p.key === 'user:karim')!.cells['p1'].remainingHours).toBe(0);
         expect(out.people.find((p) => p.key === 'employee:e1')!.cells['p1'].assignedNotOnTeam).toBe(true);
-        expect(out.people.find((p) => p.key === 'unassigned')!.cells['p1'].remainingHours).toBe(8);
+        expect(out.people.find((p) => p.key === 'unassigned')!.cells['p1']).toMatchObject({
+            remainingHours: 8, assignedNotOnTeam: false,
+        });
         expect(out.summary).toMatchObject({ people: 3, overloaded: 0, unassignedRemainingHours: 8 });
     });
 
