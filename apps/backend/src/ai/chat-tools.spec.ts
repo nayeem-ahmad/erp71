@@ -70,6 +70,7 @@ function makeDeps(overrides: Partial<Record<keyof ChatToolDeps, any>> = {}): Cha
         cashierSessions: { getOverview: jest.fn() },
         salesLineItems: { getSalesLineItems: jest.fn() },
         purchaseLineItems: { getPurchaseLineItems: jest.fn() },
+        mushak: { getSalesBook: jest.fn() },
         web: {
             search: jest.fn(),
             fetchPage: jest.fn(),
@@ -1258,5 +1259,90 @@ describe('purchase_line_items', () => {
         expect(result.rows[0].product).toBe('Rice 5kg');
         expect(result.rows[0].supplier).toBe('Dhaka Foods');
         expect(result.rows[0].purchase).toBeUndefined();
+    });
+});
+
+describe('mushak_summary', () => {
+    it('requires VIEW_FINANCIAL_REPORTS', () => {
+        expect(CHAT_TOOLS_BY_NAME.mushak_summary.permission).toBe(StorePermission.VIEW_FINANCIAL_REPORTS);
+    });
+
+    it('pages the sales book and flattens the buyer to a name', async () => {
+        const rows = Array.from({ length: 25 }, (_, i) => ({
+            date: new Date('2026-07-01T04:00:00Z'),
+            invoiceNumber: `INV-${i + 1}`,
+            buyer: { name: 'Karim', bin: 'SECRET-BIN', address: 'hidden' },
+            vatAmount: 15.126,
+            sdAmount: 0,
+            totalValue: 100,
+            description: 'should not leak',
+        }));
+        const getSalesBook = jest.fn().mockResolvedValue({
+            form: '6.2',
+            totals: { invoices: 25, totalValue: 2500, sdAmount: 0, vatAmount: 100.126, inclusiveTotal: 2600 },
+            estimated: false,
+            rows,
+        });
+        const deps = makeDeps({ mushak: { getSalesBook } } as any);
+
+        const result: any = await run(
+            'mushak_summary',
+            { from: '2026-07-01', to: '2026-07-31', taxableOnly: true },
+            deps,
+        );
+
+        expect(getSalesBook).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ from: '2026-07-01', to: '2026-07-31', taxableOnly: 'true' }),
+            'Asia/Dhaka',
+        );
+        expect(result.totals.vatAmount).toBe(100.13);
+        expect(result.rows).toHaveLength(20);
+        expect(result.hasMore).toBe(true);
+        expect(result.rows[0].buyer).toBe('Karim');
+        expect(result.rows[0]).toEqual(expect.objectContaining({
+            invoiceNumber: 'INV-1',
+            vatAmount: 15.13,
+            sdAmount: 0,
+            totalValue: 100,
+        }));
+        expect(result.rows[0]).not.toHaveProperty('description');
+        expect(result.rows[0]).not.toHaveProperty('bin');
+    });
+});
+
+describe('bad_debts', () => {
+    it('requires WRITE_OFF_CUSTOMER_DEBT', () => {
+        expect(CHAT_TOOLS_BY_NAME.bad_debts.permission).toBe(StorePermission.WRITE_OFF_CUSTOMER_DEBT);
+    });
+
+    it('projects write-offs with reason taken from reference_id', async () => {
+        const listWriteOffs = jest.fn().mockResolvedValue({
+            items: [{
+                customer: { name: 'Karim', phone: '0171' },
+                amount: 500.126,
+                reference_id: 'UNCOLLECTABLE',
+                created_at: new Date('2026-07-01T04:00:00Z'),
+                creator: { name: 'Asha' },
+            }],
+            total: 1,
+            page: 1,
+            limit: 20,
+        });
+        const deps = makeDeps({ customers: { listWriteOffs } } as any);
+
+        const result: any = await run('bad_debts', { from: '2026-07-01', to: '2026-07-31' }, deps);
+
+        expect(listWriteOffs).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ timezone: 'Asia/Dhaka', from: '2026-07-01', to: '2026-07-31' }),
+        );
+        expect(result.rows[0]).toEqual(expect.objectContaining({
+            customer: 'Karim',
+            phone: '0171',
+            amount: 500.13,
+            reason: 'UNCOLLECTABLE',
+            createdBy: 'Asha',
+        }));
     });
 });

@@ -1,5 +1,14 @@
 import { StorePermission } from '@erp71/shared-types';
-import { isoDate, money, page, PAGING_PROPS, pct, type ChatTool } from './types';
+import {
+    DATE_RANGE_PROPS,
+    isoDate,
+    MAX_TOOL_ROWS,
+    money,
+    page,
+    PAGING_PROPS,
+    pct,
+    type ChatTool,
+} from './types';
 
 export const PARTY_TOOLS: ChatTool[] = [
     {
@@ -239,6 +248,49 @@ export const PARTY_TOOLS: ChatTool[] = [
                     segment: r.segment,
                     count: r.count,
                     sharePct: pct(r.percentage),
+                })),
+            };
+        },
+    },
+
+    {
+        name: 'bad_debts',
+        permission: StorePermission.WRITE_OFF_CUSTOMER_DEBT,
+        modules: ['retail', 'crm'],
+        description:
+            'Customer debts written off as uncollectable: who, how much, the reason, and who recorded it. ' +
+            'Use for "what bad debts have we written off", "who did we forgive". This is the write-off register, ' +
+            'not the live due-aging report.',
+        parameters: {
+            type: 'object',
+            properties: {
+                ...DATE_RANGE_PROPS,
+                customerId: { type: 'string', description: 'Restrict to one customer id from resolve_entity.' },
+                ...PAGING_PROPS,
+            },
+        },
+        handler: async (ctx, args, deps) => {
+            const limit = Math.min(Math.max(Number(args.limit) || MAX_TOOL_ROWS, 1), MAX_TOOL_ROWS);
+            const offset = Math.max(Number(args.offset) || 0, 0);
+            const result = await deps.customers.listWriteOffs(ctx.tenantId, {
+                timezone: ctx.timezone,
+                from: args.from,
+                to: args.to,
+                limit,
+                page: Math.floor(offset / limit) + 1,
+                ...(args.customerId ? { customerId: String(args.customerId) } : {}),
+            });
+            const items = result.items ?? [];
+            return {
+                totalRows: result.total ?? items.length,
+                page: result.page ?? 1,
+                rows: items.map((item: any) => ({
+                    customer: item.customer?.name ?? null,
+                    phone: item.customer?.phone ?? null,
+                    amount: money(item.amount),
+                    reason: item.reason ?? item.reference_id ?? null,
+                    date: isoDate(item.created_at),
+                    createdBy: item.creator?.name ?? null,
                 })),
             };
         },
