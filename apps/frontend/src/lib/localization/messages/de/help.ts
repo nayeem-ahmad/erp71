@@ -82,6 +82,10 @@ export const helpMessages = {
                     q: "Wo verwalte ich Kundenzahlungen und überfällige Salden?",
                     a: "Nutzen Sie Verkauf → Kundenzahlungen, um eingegangenes Geld auf Salden zu buchen, Verkauf → Kundenkonto für einen laufenden Auszug je Kunde und den Fälligkeitsbericht (unter Verkauf → Kunden), um zu sehen, wer wie viel und wie lange schuldet.",
                 },
+                {
+                    q: 'Can I ask the assistant for today\'s Daily Report / open tills / invoice lines / Mushak 6.2 / write-offs / an exchange or warranty claim?',
+                    a: 'Yes. Ask it for today\'s Daily Report (Sales → Daily Report), whether tills are still open (Sales → Cashier Sessions), which invoices a figure came from (Sales → Sales Line Items or Purchases → Purchase Line Items), Mushak 6.2 VAT totals (Sales → Mushak books), customer debts written off (Sales → Bad Debts), or an exchange or warranty claim (Sales → Sales Exchanges / Warranty Claims). It looks those up; it cannot change them.',
+                },
             ],
         },
         inventory: {
@@ -218,7 +222,7 @@ export const helpMessages = {
                 },
                 {
                     q: "Was sieht er tatsächlich, und kann ich den Antworten trauen?",
-                    a: "Fragen Sie „Was kannst du?“, und er nennt Ihre Filialen, wie weit Ihre Aufzeichnungen zurückreichen und welche Werkzeuge er nutzen kann — eine leere Antwort bedeutet also einen leeren Zeitraum, keine fehlerhafte Abfrage. Jede Antwort führt ihre Quellen auf (die genauen Berichte und Zeiträume), sodass Sie sie überprüfen können. Sie können ihn auch bitten, auf auffällige Vorgänge zu prüfen — Verkäufe unter Einstandspreis, doppelte Rechnungen, große Preisausreißer — und er sagt Ihnen, wenn eine Prüfung nicht abgeschlossen werden konnte, statt Unbedenklichkeit zu suggerieren.",
+                    a: "Fragen Sie „Was kannst du?“, und er nennt Ihre Filialen, wie weit Ihre Aufzeichnungen zurückreichen und welche Werkzeuge er nutzen kann — eine leere Antwort bedeutet also einen leeren Zeitraum, keine fehlerhafte Abfrage. Jede Antwort führt ihre Quellen auf (die genauen Berichte und Zeiträume), sodass Sie sie überprüfen können. Sie können ihn auch bitten, auf auffällige Vorgänge zu prüfen — Verkäufe unter Einstandspreis, doppelte Rechnungen, große Preisausreißer — und er sagt Ihnen, wenn eine Prüfung nicht abgeschlossen werden konnte, statt Unbedenklichkeit zu suggerieren. It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, and warranty claims.",
                 },
                 {
                     q: "Was sind KI-Credits und wie bekomme ich mehr?",

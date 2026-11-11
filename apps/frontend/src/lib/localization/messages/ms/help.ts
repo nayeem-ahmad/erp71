@@ -82,6 +82,10 @@ export const helpMessages = {
                     q: 'Di mana saya menguruskan pembayaran pelanggan dan baki tertunggak?',
                     a: 'Gunakan Jualan → Pembayaran Pelanggan untuk merekodkan wang yang diterima terhadap baki, Jualan → Lejar Pelanggan untuk penyata berjalan bagi setiap pelanggan, dan laporan Penuaan Tunggakan (di bawah Jualan → Pelanggan) untuk melihat siapa berhutang apa dan berapa lama.',
                 },
+                {
+                    q: 'Can I ask the assistant for today\'s Daily Report / open tills / invoice lines / Mushak 6.2 / write-offs / an exchange or warranty claim?',
+                    a: 'Yes. Ask it for today\'s Daily Report (Sales → Daily Report), whether tills are still open (Sales → Cashier Sessions), which invoices a figure came from (Sales → Sales Line Items or Purchases → Purchase Line Items), Mushak 6.2 VAT totals (Sales → Mushak books), customer debts written off (Sales → Bad Debts), or an exchange or warranty claim (Sales → Sales Exchanges / Warranty Claims). It looks those up; it cannot change them.',
+                },
             ],
         },
         inventory: {
@@ -218,7 +222,7 @@ export const helpMessages = {
                 },
                 {
                     q: 'Apa yang sebenarnya boleh dilihatnya, dan bolehkah saya mempercayai jawapannya?',
-                    a: 'Tanya "what can you do?" dan ia melaporkan cawangan anda, sejauh mana rekod anda terkebelakang, dan alat mana yang boleh digunakannya — jadi jawapan kosong bermaksud tempoh kosong, bukan pertanyaan yang rosak. Setiap jawapan menyenaraikan Sumbernya (laporan dan julat tarikh tepat yang digunakannya) supaya anda boleh mengesahkannya. Anda juga boleh memintanya menyemak transaksi luar biasa — jualan di bawah kos, invois pendua, sisihan harga besar — dan ia akan memberitahu anda jika mana-mana semakan tidak dapat diselesaikan dan bukannya menyiratkan semuanya bersih.',
+                    a: 'Tanya "what can you do?" dan ia melaporkan cawangan anda, sejauh mana rekod anda terkebelakang, dan alat mana yang boleh digunakannya — jadi jawapan kosong bermaksud tempoh kosong, bukan pertanyaan yang rosak. Setiap jawapan menyenaraikan Sumbernya (laporan dan julat tarikh tepat yang digunakannya) supaya anda boleh mengesahkannya. Anda juga boleh memintanya menyemak transaksi luar biasa — jualan di bawah kos, invois pendua, sisihan harga besar — dan ia akan memberitahu anda jika mana-mana semakan tidak dapat diselesaikan dan bukannya menyiratkan semuanya bersih. It can also look up the Daily Report for a branch, today\'s open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, and warranty claims.',
                 },
                 {
                     q: 'Apakah kredit AI dan bagaimana saya mendapatkan lebih banyak?',

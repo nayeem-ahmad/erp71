@@ -92,6 +92,10 @@ export const HELP_SECTIONS: HelpSection[] = [
                 q: 'Where do I manage customer payments and overdue balances?',
                 a: 'Use Sales → Customer Payments to record money received against balances, Sales → Customer Ledger for a running statement per customer, and the Due Aging report (under Sales → Customers) to see who owes what and for how long.',
             },
+            {
+                q: 'Can I ask the assistant for today\'s Daily Report / open tills / invoice lines / Mushak 6.2 / write-offs / an exchange or warranty claim?',
+                a: 'Yes. Ask it for today\'s Daily Report (Sales → Daily Report), whether tills are still open (Sales → Cashier Sessions), which invoices a figure came from (Sales → Sales Line Items or Purchases → Purchase Line Items), Mushak 6.2 VAT totals (Sales → Mushak books), customer debts written off (Sales → Bad Debts), or an exchange or warranty claim (Sales → Sales Exchanges / Warranty Claims). It looks those up; it cannot change them.',
+            },
         ],
     },
     {
@@ -232,7 +236,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             },
             {
                 q: 'What can it actually see, and can I trust the answers?',
-                a: 'Ask "what can you do?" and it reports your branches, how far back your records go, and which tools it can use — so an empty answer means an empty period, not a broken query. Every answer lists its Sources (the exact reports and date ranges it used) so you can verify it. You can also ask it to check for unusual transactions — sales below cost, duplicate invoices, big price outliers — and it will tell you if any check could not complete rather than implying all is clean.',
+                a: 'Ask "what can you do?" and it reports your branches, how far back your records go, and which tools it can use — so an empty answer means an empty period, not a broken query. Every answer lists its Sources (the exact reports and date ranges it used) so you can verify it. You can also ask it to check for unusual transactions — sales below cost, duplicate invoices, big price outliers — and it will tell you if any check could not complete rather than implying all is clean. It can also look up the Daily Report for a branch, today\'s open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, and warranty claims.',
             },
             {
                 q: 'What are AI credits and how do I get more?',

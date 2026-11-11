@@ -36,6 +36,11 @@ describe('searchHelp', () => {
         expect(searchHelp('how do I', 3).length).toBeLessThanOrEqual(3);
     });
 
+    it('finds Daily Report among the sales FAQs', () => {
+        const results = searchHelp('daily report for a branch');
+        expect(results.some((r) => /Daily Report/i.test(r.q) || /Daily Report/i.test(r.a))).toBe(true);
+    });
+
     it('exposes the section titles for the empty-result fallback', () => {
         const titles = helpSectionTitles();
         expect(titles).toContain('Point of Sale (POS)');

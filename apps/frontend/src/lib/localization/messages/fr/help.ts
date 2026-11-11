@@ -82,6 +82,10 @@ export const helpMessages = {
                     q: "Où gérer les règlements clients et les impayés ?",
                     a: "Utilisez Ventes → Règlements clients pour enregistrer les sommes reçues, Ventes → Grand livre clients pour un relevé courant par client, et le rapport d'antériorité des créances (dans Ventes → Clients) pour voir qui doit quoi et depuis combien de temps.",
                 },
+                {
+                    q: 'Can I ask the assistant for today\'s Daily Report / open tills / invoice lines / Mushak 6.2 / write-offs / an exchange or warranty claim?',
+                    a: 'Yes. Ask it for today\'s Daily Report (Sales → Daily Report), whether tills are still open (Sales → Cashier Sessions), which invoices a figure came from (Sales → Sales Line Items or Purchases → Purchase Line Items), Mushak 6.2 VAT totals (Sales → Mushak books), customer debts written off (Sales → Bad Debts), or an exchange or warranty claim (Sales → Sales Exchanges / Warranty Claims). It looks those up; it cannot change them.',
+                },
             ],
         },
         inventory: {
@@ -218,7 +222,7 @@ export const helpMessages = {
                 },
                 {
                     q: "Que voit-il réellement, et puis-je me fier à ses réponses ?",
-                    a: "Demandez-lui « que sais-tu faire ? » : il indique vos succursales, jusqu'où remontent vos données et les outils qu'il peut utiliser — une réponse vide signifie donc une période vide, pas une requête défaillante. Chaque réponse liste ses sources (les rapports et périodes exacts utilisés) afin que vous puissiez la vérifier. Vous pouvez aussi lui demander de repérer les opérations inhabituelles — ventes à perte, factures en double, écarts de prix importants — et il vous signalera toute vérification qui n'a pas pu aboutir plutôt que de laisser croire que tout est en ordre.",
+                    a: "Demandez-lui « que sais-tu faire ? » : il indique vos succursales, jusqu'où remontent vos données et les outils qu'il peut utiliser — une réponse vide signifie donc une période vide, pas une requête défaillante. Chaque réponse liste ses sources (les rapports et périodes exacts utilisés) afin que vous puissiez la vérifier. Vous pouvez aussi lui demander de repérer les opérations inhabituelles — ventes à perte, factures en double, écarts de prix importants — et il vous signalera toute vérification qui n'a pas pu aboutir plutôt que de laisser croire que tout est en ordre. It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, and warranty claims.",
                 },
                 {
                     q: "Que sont les crédits IA et comment en obtenir davantage ?",

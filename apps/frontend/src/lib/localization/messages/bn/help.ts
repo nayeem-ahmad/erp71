@@ -82,6 +82,10 @@ export const helpMessages = {
                     q: 'কাস্টমার পেমেন্ট ও বকেয়া কোথায় ম্যানেজ করব?',
                     a: 'বকেয়ার বিপরীতে টাকা প্রাপ্তি রেকর্ড করতে Sales → Customer Payments ব্যবহার করুন, প্রতি কাস্টমারের চলমান বিবরণীর জন্য Sales → Customer Ledger, এবং কে কত ও কতদিন ধরে বকেয়া রেখেছে তা দেখতে Due Aging রিপোর্ট (Sales → Customers-এর অধীনে) ব্যবহার করুন।',
                 },
+                {
+                    q: 'Can I ask the assistant for today\'s Daily Report / open tills / invoice lines / Mushak 6.2 / write-offs / an exchange or warranty claim?',
+                    a: 'Yes. Ask it for today\'s Daily Report (Sales → Daily Report), whether tills are still open (Sales → Cashier Sessions), which invoices a figure came from (Sales → Sales Line Items or Purchases → Purchase Line Items), Mushak 6.2 VAT totals (Sales → Mushak books), customer debts written off (Sales → Bad Debts), or an exchange or warranty claim (Sales → Sales Exchanges / Warranty Claims). It looks those up; it cannot change them.',
+                },
             ],
         },
         inventory: {
@@ -218,7 +222,7 @@ export const helpMessages = {
                 },
                 {
                     q: 'এটি আসলে কী দেখতে পারে, এবং উত্তরগুলো কি বিশ্বাস করা যায়?',
-                    a: '"what can you do?" জিজ্ঞাসা করুন এবং এটি আপনার শাখাগুলো, আপনার রেকর্ড কতদূর পেছনের, এবং কোন কোন টুল ব্যবহার করতে পারে তা জানায় — তাই একটি খালি উত্তরের মানে একটি খালি সময়কাল, ভাঙা কোয়েরি নয়। প্রতিটি উত্তর তার Sources (যে রিপোর্ট ও তারিখ পরিসর ব্যবহার করেছে) তালিকাভুক্ত করে যাতে আপনি যাচাই করতে পারেন। আপনি এটিকে অস্বাভাবিক লেনদেন খুঁজতেও বলতে পারেন — খরচের নিচে বিক্রি, ডুপ্লিকেট ইনভয়েস, বড় মূল্য বিচ্যুতি — এবং কোনো পরীক্ষা সম্পূর্ণ না হলে এটি আপনাকে জানাবে, সব ঠিক আছে এমন ইঙ্গিত না দিয়ে।',
+                    a: '"what can you do?" জিজ্ঞাসা করুন এবং এটি আপনার শাখাগুলো, আপনার রেকর্ড কতদূর পেছনের, এবং কোন কোন টুল ব্যবহার করতে পারে তা জানায় — তাই একটি খালি উত্তরের মানে একটি খালি সময়কাল, ভাঙা কোয়েরি নয়। প্রতিটি উত্তর তার Sources (যে রিপোর্ট ও তারিখ পরিসর ব্যবহার করেছে) তালিকাভুক্ত করে যাতে আপনি যাচাই করতে পারেন। আপনি এটিকে অস্বাভাবিক লেনদেন খুঁজতেও বলতে পারেন — খরচের নিচে বিক্রি, ডুপ্লিকেট ইনভয়েস, বড় মূল্য বিচ্যুতি — এবং কোনো পরীক্ষা সম্পূর্ণ না হলে এটি আপনাকে জানাবে, সব ঠিক আছে এমন ইঙ্গিত না দিয়ে। It can also look up the Daily Report for a branch, today\'s open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, and warranty claims.',
                 },
                 {
                     q: 'AI ক্রেডিট কী এবং আরও কীভাবে পাব?',

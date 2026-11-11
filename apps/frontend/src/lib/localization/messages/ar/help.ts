@@ -82,6 +82,10 @@ export const helpMessages = {
                     q: "أين أدير دفعات العملاء والأرصدة المتأخرة؟",
                     a: "استخدم المبيعات ← دفعات العملاء لتسجيل المبالغ المستلمة مقابل الأرصدة، والمبيعات ← دفتر أستاذ العملاء لكشف حساب متجدّد لكل عميل، وتقرير أعمار المستحقات (ضمن المبيعات ← العملاء) لمعرفة من عليه ماذا ومنذ متى.",
                 },
+                {
+                    q: 'Can I ask the assistant for today\'s Daily Report / open tills / invoice lines / Mushak 6.2 / write-offs / an exchange or warranty claim?',
+                    a: 'Yes. Ask it for today\'s Daily Report (Sales → Daily Report), whether tills are still open (Sales → Cashier Sessions), which invoices a figure came from (Sales → Sales Line Items or Purchases → Purchase Line Items), Mushak 6.2 VAT totals (Sales → Mushak books), customer debts written off (Sales → Bad Debts), or an exchange or warranty claim (Sales → Sales Exchanges / Warranty Claims). It looks those up; it cannot change them.',
+                },
             ],
         },
         inventory: {
@@ -218,7 +222,7 @@ export const helpMessages = {
                 },
                 {
                     q: "ماذا يرى فعليًا، وهل يمكن الوثوق بإجاباته؟",
-                    a: "اسأله ”ماذا تستطيع أن تفعل؟“ فيخبرك بفروعك، وإلى أي مدى تعود سجلاتك، وأي الأدوات يستطيع استخدامها — فالإجابة الفارغة تعني فترة فارغة لا استعلامًا معطلًا. وكل إجابة تُدرج مصادرها (التقارير والفترات الزمنية التي استخدمها بالضبط) لتتحقق منها بنفسك. ويمكنك أيضًا أن تطلب منه فحص المعاملات غير المعتادة — بيع دون التكلفة، فواتير مكرّرة، انحرافات سعرية كبيرة — وسيخبرك إن تعذّر إتمام أي فحص بدل أن يوحي بأن كل شيء سليم.",
+                    a: "اسأله ”ماذا تستطيع أن تفعل؟“ فيخبرك بفروعك، وإلى أي مدى تعود سجلاتك، وأي الأدوات يستطيع استخدامها — فالإجابة الفارغة تعني فترة فارغة لا استعلامًا معطلًا. وكل إجابة تُدرج مصادرها (التقارير والفترات الزمنية التي استخدمها بالضبط) لتتحقق منها بنفسك. ويمكنك أيضًا أن تطلب منه فحص المعاملات غير المعتادة — بيع دون التكلفة، فواتير مكرّرة، انحرافات سعرية كبيرة — وسيخبرك إن تعذّر إتمام أي فحص بدل أن يوحي بأن كل شيء سليم. It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, and warranty claims.",
                 },
                 {
                     q: "ما أرصدة الذكاء الاصطناعي وكيف أحصل على المزيد؟",

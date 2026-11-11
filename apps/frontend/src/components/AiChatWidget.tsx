@@ -29,6 +29,11 @@ const TOOL_ROUTES: Record<string, string> = {
     top_movers: '/sales/reports/products',
     returns_analysis: '/sales/returns',
     customer_retention: '/sales/customers/reports/due-aging',
+    sales_line_items: '/sales/reports/line-items',
+    daily_report: '/sales/daily-report',
+    cashier_sessions: '/sales/cashier-sessions',
+    mushak_summary: '/sales/reports/mushak',
+    bad_debts: '/sales/customers/reports/bad-debts',
     // Inventory
     low_stock: '/inventory/reports/reorder',
     stock_on_hand: '/inventory/reports/valuation',
@@ -39,6 +44,7 @@ const TOOL_ROUTES: Record<string, string> = {
     purchase_summary: '/purchases/reports/summary',
     purchase_trend: '/purchases/reports/summary',
     purchase_breakdown: '/purchases/reports/summary',
+    purchase_line_items: '/purchases/reports/line-items',
     // Parties
     customer_lookup: '/sales/customers',
     customer_purchase_history: '/sales/customers',

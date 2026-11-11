@@ -129,6 +129,20 @@ Reachable for that cashier: `low_stock`, `stock_on_hand`, `stock_aging`,
 `cash_position` (via `VIEW_LEDGER`). Anything else appearing in the sources line is a
 permission-filter regression.
 
+## Wave 1 retail ops (9)
+
+| # | Question | Expected tool | Pass criteria |
+|---|---|---|---|
+| 46 | What is today's daily report for Gulshan? | `daily_report` | One branch; never an all-branches payload. Names net sales from headlines |
+| 47 | Are any tills still open? | `cashier_sessions` | No date argument. Open plus closed today only |
+| 48 | Show me the sale lines for [seeded product] last month | `resolve_entity` then `sales_line_items` | Resolves the product id first. Names invoice numbers, not only a total |
+| 49 | What did we buy of [seeded product] last month? | `purchase_line_items` | Bill numbers and supplier named |
+| 50 | What is our Mushak 6.2 VAT total this month? | `mushak_summary` | Quotes `totals.vatAmount`; does not dump the full book |
+| 51 | Which customer debts have we written off? | `bad_debts` | Names customers and amounts from the write-off register |
+| 52 | Show exchange EX-1 | `list_documents` (`type: sales_exchange`) | Finds the exchange document |
+| 53 | Open warranty claims this month | `list_documents` (`type: warranty_claim`) | Lists claims; does not invent a dedicated warranty tool |
+| 54 | Who is the lead named Rahim? | `resolve_entity` (`type: lead`) | Resolves the lead; does not treat Rahim as a customer |
+
 ## Module spot-check
 
 Switch a test tenant to an **accounting-only** plan and ask #1, #7 and #35.

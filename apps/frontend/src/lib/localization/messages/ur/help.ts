@@ -82,6 +82,10 @@ export const helpMessages = {
                     q: "گاہکوں کی ادائیگیاں اور بقایا رقوم کہاں سنبھالوں؟",
                     a: "بقایا کے مقابل موصول رقم درج کرنے کے لیے فروخت → گاہک کی ادائیگیاں، ہر گاہک کے چلتے گوشوارے کے لیے فروخت → گاہک کا کھاتہ، اور کون کتنا اور کب سے واجب الادا رکھتا ہے یہ دیکھنے کے لیے واجب الادا مدت کی رپورٹ (فروخت → گاہک کے تحت) استعمال کریں۔",
                 },
+                {
+                    q: 'Can I ask the assistant for today\'s Daily Report / open tills / invoice lines / Mushak 6.2 / write-offs / an exchange or warranty claim?',
+                    a: 'Yes. Ask it for today\'s Daily Report (Sales → Daily Report), whether tills are still open (Sales → Cashier Sessions), which invoices a figure came from (Sales → Sales Line Items or Purchases → Purchase Line Items), Mushak 6.2 VAT totals (Sales → Mushak books), customer debts written off (Sales → Bad Debts), or an exchange or warranty claim (Sales → Sales Exchanges / Warranty Claims). It looks those up; it cannot change them.',
+                },
             ],
         },
         inventory: {
@@ -218,7 +222,7 @@ export const helpMessages = {
                 },
                 {
                     q: "یہ اصل میں کیا دیکھ سکتا ہے، اور کیا جوابات پر بھروسہ کیا جا سکتا ہے؟",
-                    a: "پوچھیں ”تم کیا کر سکتے ہو؟“ اور یہ آپ کی شاخیں، آپ کے ریکارڈ کتنے پرانے ہیں، اور کون سے اوزار استعمال کر سکتا ہے، سب بتا دیتا ہے — یعنی خالی جواب کا مطلب خالی مدت ہے، ٹوٹی ہوئی کوئری نہیں۔ ہر جواب اپنے ذرائع (استعمال کی گئی عین رپورٹس اور مدت) دکھاتا ہے تاکہ آپ تصدیق کر سکیں۔ آپ اس سے غیر معمولی لین دین بھی جانچنے کو کہہ سکتے ہیں — لاگت سے کم فروخت، دہرے انوائس، قیمت میں بڑے فرق — اور اگر کوئی جانچ مکمل نہ ہو سکے تو یہ بتا دیتا ہے، سب ٹھیک ہونے کا تاثر نہیں دیتا۔",
+                    a: "پوچھیں ”تم کیا کر سکتے ہو؟“ اور یہ آپ کی شاخیں، آپ کے ریکارڈ کتنے پرانے ہیں، اور کون سے اوزار استعمال کر سکتا ہے، سب بتا دیتا ہے — یعنی خالی جواب کا مطلب خالی مدت ہے، ٹوٹی ہوئی کوئری نہیں۔ ہر جواب اپنے ذرائع (استعمال کی گئی عین رپورٹس اور مدت) دکھاتا ہے تاکہ آپ تصدیق کر سکیں۔ آپ اس سے غیر معمولی لین دین بھی جانچنے کو کہہ سکتے ہیں — لاگت سے کم فروخت، دہرے انوائس، قیمت میں بڑے فرق — اور اگر کوئی جانچ مکمل نہ ہو سکے تو یہ بتا دیتا ہے، سب ٹھیک ہونے کا تاثر نہیں دیتا۔ It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, and warranty claims.",
                 },
                 {
                     q: "AI کریڈٹس کیا ہیں اور مزید کیسے حاصل کروں؟",

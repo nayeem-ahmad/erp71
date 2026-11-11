@@ -82,6 +82,10 @@ export const helpMessages = {
                     q: "ग्राहक भुगतान और मेयादोत्तीर्ण बकाया कहाँ प्रबंधित करूँ?",
                     a: "बकाया के विरुद्ध प्राप्त धन दर्ज करने के लिए बिक्री → ग्राहक भुगतान, प्रति ग्राहक चालू विवरण के लिए बिक्री → ग्राहक खाता-बही, और कौन कितना और कब से बकाया रखता है यह देखने के लिए ड्यू एजिंग रिपोर्ट (बिक्री → ग्राहक के अंतर्गत) उपयोग करें।",
                 },
+                {
+                    q: 'Can I ask the assistant for today\'s Daily Report / open tills / invoice lines / Mushak 6.2 / write-offs / an exchange or warranty claim?',
+                    a: 'Yes. Ask it for today\'s Daily Report (Sales → Daily Report), whether tills are still open (Sales → Cashier Sessions), which invoices a figure came from (Sales → Sales Line Items or Purchases → Purchase Line Items), Mushak 6.2 VAT totals (Sales → Mushak books), customer debts written off (Sales → Bad Debts), or an exchange or warranty claim (Sales → Sales Exchanges / Warranty Claims). It looks those up; it cannot change them.',
+                },
             ],
         },
         inventory: {
@@ -218,7 +222,7 @@ export const helpMessages = {
                 },
                 {
                     q: "यह वास्तव में क्या देख सकता है, और क्या उत्तरों पर भरोसा किया जा सकता है?",
-                    a: "पूछें \"आप क्या कर सकते हैं?\" और यह आपकी शाखाएँ, आपके रिकॉर्ड कितने पीछे तक जाते हैं, और कौन-से टूल यह उपयोग कर सकता है बताता है — इसलिए खाली उत्तर का अर्थ खाली अवधि है, टूटी क्वेरी नहीं। हर उत्तर अपने स्रोत सूचीबद्ध करता है (ठीक वे रिपोर्ट और तिथि सीमाएँ जो उसने उपयोग कीं) ताकि आप जाँच सकें। आप इससे असामान्य लेन-देन जाँचने को भी कह सकते हैं — लागत से कम बिक्री, दोहरे चालान, बड़े मूल्य विचलन — और यदि कोई जाँच पूरी न हो सकी तो यह आपको बताएगा, यह नहीं जताएगा कि सब ठीक है।",
+                    a: "पूछें \"आप क्या कर सकते हैं?\" और यह आपकी शाखाएँ, आपके रिकॉर्ड कितने पीछे तक जाते हैं, और कौन-से टूल यह उपयोग कर सकता है बताता है — इसलिए खाली उत्तर का अर्थ खाली अवधि है, टूटी क्वेरी नहीं। हर उत्तर अपने स्रोत सूचीबद्ध करता है (ठीक वे रिपोर्ट और तिथि सीमाएँ जो उसने उपयोग कीं) ताकि आप जाँच सकें। आप इससे असामान्य लेन-देन जाँचने को भी कह सकते हैं — लागत से कम बिक्री, दोहरे चालान, बड़े मूल्य विचलन — और यदि कोई जाँच पूरी न हो सकी तो यह आपको बताएगा, यह नहीं जताएगा कि सब ठीक है। It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, and warranty claims.",
                 },
                 {
                     q: "AI क्रेडिट क्या हैं और और कैसे पाऊँ?",

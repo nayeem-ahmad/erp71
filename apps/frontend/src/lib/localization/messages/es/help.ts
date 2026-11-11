@@ -82,6 +82,10 @@ export const helpMessages = {
                     q: "¿Dónde gestiono los cobros de clientes y los saldos vencidos?",
                     a: "Use Ventas → Cobros de clientes para registrar el dinero recibido contra los saldos, Ventas → Libro mayor de clientes para un extracto continuo por cliente y el informe de antigüedad de deuda (en Ventas → Clientes) para ver quién debe cuánto y desde cuándo.",
                 },
+                {
+                    q: 'Can I ask the assistant for today\'s Daily Report / open tills / invoice lines / Mushak 6.2 / write-offs / an exchange or warranty claim?',
+                    a: 'Yes. Ask it for today\'s Daily Report (Sales → Daily Report), whether tills are still open (Sales → Cashier Sessions), which invoices a figure came from (Sales → Sales Line Items or Purchases → Purchase Line Items), Mushak 6.2 VAT totals (Sales → Mushak books), customer debts written off (Sales → Bad Debts), or an exchange or warranty claim (Sales → Sales Exchanges / Warranty Claims). It looks those up; it cannot change them.',
+                },
             ],
         },
         inventory: {
@@ -218,7 +222,7 @@ export const helpMessages = {
                 },
                 {
                     q: "¿Qué puede ver realmente y puedo fiarme de sus respuestas?",
-                    a: "Pregúntele «¿qué puedes hacer?» y le indicará sus sucursales, hasta dónde se remontan sus registros y qué herramientas puede usar, de modo que una respuesta vacía significa un periodo vacío, no una consulta rota. Cada respuesta enumera sus fuentes (los informes y rangos de fechas exactos que utilizó) para que pueda verificarla. También puede pedirle que busque operaciones inusuales —ventas por debajo del coste, facturas duplicadas, precios muy atípicos— y le avisará si alguna comprobación no pudo completarse en lugar de dar a entender que todo está correcto.",
+                    a: "Pregúntele «¿qué puedes hacer?» y le indicará sus sucursales, hasta dónde se remontan sus registros y qué herramientas puede usar, de modo que una respuesta vacía significa un periodo vacío, no una consulta rota. Cada respuesta enumera sus fuentes (los informes y rangos de fechas exactos que utilizó) para que pueda verificarla. También puede pedirle que busque operaciones inusuales —ventas por debajo del coste, facturas duplicadas, precios muy atípicos— y le avisará si alguna comprobación no pudo completarse en lugar de dar a entender que todo está correcto. It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, and warranty claims.",
                 },
                 {
                     q: "¿Qué son los créditos de IA y cómo consigo más?",
