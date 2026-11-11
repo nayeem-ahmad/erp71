@@ -72,6 +72,11 @@ function makeDeps(overrides: Partial<Record<keyof ChatToolDeps, any>> = {}): Cha
         purchaseLineItems: { getPurchaseLineItems: jest.fn() },
         mushak: { getSalesBook: jest.fn() },
         storefront: { getOrders: jest.fn() },
+        manufacturing: {
+            listJobs: jest.fn(),
+            getProductPL: jest.fn(),
+            getAnalytics: jest.fn(),
+        },
         web: {
             search: jest.fn(),
             fetchPage: jest.fn(),
@@ -1377,5 +1382,87 @@ describe('storefront_orders', () => {
         expect(result.rows[0].total).toBe(1200.13);
         expect(result.rows[0].customer).toBe('Nadia');
         expect(result.rows[0].items).toBeUndefined();
+    });
+});
+
+describe('manufacturing_summary', () => {
+    it('requires kind jobs, product_pl or analytics', () => {
+        expect(CHAT_TOOLS_BY_NAME.manufacturing_summary.permission).toBe(StorePermission.EDIT_PRODUCTS);
+        expect(CHAT_TOOLS_BY_NAME.manufacturing_summary.modules).toContain('manufacturing');
+        expect((CHAT_TOOLS_BY_NAME.manufacturing_summary.parameters as any).required).toEqual(
+            expect.arrayContaining(['kind']),
+        );
+    });
+
+    it('dispatches jobs to listJobs only', async () => {
+        const listJobs = jest.fn().mockResolvedValue({
+            items: [{
+                quantity: 10,
+                status: 'IN_PROGRESS',
+                totalJobCost: 500.126,
+                recipe: { product: { name: 'Mix', sku: 'MX-1' } },
+            }],
+            total: 1,
+        });
+        const getProductPL = jest.fn();
+        const getAnalytics = jest.fn();
+        const deps = makeDeps({ manufacturing: { listJobs, getProductPL, getAnalytics } } as any);
+
+        const result: any = await run('manufacturing_summary', { kind: 'jobs' }, deps);
+
+        expect(listJobs).toHaveBeenCalled();
+        expect(getProductPL).not.toHaveBeenCalled();
+        expect(getAnalytics).not.toHaveBeenCalled();
+        expect(result.rows[0].product).toBe('Mix');
+        expect(result.rows[0].totalJobCost).toBe(500.13);
+    });
+
+    it('dispatches product_pl to getProductPL only and pages products', async () => {
+        const products = Array.from({ length: 25 }, (_, i) => ({
+            productName: `P${i}`,
+            productSku: `S${i}`,
+            quantityProduced: 2,
+            totalProductionCost: 10,
+            revenue: 20,
+            grossProfit: 10,
+        }));
+        const getProductPL = jest.fn().mockResolvedValue({
+            totals: { quantityProduced: 50, totalProductionCost: 250, revenue: 500, grossProfit: 250 },
+            products,
+        });
+        const listJobs = jest.fn();
+        const getAnalytics = jest.fn();
+        const deps = makeDeps({ manufacturing: { listJobs, getProductPL, getAnalytics } } as any);
+
+        const result: any = await run('manufacturing_summary', { kind: 'product_pl' }, deps);
+
+        expect(getProductPL).toHaveBeenCalledWith('tenant-1');
+        expect(listJobs).not.toHaveBeenCalled();
+        expect(result.totals.revenue).toBe(500);
+        expect(result.rows).toHaveLength(20);
+        expect(result.hasMore).toBe(true);
+        expect(result.rows[0].product).toBe('P0');
+    });
+
+    it('dispatches analytics with the shop timezone', async () => {
+        const getAnalytics = jest.fn().mockResolvedValue({
+            totalCompletedJobs: 3,
+            totalUnitsProduced: 30,
+            totalMaterialCost: 100.126,
+            avgUnitProductionCost: 3.337,
+            jobs: [{ jobId: 'secret' }],
+            volumeTrend: [{ date: '2026-07-01', quantityProduced: 10 }],
+        });
+        const deps = makeDeps({
+            manufacturing: { listJobs: jest.fn(), getProductPL: jest.fn(), getAnalytics },
+        } as any);
+
+        const result: any = await run('manufacturing_summary', { kind: 'analytics' }, deps);
+
+        expect(getAnalytics).toHaveBeenCalledWith('tenant-1', 'Asia/Dhaka');
+        expect(result.totalCompletedJobs).toBe(3);
+        expect(result.totalMaterialCost).toBe(100.13);
+        expect(result.jobs).toBeUndefined();
+        expect(result.rows[0].date).toBe('2026-07-01');
     });
 });

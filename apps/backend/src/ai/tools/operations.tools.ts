@@ -158,6 +158,94 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
     },
 
     {
+        name: 'manufacturing_summary',
+        permission: StorePermission.EDIT_PRODUCTS,
+        modules: ['manufacturing'],
+        description:
+            'Production jobs, manufactured-product P&L, or manufacturing analytics. Pass kind: jobs (open and recent ' +
+            'jobs), product_pl (cost vs revenue per manufactured product), or analytics (completed volume and cost ' +
+            'headlines). Use for "what is in production", "are we making money on what we manufacture".',
+        parameters: {
+            type: 'object',
+            properties: {
+                kind: {
+                    type: 'string',
+                    enum: ['jobs', 'product_pl', 'analytics'],
+                    description: 'Which manufacturing view to return.',
+                },
+                status: { type: 'string', description: 'For kind=jobs, restrict to a job status such as IN_PROGRESS.' },
+                ...PAGING_PROPS,
+            },
+            required: ['kind'],
+        },
+        handler: async (ctx, args, deps) => {
+            const kind = args.kind;
+            if (kind !== 'jobs' && kind !== 'product_pl' && kind !== 'analytics') {
+                return { error: 'kind must be jobs, product_pl, or analytics' };
+            }
+            if (kind === 'jobs') {
+                const limit = Math.min(Math.max(Number(args.limit) || MAX_TOOL_ROWS, 1), MAX_TOOL_ROWS);
+                const offset = Math.max(Number(args.offset) || 0, 0);
+                const result = await deps.manufacturing.listJobs(
+                    ctx.tenantId,
+                    Math.floor(offset / limit) + 1,
+                    limit,
+                    args.status ? String(args.status) : undefined,
+                );
+                const items = result.items ?? [];
+                return {
+                    kind,
+                    totalRows: result.total ?? items.length,
+                    page: result.page ?? 1,
+                    rows: items.map((job: any) => ({
+                        product: job.recipe?.product?.name ?? job.productName ?? null,
+                        sku: job.recipe?.product?.sku ?? job.productSku ?? null,
+                        quantity: job.quantity,
+                        status: job.status,
+                        totalJobCost: money(job.totalJobCost),
+                    })),
+                };
+            }
+            if (kind === 'product_pl') {
+                const result = await deps.manufacturing.getProductPL(ctx.tenantId);
+                const paged = page(result.products ?? [], args);
+                return {
+                    kind,
+                    totals: {
+                        quantityProduced: result.totals.quantityProduced,
+                        totalProductionCost: money(result.totals.totalProductionCost),
+                        revenue: money(result.totals.revenue),
+                        grossProfit: money(result.totals.grossProfit),
+                    },
+                    ...paged,
+                    rows: paged.rows.map((p: any) => ({
+                        product: p.productName ?? p.product ?? null,
+                        sku: p.productSku ?? p.sku ?? null,
+                        quantityProduced: p.quantityProduced,
+                        productionCost: money(p.totalProductionCost ?? p.productionCost),
+                        revenue: money(p.revenue),
+                        grossProfit: money(p.grossProfit),
+                    })),
+                };
+            }
+            const result = await deps.manufacturing.getAnalytics(ctx.tenantId, ctx.timezone);
+            const paged = page(result.volumeTrend ?? [], args);
+            return {
+                kind,
+                totalCompletedJobs: result.totalCompletedJobs,
+                totalUnitsProduced: result.totalUnitsProduced,
+                totalMaterialCost: money(result.totalMaterialCost),
+                avgUnitProductionCost: money(result.avgUnitProductionCost),
+                ...paged,
+                rows: paged.rows.map((row: any) => ({
+                    date: row.date,
+                    quantityProduced: row.quantityProduced,
+                })),
+            };
+        },
+    },
+
+    {
         name: 'storefront_orders',
         permission: StorePermission.CREATE_SALE,
         modules: ['storefront'],

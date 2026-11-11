@@ -5,6 +5,7 @@ import { CustomersService } from '../customers/customers.service';
 import { DailyReportService } from '../daily-report/daily-report.service';
 import { ExpensesService } from '../expenses/expenses.service';
 import { InventoryReportsService } from '../inventory-reports/inventory-reports.service';
+import { ManufacturingService } from '../manufacturing/manufacturing.service';
 import { MushakService } from '../mushak/mushak.service';
 import { PurchaseLineItemsService } from '../purchase-reports/purchase-line-items.service';
 import { PurchaseReportsService } from '../purchase-reports/purchase-reports.service';
@@ -41,6 +42,7 @@ export class ChatToolDepsFactory {
         private readonly purchaseLineItems: PurchaseLineItemsService,
         private readonly mushak: MushakService,
         private readonly storefront: StorefrontService,
+        private readonly manufacturing: ManufacturingService,
     ) {}
 
     build(): ChatToolDeps {
@@ -61,6 +63,7 @@ export class ChatToolDepsFactory {
             purchaseLineItems: this.purchaseLineItems,
             mushak: this.mushak,
             storefront: this.storefront,
+            manufacturing: this.manufacturing,
         };
     }
 }

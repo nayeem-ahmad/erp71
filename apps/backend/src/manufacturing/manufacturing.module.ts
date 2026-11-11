@@ -7,5 +7,6 @@ import { ManufacturingService } from './manufacturing.service';
     imports: [AuthModule],
     controllers: [ManufacturingController],
     providers: [ManufacturingService],
+    exports: [ManufacturingService],
 })
 export class ManufacturingModule {}

@@ -154,16 +154,21 @@ function makeService(overrides: {
     return { service, db, ai, platformSettings, planEntitlements, salesReports, chatData, webSearch, anomalies };
 }
 
-const FLAGGED_TOOLS = CHAT_TOOLS.filter((tool) => tool.featureFlag);
-
 describe('ChatService.resolveTools', () => {
     it('gives an OWNER every unflagged tool without consulting per-store grants', async () => {
         const { service, db } = makeService();
-        const { tools } = await service.resolveTools(OWNER_CTX);
+        const { tools, modules } = await service.resolveTools(OWNER_CTX);
 
         // Feature-flagged tools are excluded: an owner's permissions are total, but
         // a capability the platform operator has not switched on is nobody's.
-        expect(tools).toHaveLength(CHAT_TOOLS.length - FLAGGED_TOOLS.length);
+        // Module-gated tools follow the plan, so manufacturing stays off until
+        // premiumManufacturing is entitled.
+        const expected = CHAT_TOOLS.filter((tool) => {
+            if (tool.featureFlag) return false;
+            if (!tool.modules?.length) return true;
+            return tool.modules.some((m) => modules.has(m));
+        });
+        expect(tools.map((t) => t.name)).toEqual(expected.map((t) => t.name));
         expect(db.userStorePermission.findFirst).not.toHaveBeenCalled();
     });
 
@@ -275,6 +280,18 @@ describe('ChatService.resolveTools', () => {
         expect(modules.has('storefront')).toBe(false);
         expect(modules.has('imports')).toBe(false);
         expect(modules.has('retail')).toBe(false);
+    });
+
+    it('withholds manufacturing_summary when premiumManufacturing is off', async () => {
+        const { service } = makeService({ planFeatures: {} });
+        const names = (await service.resolveTools(OWNER_CTX)).tools.map((t) => t.name);
+        expect(names).not.toContain('manufacturing_summary');
+    });
+
+    it('offers manufacturing_summary when premiumManufacturing is on', async () => {
+        const { service } = makeService({ planFeatures: { premiumManufacturing: true } });
+        const names = (await service.resolveTools(OWNER_CTX)).tools.map((t) => t.name);
+        expect(names).toContain('manufacturing_summary');
     });
 });
 
