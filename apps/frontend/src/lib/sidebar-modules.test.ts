@@ -126,6 +126,7 @@ describe('resolveSidebarModules — app states match the legacy gates', () => {
                             && paid && Boolean(plan.features.premiumAccounting),
                         canAccessManufacturing: switches.manufacturing && Boolean(plan.features.premiumManufacturing),
                         canAccessProjects: switches.projects && (viewer.isOwner || viewer.permissions.includes('VIEW_PROJECTS')),
+                        canAccessMeetings: viewer.isOwner || viewer.permissions.includes('VIEW_MEETINGS'),
                         helpEnabled: switches.help,
                         supportEnabled: switches.support || switches.feedback,
                         canAccessAdmin: false,

@@ -192,6 +192,22 @@ describe('EmailService', () => {
             expect(credits.consume).not.toHaveBeenCalled();
         });
 
+        it('sendOperational uses the tenant sender and does not bill credits', async () => {
+            tenantIdentity.resolveEmailIdentity.mockResolvedValueOnce({
+                from: 'hello@shop.com',
+                fromName: 'Shop BD',
+                replyTo: 'support@shop.com',
+            });
+
+            await service.sendOperational('staff@shop.com', 'Minutes', '<p>Hi</p>', { tenantId: 'tenant-1' });
+
+            expect(credits.consume).not.toHaveBeenCalled();
+            expect(tenantIdentity.resolveEmailIdentity).toHaveBeenCalledWith('tenant-1');
+            const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+            expect(body.sender).toEqual({ email: 'hello@shop.com', name: 'Shop BD' });
+            expect(body.subject).toBe('Minutes');
+        });
+
         it('sendMeet71Invite is unbilled platform mail', async () => {
             process.env.MEET71_PUBLIC_URL = 'https://meet.erp71.com';
 

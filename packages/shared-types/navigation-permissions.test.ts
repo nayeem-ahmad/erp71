@@ -57,6 +57,13 @@ describe('NAV_PERMISSIONS', () => {
             expect(NAV_PERMISSIONS.projects).toBeUndefined();
         });
 
+        it('leaves Meetings untagged, since a meetings role already gates it on VIEW_MEETINGS', () => {
+            expect(NAV_PERMISSIONS.meetings).toBeUndefined();
+            expect(NAV_PERMISSIONS['meetings.list']).toBeUndefined();
+            expect(NAV_PERMISSIONS['meetings.actions']).toBeUndefined();
+            expect(NAV_PERMISSIONS['meetings.actions-all']).toEqual(['VIEW_ALL_MEETINGS']);
+        });
+
         it('hides Bad Debts from anyone who cannot write a debt off', () => {
             const needed = NAV_PERMISSIONS['sales.receivables.bad-debts'];
             expect(needed).toEqual(['WRITE_OFF_CUSTOMER_DEBT']);

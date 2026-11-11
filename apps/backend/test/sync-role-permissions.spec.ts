@@ -10,6 +10,7 @@ import {
 } from '@erp71/shared-types';
 
 const PROJECT_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'projects')!.permissions;
+const MEETINGS_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'meetings')!.permissions;
 const SHORT_LINKS_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'short-links')!.permissions;
 const HR_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'hr')!.permissions;
 const DEMAND_PERMS = PERMISSION_BACKFILL_GROUPS.find((g) => g.key === 'product-demands')!.permissions;
@@ -89,7 +90,10 @@ describe('syncRolePermissions', () => {
     it('grants the projects group to the roles ROLE_DEFAULT_PERMISSIONS assigns it to', async () => {
         const { client, tables } = seedTenant();
 
-        const [result] = await syncRolePermissions(client);
+        const results = await syncRolePermissions(client);
+        // Found by key, not position — meetings landed ahead of projects in
+        // PERMISSION_BACKFILL_GROUPS and must not silently retarget this pin.
+        const result = results.find((r) => r.key === 'projects')!;
 
         // Only MANAGER carries projects permissions in the matrix; cashier and
         // accountant carry none, so only one role is touched.
@@ -113,6 +117,25 @@ describe('syncRolePermissions', () => {
                 .filter((r) => PROJECT_PERMS.includes(r.permission))
                 .every((r) => r.tenant_role_id === ROLE_IDS.manager),
         ).toBe(true);
+    });
+
+    it('carries VIEW_MEETINGS to every coarse role and MANAGE_MEETINGS only to the manager', async () => {
+        const { client, tables } = seedTenant();
+
+        const results = await syncRolePermissions(client);
+        const meetings = results.find((r) => r.key === 'meetings')!;
+
+        const byRole = (roleId: string) => tables.tenantRolePermission
+            .filter((r) => r.tenant_role_id === roleId && MEETINGS_PERMS.includes(r.permission))
+            .map((r) => r.permission)
+            .sort();
+
+        expect(meetings.rolesTouched).toBe(3);
+        expect(byRole(ROLE_IDS.manager)).toEqual([...MEETINGS_PERMS].sort());
+        expect(byRole(ROLE_IDS.cashier)).toEqual([StorePermission.VIEW_MEETINGS]);
+        expect(byRole(ROLE_IDS.accountant)).toEqual([StorePermission.VIEW_MEETINGS]);
+        expect(tables.tenantRolePermission.map((r) => r.permission))
+            .not.toContain(StorePermission.VIEW_ALL_MEETINGS);
     });
 
     it('also backfills the short-links group in the same run', async () => {
@@ -170,7 +193,8 @@ describe('syncRolePermissions', () => {
     it('materializes onto every store the role-holding member can access', async () => {
         const { client, tables } = seedTenant();
 
-        const [result] = await syncRolePermissions(client);
+        const results = await syncRolePermissions(client);
+        const result = results.find((r) => r.key === 'projects')!;
 
         // The manager holds the role and has two stores; the cashier's role gained
         // nothing, so the cashier gets nothing.
@@ -220,7 +244,8 @@ describe('syncRolePermissions', () => {
     it('writes nothing on a dry run but reports what it would do', async () => {
         const { client, tables } = seedTenant();
 
-        const [result] = await syncRolePermissions(client, { dryRun: true });
+        const results = await syncRolePermissions(client, { dryRun: true });
+        const result = results.find((r) => r.key === 'projects')!;
 
         expect(result.roleGrants).toBe(PROJECT_PERMS.length);
         expect(result.memberGrants).toBe(PROJECT_PERMS.length * 2);
@@ -232,7 +257,7 @@ describe('syncRolePermissions', () => {
         const { client } = seedTenant();
 
         await syncRolePermissions(client);
-        const [second] = await syncRolePermissions(client);
+        const second = (await syncRolePermissions(client)).find((r) => r.key === 'projects')!;
 
         expect(second.roleGrants).toBe(0);
         expect(second.memberGrants).toBe(0);
@@ -248,7 +273,7 @@ describe('syncRolePermissions', () => {
                 .map((permission) => ({ tenant_role_id: ROLE_IDS.manager, permission })),
         });
 
-        const [result] = await syncRolePermissions(client);
+        const result = (await syncRolePermissions(client)).find((r) => r.key === 'projects')!;
 
         expect(result.roleGrants).toBe(0);
         expect(result.rolesAlreadyReconciled).toBe(1);

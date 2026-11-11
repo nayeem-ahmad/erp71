@@ -127,6 +127,7 @@ export interface SidebarModulesInput {
     canAccessPremiumCrm?: boolean;
     canAccessManufacturing?: boolean;
     canAccessProjects?: boolean;
+    canAccessMeetings?: boolean;
     canAccessPlatformAccounting?: boolean;
     canAccessAdmin?: boolean;
     /**
@@ -168,6 +169,7 @@ function legacyModuleGate(module: ResolvedNavModule, input: SidebarModulesInput)
     if (module.key === 'support') return Boolean(input.supportEnabled);
     if (module.key === 'manufacturing') return Boolean(input.canAccessManufacturing);
     if (module.key === 'projects') return Boolean(input.canAccessProjects);
+    if (module.key === 'meetings') return Boolean(input.canAccessMeetings);
     // Module-level entitlement from NAV_REGISTRY. Declared for `chat`
     // since team chat shipped, but silently dropped in resolution until
     // now, so the module rendered on every plan and 403'd on entry.

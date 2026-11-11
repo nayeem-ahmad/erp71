@@ -8,6 +8,8 @@ describe('isAccountingOnlyBlockedPath', () => {
         expect(isAccountingOnlyBlockedPath('/inventory/products')).toBe(true);
         expect(isAccountingOnlyBlockedPath('/crm')).toBe(true);
         expect(isAccountingOnlyBlockedPath('/hr')).toBe(true);
+        expect(isAccountingOnlyBlockedPath('/meetings')).toBe(true);
+        expect(isAccountingOnlyBlockedPath('/meetings/actions')).toBe(true);
         expect(isAccountingOnlyBlockedPath('/storefront')).toBe(true);
     });
 

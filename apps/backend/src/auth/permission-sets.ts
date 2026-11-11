@@ -175,6 +175,11 @@ export const PAYROLL_WRITE: P[] = [P.MANAGE_HR];
 /** Accruing salaries posts vouchers, so the accountant who runs it may too. */
 export const PAYROLL_POST: P[] = [P.MANAGE_HR, P.CREATE_VOUCHER];
 
+// Meetings --------------------------------------------------------------------
+export const MEETINGS_READ: P[] = [P.VIEW_MEETINGS, P.VIEW_ALL_MEETINGS, P.MANAGE_MEETINGS];
+export const MEETINGS_MANAGE: P[] = [P.MANAGE_MEETINGS];
+export const MEETINGS_VIEW_ALL: P[] = [P.VIEW_ALL_MEETINGS];
+
 // Workspace settings ------------------------------------------------------------
 /** Whoever administers users, branches or counters. */
 export const SETTINGS_ADMIN: P[] = [P.MANAGE_USERS, P.MANAGE_STORES, P.MANAGE_COUNTERS];

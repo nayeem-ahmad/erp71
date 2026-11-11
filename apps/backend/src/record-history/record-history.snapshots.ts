@@ -339,6 +339,73 @@ const loadCustomerPayment: Loader = async (db, id) => {
     });
 };
 
+const loadMeeting: Loader = async (db, id) => {
+    const row = await db.meeting.findUnique({
+        where: { id },
+        include: {
+            organizer: named,
+            store: named,
+            attendees: { orderBy: { name: 'asc' } },
+            discussions: {
+                orderBy: { position: 'asc' },
+                include: {
+                    actionItems: {
+                        orderBy: { position: 'asc' },
+                        include: { others: { orderBy: { position: 'asc' } } },
+                    },
+                },
+            },
+        },
+    });
+    if (!row) return null;
+    const { organizer, store, attendees, discussions } = row;
+    return snapshot(row.tenant_id, row.meeting_number ?? row.title, {
+        ...scalars(await withUserNames(db, row, ['created_by', 'finalized_by', 'cancelled_by']), [
+            'organizer',
+            'store',
+            'attendees',
+            'discussions',
+            'actionItems',
+            'organizer_id',
+            'store_id',
+            'share_token',
+        ]),
+        organizer: nameOf(organizer),
+        branch: nameOf(store),
+        attendees: keyLines(
+            attendees.map((attendee) => ({
+                _ref: attendee.id,
+                name: attendee.name,
+                email: attendee.email,
+                organization: attendee.organization,
+                role: attendee.role,
+                attended: attendee.attended,
+            })),
+            (line) => line._ref,
+            (line) => line.name ?? line._ref,
+        ),
+        discussions: keyLines(
+            discussions.map((discussion) => ({
+                _ref: discussion.id,
+                position: discussion.position,
+                title: discussion.title,
+                description: discussion.description,
+                decision: discussion.decision,
+                actions: discussion.actionItems.map((item) => ({
+                    position: item.position,
+                    description: item.description,
+                    assignee: item.assignee_name,
+                    due_date: item.due_date,
+                    status: item.status,
+                    others: item.others.map((person) => person.name),
+                })),
+            })),
+            (line) => line._ref,
+            (line) => line.title ?? line._ref,
+        ),
+    });
+};
+
 const loadSupplierPayment: Loader = async (db, id) => {
     const row = await db.supplierCreditTransaction.findUnique({
         where: { id },
@@ -379,4 +446,5 @@ export const SNAPSHOT_LOADERS: Record<RecordHistoryEntityType, Loader> = {
     PURCHASE_RETURN: loadPurchaseReturn,
     CUSTOMER_PAYMENT: loadCustomerPayment,
     SUPPLIER_PAYMENT: loadSupplierPayment,
+    MEETING: loadMeeting,
 };

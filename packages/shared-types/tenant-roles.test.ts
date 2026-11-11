@@ -85,6 +85,13 @@ describe("TENANT_ROLE_TEMPLATES", () => {
         }
     });
 
+    it("keeps VIEW_ALL_MEETINGS out of every template", () => {
+        for (const template of TENANT_ROLE_TEMPLATES) {
+            if (template.key === "tenant_admin") continue;
+            expect(template.permissions).not.toContain(StorePermission.VIEW_ALL_MEETINGS);
+        }
+    });
+
     it("reserves MANAGER for the administration roles and ACCOUNTANT for accounting", () => {
         // The coarse gates are workspace-wide: MANAGER lets someone add staff and
         // ACCOUNTANT opens the accounting module. A manager of one other module must

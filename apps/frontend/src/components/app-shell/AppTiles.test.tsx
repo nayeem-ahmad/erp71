@@ -132,7 +132,7 @@ describe('AppTiles', () => {
     });
 
     it('still offers Manage apps when the owner has hidden everything', () => {
-        renderTiles(shell({ hiddenApps: ['sales', 'storefront', 'purchase', 'imports', 'accounting', 'expenses', 'inventory', 'crm', 'projects', 'manufacturing', 'hr'] }));
+        renderTiles(shell({ hiddenApps: ['sales', 'storefront', 'purchase', 'imports', 'accounting', 'expenses', 'inventory', 'crm', 'projects', 'manufacturing', 'hr', 'meetings'] }));
 
         expect(within(tiles()).queryAllByRole('link').filter((link) => link.getAttribute('href') !== '/settings/apps')).toHaveLength(0);
         expect(screen.getByRole('link', { name: 'Manage apps' })).toHaveAttribute('href', '/settings/apps');

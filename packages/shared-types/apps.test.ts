@@ -45,7 +45,7 @@ describe('APP_REGISTRY', () => {
     it('lists the business apps, which are the only ones an owner may hide', () => {
         expect([...BUSINESS_APP_IDS].sort()).toEqual([
             'accounting', 'crm', 'expenses', 'hr', 'imports', 'inventory',
-            'manufacturing', 'projects', 'purchase', 'sales', 'storefront',
+            'manufacturing', 'meetings', 'projects', 'purchase', 'sales', 'storefront',
         ]);
     });
 });
@@ -95,6 +95,11 @@ describe('resolveAppStates', () => {
         const bookkeeper = resolveAppStates(input({ isOwner: false, permissions: ['VIEW_LEDGER', 'VIEW_PROJECTS'] }));
         expect(bookkeeper.accounting).toBe('available');
         expect(bookkeeper.projects).toBe('available');
+        expect(bookkeeper.meetings).toBe('unavailable');
+
+        const minutesClerk = resolveAppStates(input({ isOwner: false, permissions: ['VIEW_MEETINGS'] }));
+        expect(minutesClerk.meetings).toBe('available');
+        expect(minutesClerk.projects).toBe('unavailable');
     });
 
     it('hides only business apps the owner switched off, and ignores ids it does not know', () => {

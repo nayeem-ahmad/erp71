@@ -798,6 +798,26 @@ ${link}`,
         );
     }
 
+    /**
+     * Operational mail under the shop's sender identity: meeting minutes and
+     * action-point reminders. Not metered — no `billTenantId` — so outsider
+     * reminders do not spend messaging credits.
+     */
+    async sendOperational(
+        to: string,
+        subject: string,
+        html: string,
+        options: { tenantId: string; throwOnError?: boolean },
+    ): Promise<void> {
+        await this.send(
+            { to, subject, html },
+            {
+                throwOnError: options.throwOnError ?? false,
+                tenantId: options.tenantId,
+            },
+        );
+    }
+
     /** Sends a test message and surfaces SMTP errors to the caller (admin UI). */
     async sendTestEmail(to: string, options?: { tenantId?: string | null }): Promise<void> {
         const { from } = await this.getTransportConfig(options?.tenantId);
