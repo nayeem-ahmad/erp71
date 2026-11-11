@@ -19,6 +19,7 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { ProjectsService } from './projects.service';
 import { ProjectSettingsService } from './project-settings.service';
 import { ProjectTimeService } from './project-time.service';
+import { ProjectsStaffingService } from './projects.staffing.service';
 import {
     CreateMilestoneDto,
     CreateProjectDto,
@@ -27,6 +28,7 @@ import {
     CreateTaskStatusDto,
     UpdateLabelDto,
     ListProjectsDto,
+    StaffingQueryDto,
     TimeTagDto,
     UpdateMilestoneDto,
     UpdateProjectDto,
@@ -43,6 +45,7 @@ export class ProjectsController {
         private readonly projects: ProjectsService,
         private readonly settings: ProjectSettingsService,
         private readonly time: ProjectTimeService,
+        private readonly staffingService: ProjectsStaffingService,
     ) {}
 
     // Settings routes come first: `types` and `task-statuses` would otherwise
@@ -206,10 +209,16 @@ export class ProjectsController {
     // ── Projects ───────────────────────────────────────────────────────────
 
     /**
-     * Declared above `@Get(':id')` — Nest matches in declaration order, so the
-     * parameterised route would otherwise swallow this literal path and try to
-     * load a project called "member-candidates".
+     * Declared above `@Get()` and `@Get(':id')` — Nest matches in declaration
+     * order, so the parameterised route would otherwise swallow these literal
+     * paths and try to load a project called "staffing" or "member-candidates".
      */
+    @Get('staffing')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    staffing(@Tenant() tenant: TenantContext, @Query() query: StaffingQueryDto) {
+        return this.staffingService.get(tenant, query);
+    }
+
     @Get('member-candidates')
     @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
     memberCandidates(@Tenant() tenant: TenantContext) {
