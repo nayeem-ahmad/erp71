@@ -241,6 +241,12 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'projects.hour-logs': { id: 'projects.hour-logs', kind: 'link', icon: 'Clock', labelKey: 'sidebar.items.projectsHourLogs', href: '/projects/hour-logs', exact: true },
   'projects.hour-log-report': { id: 'projects.hour-log-report', kind: 'link', icon: 'BarChart3', labelKey: 'sidebar.items.projectsHourLogReport', href: '/projects/hour-logs/report' },
   'projects.setup': { id: 'projects.setup', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.projectsSetup', href: '/projects/settings' },
+
+  meetings: { id: 'meetings', kind: 'module', icon: 'CalendarDays', labelKey: 'sidebar.modules.meetings', moduleKey: 'meetings' },
+  'meetings.list': { id: 'meetings.list', kind: 'link', icon: 'CalendarDays', labelKey: 'sidebar.items.meetingsList', href: '/meetings', exact: true },
+  'meetings.actions': { id: 'meetings.actions', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.meetingActions', href: '/meetings/actions', exact: true },
+  'meetings.actions-all': { id: 'meetings.actions-all', kind: 'link', icon: 'ClipboardList', labelKey: 'sidebar.items.meetingActionsAll', href: '/meetings/actions/all' },
+
   crm: { id: 'crm', kind: 'module', icon: 'Users', labelKey: 'sidebar.modules.crm', moduleKey: 'crm' },
   'crm.overview': { id: 'crm.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/crm', exact: true },
   'crm.leads': { id: 'crm.leads', kind: 'link', icon: 'UserPlus', labelKey: 'sidebar.items.crmLeads', href: '/crm/leads', premiumOnly: true },
@@ -509,6 +515,10 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
   // is useless without its own management permission carries a tag.
   'projects.setup': ['MANAGE_PROJECT_SETTINGS'],
 
+  // Meetings is gated by APP_REGISTRY `VIEW_MEETINGS`, like Projects. Only the
+  // all-actions list needs its own tag: VIEW_ALL_MEETINGS is owner/admin-only.
+  'meetings.actions-all': ['VIEW_ALL_MEETINGS'],
+
   crm: CRM_ANY,
 
   hr: HR_ANY,
@@ -768,16 +778,21 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('hr.setup.designationLevels', 'hr.setup', 2),
   layoutNode('hr.setup.schedules', 'hr.setup', 3),
 
-  layoutNode('account-settings', null, 12),
+  layoutNode('meetings', null, 12),
+  layoutNode('meetings.list', 'meetings', 0),
+  layoutNode('meetings.actions', 'meetings', 1),
+  layoutNode('meetings.actions-all', 'meetings', 2),
+
+  layoutNode('account-settings', null, 13),
   layoutNode('account-settings.overview', 'account-settings', 0),
   layoutNode('account-settings.profile', 'account-settings', 1),
   layoutNode('account-settings.team', 'account-settings', 2),
   layoutNode('account-settings.billing', 'account-settings', 3),
   layoutNode('account-settings.url-shortener', 'account-settings', 4),
 
-  layoutNode('chat', null, 13),
-  layoutNode('support', null, 14),
-  layoutNode('admin', null, 15),
+  layoutNode('chat', null, 14),
+  layoutNode('support', null, 15),
+  layoutNode('admin', null, 16),
   layoutNode('admin.overview', 'admin', 0),
   layoutNode('admin.tenant-management', 'admin', 1),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
@@ -791,8 +806,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.url-shortener', 'admin', 5),
   layoutNode('admin.blog', 'admin', 6),
   layoutNode('admin.social-media', 'admin', 7),
-  layoutNode('whats-new', null, 16),
-  layoutNode('help', null, 17),
+  layoutNode('whats-new', null, 17),
+  layoutNode('help', null, 18),
 ];
 
 /**

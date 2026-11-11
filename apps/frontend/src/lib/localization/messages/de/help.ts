@@ -270,6 +270,28 @@ export const helpMessages = {
                 },
             ],
         },
+        meetings: {
+            title: 'Besprechungen & Protokolle',
+            icon: '📝',
+            faqs: [
+                {
+                    q: 'Wie halte ich ein Besprechungsprotokoll fest?',
+                    a: 'Öffnen Sie Meetings → Meetings und klicken Sie auf New meeting. Tragen Sie Titel, Datum und Teilnehmer ein und fügen Sie jede Diskussion mit Titel, Notizen, optionalem Beschluss und den daraus entstandenen Maßnahmen hinzu. Speichern Sie während des Schreibens als Entwurf; Finalize, wenn das Protokoll fertig ist. Entwürfe senden keine E-Mails.',
+                },
+                {
+                    q: 'Wie funktionieren Maßnahmen und Erinnerungen?',
+                    a: 'Jede Maßnahme gehört zu einer Diskussion und hat eine verantwortliche Person plus Frist. Das kann ein Teammitglied oder eine externe Person (Name und E-Mail) sein. Nach dem Abschluss werden Zuständige benachrichtigt. Jeden Morgen um 09:00 Bangladesch-Zeit sendet das System eine Erinnerung am Vortag der Frist, dann am Tag nach der Überfälligkeit und wöchentlich bis zur Erledigung. Abgesagte Besprechungen stoppen Erinnerungen. Zuständige können ihre Punkte auch nach dem Sperren des Protokolls als erledigt markieren.',
+                },
+                {
+                    q: 'Wie teile oder drucke ich ein Protokoll?',
+                    a: 'Bei einer abgeschlossenen Besprechung nutzen Sie Print für eine A4-Kopie mit Protokolltabelle und Unterschriftszeilen, Share für einen später widerrufbaren Nur-Lese-Link oder Email minutes, um die Tabelle an Teilnehmer zu senden. Ein Entwurf druckt mit DRAFT-Wasserzeichen.',
+                },
+                {
+                    q: 'Wer kann eine Besprechung sehen?',
+                    a: 'Organisator, Teilnehmer und jeder mit einer zugewiesenen Maßnahme können sie öffnen. Die Berechtigung "view all meetings" (Inhaber und Admins) zeigt alle Besprechungen. My action points listet Ihre Aufgaben; All action points braucht die view-all-Berechtigung. Nur-Buchhaltungs-Shops erhalten das Meetings-Modul nicht.',
+                },
+            ],
+        },
         security: {
             title: "Sicherheit & Konto",
             icon: '🔒',

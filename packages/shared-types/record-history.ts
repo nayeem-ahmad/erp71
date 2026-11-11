@@ -17,6 +17,7 @@ export const RECORD_HISTORY_ENTITY_TYPES = [
   'PURCHASE_RETURN',
   'CUSTOMER_PAYMENT',
   'SUPPLIER_PAYMENT',
+  'MEETING',
 ] as const;
 
 export type RecordHistoryEntityType = (typeof RECORD_HISTORY_ENTITY_TYPES)[number];
@@ -48,6 +49,7 @@ export const RECORD_HISTORY_SETTING_KEYS: Record<RecordHistoryEntityType, string
   PURCHASE_RETURN: 'purchase_return',
   CUSTOMER_PAYMENT: 'customer_payment',
   SUPPLIER_PAYMENT: 'supplier_payment',
+  MEETING: 'meeting',
 };
 
 /** Days a history row is kept. `0` keeps it for as long as the tenant exists. */

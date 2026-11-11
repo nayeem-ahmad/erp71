@@ -75,6 +75,7 @@ export const APP_REGISTRY: Record<string, AppDefinition> = {
   inventory: { id: 'inventory', kind: 'business' },
   crm: { id: 'crm', kind: 'business' },
   projects: { id: 'projects', kind: 'business', platformFeature: 'projects', permissionsAny: ['VIEW_PROJECTS'] },
+  meetings: { id: 'meetings', kind: 'business', permissionsAny: ['VIEW_MEETINGS'] },
   manufacturing: {
     id: 'manufacturing',
     kind: 'business',

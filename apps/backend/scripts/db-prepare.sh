@@ -313,6 +313,11 @@ step sync:expense-reparent \
 step sync:nav-expense-heads \
     npm run sync:nav-layout --workspace=@erp71/database -- --nodes=expenses.heads
 
+# Meetings is a new top-level module. A saved sidebar stays frozen until these
+# ids are merged in. Idempotent: a layout that already has them is skipped.
+step sync:nav-meetings \
+    npm run sync:nav-layout --workspace=@erp71/database -- --nodes=meetings,meetings.list,meetings.actions,meetings.actions-all
+
 # ---- After db push: fill what the schema just gained -----------------------
 
 # db:seed:platform — NOT db:seed. This runs unattended — before every deploy's

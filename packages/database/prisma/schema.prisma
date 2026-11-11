@@ -176,6 +176,13 @@ enum StorePermission {
   MANAGE_SPRINTS
   MANAGE_PROJECT_SETTINGS
 
+  // Meetings
+  VIEW_MEETINGS
+  /// Overrides attendee-only visibility, so it stays a grant an owner makes
+  /// on purpose — same stance as VIEW_ALL_PROJECTS.
+  VIEW_ALL_MEETINGS
+  MANAGE_MEETINGS
+
   // Imports (LC)
   VIEW_IMPORTS
   MANAGE_IMPORTS
@@ -510,6 +517,13 @@ model User {
   chatParticipations                ChatParticipant[]           @relation("ChatParticipantUser")
   chatMessages                      ChatMessage[]               @relation("ChatMessageSender")
   meet71Members                     Meet71Member[]
+  organizedMeetings                 Meeting[]                   @relation("MeetingOrganizer")
+  createdMeetings                   Meeting[]                   @relation("MeetingCreator")
+  finalizedMeetings                 Meeting[]                   @relation("MeetingFinalizer")
+  cancelledMeetings                 Meeting[]                   @relation("MeetingCanceller")
+  meetingAttendances                MeetingAttendee[]           @relation("MeetingAttendeeUser")
+  assignedMeetingActions            MeetingActionItem[]         @relation("MeetingActionAssignee")
+  meetingActionPeople               MeetingActionPerson[]       @relation("MeetingActionPersonUser")
 }
 
 /// Why the token was issued. A password reset and a partner invite are the same
@@ -1189,6 +1203,11 @@ model Tenant {
   dailySummaryEmailSends     DailySummaryEmailSend[]
   dailySummarySmsSends       DailySummarySmsSend[]
   dailySummaryWhatsAppSends  DailySummaryWhatsAppSend[]
+  meetings                   Meeting[]
+  meetingAttendees           MeetingAttendee[]
+  meetingDiscussions         MeetingDiscussion[]
+  meetingActionItems         MeetingActionItem[]
+  meetingActionPeople        MeetingActionPerson[]
 
   @@index([deleted_at])
   @@index([billing_suspended_at])
@@ -1777,6 +1796,7 @@ model Store {
   investorProfitRuns       InvestorProfitRun[]
   externalSyncConnections  ExternalSyncConnection[]
   projects                 Project[]
+  meetings                 Meeting[]
   productDemands           ProductDemand[]
   customers                Customer[]
   suppliers                Supplier[]
@@ -9139,6 +9159,7 @@ enum ShortLinkEntity {
   /// the two without this value.
   PROFORMA_INVOICE
   STOREFRONT_PRODUCT
+  MEETING
 }
 
 /// A code-to-URL alias. For entity links the token in `target_url` is the real
@@ -9870,4 +9891,171 @@ model Meet71RoomHost {
 
   @@unique([room_code, email])
   @@index([email])
+}
+
+enum MeetingStatus {
+  DRAFT
+  FINALIZED
+  CANCELLED
+}
+
+enum MeetingType {
+  MANAGEMENT
+  STAFF
+  CLIENT
+  SUPPLIER
+  OTHER
+}
+
+enum MeetingAttendeeRole {
+  CHAIR
+  MINUTE_TAKER
+  MEMBER
+  GUEST
+}
+
+enum MeetingActionStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum MeetingActionPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+/// A meeting is a document of discussions and the action points that came out
+/// of them. Drafts send nothing; finalize locks the minutes (not the follow-up).
+model Meeting {
+  id             String        @id @default(uuid())
+  tenant_id      String
+  store_id       String?
+  meeting_number String
+  title          String
+  type           MeetingType   @default(OTHER)
+  starts_at      DateTime
+  ends_at        DateTime?
+  venue          String?
+  summary        String?       @db.Text
+  status         MeetingStatus @default(DRAFT)
+  organizer_id   String
+  created_by     String
+  finalized_at   DateTime?
+  finalized_by   String?
+  cancelled_at   DateTime?
+  cancelled_by   String?
+  share_token    String?       @unique
+  share_token_at DateTime?
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+
+  tenant     Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store      Store?             @relation(fields: [store_id], references: [id])
+  organizer  User               @relation("MeetingOrganizer", fields: [organizer_id], references: [id])
+  creator    User               @relation("MeetingCreator", fields: [created_by], references: [id])
+  finalizer  User?              @relation("MeetingFinalizer", fields: [finalized_by], references: [id])
+  canceller  User?              @relation("MeetingCanceller", fields: [cancelled_by], references: [id])
+  attendees  MeetingAttendee[]
+  discussions MeetingDiscussion[]
+  actionItems MeetingActionItem[]
+
+  @@unique([tenant_id, meeting_number])
+  @@index([tenant_id, starts_at])
+  @@index([tenant_id, status])
+  @@map("meetings")
+}
+
+model MeetingAttendee {
+  id           String              @id @default(uuid())
+  tenant_id    String
+  meeting_id   String
+  user_id      String?
+  name         String
+  email        String?
+  organization String?
+  role         MeetingAttendeeRole @default(MEMBER)
+  attended     Boolean             @default(true)
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  meeting Meeting @relation(fields: [meeting_id], references: [id], onDelete: Cascade)
+  user    User?   @relation("MeetingAttendeeUser", fields: [user_id], references: [id])
+
+  @@index([tenant_id, user_id])
+  @@index([meeting_id])
+  @@map("meeting_attendees")
+}
+
+model MeetingDiscussion {
+  id          String  @id @default(uuid())
+  tenant_id   String
+  meeting_id  String
+  position    Int
+  title       String
+  description String? @db.Text
+  decision    String? @db.Text
+
+  tenant      Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  meeting     Meeting             @relation(fields: [meeting_id], references: [id], onDelete: Cascade)
+  actionItems MeetingActionItem[]
+
+  @@index([meeting_id, position])
+  @@map("meeting_discussions")
+}
+
+model MeetingActionItem {
+  id                       String                @id @default(uuid())
+  tenant_id                String
+  meeting_id               String
+  discussion_id            String
+  position                 Int
+  description              String                @db.Text
+  assignee_user_id         String?
+  assignee_name            String
+  assignee_email           String?
+  assignee_org             String?
+  due_date                 DateTime              @db.Date
+  priority                 MeetingActionPriority @default(NORMAL)
+  status                   MeetingActionStatus   @default(OPEN)
+  completed_at             DateTime?
+  completed_by             String?
+  completion_note          String?
+  assigned_notified_at     DateTime?
+  due_soon_notified_at     DateTime?
+  last_overdue_notified_at DateTime?
+  created_at               DateTime              @default(now())
+  updated_at               DateTime              @updatedAt
+
+  tenant     Tenant                @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  meeting    Meeting               @relation(fields: [meeting_id], references: [id], onDelete: Cascade)
+  discussion MeetingDiscussion     @relation(fields: [discussion_id], references: [id], onDelete: Cascade)
+  assignee   User?                 @relation("MeetingActionAssignee", fields: [assignee_user_id], references: [id])
+  others     MeetingActionPerson[]
+
+  @@index([discussion_id, position])
+  @@index([tenant_id, status, due_date])
+  @@index([tenant_id, assignee_user_id, status])
+  @@index([meeting_id])
+  @@map("meeting_action_items")
+}
+
+model MeetingActionPerson {
+  id             String  @id @default(uuid())
+  tenant_id      String
+  action_item_id String
+  position       Int
+  user_id        String?
+  name           String
+  email          String?
+  organization   String?
+
+  tenant     Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  actionItem MeetingActionItem @relation(fields: [action_item_id], references: [id], onDelete: Cascade)
+  user       User?             @relation("MeetingActionPersonUser", fields: [user_id], references: [id])
+
+  @@index([tenant_id, user_id])
+  @@index([action_item_id, position])
+  @@map("meeting_action_people")
 }

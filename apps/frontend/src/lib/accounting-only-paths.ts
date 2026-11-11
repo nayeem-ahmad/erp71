@@ -6,6 +6,7 @@ const RETAIL_PATH_PREFIXES = [
     routes.inventory.root,
     routes.crm.root,
     routes.hr.root,
+    routes.meetings.root,
     routes.storefront.root,
     routes.settings.root,
 ] as const;

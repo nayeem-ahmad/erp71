@@ -32,6 +32,7 @@ export const JOB_NAMES = {
     ANOMALY_DIGEST: 'alerts.daily-anomaly-digest',
     RECORD_HISTORY_PURGE: 'record-history.purge-expired',
     MEET71_SSO_SWEEP: 'meet71.sso-sweep',
+    MEETING_ACTION_REMINDERS: 'meetings.action-reminders',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -142,4 +143,5 @@ export const JOB_REGISTRY: JobDefinition[] = [
     { name: JOB_NAMES.ANOMALY_DIGEST, label: 'Alerts: daily anomaly digest', schedule: '30 20 * * *', maxIntervalMs: DAY + 2 * HOUR },
     { name: JOB_NAMES.RECORD_HISTORY_PURGE, label: 'Record history: purge rows past retention', schedule: '45 1 * * *', maxIntervalMs: DAY + 2 * HOUR },
     { name: JOB_NAMES.MEET71_SSO_SWEEP, label: 'Meet71: sweep expired SSO codes', schedule: '*/5 * * * *', maxIntervalMs: 15 * 60 * 1000 },
+    { name: JOB_NAMES.MEETING_ACTION_REMINDERS, label: 'Meetings: action reminders', schedule: '0 9 * * *', maxIntervalMs: DAY + 2 * HOUR },
 ];

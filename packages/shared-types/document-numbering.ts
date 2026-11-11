@@ -42,6 +42,7 @@ export const NUMBERING_DOC_TYPES = [
   'STOCK_TAKE',
   'SHRINKAGE',
   'STOCK_FOUND',
+  'MEETING',
 ] as const;
 export type NumberingDocType = (typeof NUMBERING_DOC_TYPES)[number];
 
@@ -51,13 +52,14 @@ export type NumberingResetPolicy = (typeof NUMBERING_RESET_POLICIES)[number];
 export const NUMBERING_SCOPES = ['TENANT', 'STORE', 'COUNTER'] as const;
 export type NumberingScope = (typeof NUMBERING_SCOPES)[number];
 
-export const NUMBERING_DOC_GROUPS = ['SALES', 'PURCHASES', 'INVENTORY'] as const;
+export const NUMBERING_DOC_GROUPS = ['SALES', 'PURCHASES', 'INVENTORY', 'GENERAL'] as const;
 export type NumberingDocGroup = (typeof NUMBERING_DOC_GROUPS)[number];
 
 export const NUMBERING_DOC_GROUP_LABELS: Record<NumberingDocGroup, string> = {
   SALES: 'Sales',
   PURCHASES: 'Purchases',
   INVENTORY: 'Inventory',
+  GENERAL: 'General',
 };
 
 export interface NumberingDocTypeInfo {
@@ -111,6 +113,7 @@ export const NUMBERING_DOC_TYPE_INFO: Record<NumberingDocType, NumberingDocTypeI
     label: 'Stock found', plural: 'stock-found entries', group: 'INVENTORY', prefix: 'FND', scopes: BRANCH_SCOPES,
     sharesColumnWith: 'SHRINKAGE',
   },
+  MEETING: { label: 'Meeting minutes', plural: 'meeting minutes', group: 'GENERAL', prefix: 'MIN', scopes: BRANCH_SCOPES },
 };
 
 export function isNumberingDocType(value: unknown): value is NumberingDocType {
@@ -141,6 +144,8 @@ const fiscalYearSeries = (prefix: string): DocumentNumberingConfig =>
   ({ template: `${prefix}-{FY}-{SEQ}`, resetPolicy: 'FISCAL_YEAR', scope: 'TENANT', seqWidth: 5 });
 const runningSeries = (prefix: string): DocumentNumberingConfig =>
   ({ template: `${prefix}-{SEQ}`, resetPolicy: 'NEVER', scope: 'TENANT', seqWidth: 5 });
+const calendarYearSeries = (prefix: string): DocumentNumberingConfig =>
+  ({ template: `${prefix}-{YYYY}-{SEQ}`, resetPolicy: 'CALENDAR_YEAR', scope: 'TENANT', seqWidth: 4 });
 
 /**
  * What a tenant gets until it saves its own format. Fiscal-year reset because
@@ -169,6 +174,7 @@ export const DEFAULT_DOCUMENT_NUMBERING: Record<NumberingDocType, DocumentNumber
   STOCK_TAKE: runningSeries('STK'),
   SHRINKAGE: runningSeries('SHR'),
   STOCK_FOUND: runningSeries('FND'),
+  MEETING: calendarYearSeries('MIN'),
 };
 
 type NumberingPreset = { key: string; label: string; config: DocumentNumberingConfig };

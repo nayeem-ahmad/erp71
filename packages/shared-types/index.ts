@@ -119,6 +119,11 @@ export const StorePermission = {
   MANAGE_SPRINTS: "MANAGE_SPRINTS",
   MANAGE_PROJECT_SETTINGS: "MANAGE_PROJECT_SETTINGS",
 
+  // Meetings
+  VIEW_MEETINGS: "VIEW_MEETINGS",
+  VIEW_ALL_MEETINGS: "VIEW_ALL_MEETINGS",
+  MANAGE_MEETINGS: "MANAGE_MEETINGS",
+
   // Imports (LC)
   VIEW_IMPORTS: "VIEW_IMPORTS",
   MANAGE_IMPORTS: "MANAGE_IMPORTS",
@@ -208,6 +213,8 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.LOG_PROJECT_TIME,
     StorePermission.MANAGE_SPRINTS,
     StorePermission.MANAGE_PROJECT_SETTINGS,
+    StorePermission.VIEW_MEETINGS,
+    StorePermission.MANAGE_MEETINGS,
     StorePermission.MANAGE_SHORT_LINKS,
     StorePermission.VIEW_BLOG,
     StorePermission.MANAGE_BLOG,
@@ -225,6 +232,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.SWITCH_STORES,
     StorePermission.VIEW_LEDGER,
     StorePermission.USE_TEAM_CHAT,
+    StorePermission.VIEW_MEETINGS,
   ],
   [UserRole.ACCOUNTANT]: [
     StorePermission.VIEW_PRODUCT_CATALOG,
@@ -239,6 +247,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, StorePermission[]> = {
     StorePermission.VIEW_INVESTORS,
     StorePermission.MANAGE_INVESTORS,
     StorePermission.USE_TEAM_CHAT,
+    StorePermission.VIEW_MEETINGS,
   ],
 };
 
@@ -426,6 +435,14 @@ export interface TenantRoleTemplate {
 const CHAT: StorePermission[] = [StorePermission.USE_TEAM_CHAT];
 
 /**
+ * Every sign-in role can see the meetings they organized, attended, or hold an
+ * action point in. VIEW_ALL_MEETINGS stays owner/admin-only, like VIEW_ALL_PROJECTS.
+ * Project templates omit this spread so a projects-only member still lands on
+ * the projects dashboard.
+ */
+const MEETINGS_VIEW: StorePermission[] = [StorePermission.VIEW_MEETINGS];
+
+/**
  * The roles every new tenant is seeded with, on top of the three legacy system
  * roles (Manager, Cashier, Accountant) that `SYSTEM_TENANT_ROLE_TO_USER_ROLE`
  * still maps.
@@ -438,7 +455,8 @@ const CHAT: StorePermission[] = [StorePermission.USE_TEAM_CHAT];
  *
  * VIEW_ALL_PROJECTS is deliberately in none of them, including Project Manager:
  * it overrides per-project privacy, so it stays a grant an owner makes on
- * purpose. Same reasoning as `sync-role-permissions.ts`.
+ * purpose. Same reasoning as `sync-role-permissions.ts`. VIEW_ALL_MEETINGS is
+ * the same for minutes.
  */
 export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
   /* ----------------------------- Administration ---------------------------- */
@@ -466,7 +484,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.MANAGE_STORES,
       StorePermission.MANAGE_COUNTERS,
       StorePermission.SWITCH_STORES,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
 
@@ -492,7 +510,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.MANAGE_COUNTERS,
       StorePermission.SWITCH_STORES,
       StorePermission.VIEW_CONSOLIDATED_REPORTS,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
   {
@@ -510,7 +528,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.CREATE_SALES_ORDER,
       StorePermission.CREATE_QUOTATION,
       StorePermission.VIEW_CUSTOMER_CREDIT,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
 
@@ -532,7 +550,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.APPROVE_PRODUCT_DEMAND,
       StorePermission.SWITCH_STORES,
       StorePermission.VIEW_CONSOLIDATED_REPORTS,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
   {
@@ -547,7 +565,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.VIEW_PRODUCT_CATALOG,
       StorePermission.CREATE_PURCHASE,
       StorePermission.CREATE_PRODUCT_DEMAND,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
 
@@ -570,7 +588,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.APPROVE_PRODUCT_DEMAND,
       StorePermission.SWITCH_STORES,
       StorePermission.VIEW_CONSOLIDATED_REPORTS,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
   {
@@ -587,7 +605,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.CREATE_GOODS_TRANSFER,
       StorePermission.STOCK_TAKE,
       StorePermission.CREATE_PRODUCT_DEMAND,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
 
@@ -606,7 +624,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.EDIT_PRODUCT_PRICES,
       StorePermission.EDIT_BRANDS,
       StorePermission.EDIT_SUPPLIERS,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
   {
@@ -620,7 +638,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
     permissions: [
       StorePermission.VIEW_PRODUCT_CATALOG,
       StorePermission.EDIT_PRODUCTS,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
 
@@ -645,7 +663,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.WRITE_OFF_CUSTOMER_DEBT,
       StorePermission.SWITCH_STORES,
       StorePermission.VIEW_CONSOLIDATED_REPORTS,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
   {
@@ -662,7 +680,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.VIEW_FINANCIAL_REPORTS,
       StorePermission.CREATE_FUND_TRANSFER,
       StorePermission.VIEW_CUSTOMER_CREDIT,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
 
@@ -686,7 +704,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.CREATE_LEAD_CONVERSATIONS,
       StorePermission.MANAGE_CRM_SETTINGS,
       StorePermission.VIEW_CUSTOMER_CREDIT,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
   {
@@ -704,7 +722,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.VIEW_LEADS,
       StorePermission.VIEW_LEAD_CONVERSATIONS,
       StorePermission.CREATE_LEAD_CONVERSATIONS,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
 
@@ -721,7 +739,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.VIEW_HR,
       StorePermission.MANAGE_HR,
       StorePermission.VIEW_PAYROLL,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
   {
@@ -732,7 +750,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
     description:
       "Reads employee records and attendance. Salary figures need a deliberate grant.",
     coarseRoles: [UserRole.CASHIER],
-    permissions: [StorePermission.VIEW_HR, ...CHAT],
+    permissions: [StorePermission.VIEW_HR, ...CHAT, ...MEETINGS_VIEW],
   },
 
   /* -------------------------------- Projects ------------------------------- */
@@ -770,6 +788,32 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
     ],
   },
 
+  /* -------------------------------- Meetings ------------------------------- */
+  {
+    key: "meetings_manager",
+    name: "Meetings Manager",
+    module: "Meetings",
+    level: TenantRoleLevel.MANAGER,
+    description:
+      "Writes, finalizes, shares and emails meeting minutes, and follows up action points.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [
+      StorePermission.VIEW_MEETINGS,
+      StorePermission.MANAGE_MEETINGS,
+      ...CHAT,
+    ],
+  },
+  {
+    key: "meetings_user",
+    name: "Meetings User",
+    module: "Meetings",
+    level: TenantRoleLevel.USER,
+    description:
+      "Sees the meetings they organized, attended or hold an action point in, and updates their own action points.",
+    coarseRoles: [UserRole.CASHIER],
+    permissions: [StorePermission.VIEW_MEETINGS, ...CHAT],
+  },
+
   /* -------------------------------- Imports -------------------------------- */
   {
     key: "imports_manager",
@@ -783,7 +827,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.VIEW_IMPORTS,
       StorePermission.MANAGE_IMPORTS,
       StorePermission.MANAGE_IMPORT_COSTS,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
   {
@@ -797,7 +841,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
     permissions: [
       StorePermission.VIEW_IMPORTS,
       StorePermission.MANAGE_IMPORTS,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
 
@@ -812,7 +856,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
     permissions: [
       StorePermission.VIEW_LOANS,
       StorePermission.MANAGE_LOANS,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
   {
@@ -822,7 +866,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
     level: TenantRoleLevel.USER,
     description: "Reads the loan book without changing it.",
     coarseRoles: [UserRole.CASHIER],
-    permissions: [StorePermission.VIEW_LOANS, ...CHAT],
+    permissions: [StorePermission.VIEW_LOANS, ...CHAT, ...MEETINGS_VIEW],
   },
 
   /* ------------------------------- Investors ------------------------------- */
@@ -836,7 +880,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
     permissions: [
       StorePermission.VIEW_INVESTORS,
       StorePermission.MANAGE_INVESTORS,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
   {
@@ -846,7 +890,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
     level: TenantRoleLevel.USER,
     description: "Reads investor balances and payouts without changing them.",
     coarseRoles: [UserRole.CASHIER],
-    permissions: [StorePermission.VIEW_INVESTORS, ...CHAT],
+    permissions: [StorePermission.VIEW_INVESTORS, ...CHAT, ...MEETINGS_VIEW],
   },
 
   /* ------------------------------- Marketing ------------------------------- */
@@ -864,7 +908,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.PUBLISH_BLOG,
       StorePermission.MANAGE_STOREFRONT_PAGES,
       StorePermission.MANAGE_SHORT_LINKS,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
   {
@@ -879,7 +923,7 @@ export const TENANT_ROLE_TEMPLATES: TenantRoleTemplate[] = [
       StorePermission.VIEW_BLOG,
       StorePermission.MANAGE_BLOG,
       StorePermission.MANAGE_SHORT_LINKS,
-      ...CHAT,
+      ...CHAT, ...MEETINGS_VIEW,
     ],
   },
 ];
@@ -990,6 +1034,9 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.LOG_PROJECT_TIME]: "Log time on tasks",
   [StorePermission.MANAGE_SPRINTS]: "Plan & run sprints",
   [StorePermission.MANAGE_PROJECT_SETTINGS]: "Manage project types & board columns",
+  [StorePermission.VIEW_MEETINGS]: "View meetings you organized, attended or hold an action point in",
+  [StorePermission.VIEW_ALL_MEETINGS]: "View every meeting without being an attendee",
+  [StorePermission.MANAGE_MEETINGS]: "Create, edit, finalize and share meeting minutes",
   [StorePermission.VIEW_IMPORTS]: "View import shipments",
   [StorePermission.MANAGE_IMPORTS]: "Create & edit import shipments",
   [StorePermission.MANAGE_IMPORT_COSTS]: "Record import costs & receive shipments",
@@ -1101,6 +1148,14 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
       StorePermission.LOG_PROJECT_TIME,
       StorePermission.MANAGE_SPRINTS,
       StorePermission.MANAGE_PROJECT_SETTINGS,
+    ],
+  },
+  {
+    label: "Meetings",
+    permissions: [
+      StorePermission.VIEW_MEETINGS,
+      StorePermission.VIEW_ALL_MEETINGS,
+      StorePermission.MANAGE_MEETINGS,
     ],
   },
   {

@@ -659,6 +659,9 @@ function AppShell({ children }: DashboardLayoutProps) {
         if (!canAccessProjects && pathname.startsWith(routes.projects.root)) {
             router.replace(routes.home);
         }
+        if (appStates.meetings !== 'available' && pathname.startsWith(routes.meetings.root)) {
+            router.replace(routes.home);
+        }
         // The books switched off, or the viewer is not a platform admin. Either
         // way every /platform/accounting call 403s, so the page would render its
         // shell around an error — send them back to the console instead.
@@ -674,7 +677,7 @@ function AppShell({ children }: DashboardLayoutProps) {
         if (!posEnabled && pathname.startsWith(routes.sales.pos)) {
             router.replace(routes.sales.list);
         }
-    }, [accountingOnlyMode, activeContext, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canAccessPlatformAccounting, canAccessProjects, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformRole, platformFeatures.help, platformFeatures.support, platformFeatures.feedback, posEnabled, router, user]);
+    }, [accountingOnlyMode, activeContext, appStates.meetings, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canAccessPlatformAccounting, canAccessProjects, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformRole, platformFeatures.help, platformFeatures.support, platformFeatures.feedback, posEnabled, router, user]);
 
     const activeStore =
         tenantStores.find((store: { id: string }) => store.id === activeStoreId) ?? tenantStores[0];
