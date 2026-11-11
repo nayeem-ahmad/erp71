@@ -5,7 +5,9 @@ import { CustomersService } from '../customers/customers.service';
 import { DailyReportService } from '../daily-report/daily-report.service';
 import { ExpensesService } from '../expenses/expenses.service';
 import { InventoryReportsService } from '../inventory-reports/inventory-reports.service';
+import { PurchaseLineItemsService } from '../purchase-reports/purchase-line-items.service';
 import { PurchaseReportsService } from '../purchase-reports/purchase-reports.service';
+import { SalesLineItemsService } from '../sales-reports/sales-line-items.service';
 import { SalesReportsService } from '../sales-reports/sales-reports.service';
 import { SuppliersService } from '../suppliers/suppliers.service';
 import { AnomalyDetectionService } from './anomaly-detection.service';
@@ -33,6 +35,8 @@ export class ChatToolDepsFactory {
         private readonly anomalies: AnomalyDetectionService,
         private readonly dailyReport: DailyReportService,
         private readonly cashierSessions: CashierSessionsService,
+        private readonly salesLineItems: SalesLineItemsService,
+        private readonly purchaseLineItems: PurchaseLineItemsService,
     ) {}
 
     build(): ChatToolDeps {
@@ -49,6 +53,8 @@ export class ChatToolDepsFactory {
             anomalies: this.anomalies,
             dailyReport: this.dailyReport,
             cashierSessions: this.cashierSessions,
+            salesLineItems: this.salesLineItems,
+            purchaseLineItems: this.purchaseLineItems,
         };
     }
 }

@@ -68,6 +68,8 @@ function makeDeps(overrides: Partial<Record<keyof ChatToolDeps, any>> = {}): Cha
         anomalies: { scan: jest.fn() },
         dailyReport: { getReport: jest.fn() },
         cashierSessions: { getOverview: jest.fn() },
+        salesLineItems: { getSalesLineItems: jest.fn() },
+        purchaseLineItems: { getPurchaseLineItems: jest.fn() },
         web: {
             search: jest.fn(),
             fetchPage: jest.fn(),
@@ -1158,5 +1160,103 @@ describe('cashier_sessions', () => {
         expect(result.open.rows[0].sales_total).toBe(500.13);
         expect(result.closed_today.rows[0].closing_cash).toBe(390.56);
         expect(result.closed_today.rows[0].variance).toBe(-9.44);
+    });
+});
+
+describe('sales_line_items', () => {
+    it('requires a date range and VIEW_FINANCIAL_REPORTS', () => {
+        expect(CHAT_TOOLS_BY_NAME.sales_line_items.permission).toBe(StorePermission.VIEW_FINANCIAL_REPORTS);
+        expect((CHAT_TOOLS_BY_NAME.sales_line_items.parameters as any).required).toEqual(
+            expect.arrayContaining(['from', 'to']),
+        );
+    });
+
+    it('projects invoice lines and caps the service page at 20', async () => {
+        const getSalesLineItems = jest.fn().mockResolvedValue({
+            summary: {
+                lineCount: 2,
+                invoiceCount: 1,
+                quantity: 5,
+                amount: 100.126,
+                returnedQuantity: 1,
+                returnedAmount: 10,
+            },
+            rows: [{
+                id: 'line-1',
+                quantity: 5,
+                price_at_sale: 20.0252,
+                product: { id: 'p1', name: 'Rice 5kg', sku: 'R-5' },
+                sale: {
+                    serial_number: 'INV-1001',
+                    sale_date: new Date('2026-07-01T04:00:00Z'),
+                    customer: { name: 'Karim' },
+                },
+            }],
+            pagination: { page: 1, limit: 20, total: 2, pages: 1 },
+        });
+        const deps = makeDeps({ salesLineItems: { getSalesLineItems } } as any);
+
+        const result: any = await run('sales_line_items', { from: '2026-07-01', to: '2026-07-31' }, deps);
+
+        expect(getSalesLineItems).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ from: '2026-07-01', to: '2026-07-31' }),
+            'Asia/Dhaka',
+        );
+        expect(getSalesLineItems.mock.calls[0][1].limit).toBeLessThanOrEqual(20);
+        expect(result.summary.amount).toBe(100.13);
+        expect(result.rows[0].invoiceNumber).toBe('INV-1001');
+        expect(result.rows[0].product).toBe('Rice 5kg');
+        expect(result.rows[0].sale).toBeUndefined();
+    });
+});
+
+describe('purchase_line_items', () => {
+    it('requires a date range and VIEW_FINANCIAL_REPORTS', () => {
+        expect(CHAT_TOOLS_BY_NAME.purchase_line_items.permission).toBe(StorePermission.VIEW_FINANCIAL_REPORTS);
+        expect((CHAT_TOOLS_BY_NAME.purchase_line_items.parameters as any).required).toEqual(
+            expect.arrayContaining(['from', 'to']),
+        );
+    });
+
+    it('projects bill lines with the supplier name', async () => {
+        const getPurchaseLineItems = jest.fn().mockResolvedValue({
+            summary: {
+                lineCount: 2,
+                billCount: 1,
+                quantity: 5,
+                amount: 100.126,
+                returnedQuantity: 1,
+                returnedAmount: 10,
+            },
+            rows: [{
+                id: 'line-1',
+                quantity: 5,
+                unit_cost: 20.0252,
+                line_total: 100.126,
+                product: { id: 'p1', name: 'Rice 5kg', sku: 'R-5' },
+                purchase: {
+                    purchase_number: 'PO-1001',
+                    purchase_date: new Date('2026-07-01T04:00:00Z'),
+                    supplier: { name: 'Dhaka Foods' },
+                },
+            }],
+            pagination: { page: 1, limit: 20, total: 2, pages: 1 },
+        });
+        const deps = makeDeps({ purchaseLineItems: { getPurchaseLineItems } } as any);
+
+        const result: any = await run('purchase_line_items', { from: '2026-07-01', to: '2026-07-31' }, deps);
+
+        expect(getPurchaseLineItems).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ from: '2026-07-01', to: '2026-07-31' }),
+            'Asia/Dhaka',
+        );
+        expect(getPurchaseLineItems.mock.calls[0][1].limit).toBeLessThanOrEqual(20);
+        expect(result.summary.amount).toBe(100.13);
+        expect(result.rows[0].billNumber).toBe('PO-1001');
+        expect(result.rows[0].product).toBe('Rice 5kg');
+        expect(result.rows[0].supplier).toBe('Dhaka Foods');
+        expect(result.rows[0].purchase).toBeUndefined();
     });
 });

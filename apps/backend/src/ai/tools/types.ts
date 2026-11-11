@@ -5,7 +5,9 @@ import type { CustomersService } from '../../customers/customers.service';
 import type { DailyReportService } from '../../daily-report/daily-report.service';
 import type { ExpensesService } from '../../expenses/expenses.service';
 import type { InventoryReportsService } from '../../inventory-reports/inventory-reports.service';
+import type { PurchaseLineItemsService } from '../../purchase-reports/purchase-line-items.service';
 import type { PurchaseReportsService } from '../../purchase-reports/purchase-reports.service';
+import type { SalesLineItemsService } from '../../sales-reports/sales-line-items.service';
 import type { SalesReportsService } from '../../sales-reports/sales-reports.service';
 import type { SuppliersService } from '../../suppliers/suppliers.service';
 import type { AnomalyDetectionService } from '../anomaly-detection.service';
@@ -41,6 +43,8 @@ export interface ChatToolDeps {
     anomalies: AnomalyDetectionService;
     dailyReport: DailyReportService;
     cashierSessions: CashierSessionsService;
+    salesLineItems: SalesLineItemsService;
+    purchaseLineItems: PurchaseLineItemsService;
 }
 
 export interface ChatToolContext {
