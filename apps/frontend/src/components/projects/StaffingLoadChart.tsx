@@ -126,7 +126,7 @@ export default function StaffingLoadChart({
                                             <li key={project.id} className="text-xs text-gray-700">
                                                 <Link
                                                     href={staffingTasksHref(person.key, project.id)}
-                                                    className="text-blue-600 hover:underline"
+                                                    className="inline-flex min-h-touch items-center text-blue-600 hover:underline"
                                                 >
                                                     {project.name}
                                                     {role ? ` · ${role}` : ''}

@@ -105,5 +105,7 @@ describe('Staffing page', () => {
         expect(screen.queryByRole('table')).not.toBeInTheDocument();
         fireEvent.click(await screen.findByRole('button', { name: /Rina/i }));
         expect(await screen.findByText(/Member|Manager/)).toBeInTheDocument();
+        const projectLink = await screen.findByRole('link', { name: /ERP Rebuild/i });
+        expect(projectLink.className).toMatch(/min-h-touch/);
     });
 });
