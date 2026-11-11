@@ -77,6 +77,7 @@ function makeDeps(overrides: Partial<Record<keyof ChatToolDeps, any>> = {}): Cha
             getProductPL: jest.fn(),
             getAnalytics: jest.fn(),
         },
+        imports: { findAll: jest.fn(), lcRegister: jest.fn() },
         web: {
             search: jest.fn(),
             fetchPage: jest.fn(),
@@ -1464,5 +1465,92 @@ describe('manufacturing_summary', () => {
         expect(result.totalMaterialCost).toBe(100.13);
         expect(result.jobs).toBeUndefined();
         expect(result.rows[0].date).toBe('2026-07-01');
+    });
+});
+
+describe('import_status', () => {
+    it('requires kind shipments or lc_register and is tagged imports', () => {
+        expect(CHAT_TOOLS_BY_NAME.import_status.permission).toBe(StorePermission.VIEW_IMPORTS);
+        expect(CHAT_TOOLS_BY_NAME.import_status.modules).toContain('imports');
+        expect((CHAT_TOOLS_BY_NAME.import_status.parameters as any).required).toEqual(
+            expect.arrayContaining(['kind']),
+        );
+        expect((CHAT_TOOLS_BY_NAME.import_status.parameters as any).properties.kind.enum).toEqual(
+            ['shipments', 'lc_register'],
+        );
+    });
+
+    it('dispatches shipments to findAll with openOnly true when no status is passed', async () => {
+        const findAll = jest.fn().mockResolvedValue({
+            items: [{
+                reference_number: 'IMP-001',
+                status: 'IN_TRANSIT',
+                lc_number: 'LC-9',
+                eta: new Date('2026-08-01T00:00:00Z'),
+                supplier: { id: 's1', name: 'Acme Ltd', country: 'CN' },
+                items: [{ sku: 'secret' }],
+            }],
+            total: 1,
+        });
+        const lcRegister = jest.fn();
+        const deps = makeDeps({ imports: { findAll, lcRegister } } as any);
+
+        const result: any = await run('import_status', { kind: 'shipments', storeId: 'store-1' }, deps);
+
+        expect(findAll).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ openOnly: 'true', storeId: 'store-1' }),
+        );
+        expect(findAll.mock.calls[0][1].limit).toBeLessThanOrEqual(20);
+        expect(lcRegister).not.toHaveBeenCalled();
+        expect(result.rows[0]).toEqual(expect.objectContaining({
+            reference_number: 'IMP-001',
+            status: 'IN_TRANSIT',
+            lc_number: 'LC-9',
+            supplier: 'Acme Ltd',
+        }));
+        expect(result.rows[0].items).toBeUndefined();
+        expect(result.rows[0].supplier).toBe('Acme Ltd');
+    });
+
+    it('dispatches lc_register and exposes daysToExpiry', async () => {
+        const lcRegister = jest.fn().mockResolvedValue([{
+            lc_number: 'LC-9',
+            supplier: 'Acme Ltd',
+            status: 'IN_TRANSIT',
+            lc_expiry_date: new Date('2026-09-01T00:00:00Z'),
+            days_to_expiry: 12,
+            invoice_value_bdt: 1000.126,
+        }]);
+        const findAll = jest.fn();
+        const deps = makeDeps({ imports: { findAll, lcRegister } } as any);
+
+        const result: any = await run(
+            'import_status',
+            { kind: 'lc_register', withinDays: 30, storeId: 'store-1' },
+            deps,
+        );
+
+        expect(lcRegister).toHaveBeenCalledWith('tenant-1', 30, 'store-1');
+        expect(findAll).not.toHaveBeenCalled();
+        expect(result.rows[0]).toEqual(expect.objectContaining({
+            lc_number: 'LC-9',
+            supplier: 'Acme Ltd',
+            status: 'IN_TRANSIT',
+            daysToExpiry: 12,
+            invoice_value_bdt: 1000.13,
+        }));
+    });
+
+    it('rejects an unknown kind without calling a service', async () => {
+        const findAll = jest.fn();
+        const lcRegister = jest.fn();
+        const deps = makeDeps({ imports: { findAll, lcRegister } } as any);
+
+        const result: any = await run('import_status', { kind: 'duty' }, deps);
+
+        expect(result.error).toMatch(/kind must be shipments or lc_register/);
+        expect(findAll).not.toHaveBeenCalled();
+        expect(lcRegister).not.toHaveBeenCalled();
     });
 });

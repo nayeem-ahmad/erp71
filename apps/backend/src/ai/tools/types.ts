@@ -4,6 +4,7 @@ import type { CashierSessionsService } from '../../cashier-sessions/cashier-sess
 import type { CustomersService } from '../../customers/customers.service';
 import type { DailyReportService } from '../../daily-report/daily-report.service';
 import type { ExpensesService } from '../../expenses/expenses.service';
+import type { ImportsService } from '../../imports/imports.service';
 import type { InventoryReportsService } from '../../inventory-reports/inventory-reports.service';
 import type { ManufacturingService } from '../../manufacturing/manufacturing.service';
 import type { MushakService } from '../../mushak/mushak.service';
@@ -51,6 +52,7 @@ export interface ChatToolDeps {
     mushak: MushakService;
     storefront: StorefrontService;
     manufacturing: ManufacturingService;
+    imports: ImportsService;
 }
 
 export interface ChatToolContext {

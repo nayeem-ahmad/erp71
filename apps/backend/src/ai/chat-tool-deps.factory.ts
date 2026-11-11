@@ -4,6 +4,7 @@ import { CashierSessionsService } from '../cashier-sessions/cashier-sessions.ser
 import { CustomersService } from '../customers/customers.service';
 import { DailyReportService } from '../daily-report/daily-report.service';
 import { ExpensesService } from '../expenses/expenses.service';
+import { ImportsService } from '../imports/imports.service';
 import { InventoryReportsService } from '../inventory-reports/inventory-reports.service';
 import { ManufacturingService } from '../manufacturing/manufacturing.service';
 import { MushakService } from '../mushak/mushak.service';
@@ -43,6 +44,7 @@ export class ChatToolDepsFactory {
         private readonly mushak: MushakService,
         private readonly storefront: StorefrontService,
         private readonly manufacturing: ManufacturingService,
+        private readonly imports: ImportsService,
     ) {}
 
     build(): ChatToolDeps {
@@ -64,6 +66,7 @@ export class ChatToolDepsFactory {
             mushak: this.mushak,
             storefront: this.storefront,
             manufacturing: this.manufacturing,
+            imports: this.imports,
         };
     }
 }

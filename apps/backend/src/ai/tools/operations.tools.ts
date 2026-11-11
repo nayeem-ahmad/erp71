@@ -281,6 +281,92 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
     },
 
     {
+        name: 'import_status',
+        permission: StorePermission.VIEW_IMPORTS,
+        modules: ['imports'],
+        description:
+            'Open import shipments or the LC register: reference, supplier, status, ETA, LC number and days to ' +
+            'expiry. Pass kind: shipments (open shipments unless a status is given) or lc_register (letters of ' +
+            'credit, optionally those expiring within withinDays). Use for "what shipments are still open", ' +
+            '"which LCs expire soon". Duty figures are not in this tool.',
+        parameters: {
+            type: 'object',
+            properties: {
+                kind: {
+                    type: 'string',
+                    enum: ['shipments', 'lc_register'],
+                    description: 'Which import view to return.',
+                },
+                status: {
+                    type: 'string',
+                    description: 'For kind=shipments, restrict to one shipment status. Omit to list open shipments.',
+                },
+                withinDays: {
+                    type: 'number',
+                    description: 'For kind=lc_register, only LCs expiring within this many days.',
+                },
+                ...STORE_PROP,
+                ...PAGING_PROPS,
+            },
+            required: ['kind'],
+        },
+        handler: async (ctx, args, deps) => {
+            const kind = args.kind;
+            if (kind !== 'shipments' && kind !== 'lc_register') {
+                return { error: 'kind must be shipments or lc_register' };
+            }
+            const { storeId, note } = resolveStoreId(ctx, args.storeId);
+            if (kind === 'shipments') {
+                const limit = Math.min(Math.max(Number(args.limit) || MAX_TOOL_ROWS, 1), MAX_TOOL_ROWS);
+                const offset = Math.max(Number(args.offset) || 0, 0);
+                const status = args.status ? String(args.status) : undefined;
+                const result = await deps.imports.findAll(ctx.tenantId, {
+                    storeId,
+                    page: Math.floor(offset / limit) + 1,
+                    limit,
+                    ...(status ? { status } : { openOnly: 'true' }),
+                });
+                const items = result.items ?? [];
+                return {
+                    ...(note ? { note } : {}),
+                    kind,
+                    totalRows: result.total ?? items.length,
+                    page: result.page ?? 1,
+                    rows: items.map((shipment: any) => ({
+                        reference_number: shipment.reference_number,
+                        supplier: shipment.supplier?.name ?? (typeof shipment.supplier === 'string' ? shipment.supplier : null),
+                        status: shipment.status,
+                        eta: isoDate(shipment.eta),
+                        lc_number: shipment.lc_number ?? null,
+                    })),
+                };
+            }
+            const withinDays = args.withinDays === undefined || args.withinDays === null
+                ? undefined
+                : Number(args.withinDays);
+            const rows = await deps.imports.lcRegister(
+                ctx.tenantId,
+                Number.isFinite(withinDays) ? withinDays : undefined,
+                storeId,
+            );
+            const paged = page(rows ?? [], args);
+            return {
+                ...(note ? { note } : {}),
+                kind,
+                ...paged,
+                rows: paged.rows.map((row: any) => ({
+                    lc_number: row.lc_number,
+                    supplier: row.supplier ?? null,
+                    status: row.status,
+                    expiry: isoDate(row.lc_expiry_date ?? row.expiry),
+                    daysToExpiry: row.daysToExpiry ?? row.days_to_expiry ?? null,
+                    invoice_value_bdt: money(row.invoice_value_bdt),
+                })),
+            };
+        },
+    },
+
+    {
         name: 'open_pipeline',
         permission: StorePermission.VIEW_PRODUCT_CATALOG,
         modules: ['retail', 'crm'],

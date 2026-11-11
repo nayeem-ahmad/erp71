@@ -11,6 +11,7 @@ import { CashierSessionsModule } from '../cashier-sessions/cashier-sessions.modu
 import { CustomersModule } from '../customers/customers.module';
 import { DailyReportModule } from '../daily-report/daily-report.module';
 import { ExpensesModule } from '../expenses/expenses.module';
+import { ImportsModule } from '../imports/imports.module';
 import { InventoryReportsModule } from '../inventory-reports/inventory-reports.module';
 import { ManufacturingModule } from '../manufacturing/manufacturing.module';
 import { MushakModule } from '../mushak/mushak.module';
@@ -42,6 +43,7 @@ import { SuppliersModule } from '../suppliers/suppliers.module';
         MushakModule,
         StorefrontModule,
         ManufacturingModule,
+        ImportsModule,
     ],
     controllers: [AiController],
     // ChatDataService is provided here rather than imported: it is the chatbot's

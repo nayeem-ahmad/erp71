@@ -243,6 +243,7 @@ describe('ChatService.resolveTools', () => {
         expect(names).not.toContain('stock_on_hand');
         expect(names).not.toContain('sales_summary');
         expect(names).not.toContain('storefront_orders');
+        expect(names).not.toContain('import_status');
         expect(names).toContain('financial_statement');
         expect(names).toContain('payables_aging');
         // The tools that carry no module tag stay available to everyone.
@@ -276,10 +277,11 @@ describe('ChatService.resolveTools', () => {
 
     it('withholds storefront and imports from an accounting-only tenant', async () => {
         const { service } = makeService({ planFeatures: { accountingOnly: true } });
-        const { modules } = await service.resolveTools(OWNER_CTX);
+        const { modules, tools } = await service.resolveTools(OWNER_CTX);
         expect(modules.has('storefront')).toBe(false);
         expect(modules.has('imports')).toBe(false);
         expect(modules.has('retail')).toBe(false);
+        expect(tools.map((t) => t.name)).not.toContain('import_status');
     });
 
     it('withholds manufacturing_summary when premiumManufacturing is off', async () => {
