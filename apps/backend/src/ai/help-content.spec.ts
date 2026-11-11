@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import { buildNavigationSection } from './app-navigation';
 import { HELP_SECTIONS, helpSectionTitles, searchHelp } from './help-content';
 
 describe('searchHelp', () => {
@@ -39,6 +40,22 @@ describe('searchHelp', () => {
     it('finds Daily Report among the sales FAQs', () => {
         const results = searchHelp('daily report for a branch');
         expect(results.some((r) => /Daily Report/i.test(r.q) || /Daily Report/i.test(r.a))).toBe(true);
+    });
+
+    it('finds Storefront Online Orders among the storefront FAQs', () => {
+        const results = searchHelp('online orders');
+        expect(results.some((r) => /Online Orders/i.test(r.q) || /Online Orders/i.test(r.a))).toBe(true);
+        expect(results.some((r) => /assistant/i.test(r.a) && /online orders/i.test(r.a))).toBe(true);
+    });
+
+    it('lists Wave 2 pages when those modules are on the plan', () => {
+        const lines = buildNavigationSection(
+            new Set(['retail', 'storefront', 'manufacturing', 'imports', 'crm']),
+        ).join('\n');
+        expect(lines).toContain('/storefront');
+        expect(lines).toContain('/manufacturing/jobs');
+        expect(lines).toContain('/purchases/imports');
+        expect(lines).toContain('/crm/leads');
     });
 
     it('exposes the section titles for the empty-result fallback', () => {

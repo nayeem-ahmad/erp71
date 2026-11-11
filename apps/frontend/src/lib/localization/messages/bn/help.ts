@@ -174,6 +174,10 @@ export const helpMessages = {
                     q: 'Follow-ups ও Conversations কীভাবে কাজ করে?',
                     a: 'Follow-ups (CRM → Follow-ups) হলো রিমাইন্ডারের একটি একক সারি — General, Collection, Birthday বা Reorder — যা কাস্টমার বা লিডের বিস্তারিত পেজ থেকে তৈরি হয়, আর Birthday ও Reorder রিমাইন্ডার স্বয়ংক্রিয়ভাবেও তৈরি হয়। Conversations (CRM → Conversations) হলো আপনার পুরো টিম জুড়ে লিডের বিপরীতে রেকর্ড করা প্রতিটি টাচপয়েন্টের (কল, SMS, WhatsApp, ভিজিট, ইত্যাদি) একটি রিড-অনলি, ফিল্টারযোগ্য লগ; আপনি লিডের বিস্তারিত পেজ থেকে নতুন একটি লগ করেন।',
                 },
+                {
+                    q: 'Can the AI assistant see leads, campaigns, and follow-ups?',
+                    a: 'Yes. Ask how many open leads you have, which campaigns went out, or which follow-ups are overdue, and it reads CRM → Leads, Campaigns, and Follow-ups. Creating a lead or marking a follow-up done still happens on those pages.',
+                },
             ],
         },
         manufacturing: {
@@ -191,6 +195,10 @@ export const helpMessages = {
                 {
                     q: 'জবের খরচ ও বিক্রয়মূল্য কীভাবে হিসাব হয়?',
                     a: 'সম্পূর্ণ হওয়ার সময়, প্রতিটি উপাদানের সর্বশেষ খরচ থেকে ম্যাটেরিয়াল খরচের স্ন্যাপশট নেওয়া হয়, এবং আপনি আরও খরচ লাইন যোগ করতে পারেন (শ্রম, প্রিন্টিং, পরিবহন, ওভারহেড ইত্যাদি), চাইলে একটি সার্ভিস পারচেজ বিল থেকে টানা। জবটি তখন একটি মোট খরচ ও প্রতি ইউনিট খরচ দেখায়, এবং সম্পূর্ণ জবের জন্য একটি Pricing প্যানেল একটি কস্ট-প্লাস বিক্রয়মূল্যের পরামর্শ দেয় যা আপনি পণ্যে প্রয়োগ করতে পারেন।',
+                },
+                {
+                    q: 'Can the AI assistant see production jobs and manufactured-product P&L?',
+                    a: 'Yes. Ask what is in production, job cost, or whether manufactured products are making money, and it reads Production Jobs, Manufactured product P&L, and manufacturing analytics. Starting or completing a job still happens on those pages.',
                 },
             ],
         },
@@ -222,7 +230,7 @@ export const helpMessages = {
                 },
                 {
                     q: 'এটি আসলে কী দেখতে পারে, এবং উত্তরগুলো কি বিশ্বাস করা যায়?',
-                    a: '"what can you do?" জিজ্ঞাসা করুন এবং এটি আপনার শাখাগুলো, আপনার রেকর্ড কতদূর পেছনের, এবং কোন কোন টুল ব্যবহার করতে পারে তা জানায় — তাই একটি খালি উত্তরের মানে একটি খালি সময়কাল, ভাঙা কোয়েরি নয়। প্রতিটি উত্তর তার Sources (যে রিপোর্ট ও তারিখ পরিসর ব্যবহার করেছে) তালিকাভুক্ত করে যাতে আপনি যাচাই করতে পারেন। আপনি এটিকে অস্বাভাবিক লেনদেন খুঁজতেও বলতে পারেন — খরচের নিচে বিক্রি, ডুপ্লিকেট ইনভয়েস, বড় মূল্য বিচ্যুতি — এবং কোনো পরীক্ষা সম্পূর্ণ না হলে এটি আপনাকে জানাবে, সব ঠিক আছে এমন ইঙ্গিত না দিয়ে। It can also look up the Daily Report for a branch, today\'s open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, and warranty claims.',
+                    a: '"what can you do?" জিজ্ঞাসা করুন এবং এটি আপনার শাখাগুলো, আপনার রেকর্ড কতদূর পেছনের, এবং কোন কোন টুল ব্যবহার করতে পারে তা জানায় — তাই একটি খালি উত্তরের মানে একটি খালি সময়কাল, ভাঙা কোয়েরি নয়। প্রতিটি উত্তর তার Sources (যে রিপোর্ট ও তারিখ পরিসর ব্যবহার করেছে) তালিকাভুক্ত করে যাতে আপনি যাচাই করতে পারেন। আপনি এটিকে অস্বাভাবিক লেনদেন খুঁজতেও বলতে পারেন — খরচের নিচে বিক্রি, ডুপ্লিকেট ইনভয়েস, বড় মূল্য বিচ্যুতি — এবং কোনো পরীক্ষা সম্পূর্ণ না হলে এটি আপনাকে জানাবে, সব ঠিক আছে এমন ইঙ্গিত না দিয়ে। It can also look up the Daily Report for a branch, today\'s open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, production jobs and manufactured-product P&L, import shipments and the LC register, and CRM leads, campaigns, and follow-ups.',
                 },
                 {
                     q: 'AI ক্রেডিট কী এবং আরও কীভাবে পাব?',
@@ -271,6 +279,10 @@ export const helpMessages = {
                 {
                     q: 'স্টোরফ্রন্ট অর্ডার কি স্বয়ংক্রিয়ভাবে আমার স্টক কমায়?',
                     a: 'এখনও নয়। একটি স্টোরফ্রন্ট অর্ডার স্টক আছে কিনা পরীক্ষা করে কিন্তু তা কমায় না, এবং একটি অর্ডার নিশ্চিত করলে শুধু এর স্ট্যাটাস পরিবর্তন হয় — আপনি নিজেই পণ্য পূরণ ও ইনভেন্টরি সমন্বয় করেন। অনলাইন অর্ডারের জন্য স্বয়ংক্রিয় ইনভেন্টরি কর্তন ভবিষ্যতের একটি রিলিজে আমাদের রোডম্যাপে আছে।',
+                },
+                {
+                    q: 'Can the AI assistant see my online orders?',
+                    a: 'Yes. Ask the assistant about pending online orders or who ordered what, and it reads Storefront → Online Orders. It is read-only — confirming or cancelling an order still happens on that page.',
                 },
             ],
         },

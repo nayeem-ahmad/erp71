@@ -58,6 +58,9 @@ const APP_PAGES: AppPage[] = [
     { path: '/sales/customers/reports/bad-debts', label: 'Bad Debts', description: 'customer debts written off as uncollectable, and undoing a write-off', modules: ['retail', 'crm'] },
     { path: '/crm/contacts', label: 'Contacts', description: 'the address book of people and the companies they work for', modules: ['crm'] },
     { path: '/crm/contacts/new', label: 'New Contact', description: 'add a contact by hand, or scan a business card to fill the form from a photo', modules: ['crm'] },
+    { path: '/crm/leads', label: 'Leads', description: 'the lead pipeline: open leads, stages and next steps', modules: ['crm'] },
+    { path: '/crm/campaigns', label: 'Campaigns', description: 'CRM campaigns and who they were sent to', modules: ['crm'] },
+    { path: '/crm/follow-ups', label: 'Follow-ups', description: 'follow-ups due today and overdue', modules: ['crm'] },
 
     // Inventory
     { path: '/inventory', label: 'Inventory', description: 'stock overview', modules: ['inventory'] },
@@ -78,6 +81,16 @@ const APP_PAGES: AppPage[] = [
     { path: '/purchases/supplier-ledger', label: 'Supplier Ledger', description: 'a supplier\'s running account of purchases and payments', modules: ['retail'] },
     { path: '/purchases/reports/summary', label: 'Purchase Summary', description: 'purchase totals and trend over a period', modules: ['retail'] },
     { path: '/purchases/reports/line-items', label: 'Purchase Line Items', description: 'every purchase bill line, searchable by period, supplier, product or branch', modules: ['retail'] },
+    { path: '/purchases/imports', label: 'Import shipments', description: 'open import shipments: reference, supplier, status, ETA and LC number', modules: ['imports'] },
+    { path: '/purchases/imports/lc-register', label: 'LC register', description: 'letters of credit, expiry dates and days to expiry', modules: ['imports'] },
+
+    // Storefront
+    { path: '/storefront', label: 'Online Orders', description: 'orders from the public online shop', modules: ['storefront'] },
+
+    // Manufacturing
+    { path: '/manufacturing/jobs', label: 'Production Jobs', description: 'open and recent production jobs', modules: ['manufacturing'] },
+    { path: '/manufacturing/product-pl', label: 'Manufactured product P&L', description: 'cost vs revenue per manufactured product', modules: ['manufacturing'] },
+    { path: '/manufacturing/analytics', label: 'Manufacturing analytics', description: 'completed volume and manufacturing cost headlines', modules: ['manufacturing'] },
 
     // Accounting — always available
     { path: '/accounting/expenses', label: 'Expenses', description: 'record an expense and review expenses' },

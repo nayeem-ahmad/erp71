@@ -174,6 +174,10 @@ export const helpMessages = {
                     q: "فالو اپ اور گفتگو کیسے کام کرتے ہیں؟",
                     a: "فالو اپ (CRM → فالو اپ) یاد دہانیوں کی ایک ہی قطار ہے — عمومی، وصولی، سالگرہ یا دوبارہ آرڈر — جو گاہک یا لیڈ کے تفصیلی صفحے سے بنتی ہے، جبکہ سالگرہ اور دوبارہ آرڈر کی یاد دہانیاں خودکار بھی بنتی ہیں۔ گفتگو (CRM → گفتگو) پوری ٹیم کی جانب سے لیڈز پر درج ہر رابطے (کال، SMS، WhatsApp، ملاقات وغیرہ) کا صرف پڑھنے کے قابل، قابلِ فلٹر ریکارڈ ہے؛ نئی گفتگو لیڈ کے تفصیلی صفحے سے درج کی جاتی ہے۔",
                 },
+                {
+                    q: 'Can the AI assistant see leads, campaigns, and follow-ups?',
+                    a: 'Yes. Ask how many open leads you have, which campaigns went out, or which follow-ups are overdue, and it reads CRM → Leads, Campaigns, and Follow-ups. Creating a lead or marking a follow-up done still happens on those pages.',
+                },
             ],
         },
         manufacturing: {
@@ -191,6 +195,10 @@ export const helpMessages = {
                 {
                     q: "کام کی لاگت اور فروخت کی قیمت کیسے شمار ہوتی ہے؟",
                     a: "مکمل ہونے پر ہر جزو کی تازہ ترین لاگت سے مادی لاگت محفوظ ہو جاتی ہے، اور آپ مزید لاگت کی سطریں شامل کر سکتے ہیں (مزدوری، چھپائی، نقل و حمل، اوپری اخراجات وغیرہ)، چاہیں تو کسی خدماتی خریداری بل سے۔ پھر کام کی کل لاگت اور فی یونٹ لاگت نظر آتی ہے، اور مکمل کاموں کے لیے ایک قیمتی پینل لاگت پر منافع جوڑ کر فروخت کی قیمت تجویز کرتا ہے جسے آپ پروڈکٹ پر لاگو کر سکتے ہیں۔",
+                },
+                {
+                    q: 'Can the AI assistant see production jobs and manufactured-product P&L?',
+                    a: 'Yes. Ask what is in production, job cost, or whether manufactured products are making money, and it reads Production Jobs, Manufactured product P&L, and manufacturing analytics. Starting or completing a job still happens on those pages.',
                 },
             ],
         },
@@ -222,7 +230,7 @@ export const helpMessages = {
                 },
                 {
                     q: "یہ اصل میں کیا دیکھ سکتا ہے، اور کیا جوابات پر بھروسہ کیا جا سکتا ہے؟",
-                    a: "پوچھیں ”تم کیا کر سکتے ہو؟“ اور یہ آپ کی شاخیں، آپ کے ریکارڈ کتنے پرانے ہیں، اور کون سے اوزار استعمال کر سکتا ہے، سب بتا دیتا ہے — یعنی خالی جواب کا مطلب خالی مدت ہے، ٹوٹی ہوئی کوئری نہیں۔ ہر جواب اپنے ذرائع (استعمال کی گئی عین رپورٹس اور مدت) دکھاتا ہے تاکہ آپ تصدیق کر سکیں۔ آپ اس سے غیر معمولی لین دین بھی جانچنے کو کہہ سکتے ہیں — لاگت سے کم فروخت، دہرے انوائس، قیمت میں بڑے فرق — اور اگر کوئی جانچ مکمل نہ ہو سکے تو یہ بتا دیتا ہے، سب ٹھیک ہونے کا تاثر نہیں دیتا۔ It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, and warranty claims.",
+                    a: "پوچھیں ”تم کیا کر سکتے ہو؟“ اور یہ آپ کی شاخیں، آپ کے ریکارڈ کتنے پرانے ہیں، اور کون سے اوزار استعمال کر سکتا ہے، سب بتا دیتا ہے — یعنی خالی جواب کا مطلب خالی مدت ہے، ٹوٹی ہوئی کوئری نہیں۔ ہر جواب اپنے ذرائع (استعمال کی گئی عین رپورٹس اور مدت) دکھاتا ہے تاکہ آپ تصدیق کر سکیں۔ آپ اس سے غیر معمولی لین دین بھی جانچنے کو کہہ سکتے ہیں — لاگت سے کم فروخت، دہرے انوائس، قیمت میں بڑے فرق — اور اگر کوئی جانچ مکمل نہ ہو سکے تو یہ بتا دیتا ہے، سب ٹھیک ہونے کا تاثر نہیں دیتا۔ It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, production jobs and manufactured-product P&L, import shipments and the LC register, and CRM leads, campaigns, and follow-ups.",
                 },
                 {
                     q: "AI کریڈٹس کیا ہیں اور مزید کیسے حاصل کروں؟",
@@ -271,6 +279,10 @@ export const helpMessages = {
                 {
                     q: "کیا دکان کے آرڈرز میرا اسٹاک خودکار طور پر کم کرتے ہیں؟",
                     a: "ابھی نہیں۔ دکان کا آرڈر جانچتا ہے کہ اسٹاک دستیاب ہے مگر اسے گھٹاتا نہیں، اور آرڈر کی تصدیق صرف اس کی حالت بدلتی ہے — تکمیل اور انوینٹری کی درستی آپ خود کرتے ہیں۔ آن لائن آرڈرز پر خودکار انوینٹری کٹوتی ہمارے آئندہ منصوبے میں شامل ہے۔",
+                },
+                {
+                    q: 'Can the AI assistant see my online orders?',
+                    a: 'Yes. Ask the assistant about pending online orders or who ordered what, and it reads Storefront → Online Orders. It is read-only — confirming or cancelling an order still happens on that page.',
                 },
             ],
         },

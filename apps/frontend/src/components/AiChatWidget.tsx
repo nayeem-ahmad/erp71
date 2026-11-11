@@ -61,6 +61,10 @@ const TOOL_ROUTES: Record<string, string> = {
     vat_tax_summary: '/accounting/reports/vat-tax',
     cash_position: '/accounting/reports/cashbook',
     // Operations
+    storefront_orders: '/storefront',
+    manufacturing_summary: '/manufacturing/jobs',
+    import_status: '/purchases/imports',
+    crm_pipeline: '/crm/leads',
     open_pipeline: '/sales/orders',
     workforce_summary: '/hr/attendance',
     loyalty_summary: '/sales/loyalty',

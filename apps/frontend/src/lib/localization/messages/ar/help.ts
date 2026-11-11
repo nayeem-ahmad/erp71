@@ -174,6 +174,10 @@ export const helpMessages = {
                     q: "كيف تعمل المتابعات والمحادثات؟",
                     a: "المتابعات (CRM ← المتابعات) قائمة انتظار واحدة للتذكيرات — عامة أو تحصيل أو عيد ميلاد أو إعادة طلب — تُنشأ من صفحة عميل أو عميل محتمل، وتُنشأ تذكيرات عيد الميلاد وإعادة الطلب تلقائيًا كذلك. أما المحادثات (CRM ← المحادثات) فسجل للقراءة فقط وقابل للتصفية لكل نقطة تواصل (مكالمة، رسالة نصية، WhatsApp، زيارة وغيرها) سُجّلت على العملاء المحتملين عبر فريقك كله؛ وتسجّل محادثة جديدة من صفحة العميل المحتمل.",
                 },
+                {
+                    q: 'Can the AI assistant see leads, campaigns, and follow-ups?',
+                    a: 'Yes. Ask how many open leads you have, which campaigns went out, or which follow-ups are overdue, and it reads CRM → Leads, Campaigns, and Follow-ups. Creating a lead or marking a follow-up done still happens on those pages.',
+                },
             ],
         },
         manufacturing: {
@@ -191,6 +195,10 @@ export const helpMessages = {
                 {
                     q: "كيف تُحتسب تكلفة الأمر وسعر البيع؟",
                     a: "عند الإتمام تُلتقط تكلفة المواد من أحدث تكلفة لكل مكوّن، ويمكنك إضافة أسطر تكلفة أخرى (عمالة، طباعة، نقل، مصروفات غير مباشرة وغيرها)، مسحوبة اختياريًا من فاتورة شراء خدمة. عندها يعرض الأمر إجمالي التكلفة وتكلفة الوحدة، ولأوامر مكتملة تقترح لوحة التسعير سعر بيع بهامش فوق التكلفة يمكنك تطبيقه على المنتج.",
+                },
+                {
+                    q: 'Can the AI assistant see production jobs and manufactured-product P&L?',
+                    a: 'Yes. Ask what is in production, job cost, or whether manufactured products are making money, and it reads Production Jobs, Manufactured product P&L, and manufacturing analytics. Starting or completing a job still happens on those pages.',
                 },
             ],
         },
@@ -222,7 +230,7 @@ export const helpMessages = {
                 },
                 {
                     q: "ماذا يرى فعليًا، وهل يمكن الوثوق بإجاباته؟",
-                    a: "اسأله ”ماذا تستطيع أن تفعل؟“ فيخبرك بفروعك، وإلى أي مدى تعود سجلاتك، وأي الأدوات يستطيع استخدامها — فالإجابة الفارغة تعني فترة فارغة لا استعلامًا معطلًا. وكل إجابة تُدرج مصادرها (التقارير والفترات الزمنية التي استخدمها بالضبط) لتتحقق منها بنفسك. ويمكنك أيضًا أن تطلب منه فحص المعاملات غير المعتادة — بيع دون التكلفة، فواتير مكرّرة، انحرافات سعرية كبيرة — وسيخبرك إن تعذّر إتمام أي فحص بدل أن يوحي بأن كل شيء سليم. It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, and warranty claims.",
+                    a: "اسأله ”ماذا تستطيع أن تفعل؟“ فيخبرك بفروعك، وإلى أي مدى تعود سجلاتك، وأي الأدوات يستطيع استخدامها — فالإجابة الفارغة تعني فترة فارغة لا استعلامًا معطلًا. وكل إجابة تُدرج مصادرها (التقارير والفترات الزمنية التي استخدمها بالضبط) لتتحقق منها بنفسك. ويمكنك أيضًا أن تطلب منه فحص المعاملات غير المعتادة — بيع دون التكلفة، فواتير مكرّرة، انحرافات سعرية كبيرة — وسيخبرك إن تعذّر إتمام أي فحص بدل أن يوحي بأن كل شيء سليم. It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, production jobs and manufactured-product P&L, import shipments and the LC register, and CRM leads, campaigns, and follow-ups.",
                 },
                 {
                     q: "ما أرصدة الذكاء الاصطناعي وكيف أحصل على المزيد؟",
@@ -271,6 +279,10 @@ export const helpMessages = {
                 {
                     q: "هل تخصم طلبات المتجر مخزوني تلقائيًا؟",
                     a: "ليس بعد. يتحقق طلب المتجر من توفر المخزون لكنه لا يخصمه، وتأكيد الطلب يغيّر حالته فقط — أما التنفيذ وتعديل المخزون فتتولاهما بنفسك. والخصم التلقائي للمخزون في الطلبات الإلكترونية مدرج في خطتنا لإصدار قادم.",
+                },
+                {
+                    q: 'Can the AI assistant see my online orders?',
+                    a: 'Yes. Ask the assistant about pending online orders or who ordered what, and it reads Storefront → Online Orders. It is read-only — confirming or cancelling an order still happens on that page.',
                 },
             ],
         },

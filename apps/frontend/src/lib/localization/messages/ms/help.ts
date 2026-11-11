@@ -174,6 +174,10 @@ export const helpMessages = {
                     q: 'Bagaimana Susulan dan Perbualan berfungsi?',
                     a: 'Susulan (CRM → Susulan) ialah satu baris gilir peringatan — Umum, Kutipan, Hari Lahir, atau Pesanan Semula — dicipta dari halaman butiran pelanggan atau prospek, dengan peringatan Hari Lahir dan Pesanan Semula turut dijana secara automatik. Perbualan (CRM → Perbualan) ialah log baca sahaja yang boleh ditapis bagi setiap titik sentuh (panggilan, SMS, WhatsApp, lawatan, dan sebagainya) yang direkodkan terhadap prospek merentasi seluruh pasukan anda; anda log yang baharu dari halaman butiran prospek.',
                 },
+                {
+                    q: 'Can the AI assistant see leads, campaigns, and follow-ups?',
+                    a: 'Yes. Ask how many open leads you have, which campaigns went out, or which follow-ups are overdue, and it reads CRM → Leads, Campaigns, and Follow-ups. Creating a lead or marking a follow-up done still happens on those pages.',
+                },
             ],
         },
         manufacturing: {
@@ -191,6 +195,10 @@ export const helpMessages = {
                 {
                     q: 'Bagaimana kos kerja dan harga jualan dikira?',
                     a: 'Pada penyelesaian, kos bahan diambil syot kilat daripada kos terkini setiap komponen, dan anda boleh menambah baris kos lanjut (buruh, percetakan, pengangkutan, overhed, dan sebagainya), yang boleh diambil daripada bil pembelian perkhidmatan. Kerja itu kemudian menunjukkan jumlah kos dan kos seunit, dan bagi kerja yang selesai panel Penetapan Harga mencadangkan harga jualan kos-tambah yang boleh anda terapkan pada produk.',
+                },
+                {
+                    q: 'Can the AI assistant see production jobs and manufactured-product P&L?',
+                    a: 'Yes. Ask what is in production, job cost, or whether manufactured products are making money, and it reads Production Jobs, Manufactured product P&L, and manufacturing analytics. Starting or completing a job still happens on those pages.',
                 },
             ],
         },
@@ -222,7 +230,7 @@ export const helpMessages = {
                 },
                 {
                     q: 'Apa yang sebenarnya boleh dilihatnya, dan bolehkah saya mempercayai jawapannya?',
-                    a: 'Tanya "what can you do?" dan ia melaporkan cawangan anda, sejauh mana rekod anda terkebelakang, dan alat mana yang boleh digunakannya — jadi jawapan kosong bermaksud tempoh kosong, bukan pertanyaan yang rosak. Setiap jawapan menyenaraikan Sumbernya (laporan dan julat tarikh tepat yang digunakannya) supaya anda boleh mengesahkannya. Anda juga boleh memintanya menyemak transaksi luar biasa — jualan di bawah kos, invois pendua, sisihan harga besar — dan ia akan memberitahu anda jika mana-mana semakan tidak dapat diselesaikan dan bukannya menyiratkan semuanya bersih. It can also look up the Daily Report for a branch, today\'s open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, and warranty claims.',
+                    a: 'Tanya "what can you do?" dan ia melaporkan cawangan anda, sejauh mana rekod anda terkebelakang, dan alat mana yang boleh digunakannya — jadi jawapan kosong bermaksud tempoh kosong, bukan pertanyaan yang rosak. Setiap jawapan menyenaraikan Sumbernya (laporan dan julat tarikh tepat yang digunakannya) supaya anda boleh mengesahkannya. Anda juga boleh memintanya menyemak transaksi luar biasa — jualan di bawah kos, invois pendua, sisihan harga besar — dan ia akan memberitahu anda jika mana-mana semakan tidak dapat diselesaikan dan bukannya menyiratkan semuanya bersih. It can also look up the Daily Report for a branch, today\'s open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, production jobs and manufactured-product P&L, import shipments and the LC register, and CRM leads, campaigns, and follow-ups.',
                 },
                 {
                     q: 'Apakah kredit AI dan bagaimana saya mendapatkan lebih banyak?',
@@ -271,6 +279,10 @@ export const helpMessages = {
                 {
                     q: 'Adakah pesanan kedai mengurangkan stok saya secara automatik?',
                     a: 'Belum lagi. Pesanan kedai menyemak bahawa stok tersedia tetapi tidak menolaknya, dan mengesahkan pesanan hanya menukar statusnya — anda menunaikan dan melaraskan inventori sendiri. Potongan inventori automatik untuk pesanan dalam talian berada dalam peta jalan kami untuk keluaran akan datang.',
+                },
+                {
+                    q: 'Can the AI assistant see my online orders?',
+                    a: 'Yes. Ask the assistant about pending online orders or who ordered what, and it reads Storefront → Online Orders. It is read-only — confirming or cancelling an order still happens on that page.',
                 },
             ],
         },

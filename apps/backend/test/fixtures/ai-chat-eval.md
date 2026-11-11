@@ -143,6 +143,17 @@ permission-filter regression.
 | 53 | Open warranty claims this month | `list_documents` (`type: warranty_claim`) | Lists claims; does not invent a dedicated warranty tool |
 | 54 | Who is the lead named Rahim? | `resolve_entity` (`type: lead`) | Resolves the lead; does not treat Rahim as a customer |
 
+## Wave 2 paid modules (6)
+
+| # | Question | Expected tool | Pass criteria |
+|---|---|---|---|
+| 55 | Any pending online orders? | `storefront_orders` | Lists storefront orders, not POS sales |
+| 56 | How many production jobs are in progress? | `manufacturing_summary` `jobs` | `kind: jobs`; names products and statuses |
+| 57 | What is the P&L on manufactured products? | `manufacturing_summary` `product_pl` | `kind: product_pl`; quotes totals, not a jobs dump |
+| 58 | Which LCs expire soon? | `import_status` `lc_register` | `kind: lc_register`; names LC numbers and daysToExpiry |
+| 59 | How many open leads do we have? | `crm_pipeline` `leads` | `kind: leads`; quotes `open` from the status summary |
+| 60 | What follow-ups are overdue? | `crm_pipeline` `follow_ups` | `kind: follow_ups` `scope: overdue`; names parties due before today |
+
 ## Module spot-check
 
 Switch a test tenant to an **accounting-only** plan and ask #1, #7 and #35.
