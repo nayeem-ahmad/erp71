@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
     CheckCircle2,
     CircleDashed,
@@ -152,16 +153,58 @@ function assigneeQuery(
     return {};
 }
 
+/**
+ * Staffing cells and person names link here with `assignee` / `projectId`.
+ * Anything the filter does not already understand is ignored, so a hand-edited
+ * URL opens the default slice rather than an empty one.
+ */
+function readAssigneeParam(value: string | null): string {
+    if (!value) return '';
+    if (value === 'me' || value === 'anyone' || value === 'unassigned') return value;
+    if (value.startsWith('user:') && value.length > 'user:'.length) return value;
+    if (value.startsWith('employee:') && value.length > 'employee:'.length) return value;
+    return '';
+}
+
+function readProjectIdParam(value: string | null): string {
+    return value?.trim() ?? '';
+}
+
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
 
 const assigneeLabel = (task: TaskRow): string => assigneeLabelOf(task);
 
-export default function TasksPage() {
+function TasksPage() {
     const { t, fmt, locale, localeInfo } = useI18n();
     const m = t.projects;
     const listUi = m.tasks.listUi;
 
-    const [filters, setFilter, filtersReady] = useRememberedFilters('project-tasks', DEFAULT_FILTERS);
+    // Filters can arrive in the URL so staffing can link at a specific slice —
+    // a cell that counted Rina's remaining hours on one project is a lie if the
+    // list it opens is still "my tasks". Read once, into the initial state
+    // below: from here on the controls own these.
+    const searchParams = useSearchParams();
+    const assigneeParam = readAssigneeParam(searchParams.get('assignee'));
+    const projectIdParam = readProjectIdParam(searchParams.get('projectId'));
+
+    const urlSeeded = useMemo(() => {
+        const seeded: Array<'assignee' | 'projectId'> = [];
+        if (assigneeParam) seeded.push('assignee');
+        if (projectIdParam) seeded.push('projectId');
+        return seeded;
+        // Read once, at mount: from here on the controls own these.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const [filters, setFilter, filtersReady] = useRememberedFilters(
+        'project-tasks',
+        {
+            ...DEFAULT_FILTERS,
+            assignee: assigneeParam || DEFAULT_FILTERS.assignee,
+            projectId: projectIdParam,
+        },
+        urlSeeded,
+    );
     const { search, assignee, projectId, statusCategory, priority, createdRange } = filters;
 
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -890,5 +933,15 @@ export default function TasksPage() {
                 />
             )}
         </PageShell>
+    );
+}
+
+export default function TasksPageWrapper() {
+    // useSearchParams needs a Suspense boundary to keep the route statically
+    // renderable under the app router.
+    return (
+        <Suspense fallback={null}>
+            <TasksPage />
+        </Suspense>
     );
 }
