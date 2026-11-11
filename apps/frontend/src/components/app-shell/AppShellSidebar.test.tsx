@@ -62,6 +62,10 @@ jest.mock('@/hooks/usePendingVoucherCount', () => ({
     usePendingVoucherCount: () => ({ count: mockPendingVouchers }),
 }));
 
+jest.mock('@/hooks/useOverdueMeetingActionsCount', () => ({
+    useOverdueMeetingActionsCount: () => ({ count: 0 }),
+}));
+
 jest.mock('@/lib/branding', () => ({
     useBranding: () => ({ logoUrl: null, faviconUrl: null, businessName: 'Karim Traders', primaryColor: '#2563eb' }),
 }));

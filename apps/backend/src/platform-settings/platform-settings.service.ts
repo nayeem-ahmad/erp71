@@ -219,6 +219,7 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         purchase_return:  { isSecret: false, default: 'true' },
         customer_payment: { isSecret: false, default: 'true' },
         supplier_payment: { isSecret: false, default: 'true' },
+        meeting:          { isSecret: false, default: 'true' },
         // `0` keeps every row for as long as the tenant exists.
         retention_days:   { isSecret: false, default: String(RECORD_HISTORY_DEFAULT_RETENTION_DAYS) },
     },

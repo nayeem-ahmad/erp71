@@ -12,8 +12,8 @@ describe('robots', () => {
         expect(rules.userAgent).toBe('*');
     });
 
-    it('disallows the shared-quotation and short-link paths', () => {
-        expect(rules.disallow).toEqual(expect.arrayContaining(['/q/', '/s/']));
+    it('disallows the shared-quotation, minutes and short-link paths', () => {
+        expect(rules.disallow).toEqual(expect.arrayContaining(['/q/', '/s/', '/m/']));
     });
 
     it('leaves storefronts crawlable — they are marketing pages', () => {

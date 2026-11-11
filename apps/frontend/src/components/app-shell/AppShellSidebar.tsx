@@ -9,6 +9,7 @@ import NavModuleChildren from '@/components/sidebar/NavModuleChildren';
 import { useNavLayouts } from '@/contexts/NavLayoutContext';
 import { useDrawerFocusTrap } from '@/hooks/useDrawerFocusTrap';
 import { useIsMdUp } from '@/hooks/useMediaQuery';
+import { useOverdueMeetingActionsCount } from '@/hooks/useOverdueMeetingActionsCount';
 import { usePendingVoucherCount } from '@/hooks/usePendingVoucherCount';
 import { appHomeHref, buildRail, collectNavLinkTargets, findActiveAppKey, isNavLinkActive, railKeyFor, type RailEntry } from '@/lib/app-shell';
 import { BRAND_NAME } from '@/lib/brand';
@@ -188,9 +189,18 @@ export default function AppShellSidebar({
     // The approval queue is the voucher list filtered to PENDING, so its count
     // hangs off the Vouchers link, and Accounting's rail icon carries a dot.
     const { count: pendingVoucherCount } = usePendingVoucherCount();
+    const { count: overdueMeetingActions } = useOverdueMeetingActionsCount();
     const badgeFor = useCallback(
-        (href: string) => (href === routes.accounting.vouchers ? pendingVoucherCount : 0),
-        [pendingVoucherCount],
+        (href: string) => {
+            if (href === routes.accounting.vouchers) return pendingVoucherCount;
+            if (href === routes.meetings.actions) return overdueMeetingActions;
+            return 0;
+        },
+        [pendingVoucherCount, overdueMeetingActions],
+    );
+    const badgeTitleFor = useCallback(
+        (href: string) => (href === routes.meetings.actions ? t.meetings.overdueBadge : t.vouchers.approval.queueBadge),
+        [t.meetings.overdueBadge, t.vouchers.approval.queueBadge],
     );
     const entryHasWork = (entry: RailEntry) => entry.modules.some((module) =>
         (module.children ?? []).some((child) => (isNavSubgroup(child)
@@ -435,7 +445,7 @@ export default function AppShellSidebar({
                 isSearching={searching}
                 compactNav={compactNav}
                 badgeFor={badgeFor}
-                badgeTitle={t.vouchers.approval.queueBadge}
+                badgeTitle={badgeTitleFor}
                 flat
             />
         ) : renderSingleLink(module)

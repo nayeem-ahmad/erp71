@@ -77,6 +77,17 @@ export interface PermissionGroup {
 
 export const PERMISSION_BACKFILL_GROUPS: PermissionGroup[] = [
     {
+        // VIEW_ALL_MEETINGS is deliberately absent. It overrides attendee-only
+        // visibility, so handing it to every existing manager as part of a
+        // backfill would quietly undo the point of a private meeting. Same
+        // stance as VIEW_ALL_PROJECTS.
+        key: 'meetings',
+        permissions: [
+            StorePermission.VIEW_MEETINGS,
+            StorePermission.MANAGE_MEETINGS,
+        ],
+    },
+    {
         // VIEW_ALL_PROJECTS is deliberately absent. It overrides per-project
         // privacy, so handing it to every existing manager as part of a
         // backfill would quietly undo the point of a private project. It is

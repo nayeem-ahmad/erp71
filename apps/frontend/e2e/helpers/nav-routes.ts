@@ -113,6 +113,11 @@ export const NAV_ROUTES: { path: string; label: string }[] = [
     { path: '/hr/leaves', label: 'Leaves' },
     { path: '/hr/salary-payments', label: 'Salary Payments' },
 
+    // Meetings
+    { path: '/meetings', label: 'Meetings' },
+    { path: '/meetings/actions', label: 'My action points' },
+    { path: '/meetings/actions/all', label: 'All action points' },
+
     // Account settings — sidebar + settings quick links
     { path: '/settings', label: 'Settings' },
     { path: '/billing', label: 'Billing' },

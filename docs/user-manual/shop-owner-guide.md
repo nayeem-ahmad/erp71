@@ -28,6 +28,7 @@
 18. [Billing & Subscription](#18-billing--subscription)
 19. [Reports Reference](#19-reports-reference)
 20. [Tips, Shortcuts & Best Practices](#20-tips-shortcuts--best-practices)
+21. [Meetings & Minutes](#21-meetings--minutes)
 
 ---
 
@@ -1156,6 +1157,43 @@ A consolidated list of all reports and where to find them:
 | SMS not sent | Check your SMS credit balance in Settings → SMS Credits. |
 | Staff member can't log in | Verify their account is active in Settings → Team. |
 | Payment failed | Go to Billing and update your payment method, then retry. |
+
+---
+
+## 21. Meetings & Minutes
+
+Meetings is a core module for every shop that is not on an accounting-only plan. It records what was discussed, what was decided, and who must do what by when. Video calls (Meet71) are a separate product.
+
+### 21.1 Write minutes
+
+1. Open **Meetings → Meetings** and click **New meeting**.
+2. Fill in the title, type, start time, and attendees (team members or guests with a name and email). Mark the chair and minute-taker.
+3. Add each **discussion** with a title, notes, and an optional decision. Under a discussion, add **action points**: who is responsible, optional others, a deadline, and priority.
+4. **Save draft** while you write. Drafts never email anyone.
+5. **Finalize** when the minutes are ready. Assignees are then notified. The minutes are locked; the organizer (or someone with view-all plus manage) can still edit, and that edit is written to the record history.
+
+### 21.2 Action points and reminders
+
+- Every action point belongs to one discussion. The first person is responsible; extra people appear as "(+ name)" and receive a copy of reminder emails.
+- A team member sees the point under **My action points** and can mark it done even after the minutes are locked. An outsider (name + email) gets email only.
+- Each morning at **09:00 Bangladesh time** the system emails: assignment (on finalize, or when a point is added to a finalized meeting), the day before the deadline, the day after it is overdue, then weekly until done or cancelled. Organizers get a Monday digest of overdue points in their meetings.
+- **Cancel meeting** stops all reminders for that meeting.
+
+### 21.3 Print, share, and email
+
+- **Print** opens an A4 layout with the shop logo, the minutes table, chair and minute-taker signature lines, and a DRAFT watermark while the meeting is still a draft.
+- **Share** (finalized only) creates a read-only public link `/m/[token]` with a short URL. Revoking the share kills every link ever sent.
+- **Email minutes** sends the same table to attendees.
+
+### 21.4 Who can see what
+
+| Permission | What it grants |
+|------------|----------------|
+| View meetings | Meetings you organized, attended, or hold an action point in. **My action points**. |
+| View all meetings | Every meeting and **All action points**. Owners and admins. |
+| Manage meetings | Create, edit your drafts, finalize, cancel, share, and email meetings you organized. |
+
+Accounting-only shops do not see Meetings in the sidebar.
 
 ---
 

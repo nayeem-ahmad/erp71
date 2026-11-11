@@ -60,6 +60,7 @@ describe('sitemap', () => {
 
         expect(paths.some((path) => path.startsWith('/q/'))).toBe(false);
         expect(paths.some((path) => path.startsWith('/s/'))).toBe(false);
+        expect(paths.some((path) => path.startsWith('/m/'))).toBe(false);
 
         const disallowed = robots().rules;
         const list = Array.isArray(disallowed) ? disallowed : [disallowed];

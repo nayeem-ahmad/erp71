@@ -22,7 +22,8 @@ export type ModuleKey =
     | 'status'
     | 'support'
     | 'smsCredits'
-    | 'aiCredits';
+    | 'aiCredits'
+    | 'meetings';
 
 const moduleRoots: Record<ModuleKey, string> = {
     dashboard: routes.home,
@@ -45,6 +46,7 @@ const moduleRoots: Record<ModuleKey, string> = {
     support: routes.support,
     smsCredits: routes.smsCredits,
     aiCredits: routes.aiCredits,
+    meetings: routes.meetings.root,
 };
 
 /** Prepend Home and optional module hub segments before the current page label. */

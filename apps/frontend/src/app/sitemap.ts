@@ -8,9 +8,10 @@ import { fetchCategories, fetchPosts, siteOrigin } from '@/lib/blog/api';
  * then left every page to incidental discovery. The blog needs one, and the
  * marketing and legal pages have needed one since they shipped.
  *
- * What is deliberately absent mirrors `robots.ts`: `/q/` and `/s/` are a
- * customer's quotation and the shortener that points at it, and listing either
- * would hand a crawler the URLs robots.txt asks it not to fetch. Storefronts
+ * What is deliberately absent mirrors `robots.ts`: `/q/`, `/m/` and `/s/` are a
+ * customer's quotation, shared meeting minutes, and the shortener that points
+ * at them, and listing any of those would hand a crawler the URLs robots.txt
+ * asks it not to fetch. Storefronts
  * are absent for a different reason — there is one per shop, they change
  * constantly, and a shop's own storefront sitemap is the right place for them.
  */
