@@ -434,6 +434,7 @@ export const coreMessages = {
             crmActivities: "Activités",
             crmApprovalsInbox: 'Approvals Inbox',
             projectsList: "Tous les projets",
+            projectsStaffing: "Affectation",
             projectsBoards: "Tableaux",
             projectsTasks: "Tâches",
             projectsStories: "User stories",

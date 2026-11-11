@@ -46,6 +46,13 @@ describe('matchVoiceNav', () => {
         expect(matchVoiceNav('ঘণ্টা লগ')?.route.path).toBe('/projects/hour-logs');
     });
 
+    it('opens staffing from staffing / who is on which project / স্টাফিং', () => {
+        expect(matchVoiceNav('staffing')?.route.path).toBe('/projects/staffing');
+        expect(matchVoiceNav('who is on which project')?.route.path).toBe('/projects/staffing');
+        expect(matchVoiceNav('স্টাফিং')?.route.path).toBe('/projects/staffing');
+        expect(matchVoiceNav('project team')?.route.path).toBe('/projects/staffing');
+    });
+
     it('only matches aliases on whole words', () => {
         // `hr` lives inside “three”, `pos` inside “post” — neither should navigate.
         expect(matchVoiceNav('three')).toBeNull();

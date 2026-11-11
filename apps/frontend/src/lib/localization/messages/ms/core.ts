@@ -434,6 +434,7 @@ export const coreMessages = {
             crmActivities: 'Aktiviti',
             crmApprovalsInbox: 'Approvals Inbox',
             projectsList: "Semua Projek",
+            projectsStaffing: "Kepegawaian",
             projectsBoards: "Papan",
             projectsTasks: "Tugasan",
             projectsStories: "Cerita pengguna",
