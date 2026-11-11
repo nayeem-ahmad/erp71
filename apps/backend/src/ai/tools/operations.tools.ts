@@ -211,7 +211,7 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
                         sku: job.recipe?.product?.sku ?? job.productSku ?? null,
                         quantity: job.quantity,
                         status: job.status,
-                        totalJobCost: money(job.totalJobCost),
+                        totalJobCost: nullableMoney(job.totalJobCost),
                     })),
                 };
             }

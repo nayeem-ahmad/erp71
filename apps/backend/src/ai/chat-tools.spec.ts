@@ -1421,6 +1421,25 @@ describe('manufacturing_summary', () => {
         expect(result.rows[0].totalJobCost).toBe(500.13);
     });
 
+    it('keeps totalJobCost null for an in-progress job that has no cost yet', async () => {
+        const listJobs = jest.fn().mockResolvedValue({
+            items: [{
+                quantity: 10,
+                status: 'IN_PROGRESS',
+                totalJobCost: null,
+                recipe: { product: { name: 'Mix', sku: 'MX-1' } },
+            }],
+            total: 1,
+        });
+        const deps = makeDeps({
+            manufacturing: { listJobs, getProductPL: jest.fn(), getAnalytics: jest.fn() },
+        } as any);
+
+        const result: any = await run('manufacturing_summary', { kind: 'jobs' }, deps);
+
+        expect(result.rows[0].totalJobCost).toBeNull();
+    });
+
     it('dispatches product_pl to getProductPL only and pages products', async () => {
         const products = Array.from({ length: 25 }, (_, i) => ({
             productName: `P${i}`,
