@@ -1,5 +1,5 @@
 import { StorePermission } from '@erp71/shared-types';
-import { zonedDateString } from '../../common/tenant-time.util';
+import { startOfZonedToday, zonedDateString } from '../../common/tenant-time.util';
 import {
     asDate,
     DATE_RANGE_PROPS,
@@ -24,6 +24,15 @@ function isoTimestamp(value: unknown): string | null {
     if (!value) return null;
     const date = value instanceof Date ? value : new Date(String(value));
     return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function projectFollowUp(row: any) {
+    return {
+        party: row.customer?.name ?? row.lead?.name ?? null,
+        due_at: isoTimestamp(row.due_at),
+        status: row.status,
+        assignee: row.assignee?.name ?? null,
+    };
 }
 
 export const OPERATIONS_TOOLS: ChatTool[] = [
@@ -362,6 +371,135 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
                     daysToExpiry: row.daysToExpiry ?? row.days_to_expiry ?? null,
                     invoice_value_bdt: money(row.invoice_value_bdt),
                 })),
+            };
+        },
+    },
+
+    {
+        name: 'crm_pipeline',
+        permission: StorePermission.VIEW_LEADS,
+        modules: ['crm'],
+        description:
+            'Lead lists, campaigns, and follow-ups. Pass kind: leads (open counts plus matching rows), campaigns ' +
+            '(name, created date, recipient count), or follow_ups (due today by default, or overdue). Use for ' +
+            '"how many open leads", "what campaigns did we send", "which follow-ups are overdue". ' +
+            'open_pipeline kind=leads is only the committed-but-unfinished count; this tool is the list.',
+        parameters: {
+            type: 'object',
+            properties: {
+                kind: {
+                    type: 'string',
+                    enum: ['leads', 'campaigns', 'follow_ups'],
+                    description: 'Which CRM view to return.',
+                },
+                search: { type: 'string', description: 'For kind=leads, match name, mobile or email.' },
+                status: { type: 'string', description: 'For kind=leads, restrict to one lead status.' },
+                scope: {
+                    type: 'string',
+                    enum: ['today', 'overdue'],
+                    description: 'For kind=follow_ups. Omit for due today.',
+                },
+                ...PAGING_PROPS,
+            },
+            required: ['kind'],
+        },
+        handler: async (ctx, args, deps) => {
+            const kind = args.kind;
+            if (kind !== 'leads' && kind !== 'campaigns' && kind !== 'follow_ups') {
+                return { error: 'kind must be leads, campaigns, or follow_ups' };
+            }
+            const limit = Math.min(Math.max(Number(args.limit) || MAX_TOOL_ROWS, 1), MAX_TOOL_ROWS);
+            const offset = Math.max(Number(args.offset) || 0, 0);
+            const pageNum = Math.floor(offset / limit) + 1;
+
+            if (kind === 'leads') {
+                const [summary, result] = await Promise.all([
+                    deps.crmLeads.getStatusSummary(ctx.tenantId),
+                    deps.crmLeads.findAll(ctx.tenantId, {
+                        timezone: ctx.timezone,
+                        search: args.search ? String(args.search) : undefined,
+                        status: args.status ? String(args.status) : undefined,
+                        page: pageNum,
+                        limit,
+                    }),
+                ]);
+                const items = result.items ?? [];
+                return {
+                    kind,
+                    counts: summary.counts,
+                    open: summary.open,
+                    totalRows: result.total ?? items.length,
+                    page: result.page ?? pageNum,
+                    rows: items.map((lead: any) => ({
+                        name: lead.name,
+                        status: lead.status,
+                        mobile: lead.mobile ?? null,
+                        source: lead.sourceOption?.name ?? lead.source ?? null,
+                        next_step_date: isoDate(lead.next_step_date),
+                    })),
+                };
+            }
+
+            if (kind === 'campaigns') {
+                const result = await deps.crmCampaigns.findAll(ctx.tenantId, {
+                    timezone: ctx.timezone,
+                    page: pageNum,
+                    limit,
+                });
+                const items = result.items ?? [];
+                return {
+                    kind,
+                    totalRows: result.total ?? items.length,
+                    page: result.page ?? pageNum,
+                    rows: items.map((campaign: any) => ({
+                        name: campaign.name,
+                        created_at: isoDate(campaign.created_at),
+                        recipientCount: campaign._count?.recipients ?? campaign.recipientCount ?? 0,
+                    })),
+                };
+            }
+
+            const summary = await deps.crmFollowUps.getTodaySummary(ctx.tenantId, ctx.timezone);
+            const scope = args.scope === 'overdue' ? 'overdue' : 'today';
+            if (scope === 'today') {
+                const result = await deps.crmFollowUps.findAll(ctx.tenantId, {
+                    dueToday: true,
+                    timezone: ctx.timezone,
+                    page: pageNum,
+                    limit,
+                });
+                const items = result.items ?? [];
+                return {
+                    kind,
+                    scope,
+                    dueToday: summary.dueToday,
+                    overdue: summary.overdue,
+                    total: summary.total,
+                    totalRows: result.total ?? items.length,
+                    page: result.page ?? pageNum,
+                    rows: items.map(projectFollowUp),
+                };
+            }
+
+            const result = await deps.crmFollowUps.findAll(ctx.tenantId, {
+                status: 'PENDING',
+                timezone: ctx.timezone,
+                limit: 100,
+            });
+            const todayStart = startOfZonedToday(ctx.timezone);
+            const overdueRows = (result.items ?? []).filter((row: any) => {
+                const due = row.due_at instanceof Date ? row.due_at : new Date(row.due_at);
+                return !Number.isNaN(due.getTime()) && due < todayStart;
+            });
+            const paged = page(overdueRows, args);
+            return {
+                kind,
+                scope,
+                dueToday: summary.dueToday,
+                overdue: summary.overdue,
+                total: summary.total,
+                ...paged,
+                rows: paged.rows.map(projectFollowUp),
             };
         },
     },

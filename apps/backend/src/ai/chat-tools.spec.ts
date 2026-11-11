@@ -78,6 +78,9 @@ function makeDeps(overrides: Partial<Record<keyof ChatToolDeps, any>> = {}): Cha
             getAnalytics: jest.fn(),
         },
         imports: { findAll: jest.fn(), lcRegister: jest.fn() },
+        crmLeads: { findAll: jest.fn(), getStatusSummary: jest.fn() },
+        crmCampaigns: { findAll: jest.fn() },
+        crmFollowUps: { findAll: jest.fn(), getTodaySummary: jest.fn() },
         web: {
             search: jest.fn(),
             fetchPage: jest.fn(),
@@ -1552,5 +1555,171 @@ describe('import_status', () => {
         expect(result.error).toMatch(/kind must be shipments or lc_register/);
         expect(findAll).not.toHaveBeenCalled();
         expect(lcRegister).not.toHaveBeenCalled();
+    });
+});
+
+describe('crm_pipeline', () => {
+    it('requires kind leads, campaigns or follow_ups and is tagged crm', () => {
+        expect(CHAT_TOOLS_BY_NAME.crm_pipeline.permission).toBe(StorePermission.VIEW_LEADS);
+        expect(CHAT_TOOLS_BY_NAME.crm_pipeline.modules).toContain('crm');
+        expect((CHAT_TOOLS_BY_NAME.crm_pipeline.parameters as any).required).toEqual(
+            expect.arrayContaining(['kind']),
+        );
+        expect((CHAT_TOOLS_BY_NAME.crm_pipeline.parameters as any).properties.kind.enum).toEqual(
+            ['leads', 'campaigns', 'follow_ups'],
+        );
+    });
+
+    it('includes open from getStatusSummary and rows from findAll with timezone', async () => {
+        const getStatusSummary = jest.fn().mockResolvedValue({
+            counts: { NEW: 2, CONTACTED: 1, QUALIFIED: 1, WON: 0 },
+            open: 4,
+        });
+        const findAll = jest.fn().mockResolvedValue({
+            items: [{
+                name: 'Rahim',
+                status: 'NEW',
+                mobile: '0171',
+                sourceOption: { name: 'Walk-in' },
+                next_step_date: new Date('2026-07-20T00:00:00Z'),
+            }],
+            total: 1,
+        });
+        const campaignsFindAll = jest.fn();
+        const followUpsFindAll = jest.fn();
+        const getTodaySummary = jest.fn();
+        const deps = makeDeps({
+            crmLeads: { findAll, getStatusSummary },
+            crmCampaigns: { findAll: campaignsFindAll },
+            crmFollowUps: { findAll: followUpsFindAll, getTodaySummary },
+        } as any);
+
+        const result: any = await run('crm_pipeline', { kind: 'leads', search: 'Rahim' }, deps);
+
+        expect(getStatusSummary).toHaveBeenCalledWith('tenant-1');
+        expect(findAll).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ timezone: 'Asia/Dhaka', search: 'Rahim' }),
+        );
+        expect(campaignsFindAll).not.toHaveBeenCalled();
+        expect(followUpsFindAll).not.toHaveBeenCalled();
+        expect(result.open).toBe(4);
+        expect(result.rows[0]).toEqual(expect.objectContaining({
+            name: 'Rahim',
+            status: 'NEW',
+            mobile: '0171',
+            source: 'Walk-in',
+        }));
+    });
+
+    it('dispatches campaigns without calling lead or follow-up services', async () => {
+        const campaignsFindAll = jest.fn().mockResolvedValue({
+            items: [{
+                name: 'Eid blast',
+                created_at: new Date('2026-07-01T04:00:00Z'),
+                _count: { recipients: 42 },
+            }],
+            total: 1,
+        });
+        const getStatusSummary = jest.fn();
+        const leadsFindAll = jest.fn();
+        const followUpsFindAll = jest.fn();
+        const getTodaySummary = jest.fn();
+        const deps = makeDeps({
+            crmLeads: { findAll: leadsFindAll, getStatusSummary },
+            crmCampaigns: { findAll: campaignsFindAll },
+            crmFollowUps: { findAll: followUpsFindAll, getTodaySummary },
+        } as any);
+
+        const result: any = await run('crm_pipeline', { kind: 'campaigns' }, deps);
+
+        expect(campaignsFindAll).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ timezone: 'Asia/Dhaka' }),
+        );
+        expect(getStatusSummary).not.toHaveBeenCalled();
+        expect(leadsFindAll).not.toHaveBeenCalled();
+        expect(followUpsFindAll).not.toHaveBeenCalled();
+        expect(getTodaySummary).not.toHaveBeenCalled();
+        expect(result.rows[0]).toEqual(expect.objectContaining({
+            name: 'Eid blast',
+            recipientCount: 42,
+        }));
+    });
+
+    it('includes today summary and default scope today calls findAll with dueToday', async () => {
+        const getTodaySummary = jest.fn().mockResolvedValue({ dueToday: 2, overdue: 1, total: 3 });
+        const findAll = jest.fn().mockResolvedValue({
+            items: [{
+                due_at: new Date('2026-07-15T04:00:00Z'),
+                status: 'PENDING',
+                customer: { name: 'Karim' },
+                lead: null,
+                assignee: { name: 'Asha' },
+            }],
+            total: 1,
+        });
+        const deps = makeDeps({
+            crmLeads: { findAll: jest.fn(), getStatusSummary: jest.fn() },
+            crmCampaigns: { findAll: jest.fn() },
+            crmFollowUps: { findAll, getTodaySummary },
+        } as any);
+
+        const result: any = await run('crm_pipeline', { kind: 'follow_ups' }, deps);
+
+        expect(getTodaySummary).toHaveBeenCalledWith('tenant-1', 'Asia/Dhaka');
+        expect(findAll).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ dueToday: true, timezone: 'Asia/Dhaka' }),
+        );
+        expect(result).toEqual(expect.objectContaining({ dueToday: 2, overdue: 1, total: 3 }));
+        expect(result.rows[0]).toEqual(expect.objectContaining({
+            party: 'Karim',
+            status: 'PENDING',
+            assignee: 'Asha',
+        }));
+    });
+
+    it('filters overdue follow-ups to due_at before today in Asia/Dhaka', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-07-15T12:00:00Z'));
+        const getTodaySummary = jest.fn().mockResolvedValue({ dueToday: 0, overdue: 1, total: 2 });
+        const findAll = jest.fn().mockResolvedValue({
+            items: [
+                {
+                    due_at: new Date('2026-07-14T10:00:00Z'),
+                    status: 'PENDING',
+                    customer: null,
+                    lead: { name: 'Nadia' },
+                    assignee: { name: 'Asha' },
+                },
+                {
+                    due_at: new Date('2026-07-16T10:00:00Z'),
+                    status: 'PENDING',
+                    customer: { name: 'Karim' },
+                    lead: null,
+                    assignee: { name: 'Asha' },
+                },
+            ],
+            total: 2,
+        });
+        const deps = makeDeps({
+            crmLeads: { findAll: jest.fn(), getStatusSummary: jest.fn() },
+            crmCampaigns: { findAll: jest.fn() },
+            crmFollowUps: { findAll, getTodaySummary },
+        } as any);
+
+        try {
+            const result: any = await run('crm_pipeline', { kind: 'follow_ups', scope: 'overdue' }, deps);
+
+            expect(findAll).toHaveBeenCalledWith(
+                'tenant-1',
+                expect.objectContaining({ status: 'PENDING', timezone: 'Asia/Dhaka', limit: 100 }),
+            );
+            expect(result.rows).toHaveLength(1);
+            expect(result.rows[0].party).toBe('Nadia');
+        } finally {
+            jest.useRealTimers();
+        }
     });
 });

@@ -8,6 +8,9 @@ import { ChatToolDepsFactory } from './chat-tool-deps.factory';
 import { WebSearchService } from './web-search.service';
 import { AccountingModule } from '../accounting/accounting.module';
 import { CashierSessionsModule } from '../cashier-sessions/cashier-sessions.module';
+import { CrmCampaignsModule } from '../crm-campaigns/crm-campaigns.module';
+import { CrmFollowUpsModule } from '../crm-follow-ups/crm-follow-ups.module';
+import { CrmLeadsModule } from '../crm-leads/crm-leads.module';
 import { CustomersModule } from '../customers/customers.module';
 import { DailyReportModule } from '../daily-report/daily-report.module';
 import { ExpensesModule } from '../expenses/expenses.module';
@@ -44,6 +47,9 @@ import { SuppliersModule } from '../suppliers/suppliers.module';
         StorefrontModule,
         ManufacturingModule,
         ImportsModule,
+        CrmLeadsModule,
+        CrmCampaignsModule,
+        CrmFollowUpsModule,
     ],
     controllers: [AiController],
     // ChatDataService is provided here rather than imported: it is the chatbot's

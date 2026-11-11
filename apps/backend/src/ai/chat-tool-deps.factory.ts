@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { AccountingService } from '../accounting/accounting.service';
 import { CashierSessionsService } from '../cashier-sessions/cashier-sessions.service';
+import { CrmCampaignsService } from '../crm-campaigns/crm-campaigns.service';
+import { CrmFollowUpsService } from '../crm-follow-ups/crm-follow-ups.service';
+import { CrmLeadsService } from '../crm-leads/crm-leads.service';
 import { CustomersService } from '../customers/customers.service';
 import { DailyReportService } from '../daily-report/daily-report.service';
 import { ExpensesService } from '../expenses/expenses.service';
@@ -45,6 +48,9 @@ export class ChatToolDepsFactory {
         private readonly storefront: StorefrontService,
         private readonly manufacturing: ManufacturingService,
         private readonly imports: ImportsService,
+        private readonly crmLeads: CrmLeadsService,
+        private readonly crmCampaigns: CrmCampaignsService,
+        private readonly crmFollowUps: CrmFollowUpsService,
     ) {}
 
     build(): ChatToolDeps {
@@ -67,6 +73,9 @@ export class ChatToolDepsFactory {
             storefront: this.storefront,
             manufacturing: this.manufacturing,
             imports: this.imports,
+            crmLeads: this.crmLeads,
+            crmCampaigns: this.crmCampaigns,
+            crmFollowUps: this.crmFollowUps,
         };
     }
 }

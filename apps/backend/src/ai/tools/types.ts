@@ -1,6 +1,9 @@
 import { StorePermission } from '@erp71/shared-types';
 import type { AccountingService } from '../../accounting/accounting.service';
 import type { CashierSessionsService } from '../../cashier-sessions/cashier-sessions.service';
+import type { CrmCampaignsService } from '../../crm-campaigns/crm-campaigns.service';
+import type { CrmFollowUpsService } from '../../crm-follow-ups/crm-follow-ups.service';
+import type { CrmLeadsService } from '../../crm-leads/crm-leads.service';
 import type { CustomersService } from '../../customers/customers.service';
 import type { DailyReportService } from '../../daily-report/daily-report.service';
 import type { ExpensesService } from '../../expenses/expenses.service';
@@ -53,6 +56,9 @@ export interface ChatToolDeps {
     storefront: StorefrontService;
     manufacturing: ManufacturingService;
     imports: ImportsService;
+    crmLeads: CrmLeadsService;
+    crmCampaigns: CrmCampaignsService;
+    crmFollowUps: CrmFollowUpsService;
 }
 
 export interface ChatToolContext {
