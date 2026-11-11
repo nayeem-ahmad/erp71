@@ -14,6 +14,7 @@ import { BoardsService } from './boards.service';
 import { BoardColumnsService } from './board-columns.service';
 import { ProjectAccessService } from './project-access.service';
 import { ProjectsService } from './projects.service';
+import { ProjectsStaffingService } from './projects.staffing.service';
 import { ProjectStoriesService } from './project-stories.service';
 import { ProjectEpicsService } from './project-epics.service';
 import { ProjectBacklogService } from './project-backlog.service';
@@ -46,6 +47,7 @@ import { ProjectAttachmentsService } from './project-attachments.service';
     providers: [
         ProjectAccessService,
         ProjectsService,
+        ProjectsStaffingService,
         BoardsService,
         BoardColumnsService,
         ProjectStoriesService,

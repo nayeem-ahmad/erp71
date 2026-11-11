@@ -122,6 +122,12 @@ export class ListProjectsDto {
     filters?: ColumnFilters;
 }
 
+/** Query for `GET /projects/staffing`. Empty / omitted uses ACTIVE,ON_HOLD. */
+export class StaffingQueryDto {
+    @IsOptional() @IsString()
+    status?: string;
+}
+
 export class CreateProjectDto {
     @IsString() @MinLength(1) @MaxLength(200)
     name!: string;
