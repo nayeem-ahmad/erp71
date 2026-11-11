@@ -116,10 +116,10 @@ export default function MeetingsPage() {
     ];
 
     const stats: ListStat[] = [
-        { label: m.listUi.stats.meetings, value: rows.length },
-        { label: m.listUi.stats.drafts, value: rows.filter((row) => row.status === 'DRAFT').length },
-        { label: m.listUi.stats.finalized, value: rows.filter((row) => row.status === 'FINALIZED').length },
-        { label: m.listUi.stats.overdue, value: rows.reduce((sum, row) => sum + (row.overdue_action_count ?? 0), 0) },
+        { id: 'meetings', label: m.listUi.stats.meetings, value: String(rows.length) },
+        { id: 'drafts', label: m.listUi.stats.drafts, value: String(rows.filter((row) => row.status === 'DRAFT').length) },
+        { id: 'finalized', label: m.listUi.stats.finalized, value: String(rows.filter((row) => row.status === 'FINALIZED').length) },
+        { id: 'overdue', label: m.listUi.stats.overdue, value: String(rows.reduce((sum, row) => sum + (row.overdue_action_count ?? 0), 0)) },
     ];
 
     return (
