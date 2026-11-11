@@ -768,6 +768,33 @@ export const projectsMessages = {
 
     },
 
+    staffing: {
+        title: "التوظيف",
+        subtitle: "الأشخاص عبر المشاريع، مع الساعات المتبقية على المهام المفتوحة",
+        empty: "لا توجد مشاريع ظاهرة للعرض.",
+        loadFailed: "تعذّر تحميل التوظيف.",
+        person: "الشخص",
+        remaining: "المتبقي",
+        unassigned: "غير مسندة",
+        noLogin: "بلا حساب دخول",
+        assignedNotOnTeam: "مكلَّف، وليس في الفريق",
+        hideIdle: "إخفاء العاطلين",
+        statusActive: "نشط ومعلَّق",
+        statusAll: "الكل",
+        overloaded: "على ٣ مشاريع فأكثر",
+        legend: "الساعات المتبقية نسبةً إلى أكثر الخلايا انشغالًا",
+        listUi: {
+            statsLabel: "ملخص التوظيف",
+            stats: {
+                people: "الأشخاص",
+                projects: "المشاريع",
+                remaining: "الساعات المتبقية",
+                unassigned: "ساعات غير مسندة",
+                overloaded: "على ٣ مشاريع فأكثر",
+            },
+        },
+    },
+
     hourLogReport: {
         title: "تقرير سجل الساعات",
         subtitle: "الساعات المسجّلة في فترة زمنية، ملخّصة",

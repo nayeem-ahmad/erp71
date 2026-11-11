@@ -228,6 +228,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
 
   projects: { id: 'projects', kind: 'module', icon: 'FolderKanban', labelKey: 'sidebar.modules.projects', moduleKey: 'projects' },
   'projects.list': { id: 'projects.list', kind: 'link', icon: 'FolderKanban', labelKey: 'sidebar.items.projectsList', href: '/projects', exact: true },
+  'projects.staffing': { id: 'projects.staffing', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.projectsStaffing', href: '/projects/staffing' },
   'projects.boards': { id: 'projects.boards', kind: 'link', icon: 'KanbanSquare', labelKey: 'sidebar.items.projectsBoards', href: '/projects/boards' },
   'projects.tasks': { id: 'projects.tasks', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.projectsTasks', href: '/projects/tasks' },
   // The cross-project backlog. The per-project one lives on the project page
@@ -575,6 +576,8 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
  * The 2026-09-24 epics added `projects.epics` the same way:
  * `npx tsx prisma/sync-nav-layout.ts --nodes=projects.epics`.
  *
+ * `npx tsx prisma/sync-nav-layout.ts --nodes=projects.staffing`.
+ *
  * The 2026-09-26 line-item searches added one leaf to each of the two report
  * subgroups, again with no reset needed:
  * `npx tsx prisma/sync-nav-layout.ts --nodes=sales.reports.line-items,purchase.reports.line-items`.
@@ -735,14 +738,15 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
 
   layoutNode('projects', null, 9),
   layoutNode('projects.list', 'projects', 0),
-  layoutNode('projects.boards', 'projects', 1),
-  layoutNode('projects.tasks', 'projects', 2),
-  layoutNode('projects.epics', 'projects', 3),
-  layoutNode('projects.stories', 'projects', 4),
-  layoutNode('projects.sprints', 'projects', 5),
-  layoutNode('projects.hour-logs', 'projects', 6),
-  layoutNode('projects.hour-log-report', 'projects', 7),
-  layoutNode('projects.setup', 'projects', 8),
+  layoutNode('projects.staffing', 'projects', 1),
+  layoutNode('projects.boards', 'projects', 2),
+  layoutNode('projects.tasks', 'projects', 3),
+  layoutNode('projects.epics', 'projects', 4),
+  layoutNode('projects.stories', 'projects', 5),
+  layoutNode('projects.sprints', 'projects', 6),
+  layoutNode('projects.hour-logs', 'projects', 7),
+  layoutNode('projects.hour-log-report', 'projects', 8),
+  layoutNode('projects.setup', 'projects', 9),
 
   layoutNode('manufacturing', null, 10),
   layoutNode('manufacturing.boms', 'manufacturing', 0),
@@ -898,14 +902,15 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   // sidebar. Hidden unless the `platformProjects` switch is on.
   layoutNode('projects', null, 1),
   layoutNode('projects.list', 'projects', 0),
-  layoutNode('projects.boards', 'projects', 1),
-  layoutNode('projects.tasks', 'projects', 2),
-  layoutNode('projects.epics', 'projects', 3),
-  layoutNode('projects.stories', 'projects', 4),
-  layoutNode('projects.sprints', 'projects', 5),
-  layoutNode('projects.hour-logs', 'projects', 6),
-  layoutNode('projects.hour-log-report', 'projects', 7),
-  layoutNode('projects.setup', 'projects', 8),
+  layoutNode('projects.staffing', 'projects', 1),
+  layoutNode('projects.boards', 'projects', 2),
+  layoutNode('projects.tasks', 'projects', 3),
+  layoutNode('projects.epics', 'projects', 4),
+  layoutNode('projects.stories', 'projects', 5),
+  layoutNode('projects.sprints', 'projects', 6),
+  layoutNode('projects.hour-logs', 'projects', 7),
+  layoutNode('projects.hour-log-report', 'projects', 8),
+  layoutNode('projects.setup', 'projects', 9),
 
   layoutNode('whats-new', null, 2),
   layoutNode('help', null, 3),

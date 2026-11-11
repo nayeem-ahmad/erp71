@@ -768,6 +768,33 @@ export const projectsMessages = {
 
     },
 
+    staffing: {
+        title: "Besetzung",
+        subtitle: "Personen über Projekte, mit verbleibenden Stunden auf offenen Aufgaben",
+        empty: "Keine sichtbaren Projekte zum Anzeigen.",
+        loadFailed: "Die Besetzung konnte nicht geladen werden.",
+        person: "Person",
+        remaining: "Verbleibend",
+        unassigned: "Nicht zugewiesen",
+        noLogin: "Kein Zugang",
+        assignedNotOnTeam: "Zugewiesen, nicht im Team",
+        hideIdle: "Unbeschäftigte ausblenden",
+        statusActive: "Aktiv & pausiert",
+        statusAll: "Alle",
+        overloaded: "Auf 3+ Projekten",
+        legend: "Verbleibende Stunden relativ zur vollsten Zelle",
+        listUi: {
+            statsLabel: "Besetzungsübersicht",
+            stats: {
+                people: "Personen",
+                projects: "Projekte",
+                remaining: "Verbleibende Stunden",
+                unassigned: "Nicht zugewiesene Stunden",
+                overloaded: "Auf 3+ Projekten",
+            },
+        },
+    },
+
     hourLogReport: {
         title: "Stundenbericht",
         subtitle: "Gebuchte Stunden in einem Zeitraum, zusammengefasst",

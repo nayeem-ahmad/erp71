@@ -772,6 +772,33 @@ export const projectsMessages = {
         },
     },
 
+    staffing: {
+        title: 'Staffing',
+        subtitle: 'People across projects, with remaining hours on open tasks',
+        empty: 'No visible projects to show.',
+        loadFailed: 'Could not load staffing.',
+        person: 'Person',
+        remaining: 'Remaining',
+        unassigned: 'Unassigned',
+        noLogin: 'No login',
+        assignedNotOnTeam: 'Assigned, not on the team',
+        hideIdle: 'Hide idle',
+        statusActive: 'Active & on hold',
+        statusAll: 'All',
+        overloaded: 'On 3+ projects',
+        legend: 'Remaining hours against the busiest cell',
+        listUi: {
+            statsLabel: 'Staffing summary',
+            stats: {
+                people: 'People',
+                projects: 'Projects',
+                remaining: 'Remaining hours',
+                unassigned: 'Unassigned hours',
+                overloaded: 'On 3+ projects',
+            },
+        },
+    },
+
     hourLogReport: {
         title: 'Hour Log Report',
         subtitle: 'Hours logged in a date range, summarised',

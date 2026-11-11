@@ -768,6 +768,33 @@ export const projectsMessages = {
 
     },
 
+    staffing: {
+        title: 'স্টাফিং',
+        subtitle: 'প্রকল্প জুড়ে মানুষ, খোলা কাজের বাকি ঘণ্টাসহ',
+        empty: 'দেখানোর মতো কোনো প্রকল্প নেই।',
+        loadFailed: 'স্টাফিং লোড করা যায়নি।',
+        person: 'ব্যক্তি',
+        remaining: 'বাকি',
+        unassigned: 'কেউ নিযুক্ত নয়',
+        noLogin: 'লগইন নেই',
+        assignedNotOnTeam: 'কাজ আছে, দলে নেই',
+        hideIdle: 'নিষ্ক্রিয় লুকান',
+        statusActive: 'সক্রিয় ও স্থগিত',
+        statusAll: 'সব',
+        overloaded: '৩+ প্রকল্পে',
+        legend: 'বাকি ঘণ্টা, সবচেয়ে ব্যস্ত ঘরের তুলনায়',
+        listUi: {
+            statsLabel: 'স্টাফিং সারসংক্ষেপ',
+            stats: {
+                people: 'ব্যক্তি',
+                projects: 'প্রকল্প',
+                remaining: 'বাকি ঘণ্টা',
+                unassigned: 'অনির্ধারিত ঘণ্টা',
+                overloaded: '৩+ প্রকল্পে',
+            },
+        },
+    },
+
     hourLogReport: {
         title: 'ঘণ্টা লগ রিপোর্ট',
         subtitle: 'একটি সময়সীমার লগ করা ঘণ্টার সারসংক্ষেপ',

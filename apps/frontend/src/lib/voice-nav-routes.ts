@@ -37,6 +37,7 @@ export type VoiceNavTargetId =
     | 'sprints'
     | 'project-boards'
     | 'hour-logs'
+    | 'staffing'
     | 'meetings'
     | 'meeting-actions'
     | 'hr'
@@ -325,6 +326,16 @@ export const VOICE_NAV_ROUTES: VoiceNavRoute[] = [
             'log hours',
             'ঘণ্টা লগ',
             'log jam',
+        ],
+    },
+    {
+        id: 'staffing',
+        path: '/projects/staffing',
+        aliases: [
+            'staffing',
+            'who is on which project',
+            'project team',
+            'স্টাফিং',
         ],
     },
     {

@@ -6913,6 +6913,14 @@ export const api = {
         // `.items`, which every caller here reads.
         return fetchPaginated(`/projects?${query}`);
     },
+    /** People × projects remaining-hours matrix. Empty `status` lets the API default. */
+    getProjectStaffing: (params?: { status?: string }) => {
+        const query = new URLSearchParams();
+        for (const [key, value] of Object.entries(params ?? {})) {
+            if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+        }
+        return fetchWithAuth(`/projects/staffing?${query}`);
+    },
     getProject: (id: string) => fetchWithAuth(`/projects/${id}`),
     /** A free code proposed from a project name — the create form prefills it. */
     suggestProjectCode: (name: string): Promise<{ code: string }> =>

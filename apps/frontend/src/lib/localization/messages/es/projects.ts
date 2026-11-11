@@ -768,6 +768,33 @@ export const projectsMessages = {
 
     },
 
+    staffing: {
+        title: "Dotación",
+        subtitle: "Personas entre proyectos, con horas restantes en tareas abiertas",
+        empty: "No hay proyectos visibles que mostrar.",
+        loadFailed: "No se pudo cargar la dotación.",
+        person: "Persona",
+        remaining: "Restante",
+        unassigned: "Sin asignar",
+        noLogin: "Sin acceso",
+        assignedNotOnTeam: "Asignado, no está en el equipo",
+        hideIdle: "Ocultar inactivos",
+        statusActive: "Activos y en pausa",
+        statusAll: "Todos",
+        overloaded: "En 3+ proyectos",
+        legend: "Horas restantes respecto a la celda más cargada",
+        listUi: {
+            statsLabel: "Resumen de dotación",
+            stats: {
+                people: "Personas",
+                projects: "Proyectos",
+                remaining: "Horas restantes",
+                unassigned: "Horas sin asignar",
+                overloaded: "En 3+ proyectos",
+            },
+        },
+    },
+
     hourLogReport: {
         title: "Informe de registros de horas",
         subtitle: "Horas imputadas en un rango de fechas, resumidas",
