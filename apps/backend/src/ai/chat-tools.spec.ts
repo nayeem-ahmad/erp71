@@ -71,6 +71,7 @@ function makeDeps(overrides: Partial<Record<keyof ChatToolDeps, any>> = {}): Cha
         salesLineItems: { getSalesLineItems: jest.fn() },
         purchaseLineItems: { getPurchaseLineItems: jest.fn() },
         mushak: { getSalesBook: jest.fn() },
+        storefront: { getOrders: jest.fn() },
         web: {
             search: jest.fn(),
             fetchPage: jest.fn(),
@@ -1344,5 +1345,37 @@ describe('bad_debts', () => {
             reason: 'UNCOLLECTABLE',
             createdBy: 'Asha',
         }));
+    });
+});
+
+describe('storefront_orders', () => {
+    it('is tagged storefront so accounting-only tenants never see it', () => {
+        expect(CHAT_TOOLS_BY_NAME.storefront_orders.modules).toContain('storefront');
+        expect(CHAT_TOOLS_BY_NAME.storefront_orders.permission).toBe(StorePermission.CREATE_SALE);
+    });
+
+    it('projects order headers and drops nested line items', async () => {
+        const getOrders = jest.fn().mockResolvedValue({
+            items: [{
+                id: 'ord-1',
+                created_at: new Date('2026-07-01T04:00:00Z'),
+                status: 'PENDING',
+                customer_name: 'Nadia',
+                customer_phone: '0171',
+                items: [{}, {}],
+                total: 1200.126,
+            }],
+            total: 1,
+        });
+        const deps = makeDeps({ storefront: { getOrders } } as any);
+
+        const result: any = await run('storefront_orders', { storeId: 'store-1' }, deps);
+
+        expect(getOrders).toHaveBeenCalledWith('tenant-1', 1, expect.any(Number), 'store-1');
+        expect(getOrders.mock.calls[0][2]).toBeLessThanOrEqual(20);
+        expect(result.rows[0].itemCount).toBe(2);
+        expect(result.rows[0].total).toBe(1200.13);
+        expect(result.rows[0].customer).toBe('Nadia');
+        expect(result.rows[0].items).toBeUndefined();
     });
 });

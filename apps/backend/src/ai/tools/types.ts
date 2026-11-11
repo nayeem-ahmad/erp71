@@ -10,6 +10,7 @@ import type { PurchaseLineItemsService } from '../../purchase-reports/purchase-l
 import type { PurchaseReportsService } from '../../purchase-reports/purchase-reports.service';
 import type { SalesLineItemsService } from '../../sales-reports/sales-line-items.service';
 import type { SalesReportsService } from '../../sales-reports/sales-reports.service';
+import type { StorefrontService } from '../../storefront/storefront.service';
 import type { SuppliersService } from '../../suppliers/suppliers.service';
 import type { AnomalyDetectionService } from '../anomaly-detection.service';
 import type { ChatDataService } from '../chat-data.service';
@@ -47,6 +48,7 @@ export interface ChatToolDeps {
     salesLineItems: SalesLineItemsService;
     purchaseLineItems: PurchaseLineItemsService;
     mushak: MushakService;
+    storefront: StorefrontService;
 }
 
 export interface ChatToolContext {

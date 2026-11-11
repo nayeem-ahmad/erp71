@@ -3,6 +3,8 @@ import { zonedDateString } from '../../common/tenant-time.util';
 import {
     asDate,
     DATE_RANGE_PROPS,
+    isoDate,
+    MAX_TOOL_ROWS,
     money,
     page,
     PAGING_PROPS,
@@ -151,6 +153,41 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
                 },
                 open: { ...open, rows: open.rows.map(projectRow) },
                 closed_today: { ...closedToday, rows: closedToday.rows.map(projectRow) },
+            };
+        },
+    },
+
+    {
+        name: 'storefront_orders',
+        permission: StorePermission.CREATE_SALE,
+        modules: ['storefront'],
+        description:
+            'Online storefront orders: who ordered, status, item count and total. Use for "what online orders came in", ' +
+            '"pending web orders", storefront order questions. This is the public shop, not POS sales.',
+        parameters: {
+            type: 'object',
+            properties: { ...STORE_PROP, ...PAGING_PROPS },
+        },
+        handler: async (ctx, args, deps) => {
+            const { storeId, note } = resolveStoreId(ctx, args.storeId);
+            const limit = Math.min(Math.max(Number(args.limit) || MAX_TOOL_ROWS, 1), MAX_TOOL_ROWS);
+            const offset = Math.max(Number(args.offset) || 0, 0);
+            const pageNum = Math.floor(offset / limit) + 1;
+            const result = await deps.storefront.getOrders(ctx.tenantId, pageNum, limit, storeId);
+            const items = result.items ?? [];
+            return {
+                ...(note ? { note } : {}),
+                totalRows: result.total ?? items.length,
+                page: result.page ?? pageNum,
+                rows: items.map((order: any) => ({
+                    id: order.id,
+                    created_at: isoDate(order.created_at),
+                    status: order.status,
+                    customer: order.customerName ?? order.customer_name ?? null,
+                    phone: order.customerPhone ?? order.customer_phone ?? null,
+                    itemCount: Array.isArray(order.items) ? order.items.length : order.itemCount ?? 0,
+                    total: money(order.total ?? order.totalAmount),
+                })),
             };
         },
     },

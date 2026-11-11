@@ -237,6 +237,7 @@ describe('ChatService.resolveTools', () => {
         expect(names).not.toContain('low_stock');
         expect(names).not.toContain('stock_on_hand');
         expect(names).not.toContain('sales_summary');
+        expect(names).not.toContain('storefront_orders');
         expect(names).toContain('financial_statement');
         expect(names).toContain('payables_aging');
         // The tools that carry no module tag stay available to everyone.

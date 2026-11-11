@@ -10,6 +10,7 @@ import { PurchaseLineItemsService } from '../purchase-reports/purchase-line-item
 import { PurchaseReportsService } from '../purchase-reports/purchase-reports.service';
 import { SalesLineItemsService } from '../sales-reports/sales-line-items.service';
 import { SalesReportsService } from '../sales-reports/sales-reports.service';
+import { StorefrontService } from '../storefront/storefront.service';
 import { SuppliersService } from '../suppliers/suppliers.service';
 import { AnomalyDetectionService } from './anomaly-detection.service';
 import { ChatDataService } from './chat-data.service';
@@ -39,6 +40,7 @@ export class ChatToolDepsFactory {
         private readonly salesLineItems: SalesLineItemsService,
         private readonly purchaseLineItems: PurchaseLineItemsService,
         private readonly mushak: MushakService,
+        private readonly storefront: StorefrontService,
     ) {}
 
     build(): ChatToolDeps {
@@ -58,6 +60,7 @@ export class ChatToolDepsFactory {
             salesLineItems: this.salesLineItems,
             purchaseLineItems: this.purchaseLineItems,
             mushak: this.mushak,
+            storefront: this.storefront,
         };
     }
 }

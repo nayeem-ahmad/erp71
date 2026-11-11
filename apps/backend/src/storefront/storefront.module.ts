@@ -12,5 +12,6 @@ import { StorefrontController } from './storefront.controller';
     imports: [DatabaseModule, AuthModule, PriceListsModule, StorefrontPagesModule, StoresModule, PasswordResetModule],
     controllers: [StorefrontController],
     providers: [StorefrontService],
+    exports: [StorefrontService],
 })
 export class StorefrontModule {}
