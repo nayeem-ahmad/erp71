@@ -438,6 +438,9 @@ function AppShell({ children }: DashboardLayoutProps) {
     const canAccessProjects = inPlatformAdminMode
         ? canAccessPlatformProjects
         : Boolean(platformFeatures.projects) && (owner || hasPermission(perms, 'VIEW_PROJECTS'));
+    // Meetings is on every plan. The owner always sees it; a member needs
+    // VIEW_MEETINGS. Same shape as projects, minus the platform switch.
+    const canAccessMeetings = owner || hasPermission(perms, 'VIEW_MEETINGS');
     // The rail-of-apps shell: a shop's own workspace only — the admin console,
     // the referral partner portal and the employee portal keep their sidebars.
     const appShellOn = Boolean(platformFeatures.appShell)
@@ -715,6 +718,7 @@ function AppShell({ children }: DashboardLayoutProps) {
         canAccessPremiumCrm: hasPremiumCrm,
         canAccessManufacturing,
         canAccessProjects,
+        canAccessMeetings,
         canAccessPlatformAccounting,
         canAccessAdmin: isPlatformAdmin,
         platformRole: inPlatformAdminMode ? platformRole : null,

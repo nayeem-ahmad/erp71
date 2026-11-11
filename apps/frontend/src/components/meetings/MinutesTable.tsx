@@ -60,7 +60,7 @@ export default function MinutesTable({
                                     <li key={action.id ?? `${discussion.position}-${action.position}`} className="rounded-md bg-gray-50 p-2 text-sm">
                                         <p>
                                             {action.priority === 'HIGH' ? (
-                                                <span className="mr-1 text-red-600" aria-hidden>●</span>
+                                                <span className="me-1 text-red-600" aria-hidden>●</span>
                                             ) : null}
                                             {discussion.position}.{action.position} {action.description}
                                         </p>
@@ -75,7 +75,7 @@ export default function MinutesTable({
                 ))}
             </div>
             <div className="hidden overflow-x-auto md:block print:block">
-                <table className="min-w-full border-collapse border border-gray-200 text-left">
+                <table className="min-w-full border-collapse border border-gray-200 text-start">
                     <thead>
                         <tr className="bg-gray-50">
                             <th className={`${cell} border border-gray-200 font-medium text-gray-700 w-10`}>{labels.number}</th>
@@ -117,7 +117,7 @@ export default function MinutesTable({
                                         <>
                                             <td className={`${cell} border border-gray-200 align-top`}>
                                                 {action.priority === 'HIGH' ? (
-                                                    <span className="mr-1 text-red-600" aria-hidden>●</span>
+                                                    <span className="me-1 text-red-600" aria-hidden>●</span>
                                                 ) : null}
                                                 {discussion.position}.{action.position} {action.description}
                                             </td>

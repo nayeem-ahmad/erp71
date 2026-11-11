@@ -71,6 +71,7 @@ export default function Sidebar({
     canAccessPremiumCrm = false,
     canAccessManufacturing = false,
     canAccessProjects = false,
+    canAccessMeetings = false,
     canAccessPlatformAccounting = false,
     canAccessAdmin = false,
     platformRole = null,
@@ -100,6 +101,7 @@ export default function Sidebar({
     canAccessPremiumCrm?: boolean;
     canAccessManufacturing?: boolean;
     canAccessProjects?: boolean;
+    canAccessMeetings?: boolean;
     /** The platform's own books in the admin console — its own platform switch. */
     canAccessPlatformAccounting?: boolean;
     canAccessAdmin?: boolean;
@@ -242,6 +244,7 @@ export default function Sidebar({
             canAccessPremiumCrm,
             canAccessManufacturing,
             canAccessProjects,
+            canAccessMeetings,
             canAccessPlatformAccounting,
             canAccessAdmin,
             platformRole,
@@ -274,6 +277,7 @@ export default function Sidebar({
         canAccessPremiumCrm,
         canAccessManufacturing,
         canAccessProjects,
+        canAccessMeetings,
         canAccessPlatformAccounting,
         canAccessAdmin,
         platformRole,
