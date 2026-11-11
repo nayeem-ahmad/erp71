@@ -146,7 +146,7 @@ export default function MeetingsPage() {
                 emptyMessage={m.empty}
                 searchPlaceholder={m.searchPlaceholder}
                 filters={filters}
-                stats={stats}
+                stats={{ items: stats, loading, label: m.listUi.statsLabel }}
             />
         </PageShell>
     );
