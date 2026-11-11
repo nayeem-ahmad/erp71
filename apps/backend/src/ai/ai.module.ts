@@ -44,9 +44,12 @@ import { SuppliersModule } from '../suppliers/suppliers.module';
         DailyReportModule,
         CashierSessionsModule,
         MushakModule,
-        StorefrontModule,
-        ManufacturingModule,
-        ImportsModule,
+        // These three import AuthModule, and AuthModule → PlatformSettings → AiModule.
+        // Loading them while AuthModule is still evaluating leaves their Auth import
+        // undefined unless both sides of the cycle are deferred.
+        forwardRef(() => StorefrontModule),
+        forwardRef(() => ManufacturingModule),
+        forwardRef(() => ImportsModule),
         CrmLeadsModule,
         CrmCampaignsModule,
         CrmFollowUpsModule,

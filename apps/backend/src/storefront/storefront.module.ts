@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
 import { AuthModule } from '../auth/auth.module';
 import { PriceListsModule } from '../price-lists/price-lists.module';
@@ -9,7 +9,7 @@ import { StorefrontService } from './storefront.service';
 import { StorefrontController } from './storefront.controller';
 
 @Module({
-    imports: [DatabaseModule, AuthModule, PriceListsModule, StorefrontPagesModule, StoresModule, PasswordResetModule],
+    imports: [DatabaseModule, forwardRef(() => AuthModule), PriceListsModule, StorefrontPagesModule, StoresModule, PasswordResetModule],
     controllers: [StorefrontController],
     providers: [StorefrontService],
     exports: [StorefrontService],
