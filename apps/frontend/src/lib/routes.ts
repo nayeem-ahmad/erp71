@@ -243,6 +243,7 @@ export const routes = {
         sprintDetail: (id: string) => `/projects/sprints/${id}` as const,
         hourLogs: '/projects/hour-logs',
         hourLogReport: '/projects/hour-logs/report',
+        staffing: '/projects/staffing',
         settings: '/projects/settings',
     },
 

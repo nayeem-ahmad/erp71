@@ -768,6 +768,33 @@ export const projectsMessages = {
 
     },
 
+    staffing: {
+        title: "Affectation",
+        subtitle: "Les personnes sur les projets, avec les heures restantes des tâches ouvertes",
+        empty: "Aucun projet visible à afficher.",
+        loadFailed: "Impossible de charger l'affectation.",
+        person: "Personne",
+        remaining: "Restant",
+        unassigned: "Non assignée",
+        noLogin: "Sans accès",
+        assignedNotOnTeam: "Assigné, pas dans l'équipe",
+        hideIdle: "Masquer les inactifs",
+        statusActive: "Actifs et en pause",
+        statusAll: "Tous",
+        overloaded: "Sur 3+ projets",
+        legend: "Heures restantes par rapport à la cellule la plus chargée",
+        listUi: {
+            statsLabel: "Résumé de l'affectation",
+            stats: {
+                people: "Personnes",
+                projects: "Projets",
+                remaining: "Heures restantes",
+                unassigned: "Heures non assignées",
+                overloaded: "Sur 3+ projets",
+            },
+        },
+    },
+
     hourLogReport: {
         title: "Rapport des relevés d'heures",
         subtitle: "Heures saisies sur une période, synthétisées",
