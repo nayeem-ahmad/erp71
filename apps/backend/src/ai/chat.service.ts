@@ -147,9 +147,11 @@ export class ChatService {
         if (!hasPlanEntitlement(features, 'accountingOnly')) {
             modules.add('retail');
             modules.add('inventory');
-            modules.add('crm');
             modules.add('hr');
+            modules.add('storefront');
+            modules.add('imports');
         }
+        if (hasPlanEntitlement(features, 'premiumCrm')) modules.add('crm');
         if (hasPlanEntitlement(features, 'premiumManufacturing')) modules.add('manufacturing');
 
         return modules;

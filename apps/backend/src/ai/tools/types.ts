@@ -93,7 +93,7 @@ export interface ChatTool {
 }
 
 /** Coarse product areas, used to hide tools a tenant's subscription cannot use. */
-export type ChatToolModule = 'retail' | 'inventory' | 'accounting' | 'crm' | 'hr' | 'manufacturing';
+export type ChatToolModule = 'retail' | 'inventory' | 'accounting' | 'crm' | 'hr' | 'manufacturing' | 'storefront' | 'imports';
 
 /** Platform-operator switches a tool can depend on. */
 export type ChatToolFeatureFlag = 'webSearch';

@@ -252,6 +252,29 @@ describe('ChatService.resolveTools', () => {
 
         expect(names).toContain('sales_summary');
     });
+
+    it('withholds crm-only tools when premiumCrm is off', async () => {
+        const { service } = makeService({ planFeatures: {} });
+        const { modules, tools } = await service.resolveTools(OWNER_CTX);
+        expect(modules.has('crm')).toBe(false);
+        expect(modules.has('storefront')).toBe(true);
+        expect(modules.has('imports')).toBe(true);
+        // customer_lookup is tagged retail+crm, so BASIC still sees it.
+        expect(tools.map((t) => t.name)).toContain('customer_lookup');
+    });
+
+    it('adds crm when premiumCrm is on', async () => {
+        const { service } = makeService({ planFeatures: { premiumCrm: true } });
+        expect((await service.resolveTools(OWNER_CTX)).modules.has('crm')).toBe(true);
+    });
+
+    it('withholds storefront and imports from an accounting-only tenant', async () => {
+        const { service } = makeService({ planFeatures: { accountingOnly: true } });
+        const { modules } = await service.resolveTools(OWNER_CTX);
+        expect(modules.has('storefront')).toBe(false);
+        expect(modules.has('imports')).toBe(false);
+        expect(modules.has('retail')).toBe(false);
+    });
 });
 
 describe('ChatService.chat', () => {
