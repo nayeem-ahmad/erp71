@@ -121,27 +121,33 @@ function makeService(overrides: {
         }),
     };
 
+    const toolDeps = {
+        build: () => ({
+            salesReports,
+            inventoryReports: {} as any,
+            purchaseReports: {} as any,
+            customers: {} as any,
+            suppliers: {} as any,
+            expenses: {} as any,
+            accounting: {} as any,
+            data: chatData,
+            web: webSearch,
+            anomalies,
+        }),
+    };
+    const timezones = {
+        for: jest.fn(async () => 'Asia/Dhaka'),
+        forMany: jest.fn(async () => new Map()),
+        prime: jest.fn(),
+        invalidate: jest.fn(),
+    } as any;
     const service = new ChatService(
         db,
         ai,
         platformSettings,
         planEntitlements,
-        salesReports,
-        {} as any, // inventoryReports
-        {} as any, // purchaseReports
-        {} as any, // customers
-        {} as any, // suppliers
-        {} as any, // expenses
-        {} as any, // accounting
-        chatData,
-        webSearch,
-        anomalies,
-        {
-            for: jest.fn(async () => 'Asia/Dhaka'),
-            forMany: jest.fn(async () => new Map()),
-            prime: jest.fn(),
-            invalidate: jest.fn(),
-        } as any, // timezones
+        toolDeps as any,
+        timezones,
         new AuthCacheService({ ttlMs: 0 }),
     );
 

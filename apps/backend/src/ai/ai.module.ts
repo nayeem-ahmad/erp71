@@ -4,6 +4,7 @@ import { AiService } from './ai.service';
 import { AnomalyDetectionService } from './anomaly-detection.service';
 import { ChatDataService } from './chat-data.service';
 import { ChatService } from './chat.service';
+import { ChatToolDepsFactory } from './chat-tool-deps.factory';
 import { WebSearchService } from './web-search.service';
 import { AccountingModule } from '../accounting/accounting.module';
 import { CustomersModule } from '../customers/customers.module';
@@ -39,7 +40,7 @@ import { SuppliersModule } from '../suppliers/suppliers.module';
     // AnomalyDetectionService is exported as well: it takes a tenant id and a
     // window and returns a ranked list, which is exactly what the planned weekly
     // scan needs, and that job has no business going through the chat loop.
-    providers: [AiService, ChatService, ChatDataService, WebSearchService, AnomalyDetectionService],
+    providers: [AiService, ChatService, ChatToolDepsFactory, ChatDataService, WebSearchService, AnomalyDetectionService],
     exports: [AiService, ChatService, AnomalyDetectionService, WebSearchService],
 })
 export class AiModule {}

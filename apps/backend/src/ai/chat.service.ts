@@ -5,18 +5,9 @@ import { hasStorePermission } from '../auth/permission.util';
 import { TenantContext } from '../database/tenant.decorator';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
-import { AccountingService } from '../accounting/accounting.service';
-import { CustomersService } from '../customers/customers.service';
-import { ExpensesService } from '../expenses/expenses.service';
-import { InventoryReportsService } from '../inventory-reports/inventory-reports.service';
-import { PurchaseReportsService } from '../purchase-reports/purchase-reports.service';
-import { SalesReportsService } from '../sales-reports/sales-reports.service';
-import { SuppliersService } from '../suppliers/suppliers.service';
 import { AiService, type ChatCompletionMessage } from './ai.service';
-import { AnomalyDetectionService } from './anomaly-detection.service';
 import { buildNavigationSection } from './app-navigation';
-import { ChatDataService } from './chat-data.service';
-import { WebSearchService } from './web-search.service';
+import { ChatToolDepsFactory } from './chat-tool-deps.factory';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
 import { AuthCacheService } from '../database/auth-cache.service';
 import { loadMemberStoreAccess } from '../database/member-access.loader';
@@ -70,16 +61,7 @@ export class ChatService {
         private readonly ai: AiService,
         private readonly platformSettings: PlatformSettingsService,
         private readonly planEntitlements: PlanEntitlementsService,
-        private readonly salesReports: SalesReportsService,
-        private readonly inventoryReports: InventoryReportsService,
-        private readonly purchaseReports: PurchaseReportsService,
-        private readonly customers: CustomersService,
-        private readonly suppliers: SuppliersService,
-        private readonly expenses: ExpensesService,
-        private readonly accounting: AccountingService,
-        private readonly chatData: ChatDataService,
-        private readonly webSearch: WebSearchService,
-        private readonly anomalyDetection: AnomalyDetectionService,
+        private readonly toolDeps: ChatToolDepsFactory,
         private readonly timezones: TenantTimezoneService,
         private readonly authCache: AuthCacheService,
     ) {}
@@ -104,18 +86,7 @@ export class ChatService {
     }
 
     private get deps(): ChatToolDeps {
-        return {
-            salesReports: this.salesReports,
-            inventoryReports: this.inventoryReports,
-            purchaseReports: this.purchaseReports,
-            customers: this.customers,
-            suppliers: this.suppliers,
-            expenses: this.expenses,
-            accounting: this.accounting,
-            data: this.chatData,
-            web: this.webSearch,
-            anomalies: this.anomalyDetection,
-        };
+        return this.toolDeps.build();
     }
 
     /**
@@ -162,7 +133,7 @@ export class ChatService {
     /** Platform-level capabilities that cost money per call, hence opt-in. */
     private async resolveFeatureFlags(): Promise<Set<ChatToolFeatureFlag>> {
         const flags = new Set<ChatToolFeatureFlag>();
-        if (await this.webSearch.isEnabled().catch(() => false)) flags.add('webSearch');
+        if (await this.deps.web.isEnabled().catch(() => false)) flags.add('webSearch');
         return flags;
     }
 
@@ -265,7 +236,7 @@ export class ChatService {
         // Seeded with any link the user typed: asking the assistant to read a URL
         // you pasted is a legitimate request, and it is the one case where a
         // fetchable URL does not have to come from a search result first.
-        const fetchableUrls = new Set(this.webSearch.extractUrls(message));
+        const fetchableUrls = new Set(this.deps.web.extractUrls(message));
         const toolCredits = { total: 0 };
 
         const toolContext: ChatToolContext = {
