@@ -1,7 +1,160 @@
 import { StorePermission } from '@erp71/shared-types';
-import { DATE_RANGE_PROPS, money, page, PAGING_PROPS, pct, resolveStoreId, STORE_PROP, type ChatTool } from './types';
+import { zonedDateString } from '../../common/tenant-time.util';
+import {
+    asDate,
+    DATE_RANGE_PROPS,
+    money,
+    page,
+    PAGING_PROPS,
+    pct,
+    resolveRequiredStoreId,
+    resolveStoreId,
+    STORE_PROP,
+    type ChatTool,
+} from './types';
+
+function nullableMoney(value: unknown): number | null {
+    if (value === null || value === undefined) return null;
+    return money(value);
+}
+
+function isoTimestamp(value: unknown): string | null {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(String(value));
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
 
 export const OPERATIONS_TOOLS: ChatTool[] = [
+    {
+        name: 'daily_report',
+        permission: StorePermission.VIEW_FINANCIAL_REPORTS,
+        modules: ['retail'],
+        description:
+            'Closed calendar-day snapshot for one branch: net sales, cash movement, tenders, till, money out, dues, ' +
+            'top products, stock exception counts and the attention checklist. Always per branch — a missing branch ' +
+            'id is an error, never an all-branches report. Omit date for today in the shop timezone. ' +
+            'Use for "today\'s report", "how did Gulshan do yesterday", daily close questions.',
+        parameters: {
+            type: 'object',
+            properties: {
+                date: {
+                    type: 'string',
+                    description: 'Calendar day as YYYY-MM-DD. Omit for today in the shop timezone.',
+                },
+                storeId: {
+                    type: 'string',
+                    description:
+                        'Branch id from the branch list in the system prompt. Required when several branches exist ' +
+                        'and none is currently selected. Daily report is always for one branch — never invent an id.',
+                },
+            },
+        },
+        handler: async (ctx, args, deps) => {
+            const resolved = resolveRequiredStoreId(ctx, args.storeId);
+            if ('error' in resolved) return resolved;
+
+            const date = asDate(args.date) ?? zonedDateString(new Date(), ctx.timezone);
+            const storeName = ctx.stores.find((s) => s.id === resolved.storeId)?.name ?? '';
+            const tenantName = await deps.data.tenantName(ctx.tenantId);
+            const report = await deps.dailyReport.getReport({
+                tenantId: ctx.tenantId,
+                storeId: resolved.storeId,
+                tenantName,
+                storeName,
+                date,
+                timezone: ctx.timezone,
+                locale: 'en',
+            });
+
+            return {
+                ...(resolved.note ? { note: resolved.note } : {}),
+                date: report.date,
+                storeName: report.storeName,
+                headlines: report.headlines,
+                sales: report.sales,
+                tenders: report.tenders,
+                till: report.till
+                    ? {
+                          sessions: report.till.sessions.map((session) => ({
+                              cashier: session.cashierName,
+                              counter: session.counterName,
+                              status: session.status,
+                              opening: session.openingCash,
+                              expected: session.expectedCash,
+                              closing: session.closingCash,
+                              variance: session.variance,
+                          })),
+                          rollup: report.till.rollup,
+                          openSessionCount: report.till.openSessionCount,
+                          unassignedSalesCount: report.till.unassignedSalesCount,
+                      }
+                    : null,
+                moneyOut: report.moneyOut,
+                dues: report.dues,
+                topProducts: report.topProducts,
+                stock: report.stock
+                    ? {
+                          reorderCount: report.stock.reorderCount,
+                          zeroCount: report.stock.zeroCount,
+                          shrinkageCount: report.stock.shrinkageCount,
+                          shrinkageAmount: report.stock.shrinkageAmount,
+                      }
+                    : null,
+                checklist: (report.checklist ?? []).map((item) => ({
+                    code: item.code,
+                    count: item.count,
+                    href: item.href,
+                })),
+            };
+        },
+    },
+
+    {
+        name: 'cashier_sessions',
+        permission: StorePermission.CREATE_SALE,
+        modules: ['retail'],
+        description:
+            'Today only: every till still open and every till closed today, with sales, expected cash and variance. ' +
+            'There is no date parameter — yesterday\'s closed shifts are not in this result. ' +
+            'Use for "are any tills still open", "who is short today", till variance questions.',
+        parameters: {
+            type: 'object',
+            properties: { ...STORE_PROP },
+        },
+        handler: async (ctx, args, deps) => {
+            const { storeId, note } = resolveStoreId(ctx, args.storeId);
+            const overview = await deps.cashierSessions.getOverview(ctx.tenantId, storeId, ctx.timezone);
+            const projectRow = (row: any) => ({
+                cashier: row.cashier?.name ?? null,
+                counter: row.counter?.name ?? null,
+                branch: row.store?.name ?? null,
+                sales_count: row.sales_count,
+                sales_total: money(row.sales_total),
+                expected_cash: nullableMoney(row.expected_cash),
+                closing_cash: nullableMoney(row.closing_cash),
+                variance: nullableMoney(row.variance),
+                opened_at: isoTimestamp(row.opened_at),
+                closed_at: isoTimestamp(row.closed_at),
+            });
+            const open = page(overview.open ?? []);
+            const closedToday = page(overview.closed_today ?? []);
+            return {
+                ...(note ? { note } : {}),
+                store_id: overview.store_id,
+                totals: {
+                    open_count: overview.totals.open_count,
+                    closed_count: overview.totals.closed_count,
+                    sales_total: money(overview.totals.sales_total),
+                    expected_cash: money(overview.totals.expected_cash),
+                    short: money(overview.totals.short),
+                    over: money(overview.totals.over),
+                },
+                open: { ...open, rows: open.rows.map(projectRow) },
+                closed_today: { ...closedToday, rows: closedToday.rows.map(projectRow) },
+            };
+        },
+    },
+
     {
         name: 'open_pipeline',
         permission: StorePermission.VIEW_PRODUCT_CATALOG,

@@ -66,6 +66,8 @@ function makeDeps(overrides: Partial<Record<keyof ChatToolDeps, any>> = {}): Cha
             getDataCoverage: jest.fn(),
         },
         anomalies: { scan: jest.fn() },
+        dailyReport: { getReport: jest.fn() },
+        cashierSessions: { getOverview: jest.fn() },
         web: {
             search: jest.fn(),
             fetchPage: jest.fn(),
@@ -1007,5 +1009,154 @@ describe('transaction_anomalies', () => {
 
         expect((deps.anomalies.scan as jest.Mock).mock.calls[0][1].storeId).toBeUndefined();
         expect(result.note).toContain('whole business');
+    });
+});
+
+describe('resolveRequiredStoreId', () => {
+    const { resolveRequiredStoreId } = require('./tools/types') as typeof import('./tools/types');
+
+    it('uses a requested branch that is on the allow-list', () => {
+        expect(resolveRequiredStoreId(ctx, 'store-1')).toEqual({ storeId: 'store-1' });
+    });
+
+    it('refuses an owner with several branches and no current branch', () => {
+        const owner: ChatToolContext = { ...ctx, storeId: undefined };
+        const result = resolveRequiredStoreId(owner);
+        expect(result).toEqual(expect.objectContaining({ error: expect.stringMatching(/per branch/) }));
+    });
+
+    it('falls back to the current branch when the request is omitted', () => {
+        const staff: ChatToolContext = { ...ctx, userRole: 'CASHIER' };
+        expect(resolveRequiredStoreId(staff)).toEqual({ storeId: 'store-1' });
+    });
+
+    it('falls back to the current branch when the requested id is unknown', () => {
+        const result = resolveRequiredStoreId(ctx, 'store-unknown');
+        expect(result).toEqual(expect.objectContaining({
+            storeId: 'store-1',
+            note: expect.stringContaining('store-unknown'),
+        }));
+    });
+});
+
+describe('daily_report', () => {
+    const report = {
+        headlines: { netSales: 1000, cashMovement: 200, newDues: 50, vsPreviousPct: 10 },
+        sales: { bills: 4, gross: 1100, returnsAmount: 100, returnsCount: 1, net: 1000, avgBill: 250 },
+        tenders: [{ method: 'CASH', amount: 800 }],
+        till: { sessions: [], rollup: {}, openSessionCount: 0, unassignedSalesCount: 0 },
+        moneyOut: null,
+        dues: null,
+        topProducts: [],
+        whatsappText: 'SECRET',
+        stock: {
+            reorder: [{ name: 'X', onHand: 0, level: 2 }],
+            reorderCount: 1,
+            zeroCount: 0,
+            shrinkageCount: 0,
+            shrinkageAmount: 0,
+        },
+        checklist: [],
+    };
+
+    it('projects headlines and omits whatsapp text and stock.reorder', async () => {
+        const getReport = jest.fn().mockResolvedValue(report);
+        const tenantName = jest.fn().mockResolvedValue('Karim Electronics');
+        const deps = makeDeps({
+            dailyReport: { getReport },
+            data: { tenantName },
+        } as any);
+
+        const result: any = await run('daily_report', { date: '2026-07-01', storeId: 'store-1' }, deps);
+
+        expect(getReport).toHaveBeenCalledWith(expect.objectContaining({
+            tenantId: 'tenant-1',
+            storeId: 'store-1',
+            tenantName: 'Karim Electronics',
+            storeName: 'Gulshan',
+            date: '2026-07-01',
+            locale: 'en',
+        }));
+        expect(result.headlines.netSales).toBe(1000);
+        expect(result.whatsappText).toBeUndefined();
+        expect(result.stock.reorder).toBeUndefined();
+        expect(result.stock.reorderCount).toBe(1);
+    });
+
+    it('does not call getReport when the owner has no branch to scope to', async () => {
+        const getReport = jest.fn();
+        const deps = makeDeps({ dailyReport: { getReport }, data: { tenantName: jest.fn() } } as any);
+        const owner: ChatToolContext = { ...ctx, storeId: undefined };
+
+        const result: any = await CHAT_TOOLS_BY_NAME.daily_report.handler(owner, { date: '2026-07-01' }, deps);
+
+        expect(result.error).toMatch(/per branch/);
+        expect(getReport).not.toHaveBeenCalled();
+    });
+
+    it('lets a future-date error from the service propagate', async () => {
+        const { BadRequestException } = require('@nestjs/common');
+        const getReport = jest.fn().mockRejectedValue(new BadRequestException('Date cannot be in the future'));
+        const deps = makeDeps({
+            dailyReport: { getReport },
+            data: { tenantName: jest.fn().mockResolvedValue('Karim Electronics') },
+        } as any);
+
+        await expect(run('daily_report', { date: '2099-01-01', storeId: 'store-1' }, deps)).rejects.toThrow(/future/);
+    });
+});
+
+describe('cashier_sessions', () => {
+    it('does not accept a date parameter', () => {
+        const props = Object.keys((CHAT_TOOLS_BY_NAME.cashier_sessions.parameters as any).properties ?? {});
+        expect(props).not.toContain('date');
+    });
+
+    it('projects today\'s open and closed tills', async () => {
+        const getOverview = jest.fn().mockResolvedValue({
+            store_id: 'store-1',
+            open: [{
+                cashier: { name: 'Asha' },
+                counter: { name: 'Till 1' },
+                store: { name: 'Gulshan' },
+                sales_count: 3,
+                sales_total: 500.126,
+                expected_cash: 600.1,
+                closing_cash: null,
+                variance: null,
+                opened_at: new Date('2026-07-01T03:00:00Z'),
+                closed_at: null,
+            }],
+            closed_today: [{
+                cashier: { name: 'Bina' },
+                counter: { name: 'Till 2' },
+                store: { name: 'Gulshan' },
+                sales_count: 8,
+                sales_total: 1200,
+                expected_cash: 400,
+                closing_cash: 390.555,
+                variance: -9.445,
+                opened_at: new Date('2026-07-01T02:00:00Z'),
+                closed_at: new Date('2026-07-01T10:00:00Z'),
+            }],
+            totals: {
+                open_count: 1,
+                closed_count: 1,
+                sales_total: 1700.126,
+                expected_cash: 600.1,
+                short: -9.445,
+                over: 0,
+            },
+        });
+        const deps = makeDeps({ cashierSessions: { getOverview } } as any);
+
+        const result: any = await run('cashier_sessions', { storeId: 'store-1' }, deps);
+
+        expect(getOverview).toHaveBeenCalledWith('tenant-1', 'store-1', 'Asia/Dhaka');
+        expect(result.totals.open_count).toBe(1);
+        expect(result.open.rows[0].cashier).toBe('Asha');
+        expect(result.open.rows[0].sales_total).toBe(500.13);
+        expect(result.closed_today.rows[0].closing_cash).toBe(390.56);
+        expect(result.closed_today.rows[0].variance).toBe(-9.44);
     });
 });

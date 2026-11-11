@@ -7,7 +7,9 @@ import { ChatService } from './chat.service';
 import { ChatToolDepsFactory } from './chat-tool-deps.factory';
 import { WebSearchService } from './web-search.service';
 import { AccountingModule } from '../accounting/accounting.module';
+import { CashierSessionsModule } from '../cashier-sessions/cashier-sessions.module';
 import { CustomersModule } from '../customers/customers.module';
+import { DailyReportModule } from '../daily-report/daily-report.module';
 import { ExpensesModule } from '../expenses/expenses.module';
 import { InventoryReportsModule } from '../inventory-reports/inventory-reports.module';
 import { PlatformSettingsModule } from '../platform-settings/platform-settings.module';
@@ -32,6 +34,8 @@ import { SuppliersModule } from '../suppliers/suppliers.module';
         SuppliersModule,
         ExpensesModule,
         AccountingModule,
+        DailyReportModule,
+        CashierSessionsModule,
     ],
     controllers: [AiController],
     // ChatDataService is provided here rather than imported: it is the chatbot's

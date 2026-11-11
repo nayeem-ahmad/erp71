@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { AccountingService } from '../accounting/accounting.service';
+import { CashierSessionsService } from '../cashier-sessions/cashier-sessions.service';
 import { CustomersService } from '../customers/customers.service';
+import { DailyReportService } from '../daily-report/daily-report.service';
 import { ExpensesService } from '../expenses/expenses.service';
 import { InventoryReportsService } from '../inventory-reports/inventory-reports.service';
 import { PurchaseReportsService } from '../purchase-reports/purchase-reports.service';
@@ -29,6 +31,8 @@ export class ChatToolDepsFactory {
         private readonly data: ChatDataService,
         private readonly web: WebSearchService,
         private readonly anomalies: AnomalyDetectionService,
+        private readonly dailyReport: DailyReportService,
+        private readonly cashierSessions: CashierSessionsService,
     ) {}
 
     build(): ChatToolDeps {
@@ -43,6 +47,8 @@ export class ChatToolDepsFactory {
             data: this.data,
             web: this.web,
             anomalies: this.anomalies,
+            dailyReport: this.dailyReport,
+            cashierSessions: this.cashierSessions,
         };
     }
 }
