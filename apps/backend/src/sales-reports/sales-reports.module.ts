@@ -10,6 +10,6 @@ import { SalesLineItemsService } from './sales-line-items.service';
     imports: [DatabaseModule],
     controllers: [SalesReportsController],
     providers: [SalesReportsService, SalesLineItemsService, SubscriptionAccessGuard, StorePermissionGuard],
-    exports: [SalesReportsService],
+    exports: [SalesReportsService, SalesLineItemsService],
 })
 export class SalesReportsModule {}

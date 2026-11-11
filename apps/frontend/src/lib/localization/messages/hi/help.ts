@@ -82,6 +82,10 @@ export const helpMessages = {
                     q: "ग्राहक भुगतान और मेयादोत्तीर्ण बकाया कहाँ प्रबंधित करूँ?",
                     a: "बकाया के विरुद्ध प्राप्त धन दर्ज करने के लिए बिक्री → ग्राहक भुगतान, प्रति ग्राहक चालू विवरण के लिए बिक्री → ग्राहक खाता-बही, और कौन कितना और कब से बकाया रखता है यह देखने के लिए ड्यू एजिंग रिपोर्ट (बिक्री → ग्राहक के अंतर्गत) उपयोग करें।",
                 },
+                {
+                    q: 'Can I ask the assistant for today\'s Daily Report / open tills / invoice lines / Mushak 6.2 / write-offs / an exchange or warranty claim?',
+                    a: 'Yes. Ask it for today\'s Daily Report (Sales → Daily Report), whether tills are still open (Sales → Cashier Sessions), which invoices a figure came from (Sales → Sales Line Items or Purchases → Purchase Line Items), Mushak 6.2 VAT totals (Sales → Mushak books), customer debts written off (Sales → Bad Debts), or an exchange or warranty claim (Sales → Sales Exchanges / Warranty Claims). It looks those up; it cannot change them.',
+                },
             ],
         },
         inventory: {
@@ -170,6 +174,10 @@ export const helpMessages = {
                     q: "फ़ॉलो-अप और बातचीत कैसे काम करते हैं?",
                     a: "फ़ॉलो-अप (CRM → फ़ॉलो-अप) रिमाइंडर की एक ही कतार है — सामान्य, वसूली, जन्मदिन या पुनःऑर्डर — जो ग्राहक या लीड के विवरण पृष्ठ से बनती है, और जन्मदिन तथा पुनःऑर्डर रिमाइंडर अपने आप भी बनते हैं। बातचीत (CRM → बातचीत) आपकी पूरी टीम की लीड पर दर्ज हर संपर्क (कॉल, SMS, WhatsApp, मुलाक़ात इत्यादि) का केवल-पढ़ने योग्य, फ़िल्टर करने योग्य लॉग है; नई बातचीत लीड के विवरण पृष्ठ से दर्ज करें।",
                 },
+                {
+                    q: 'Can the AI assistant see leads, campaigns, and follow-ups?',
+                    a: 'Yes. Ask how many open leads you have, which campaigns went out, or which follow-ups are overdue, and it reads CRM → Leads, Campaigns, and Follow-ups. Creating a lead or marking a follow-up done still happens on those pages.',
+                },
             ],
         },
         manufacturing: {
@@ -187,6 +195,10 @@ export const helpMessages = {
                 {
                     q: "कार्य लागत और विक्रय मूल्य कैसे निकाला जाता है?",
                     a: "पूरा होने पर सामग्री लागत हर घटक की नवीनतम लागत से ली जाती है, और आप और लागत लाइनें जोड़ सकते हैं (श्रम, छपाई, परिवहन, ऊपरी व्यय इत्यादि), चाहें तो किसी सेवा खरीद बिल से। फिर कार्य कुल लागत और प्रति इकाई लागत दिखाता है, और पूर्ण कार्यों के लिए मूल्य निर्धारण पैनल लागत-जोड़ विक्रय मूल्य सुझाता है जिसे आप उत्पाद पर लागू कर सकते हैं।",
+                },
+                {
+                    q: 'Can the AI assistant see production jobs and manufactured-product P&L?',
+                    a: 'Yes. Ask what is in production, job cost, or whether manufactured products are making money, and it reads Production Jobs, Manufactured product P&L, and manufacturing analytics. Starting or completing a job still happens on those pages.',
                 },
             ],
         },
@@ -218,7 +230,7 @@ export const helpMessages = {
                 },
                 {
                     q: "यह वास्तव में क्या देख सकता है, और क्या उत्तरों पर भरोसा किया जा सकता है?",
-                    a: "पूछें \"आप क्या कर सकते हैं?\" और यह आपकी शाखाएँ, आपके रिकॉर्ड कितने पीछे तक जाते हैं, और कौन-से टूल यह उपयोग कर सकता है बताता है — इसलिए खाली उत्तर का अर्थ खाली अवधि है, टूटी क्वेरी नहीं। हर उत्तर अपने स्रोत सूचीबद्ध करता है (ठीक वे रिपोर्ट और तिथि सीमाएँ जो उसने उपयोग कीं) ताकि आप जाँच सकें। आप इससे असामान्य लेन-देन जाँचने को भी कह सकते हैं — लागत से कम बिक्री, दोहरे चालान, बड़े मूल्य विचलन — और यदि कोई जाँच पूरी न हो सकी तो यह आपको बताएगा, यह नहीं जताएगा कि सब ठीक है।",
+                    a: "पूछें \"आप क्या कर सकते हैं?\" और यह आपकी शाखाएँ, आपके रिकॉर्ड कितने पीछे तक जाते हैं, और कौन-से टूल यह उपयोग कर सकता है बताता है — इसलिए खाली उत्तर का अर्थ खाली अवधि है, टूटी क्वेरी नहीं। हर उत्तर अपने स्रोत सूचीबद्ध करता है (ठीक वे रिपोर्ट और तिथि सीमाएँ जो उसने उपयोग कीं) ताकि आप जाँच सकें। आप इससे असामान्य लेन-देन जाँचने को भी कह सकते हैं — लागत से कम बिक्री, दोहरे चालान, बड़े मूल्य विचलन — और यदि कोई जाँच पूरी न हो सकी तो यह आपको बताएगा, यह नहीं जताएगा कि सब ठीक है। It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, production jobs and manufactured-product P&L, import shipments and the LC register, and CRM leads, campaigns, and follow-ups.",
                 },
                 {
                     q: "AI क्रेडिट क्या हैं और और कैसे पाऊँ?",
@@ -267,6 +279,10 @@ export const helpMessages = {
                 {
                     q: "क्या स्टोरफ़्रंट ऑर्डर अपने आप मेरा स्टॉक घटाते हैं?",
                     a: "अभी नहीं। स्टोरफ़्रंट ऑर्डर जाँचता है कि स्टॉक उपलब्ध है पर उसे घटाता नहीं, और ऑर्डर पुष्ट करने से केवल उसकी स्थिति बदलती है — आप स्वयं पूर्ति करते और इन्वेंट्री समायोजित करते हैं। ऑनलाइन ऑर्डर के लिए स्वचालित इन्वेंट्री कटौती भविष्य के रिलीज़ के लिए हमारे रोडमैप पर है।",
+                },
+                {
+                    q: 'Can the AI assistant see my online orders?',
+                    a: 'Yes. Ask the assistant about pending online orders or who ordered what, and it reads Storefront → Online Orders. It is read-only — confirming or cancelling an order still happens on that page.',
                 },
             ],
         },

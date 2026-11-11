@@ -27,7 +27,8 @@ export type EntityType =
     | 'category'
     | 'brand'
     | 'employee'
-    | 'account';
+    | 'account'
+    | 'lead';
 
 export type DocumentType =
     | 'sale'
@@ -38,7 +39,9 @@ export type DocumentType =
     | 'purchase_order'
     | 'quotation'
     | 'expense'
-    | 'voucher';
+    | 'voucher'
+    | 'sales_exchange'
+    | 'warranty_claim';
 
 export type PipelineKind = 'sales_orders' | 'purchase_orders' | 'quotations' | 'leads' | 'deliveries';
 
@@ -187,6 +190,22 @@ export class ChatDataService {
                     detail: [r.employee_code, r.designation?.name].filter(Boolean).join(' · ') || null,
                 }));
             }
+            case 'lead': {
+                const rows = await this.db.lead.findMany({
+                    where: {
+                        tenant_id: tenantId,
+                        OR: [{ name: contains }, { mobile: contains }, { email: contains }],
+                    },
+                    select: { id: true, name: true, mobile: true, email: true },
+                    take: limit,
+                    orderBy: { name: 'asc' },
+                });
+                return rows.map((r) => ({
+                    id: r.id,
+                    label: r.name,
+                    detail: r.mobile ?? r.email ?? null,
+                }));
+            }
             default: {
                 const rows = await this.db.account.findMany({
                     where: { tenant_id: tenantId, OR: [{ name: contains }, { code: contains }] },
@@ -197,6 +216,14 @@ export class ChatDataService {
                 return rows.map((r) => ({ id: r.id, label: r.name, detail: [r.code, r.type].filter(Boolean).join(' · ') }));
             }
         }
+    }
+
+    async tenantName(tenantId: string): Promise<string> {
+        const row = await this.db.tenant.findUnique({
+            where: { id: tenantId },
+            select: { name: true },
+        });
+        return row?.name ?? '';
     }
 
     /** Product ids and names for every catalogue entity type, for `describe`. */
@@ -510,6 +537,71 @@ export class ChatDataService {
                     amount: Number(r.total_amount),
                     status: r.status,
                     dueDate: toDateString(r.valid_until),
+                }));
+            }
+            case 'sales_exchange': {
+                const rows = await this.db.salesExchange.findMany({
+                    where: {
+                        tenant_id: tenantId,
+                        ...(storeId ? { store_id: storeId } : {}),
+                        ...(window ? { created_at: window } : {}),
+                        ...(searchFilter
+                            ? { exchange_number: { contains: searchFilter, mode: 'insensitive' } }
+                            : {}),
+                    },
+                    select: {
+                        id: true,
+                        exchange_number: true,
+                        difference: true,
+                        status: true,
+                        created_at: true,
+                        store: { select: { name: true } },
+                        sale: { select: { customer: { select: { name: true } } } },
+                    },
+                    orderBy: { created_at: 'desc' },
+                    take: limit,
+                });
+                return rows.map((r) => ({
+                    id: r.id,
+                    number: r.exchange_number,
+                    date: toDateString(r.created_at),
+                    party: r.sale?.customer?.name ?? 'Walk-in customer',
+                    branch: r.store.name,
+                    amount: Number(r.difference),
+                    status: r.status,
+                }));
+            }
+            case 'warranty_claim': {
+                const rows = await this.db.warrantyClaim.findMany({
+                    where: {
+                        tenant_id: tenantId,
+                        ...(storeId ? { store_id: storeId } : {}),
+                        ...(window ? { created_at: window } : {}),
+                        ...(searchFilter
+                            ? { claim_number: { contains: searchFilter, mode: 'insensitive' } }
+                            : {}),
+                    },
+                    select: {
+                        id: true,
+                        claim_number: true,
+                        serial_number: true,
+                        status: true,
+                        created_at: true,
+                        store: { select: { name: true } },
+                        customer: { select: { name: true } },
+                        product: { select: { name: true } },
+                    },
+                    orderBy: { created_at: 'desc' },
+                    take: limit,
+                });
+                return rows.map((r) => ({
+                    id: r.id,
+                    number: r.claim_number,
+                    date: toDateString(r.created_at),
+                    party: r.customer?.name ?? 'Walk-in customer',
+                    branch: r.store.name,
+                    status: r.status,
+                    detail: [r.product?.name, r.serial_number].filter(Boolean).join(' · ') || null,
                 }));
             }
             case 'expense': {

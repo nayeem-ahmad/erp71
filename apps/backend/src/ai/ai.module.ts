@@ -4,16 +4,26 @@ import { AiService } from './ai.service';
 import { AnomalyDetectionService } from './anomaly-detection.service';
 import { ChatDataService } from './chat-data.service';
 import { ChatService } from './chat.service';
+import { ChatToolDepsFactory } from './chat-tool-deps.factory';
 import { WebSearchService } from './web-search.service';
 import { AccountingModule } from '../accounting/accounting.module';
+import { CashierSessionsModule } from '../cashier-sessions/cashier-sessions.module';
+import { CrmCampaignsModule } from '../crm-campaigns/crm-campaigns.module';
+import { CrmFollowUpsModule } from '../crm-follow-ups/crm-follow-ups.module';
+import { CrmLeadsModule } from '../crm-leads/crm-leads.module';
 import { CustomersModule } from '../customers/customers.module';
+import { DailyReportModule } from '../daily-report/daily-report.module';
 import { ExpensesModule } from '../expenses/expenses.module';
+import { ImportsModule } from '../imports/imports.module';
 import { InventoryReportsModule } from '../inventory-reports/inventory-reports.module';
+import { ManufacturingModule } from '../manufacturing/manufacturing.module';
+import { MushakModule } from '../mushak/mushak.module';
 import { PlatformSettingsModule } from '../platform-settings/platform-settings.module';
 import { ProductsModule } from '../products/products.module';
 import { PurchaseReportsModule } from '../purchase-reports/purchase-reports.module';
 import { SalesReportsModule } from '../sales-reports/sales-reports.module';
 import { SubscriptionPlansModule } from '../subscription-plans/subscription-plans.module';
+import { StorefrontModule } from '../storefront/storefront.module';
 import { SuppliersModule } from '../suppliers/suppliers.module';
 
 @Module({
@@ -31,6 +41,18 @@ import { SuppliersModule } from '../suppliers/suppliers.module';
         SuppliersModule,
         ExpensesModule,
         AccountingModule,
+        DailyReportModule,
+        CashierSessionsModule,
+        MushakModule,
+        // These three import AuthModule, and AuthModule → PlatformSettings → AiModule.
+        // Loading them while AuthModule is still evaluating leaves their Auth import
+        // undefined unless both sides of the cycle are deferred.
+        forwardRef(() => StorefrontModule),
+        forwardRef(() => ManufacturingModule),
+        forwardRef(() => ImportsModule),
+        CrmLeadsModule,
+        CrmCampaignsModule,
+        CrmFollowUpsModule,
     ],
     controllers: [AiController],
     // ChatDataService is provided here rather than imported: it is the chatbot's
@@ -39,7 +61,7 @@ import { SuppliersModule } from '../suppliers/suppliers.module';
     // AnomalyDetectionService is exported as well: it takes a tenant id and a
     // window and returns a ranked list, which is exactly what the planned weekly
     // scan needs, and that job has no business going through the chat loop.
-    providers: [AiService, ChatService, ChatDataService, WebSearchService, AnomalyDetectionService],
+    providers: [AiService, ChatService, ChatToolDepsFactory, ChatDataService, WebSearchService, AnomalyDetectionService],
     exports: [AiService, ChatService, AnomalyDetectionService, WebSearchService],
 })
 export class AiModule {}

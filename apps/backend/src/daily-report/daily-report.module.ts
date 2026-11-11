@@ -22,5 +22,6 @@ import { DailySummaryWhatsAppService } from './daily-summary-whatsapp.service';
     ],
     controllers: [DailyReportController],
     providers: [DailyReportService, DailySummaryEmailService, DailySummarySmsService, DailySummaryWhatsAppService, SubscriptionAccessGuard, StorePermissionGuard],
+    exports: [DailyReportService],
 })
 export class DailyReportModule {}

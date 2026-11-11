@@ -35,6 +35,8 @@ function makeDb() {
         voucher: model(),
         voucherDetail: model(),
         lead: model(),
+        salesExchange: model(),
+        warrantyClaim: model(),
         deliveryOrder: model(),
         cashierSession: model(),
         attendanceRecord: model(),
@@ -67,13 +69,13 @@ describe('ChatDataService.resolveEntity', () => {
      * assistant.
      */
     it('scopes every entity search to the caller\'s tenant', async () => {
-        for (const type of ['product', 'customer', 'supplier', 'branch', 'warehouse', 'category', 'brand', 'employee', 'account'] as const) {
+        for (const type of ['product', 'customer', 'supplier', 'branch', 'warehouse', 'category', 'brand', 'employee', 'account', 'lead'] as const) {
             await service.resolveEntity(TENANT, type, 'anything');
         }
 
         const calls = [
             db.product, db.customer, db.supplier, db.store,
-            db.warehouse, db.productGroup, db.brand, db.employee, db.account,
+            db.warehouse, db.productGroup, db.brand, db.employee, db.account, db.lead,
         ];
         for (const model of calls) {
             expect(model.findMany).toHaveBeenCalledWith(
@@ -116,6 +118,43 @@ describe('ChatDataService.resolveEntity', () => {
         expect(await service.resolveEntity(TENANT, 'customer', 'karim')).toEqual([
             { id: 'c1', label: 'Karim', detail: 'CUS-9' },
         ]);
+    });
+
+    it('matches a lead on name, mobile or email', async () => {
+        db.lead.findMany.mockResolvedValue([{ id: 'l1', name: 'Rahim', mobile: '0171', email: null }]);
+
+        expect(await service.resolveEntity(TENANT, 'lead', 'Rahim')).toEqual([
+            { id: 'l1', label: 'Rahim', detail: '0171' },
+        ]);
+        const where = db.lead.findMany.mock.calls[0][0].where;
+        expect(where.tenant_id).toBe(TENANT);
+        expect(where.OR).toEqual([
+            { name: { contains: 'Rahim', mode: 'insensitive' } },
+            { mobile: { contains: 'Rahim', mode: 'insensitive' } },
+            { email: { contains: 'Rahim', mode: 'insensitive' } },
+        ]);
+    });
+});
+
+describe('ChatDataService.tenantName', () => {
+    it('returns the tenant name', async () => {
+        const db = makeDb();
+        db.tenant.findUnique.mockResolvedValue({ name: 'Karim Electronics' });
+        const service = await makeService(db);
+
+        expect(await service.tenantName(TENANT)).toBe('Karim Electronics');
+        expect(db.tenant.findUnique).toHaveBeenCalledWith({
+            where: { id: TENANT },
+            select: { name: true },
+        });
+    });
+
+    it('returns an empty string when the tenant row is missing', async () => {
+        const db = makeDb();
+        db.tenant.findUnique.mockResolvedValue(null);
+        const service = await makeService(db);
+
+        expect(await service.tenantName(TENANT)).toBe('');
     });
 });
 
@@ -204,16 +243,69 @@ describe('ChatDataService.listDocuments', () => {
     });
 
     it('scopes every document type to the tenant', async () => {
-        const types = ['sale', 'sales_return', 'purchase', 'purchase_return', 'sales_order', 'purchase_order', 'quotation', 'expense', 'voucher'] as const;
+        const types = ['sale', 'sales_return', 'purchase', 'purchase_return', 'sales_order', 'purchase_order', 'quotation', 'expense', 'voucher', 'sales_exchange', 'warranty_claim'] as const;
         for (const type of types) {
             await service.listDocuments(TENANT, { type, limit: 5 });
         }
 
-        for (const model of [db.sale, db.salesReturn, db.purchase, db.purchaseReturn, db.salesOrder, db.purchaseOrder, db.quotation, db.expenseEntry, db.voucher]) {
+        for (const model of [db.sale, db.salesReturn, db.purchase, db.purchaseReturn, db.salesOrder, db.purchaseOrder, db.quotation, db.expenseEntry, db.voucher, db.salesExchange, db.warrantyClaim]) {
             expect(model.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({ where: expect.objectContaining({ tenant_id: TENANT }) }),
             );
         }
+    });
+
+    it('normalises a sales exchange into the shared document shape', async () => {
+        db.salesExchange.findMany.mockResolvedValue([
+            {
+                id: 'e1',
+                exchange_number: 'EX-1',
+                difference: 250.5,
+                status: 'COMPLETED',
+                created_at: new Date('2026-07-02T10:00:00Z'),
+                store: { name: 'Gulshan' },
+                sale: { customer: { name: 'Karim' } },
+            },
+        ]);
+
+        const rows: any = await service.listDocuments(TENANT, { type: 'sales_exchange', limit: 10 });
+
+        expect(rows[0]).toEqual({
+            id: 'e1',
+            number: 'EX-1',
+            date: '2026-07-02',
+            party: 'Karim',
+            branch: 'Gulshan',
+            amount: 250.5,
+            status: 'COMPLETED',
+        });
+    });
+
+    it('normalises a warranty claim into the shared document shape', async () => {
+        db.warrantyClaim.findMany.mockResolvedValue([
+            {
+                id: 'w1',
+                claim_number: 'WC-1',
+                serial_number: 'SN-9',
+                status: 'SUBMITTED',
+                created_at: new Date('2026-07-03T10:00:00Z'),
+                store: { name: 'Gulshan' },
+                customer: { name: 'Nadia' },
+                product: { name: 'Phone' },
+            },
+        ]);
+
+        const rows: any = await service.listDocuments(TENANT, { type: 'warranty_claim', limit: 10 });
+
+        expect(rows[0]).toEqual({
+            id: 'w1',
+            number: 'WC-1',
+            date: '2026-07-03',
+            party: 'Nadia',
+            branch: 'Gulshan',
+            status: 'SUBMITTED',
+            detail: 'Phone · SN-9',
+        });
     });
 });
 

@@ -82,6 +82,10 @@ export const helpMessages = {
                     q: "Wo verwalte ich Kundenzahlungen und überfällige Salden?",
                     a: "Nutzen Sie Verkauf → Kundenzahlungen, um eingegangenes Geld auf Salden zu buchen, Verkauf → Kundenkonto für einen laufenden Auszug je Kunde und den Fälligkeitsbericht (unter Verkauf → Kunden), um zu sehen, wer wie viel und wie lange schuldet.",
                 },
+                {
+                    q: 'Can I ask the assistant for today\'s Daily Report / open tills / invoice lines / Mushak 6.2 / write-offs / an exchange or warranty claim?',
+                    a: 'Yes. Ask it for today\'s Daily Report (Sales → Daily Report), whether tills are still open (Sales → Cashier Sessions), which invoices a figure came from (Sales → Sales Line Items or Purchases → Purchase Line Items), Mushak 6.2 VAT totals (Sales → Mushak books), customer debts written off (Sales → Bad Debts), or an exchange or warranty claim (Sales → Sales Exchanges / Warranty Claims). It looks those up; it cannot change them.',
+                },
             ],
         },
         inventory: {
@@ -170,6 +174,10 @@ export const helpMessages = {
                     q: "Wie funktionieren Wiedervorlagen und Konversationen?",
                     a: "Wiedervorlagen (CRM → Wiedervorlagen) sind eine einzige Warteschlange von Erinnerungen — Allgemein, Inkasso, Geburtstag oder Nachbestellung —, die von der Detailseite eines Kunden oder Leads aus entstehen; Geburtstags- und Nachbestellerinnerungen werden zusätzlich automatisch erzeugt. Konversationen (CRM → Konversationen) ist ein schreibgeschütztes, filterbares Protokoll jedes Kontaktpunkts (Anruf, SMS, WhatsApp, Besuch usw.), der teamweit zu Leads erfasst wurde; einen neuen Eintrag erfassen Sie auf der Detailseite des Leads.",
                 },
+                {
+                    q: 'Can the AI assistant see leads, campaigns, and follow-ups?',
+                    a: 'Yes. Ask how many open leads you have, which campaigns went out, or which follow-ups are overdue, and it reads CRM → Leads, Campaigns, and Follow-ups. Creating a lead or marking a follow-up done still happens on those pages.',
+                },
             ],
         },
         manufacturing: {
@@ -187,6 +195,10 @@ export const helpMessages = {
                 {
                     q: "Wie werden Auftragskosten und Verkaufspreis berechnet?",
                     a: "Beim Abschluss wird der Materialaufwand aus den jeweils letzten Kosten jeder Komponente festgehalten, und Sie können weitere Kostenzeilen ergänzen (Lohn, Druck, Transport, Gemeinkosten usw.), optional aus einer Dienstleistungsrechnung übernommen. Der Auftrag weist dann Gesamtkosten und Kosten je Einheit aus, und für abgeschlossene Aufträge schlägt ein Preisbereich einen Verkaufspreis nach dem Zuschlagsprinzip vor, den Sie auf das Produkt anwenden können.",
+                },
+                {
+                    q: 'Can the AI assistant see production jobs and manufactured-product P&L?',
+                    a: 'Yes. Ask what is in production, job cost, or whether manufactured products are making money, and it reads Production Jobs, Manufactured product P&L, and manufacturing analytics. Starting or completing a job still happens on those pages.',
                 },
             ],
         },
@@ -218,7 +230,7 @@ export const helpMessages = {
                 },
                 {
                     q: "Was sieht er tatsächlich, und kann ich den Antworten trauen?",
-                    a: "Fragen Sie „Was kannst du?“, und er nennt Ihre Filialen, wie weit Ihre Aufzeichnungen zurückreichen und welche Werkzeuge er nutzen kann — eine leere Antwort bedeutet also einen leeren Zeitraum, keine fehlerhafte Abfrage. Jede Antwort führt ihre Quellen auf (die genauen Berichte und Zeiträume), sodass Sie sie überprüfen können. Sie können ihn auch bitten, auf auffällige Vorgänge zu prüfen — Verkäufe unter Einstandspreis, doppelte Rechnungen, große Preisausreißer — und er sagt Ihnen, wenn eine Prüfung nicht abgeschlossen werden konnte, statt Unbedenklichkeit zu suggerieren.",
+                    a: "Fragen Sie „Was kannst du?“, und er nennt Ihre Filialen, wie weit Ihre Aufzeichnungen zurückreichen und welche Werkzeuge er nutzen kann — eine leere Antwort bedeutet also einen leeren Zeitraum, keine fehlerhafte Abfrage. Jede Antwort führt ihre Quellen auf (die genauen Berichte und Zeiträume), sodass Sie sie überprüfen können. Sie können ihn auch bitten, auf auffällige Vorgänge zu prüfen — Verkäufe unter Einstandspreis, doppelte Rechnungen, große Preisausreißer — und er sagt Ihnen, wenn eine Prüfung nicht abgeschlossen werden konnte, statt Unbedenklichkeit zu suggerieren. It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, production jobs and manufactured-product P&L, import shipments and the LC register, and CRM leads, campaigns, and follow-ups.",
                 },
                 {
                     q: "Was sind KI-Credits und wie bekomme ich mehr?",
@@ -267,6 +279,10 @@ export const helpMessages = {
                 {
                     q: "Verringern Shop-Bestellungen automatisch meinen Bestand?",
                     a: "Noch nicht. Eine Shop-Bestellung prüft die Verfügbarkeit, bucht den Bestand aber nicht ab, und das Bestätigen ändert nur den Status — Kommissionierung und Bestandskorrektur nehmen Sie selbst vor. Die automatische Bestandsbuchung für Online-Bestellungen steht für ein künftiges Release auf unserer Roadmap.",
+                },
+                {
+                    q: 'Can the AI assistant see my online orders?',
+                    a: 'Yes. Ask the assistant about pending online orders or who ordered what, and it reads Storefront → Online Orders. It is read-only — confirming or cancelling an order still happens on that page.',
                 },
             ],
         },
