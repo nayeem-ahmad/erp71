@@ -82,6 +82,10 @@ export const helpMessages = {
                     q: "¿Dónde gestiono los cobros de clientes y los saldos vencidos?",
                     a: "Use Ventas → Cobros de clientes para registrar el dinero recibido contra los saldos, Ventas → Libro mayor de clientes para un extracto continuo por cliente y el informe de antigüedad de deuda (en Ventas → Clientes) para ver quién debe cuánto y desde cuándo.",
                 },
+                {
+                    q: 'Can I ask the assistant for today\'s Daily Report / open tills / invoice lines / Mushak 6.2 / write-offs / an exchange or warranty claim?',
+                    a: 'Yes. Ask it for today\'s Daily Report (Sales → Daily Report), whether tills are still open (Sales → Cashier Sessions), which invoices a figure came from (Sales → Sales Line Items or Purchases → Purchase Line Items), Mushak 6.2 VAT totals (Sales → Mushak books), customer debts written off (Sales → Bad Debts), or an exchange or warranty claim (Sales → Sales Exchanges / Warranty Claims). It looks those up; it cannot change them.',
+                },
             ],
         },
         inventory: {
@@ -170,6 +174,10 @@ export const helpMessages = {
                     q: "¿Cómo funcionan los seguimientos y las conversaciones?",
                     a: "Los seguimientos (CRM → Seguimientos) son una única cola de recordatorios —General, Cobro, Cumpleaños o Reposición— creados desde la ficha de un cliente o de una oportunidad, y los de cumpleaños y reposición se generan además automáticamente. Conversaciones (CRM → Conversaciones) es un registro filtrable y de solo lectura de cada contacto (llamada, SMS, WhatsApp, visita, etc.) anotado sobre las oportunidades por todo su equipo; los nuevos se registran desde la ficha de la oportunidad.",
                 },
+                {
+                    q: 'Can the AI assistant see leads, campaigns, and follow-ups?',
+                    a: 'Yes. Ask how many open leads you have, which campaigns went out, or which follow-ups are overdue, and it reads CRM → Leads, Campaigns, and Follow-ups. Creating a lead or marking a follow-up done still happens on those pages.',
+                },
             ],
         },
         manufacturing: {
@@ -187,6 +195,10 @@ export const helpMessages = {
                 {
                     q: "¿Cómo se calculan el coste de la orden y el precio de venta?",
                     a: "Al completarla, el coste de material se toma del último coste de cada componente, y puede añadir más líneas de coste (mano de obra, impresión, transporte, gastos generales, etc.), opcionalmente tomadas de una factura de compra de servicios. La orden muestra entonces un coste total y un coste por unidad, y para las órdenes completadas un panel de precios sugiere un precio de venta con margen sobre coste que puede aplicar al producto.",
+                },
+                {
+                    q: 'Can the AI assistant see production jobs and manufactured-product P&L?',
+                    a: 'Yes. Ask what is in production, job cost, or whether manufactured products are making money, and it reads Production Jobs, Manufactured product P&L, and manufacturing analytics. Starting or completing a job still happens on those pages.',
                 },
             ],
         },
@@ -218,7 +230,7 @@ export const helpMessages = {
                 },
                 {
                     q: "¿Qué puede ver realmente y puedo fiarme de sus respuestas?",
-                    a: "Pregúntele «¿qué puedes hacer?» y le indicará sus sucursales, hasta dónde se remontan sus registros y qué herramientas puede usar, de modo que una respuesta vacía significa un periodo vacío, no una consulta rota. Cada respuesta enumera sus fuentes (los informes y rangos de fechas exactos que utilizó) para que pueda verificarla. También puede pedirle que busque operaciones inusuales —ventas por debajo del coste, facturas duplicadas, precios muy atípicos— y le avisará si alguna comprobación no pudo completarse en lugar de dar a entender que todo está correcto.",
+                    a: "Pregúntele «¿qué puedes hacer?» y le indicará sus sucursales, hasta dónde se remontan sus registros y qué herramientas puede usar, de modo que una respuesta vacía significa un periodo vacío, no una consulta rota. Cada respuesta enumera sus fuentes (los informes y rangos de fechas exactos que utilizó) para que pueda verificarla. También puede pedirle que busque operaciones inusuales —ventas por debajo del coste, facturas duplicadas, precios muy atípicos— y le avisará si alguna comprobación no pudo completarse en lugar de dar a entender que todo está correcto. It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, production jobs and manufactured-product P&L, import shipments and the LC register, and CRM leads, campaigns, and follow-ups.",
                 },
                 {
                     q: "¿Qué son los créditos de IA y cómo consigo más?",
@@ -267,6 +279,10 @@ export const helpMessages = {
                 {
                     q: "¿Los pedidos de la tienda descuentan existencias automáticamente?",
                     a: "Todavía no. Un pedido de la tienda comprueba que haya existencias, pero no las descuenta, y confirmar un pedido solo cambia su estado: la preparación y el ajuste de inventario los hace usted. El descuento automático de inventario para pedidos en línea está en nuestra hoja de ruta para una versión futura.",
+                },
+                {
+                    q: 'Can the AI assistant see my online orders?',
+                    a: 'Yes. Ask the assistant about pending online orders or who ordered what, and it reads Storefront → Online Orders. It is read-only — confirming or cancelling an order still happens on that page.',
                 },
             ],
         },

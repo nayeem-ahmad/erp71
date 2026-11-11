@@ -1,10 +1,21 @@
 import { StorePermission } from '@erp71/shared-types';
 import type { AccountingService } from '../../accounting/accounting.service';
+import type { CashierSessionsService } from '../../cashier-sessions/cashier-sessions.service';
+import type { CrmCampaignsService } from '../../crm-campaigns/crm-campaigns.service';
+import type { CrmFollowUpsService } from '../../crm-follow-ups/crm-follow-ups.service';
+import type { CrmLeadsService } from '../../crm-leads/crm-leads.service';
 import type { CustomersService } from '../../customers/customers.service';
+import type { DailyReportService } from '../../daily-report/daily-report.service';
 import type { ExpensesService } from '../../expenses/expenses.service';
+import type { ImportsService } from '../../imports/imports.service';
 import type { InventoryReportsService } from '../../inventory-reports/inventory-reports.service';
+import type { ManufacturingService } from '../../manufacturing/manufacturing.service';
+import type { MushakService } from '../../mushak/mushak.service';
+import type { PurchaseLineItemsService } from '../../purchase-reports/purchase-line-items.service';
 import type { PurchaseReportsService } from '../../purchase-reports/purchase-reports.service';
+import type { SalesLineItemsService } from '../../sales-reports/sales-line-items.service';
 import type { SalesReportsService } from '../../sales-reports/sales-reports.service';
+import type { StorefrontService } from '../../storefront/storefront.service';
 import type { SuppliersService } from '../../suppliers/suppliers.service';
 import type { AnomalyDetectionService } from '../anomaly-detection.service';
 import type { ChatDataService } from '../chat-data.service';
@@ -37,6 +48,17 @@ export interface ChatToolDeps {
     data: ChatDataService;
     web: WebSearchService;
     anomalies: AnomalyDetectionService;
+    dailyReport: DailyReportService;
+    cashierSessions: CashierSessionsService;
+    salesLineItems: SalesLineItemsService;
+    purchaseLineItems: PurchaseLineItemsService;
+    mushak: MushakService;
+    storefront: StorefrontService;
+    manufacturing: ManufacturingService;
+    imports: ImportsService;
+    crmLeads: CrmLeadsService;
+    crmCampaigns: CrmCampaignsService;
+    crmFollowUps: CrmFollowUpsService;
 }
 
 export interface ChatToolContext {
@@ -93,7 +115,7 @@ export interface ChatTool {
 }
 
 /** Coarse product areas, used to hide tools a tenant's subscription cannot use. */
-export type ChatToolModule = 'retail' | 'inventory' | 'accounting' | 'crm' | 'hr' | 'manufacturing';
+export type ChatToolModule = 'retail' | 'inventory' | 'accounting' | 'crm' | 'hr' | 'manufacturing' | 'storefront' | 'imports';
 
 /** Platform-operator switches a tool can depend on. */
 export type ChatToolFeatureFlag = 'webSearch';
@@ -210,6 +232,30 @@ export function resolveStoreId(ctx: ChatToolContext, requested?: string): { stor
     return {
         storeId: own,
         note: `Branch id "${requested}" is not one you can use — this result covers ${ownName ?? 'your current branch'} only.`,
+    };
+}
+
+const REQUIRED_STORE_ERROR =
+    'Daily report is per branch. Pass storeId from the branch list in the system prompt.';
+
+/**
+ * Like `resolveStoreId`, but a missing branch is an error rather than
+ * all-branches. Daily report has no company-wide payload — the model must
+ * name a branch, or the caller must already be on one.
+ */
+export function resolveRequiredStoreId(
+    ctx: ChatToolContext,
+    requested?: string,
+): { storeId: string; note?: string } | { error: string } {
+    const match = requested ? ctx.stores.find((s) => s.id === requested) : undefined;
+    if (match) return { storeId: match.id };
+
+    const own = ctx.storeId ?? (ctx.stores.length === 1 ? ctx.stores[0].id : undefined);
+    if (!own) return { error: REQUIRED_STORE_ERROR };
+    if (!requested) return { storeId: own };
+    return {
+        storeId: own,
+        note: `Branch id "${requested}" is not one you can use — this result covers the current branch only.`,
     };
 }
 

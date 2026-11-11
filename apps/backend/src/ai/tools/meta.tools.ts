@@ -11,6 +11,7 @@ const ENTITY_TYPES = [
     'brand',
     'employee',
     'account',
+    'lead',
 ] as const;
 
 const DOCUMENT_TYPES = [
@@ -23,6 +24,8 @@ const DOCUMENT_TYPES = [
     'quotation',
     'expense',
     'voucher',
+    'sales_exchange',
+    'warranty_claim',
 ] as const;
 
 export const META_TOOLS: ChatTool[] = [
@@ -35,7 +38,7 @@ export const META_TOOLS: ChatTool[] = [
         permission: StorePermission.VIEW_PRODUCT_CATALOG,
         description:
             'Turn a name the user typed into the id other tools need. Search products, customers, suppliers, branches, ' +
-            'warehouses, categories, brands, employees or ledger accounts. ' +
+            'warehouses, categories, brands, employees, ledger accounts or leads. ' +
             'Call this FIRST whenever a question names something specific and you need to filter by it — ' +
             'never guess or invent an id.',
         parameters: {
@@ -70,7 +73,7 @@ export const META_TOOLS: ChatTool[] = [
         permission: StorePermission.VIEW_FINANCIAL_REPORTS,
         description:
             'Individual documents rather than totals: invoices, sales returns, purchases, purchase returns, sales ' +
-            'orders, purchase orders, quotations, expenses or vouchers. Each row has its number, date, party, amount ' +
+            'orders, purchase orders, quotations, expenses, vouchers, sales exchanges or warranty claims. Each row has its number, date, party, amount ' +
             'and outstanding balance. Use to drill into an aggregate ("which invoices make up that due balance"), ' +
             'to look up one document by number, or for "show me the last N ...".',
         parameters: {

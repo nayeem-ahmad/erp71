@@ -66,6 +66,21 @@ function makeDeps(overrides: Partial<Record<keyof ChatToolDeps, any>> = {}): Cha
             getDataCoverage: jest.fn(),
         },
         anomalies: { scan: jest.fn() },
+        dailyReport: { getReport: jest.fn() },
+        cashierSessions: { getOverview: jest.fn() },
+        salesLineItems: { getSalesLineItems: jest.fn() },
+        purchaseLineItems: { getPurchaseLineItems: jest.fn() },
+        mushak: { getSalesBook: jest.fn() },
+        storefront: { getOrders: jest.fn() },
+        manufacturing: {
+            listJobs: jest.fn(),
+            getProductPL: jest.fn(),
+            getAnalytics: jest.fn(),
+        },
+        imports: { findAll: jest.fn(), lcRegister: jest.fn() },
+        crmLeads: { findAll: jest.fn(), getStatusSummary: jest.fn() },
+        crmCampaigns: { findAll: jest.fn() },
+        crmFollowUps: { findAll: jest.fn(), getTodaySummary: jest.fn() },
         web: {
             search: jest.fn(),
             fetchPage: jest.fn(),
@@ -1007,5 +1022,723 @@ describe('transaction_anomalies', () => {
 
         expect((deps.anomalies.scan as jest.Mock).mock.calls[0][1].storeId).toBeUndefined();
         expect(result.note).toContain('whole business');
+    });
+});
+
+describe('resolveRequiredStoreId', () => {
+    const { resolveRequiredStoreId } = require('./tools/types') as typeof import('./tools/types');
+
+    it('uses a requested branch that is on the allow-list', () => {
+        expect(resolveRequiredStoreId(ctx, 'store-1')).toEqual({ storeId: 'store-1' });
+    });
+
+    it('refuses an owner with several branches and no current branch', () => {
+        const owner: ChatToolContext = { ...ctx, storeId: undefined };
+        const result = resolveRequiredStoreId(owner);
+        expect(result).toEqual(expect.objectContaining({ error: expect.stringMatching(/per branch/) }));
+    });
+
+    it('falls back to the current branch when the request is omitted', () => {
+        const staff: ChatToolContext = { ...ctx, userRole: 'CASHIER' };
+        expect(resolveRequiredStoreId(staff)).toEqual({ storeId: 'store-1' });
+    });
+
+    it('falls back to the current branch when the requested id is unknown', () => {
+        const result = resolveRequiredStoreId(ctx, 'store-unknown');
+        expect(result).toEqual(expect.objectContaining({
+            storeId: 'store-1',
+            note: expect.stringContaining('store-unknown'),
+        }));
+    });
+});
+
+describe('daily_report', () => {
+    const report = {
+        headlines: { netSales: 1000, cashMovement: 200, newDues: 50, vsPreviousPct: 10 },
+        sales: { bills: 4, gross: 1100, returnsAmount: 100, returnsCount: 1, net: 1000, avgBill: 250 },
+        tenders: [{ method: 'CASH', amount: 800 }],
+        till: { sessions: [], rollup: {}, openSessionCount: 0, unassignedSalesCount: 0 },
+        moneyOut: null,
+        dues: null,
+        topProducts: [],
+        whatsappText: 'SECRET',
+        stock: {
+            reorder: [{ name: 'X', onHand: 0, level: 2 }],
+            reorderCount: 1,
+            zeroCount: 0,
+            shrinkageCount: 0,
+            shrinkageAmount: 0,
+        },
+        checklist: [],
+    };
+
+    it('projects headlines and omits whatsapp text and stock.reorder', async () => {
+        const getReport = jest.fn().mockResolvedValue(report);
+        const tenantName = jest.fn().mockResolvedValue('Karim Electronics');
+        const deps = makeDeps({
+            dailyReport: { getReport },
+            data: { tenantName },
+        } as any);
+
+        const result: any = await run('daily_report', { date: '2026-07-01', storeId: 'store-1' }, deps);
+
+        expect(getReport).toHaveBeenCalledWith(expect.objectContaining({
+            tenantId: 'tenant-1',
+            storeId: 'store-1',
+            tenantName: 'Karim Electronics',
+            storeName: 'Gulshan',
+            date: '2026-07-01',
+            locale: 'en',
+        }));
+        expect(result.headlines.netSales).toBe(1000);
+        expect(result.whatsappText).toBeUndefined();
+        expect(result.stock.reorder).toBeUndefined();
+        expect(result.stock.reorderCount).toBe(1);
+    });
+
+    it('does not call getReport when the owner has no branch to scope to', async () => {
+        const getReport = jest.fn();
+        const deps = makeDeps({ dailyReport: { getReport }, data: { tenantName: jest.fn() } } as any);
+        const owner: ChatToolContext = { ...ctx, storeId: undefined };
+
+        const result: any = await CHAT_TOOLS_BY_NAME.daily_report.handler(owner, { date: '2026-07-01' }, deps);
+
+        expect(result.error).toMatch(/per branch/);
+        expect(getReport).not.toHaveBeenCalled();
+    });
+
+    it('lets a future-date error from the service propagate', async () => {
+        const { BadRequestException } = require('@nestjs/common');
+        const getReport = jest.fn().mockRejectedValue(new BadRequestException('Date cannot be in the future'));
+        const deps = makeDeps({
+            dailyReport: { getReport },
+            data: { tenantName: jest.fn().mockResolvedValue('Karim Electronics') },
+        } as any);
+
+        await expect(run('daily_report', { date: '2099-01-01', storeId: 'store-1' }, deps)).rejects.toThrow(/future/);
+    });
+});
+
+describe('cashier_sessions', () => {
+    it('does not accept a date parameter', () => {
+        const props = Object.keys((CHAT_TOOLS_BY_NAME.cashier_sessions.parameters as any).properties ?? {});
+        expect(props).not.toContain('date');
+    });
+
+    it('projects today\'s open and closed tills', async () => {
+        const getOverview = jest.fn().mockResolvedValue({
+            store_id: 'store-1',
+            open: [{
+                cashier: { name: 'Asha' },
+                counter: { name: 'Till 1' },
+                store: { name: 'Gulshan' },
+                sales_count: 3,
+                sales_total: 500.126,
+                expected_cash: 600.1,
+                closing_cash: null,
+                variance: null,
+                opened_at: new Date('2026-07-01T03:00:00Z'),
+                closed_at: null,
+            }],
+            closed_today: [{
+                cashier: { name: 'Bina' },
+                counter: { name: 'Till 2' },
+                store: { name: 'Gulshan' },
+                sales_count: 8,
+                sales_total: 1200,
+                expected_cash: 400,
+                closing_cash: 390.555,
+                variance: -9.445,
+                opened_at: new Date('2026-07-01T02:00:00Z'),
+                closed_at: new Date('2026-07-01T10:00:00Z'),
+            }],
+            totals: {
+                open_count: 1,
+                closed_count: 1,
+                sales_total: 1700.126,
+                expected_cash: 600.1,
+                short: -9.445,
+                over: 0,
+            },
+        });
+        const deps = makeDeps({ cashierSessions: { getOverview } } as any);
+
+        const result: any = await run('cashier_sessions', { storeId: 'store-1' }, deps);
+
+        expect(getOverview).toHaveBeenCalledWith('tenant-1', 'store-1', 'Asia/Dhaka');
+        expect(result.totals.open_count).toBe(1);
+        expect(result.open.rows[0].cashier).toBe('Asha');
+        expect(result.open.rows[0].sales_total).toBe(500.13);
+        expect(result.closed_today.rows[0].closing_cash).toBe(390.56);
+        expect(result.closed_today.rows[0].variance).toBe(-9.44);
+    });
+});
+
+describe('sales_line_items', () => {
+    it('requires a date range and VIEW_FINANCIAL_REPORTS', () => {
+        expect(CHAT_TOOLS_BY_NAME.sales_line_items.permission).toBe(StorePermission.VIEW_FINANCIAL_REPORTS);
+        expect((CHAT_TOOLS_BY_NAME.sales_line_items.parameters as any).required).toEqual(
+            expect.arrayContaining(['from', 'to']),
+        );
+    });
+
+    it('projects invoice lines and caps the service page at 20', async () => {
+        const getSalesLineItems = jest.fn().mockResolvedValue({
+            summary: {
+                lineCount: 2,
+                invoiceCount: 1,
+                quantity: 5,
+                amount: 100.126,
+                returnedQuantity: 1,
+                returnedAmount: 10,
+            },
+            rows: [{
+                id: 'line-1',
+                quantity: 5,
+                price_at_sale: 20.0252,
+                product: { id: 'p1', name: 'Rice 5kg', sku: 'R-5' },
+                sale: {
+                    serial_number: 'INV-1001',
+                    sale_date: new Date('2026-07-01T04:00:00Z'),
+                    customer: { name: 'Karim' },
+                },
+            }],
+            pagination: { page: 1, limit: 20, total: 2, pages: 1 },
+        });
+        const deps = makeDeps({ salesLineItems: { getSalesLineItems } } as any);
+
+        const result: any = await run('sales_line_items', { from: '2026-07-01', to: '2026-07-31' }, deps);
+
+        expect(getSalesLineItems).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ from: '2026-07-01', to: '2026-07-31' }),
+            'Asia/Dhaka',
+        );
+        expect(getSalesLineItems.mock.calls[0][1].limit).toBeLessThanOrEqual(20);
+        expect(result.summary.amount).toBe(100.13);
+        expect(result.rows[0].invoiceNumber).toBe('INV-1001');
+        expect(result.rows[0].product).toBe('Rice 5kg');
+        expect(result.rows[0].sale).toBeUndefined();
+    });
+});
+
+describe('purchase_line_items', () => {
+    it('requires a date range and VIEW_FINANCIAL_REPORTS', () => {
+        expect(CHAT_TOOLS_BY_NAME.purchase_line_items.permission).toBe(StorePermission.VIEW_FINANCIAL_REPORTS);
+        expect((CHAT_TOOLS_BY_NAME.purchase_line_items.parameters as any).required).toEqual(
+            expect.arrayContaining(['from', 'to']),
+        );
+    });
+
+    it('projects bill lines with the supplier name', async () => {
+        const getPurchaseLineItems = jest.fn().mockResolvedValue({
+            summary: {
+                lineCount: 2,
+                billCount: 1,
+                quantity: 5,
+                amount: 100.126,
+                returnedQuantity: 1,
+                returnedAmount: 10,
+            },
+            rows: [{
+                id: 'line-1',
+                quantity: 5,
+                unit_cost: 20.0252,
+                line_total: 100.126,
+                product: { id: 'p1', name: 'Rice 5kg', sku: 'R-5' },
+                purchase: {
+                    purchase_number: 'PO-1001',
+                    purchase_date: new Date('2026-07-01T04:00:00Z'),
+                    supplier: { name: 'Dhaka Foods' },
+                },
+            }],
+            pagination: { page: 1, limit: 20, total: 2, pages: 1 },
+        });
+        const deps = makeDeps({ purchaseLineItems: { getPurchaseLineItems } } as any);
+
+        const result: any = await run('purchase_line_items', { from: '2026-07-01', to: '2026-07-31' }, deps);
+
+        expect(getPurchaseLineItems).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ from: '2026-07-01', to: '2026-07-31' }),
+            'Asia/Dhaka',
+        );
+        expect(getPurchaseLineItems.mock.calls[0][1].limit).toBeLessThanOrEqual(20);
+        expect(result.summary.amount).toBe(100.13);
+        expect(result.rows[0].billNumber).toBe('PO-1001');
+        expect(result.rows[0].product).toBe('Rice 5kg');
+        expect(result.rows[0].supplier).toBe('Dhaka Foods');
+        expect(result.rows[0].purchase).toBeUndefined();
+    });
+});
+
+describe('mushak_summary', () => {
+    it('requires VIEW_FINANCIAL_REPORTS', () => {
+        expect(CHAT_TOOLS_BY_NAME.mushak_summary.permission).toBe(StorePermission.VIEW_FINANCIAL_REPORTS);
+    });
+
+    it('pages the sales book and flattens the buyer to a name', async () => {
+        const rows = Array.from({ length: 25 }, (_, i) => ({
+            date: new Date('2026-07-01T04:00:00Z'),
+            invoiceNumber: `INV-${i + 1}`,
+            buyer: { name: 'Karim', bin: 'SECRET-BIN', address: 'hidden' },
+            vatAmount: 15.126,
+            sdAmount: 0,
+            totalValue: 100,
+            description: 'should not leak',
+        }));
+        const getSalesBook = jest.fn().mockResolvedValue({
+            form: '6.2',
+            totals: { invoices: 25, totalValue: 2500, sdAmount: 0, vatAmount: 100.126, inclusiveTotal: 2600 },
+            estimated: false,
+            rows,
+        });
+        const deps = makeDeps({ mushak: { getSalesBook } } as any);
+
+        const result: any = await run(
+            'mushak_summary',
+            { from: '2026-07-01', to: '2026-07-31', taxableOnly: true },
+            deps,
+        );
+
+        expect(getSalesBook).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ from: '2026-07-01', to: '2026-07-31', taxableOnly: 'true' }),
+            'Asia/Dhaka',
+        );
+        expect(result.totals.vatAmount).toBe(100.13);
+        expect(result.rows).toHaveLength(20);
+        expect(result.hasMore).toBe(true);
+        expect(result.rows[0].buyer).toBe('Karim');
+        expect(result.rows[0]).toEqual(expect.objectContaining({
+            invoiceNumber: 'INV-1',
+            vatAmount: 15.13,
+            sdAmount: 0,
+            totalValue: 100,
+        }));
+        expect(result.rows[0]).not.toHaveProperty('description');
+        expect(result.rows[0]).not.toHaveProperty('bin');
+    });
+});
+
+describe('bad_debts', () => {
+    it('requires WRITE_OFF_CUSTOMER_DEBT', () => {
+        expect(CHAT_TOOLS_BY_NAME.bad_debts.permission).toBe(StorePermission.WRITE_OFF_CUSTOMER_DEBT);
+    });
+
+    it('projects write-offs with reason taken from reference_id', async () => {
+        const listWriteOffs = jest.fn().mockResolvedValue({
+            items: [{
+                customer: { name: 'Karim', phone: '0171' },
+                amount: 500.126,
+                reference_id: 'UNCOLLECTABLE',
+                created_at: new Date('2026-07-01T04:00:00Z'),
+                creator: { name: 'Asha' },
+            }],
+            total: 1,
+            page: 1,
+            limit: 20,
+        });
+        const deps = makeDeps({ customers: { listWriteOffs } } as any);
+
+        const result: any = await run('bad_debts', { from: '2026-07-01', to: '2026-07-31' }, deps);
+
+        expect(listWriteOffs).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ timezone: 'Asia/Dhaka', from: '2026-07-01', to: '2026-07-31' }),
+        );
+        expect(result.rows[0]).toEqual(expect.objectContaining({
+            customer: 'Karim',
+            phone: '0171',
+            amount: 500.13,
+            reason: 'UNCOLLECTABLE',
+            createdBy: 'Asha',
+        }));
+    });
+});
+
+describe('storefront_orders', () => {
+    it('is tagged storefront so accounting-only tenants never see it', () => {
+        expect(CHAT_TOOLS_BY_NAME.storefront_orders.modules).toContain('storefront');
+        expect(CHAT_TOOLS_BY_NAME.storefront_orders.permission).toBe(StorePermission.CREATE_SALE);
+    });
+
+    it('projects order headers and drops nested line items', async () => {
+        const getOrders = jest.fn().mockResolvedValue({
+            items: [{
+                id: 'ord-1',
+                created_at: new Date('2026-07-01T04:00:00Z'),
+                status: 'PENDING',
+                customer_name: 'Nadia',
+                customer_phone: '0171',
+                items: [{}, {}],
+                total: 1200.126,
+            }],
+            total: 1,
+        });
+        const deps = makeDeps({ storefront: { getOrders } } as any);
+
+        const result: any = await run('storefront_orders', { storeId: 'store-1' }, deps);
+
+        expect(getOrders).toHaveBeenCalledWith('tenant-1', 1, expect.any(Number), 'store-1');
+        expect(getOrders.mock.calls[0][2]).toBeLessThanOrEqual(20);
+        expect(result.rows[0].itemCount).toBe(2);
+        expect(result.rows[0].total).toBe(1200.13);
+        expect(result.rows[0].customer).toBe('Nadia');
+        expect(result.rows[0].items).toBeUndefined();
+    });
+});
+
+describe('manufacturing_summary', () => {
+    it('requires kind jobs, product_pl or analytics', () => {
+        expect(CHAT_TOOLS_BY_NAME.manufacturing_summary.permission).toBe(StorePermission.EDIT_PRODUCTS);
+        expect(CHAT_TOOLS_BY_NAME.manufacturing_summary.modules).toContain('manufacturing');
+        expect((CHAT_TOOLS_BY_NAME.manufacturing_summary.parameters as any).required).toEqual(
+            expect.arrayContaining(['kind']),
+        );
+    });
+
+    it('dispatches jobs to listJobs only', async () => {
+        const listJobs = jest.fn().mockResolvedValue({
+            items: [{
+                quantity: 10,
+                status: 'IN_PROGRESS',
+                totalJobCost: 500.126,
+                recipe: { product: { name: 'Mix', sku: 'MX-1' } },
+            }],
+            total: 1,
+        });
+        const getProductPL = jest.fn();
+        const getAnalytics = jest.fn();
+        const deps = makeDeps({ manufacturing: { listJobs, getProductPL, getAnalytics } } as any);
+
+        const result: any = await run('manufacturing_summary', { kind: 'jobs' }, deps);
+
+        expect(listJobs).toHaveBeenCalled();
+        expect(getProductPL).not.toHaveBeenCalled();
+        expect(getAnalytics).not.toHaveBeenCalled();
+        expect(result.rows[0].product).toBe('Mix');
+        expect(result.rows[0].totalJobCost).toBe(500.13);
+    });
+
+    it('keeps totalJobCost null for an in-progress job that has no cost yet', async () => {
+        const listJobs = jest.fn().mockResolvedValue({
+            items: [{
+                quantity: 10,
+                status: 'IN_PROGRESS',
+                totalJobCost: null,
+                recipe: { product: { name: 'Mix', sku: 'MX-1' } },
+            }],
+            total: 1,
+        });
+        const deps = makeDeps({
+            manufacturing: { listJobs, getProductPL: jest.fn(), getAnalytics: jest.fn() },
+        } as any);
+
+        const result: any = await run('manufacturing_summary', { kind: 'jobs' }, deps);
+
+        expect(result.rows[0].totalJobCost).toBeNull();
+    });
+
+    it('dispatches product_pl to getProductPL only and pages products', async () => {
+        const products = Array.from({ length: 25 }, (_, i) => ({
+            productName: `P${i}`,
+            productSku: `S${i}`,
+            quantityProduced: 2,
+            totalProductionCost: 10,
+            revenue: 20,
+            grossProfit: 10,
+        }));
+        const getProductPL = jest.fn().mockResolvedValue({
+            totals: { quantityProduced: 50, totalProductionCost: 250, revenue: 500, grossProfit: 250 },
+            products,
+        });
+        const listJobs = jest.fn();
+        const getAnalytics = jest.fn();
+        const deps = makeDeps({ manufacturing: { listJobs, getProductPL, getAnalytics } } as any);
+
+        const result: any = await run('manufacturing_summary', { kind: 'product_pl' }, deps);
+
+        expect(getProductPL).toHaveBeenCalledWith('tenant-1');
+        expect(listJobs).not.toHaveBeenCalled();
+        expect(result.totals.revenue).toBe(500);
+        expect(result.rows).toHaveLength(20);
+        expect(result.hasMore).toBe(true);
+        expect(result.rows[0].product).toBe('P0');
+    });
+
+    it('dispatches analytics with the shop timezone', async () => {
+        const getAnalytics = jest.fn().mockResolvedValue({
+            totalCompletedJobs: 3,
+            totalUnitsProduced: 30,
+            totalMaterialCost: 100.126,
+            avgUnitProductionCost: 3.337,
+            jobs: [{ jobId: 'secret' }],
+            volumeTrend: [{ date: '2026-07-01', quantityProduced: 10 }],
+        });
+        const deps = makeDeps({
+            manufacturing: { listJobs: jest.fn(), getProductPL: jest.fn(), getAnalytics },
+        } as any);
+
+        const result: any = await run('manufacturing_summary', { kind: 'analytics' }, deps);
+
+        expect(getAnalytics).toHaveBeenCalledWith('tenant-1', 'Asia/Dhaka');
+        expect(result.totalCompletedJobs).toBe(3);
+        expect(result.totalMaterialCost).toBe(100.13);
+        expect(result.jobs).toBeUndefined();
+        expect(result.rows[0].date).toBe('2026-07-01');
+    });
+});
+
+describe('import_status', () => {
+    it('requires kind shipments or lc_register and is tagged imports', () => {
+        expect(CHAT_TOOLS_BY_NAME.import_status.permission).toBe(StorePermission.VIEW_IMPORTS);
+        expect(CHAT_TOOLS_BY_NAME.import_status.modules).toContain('imports');
+        expect((CHAT_TOOLS_BY_NAME.import_status.parameters as any).required).toEqual(
+            expect.arrayContaining(['kind']),
+        );
+        expect((CHAT_TOOLS_BY_NAME.import_status.parameters as any).properties.kind.enum).toEqual(
+            ['shipments', 'lc_register'],
+        );
+    });
+
+    it('dispatches shipments to findAll with openOnly true when no status is passed', async () => {
+        const findAll = jest.fn().mockResolvedValue({
+            items: [{
+                reference_number: 'IMP-001',
+                status: 'IN_TRANSIT',
+                lc_number: 'LC-9',
+                eta: new Date('2026-08-01T00:00:00Z'),
+                supplier: { id: 's1', name: 'Acme Ltd', country: 'CN' },
+                items: [{ sku: 'secret' }],
+            }],
+            total: 1,
+        });
+        const lcRegister = jest.fn();
+        const deps = makeDeps({ imports: { findAll, lcRegister } } as any);
+
+        const result: any = await run('import_status', { kind: 'shipments', storeId: 'store-1' }, deps);
+
+        expect(findAll).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ openOnly: 'true', storeId: 'store-1' }),
+        );
+        expect(findAll.mock.calls[0][1].limit).toBeLessThanOrEqual(20);
+        expect(lcRegister).not.toHaveBeenCalled();
+        expect(result.rows[0]).toEqual(expect.objectContaining({
+            reference_number: 'IMP-001',
+            status: 'IN_TRANSIT',
+            lc_number: 'LC-9',
+            supplier: 'Acme Ltd',
+        }));
+        expect(result.rows[0].items).toBeUndefined();
+        expect(result.rows[0].supplier).toBe('Acme Ltd');
+    });
+
+    it('dispatches lc_register and exposes daysToExpiry', async () => {
+        const lcRegister = jest.fn().mockResolvedValue([{
+            lc_number: 'LC-9',
+            supplier: 'Acme Ltd',
+            status: 'IN_TRANSIT',
+            lc_expiry_date: new Date('2026-09-01T00:00:00Z'),
+            days_to_expiry: 12,
+            invoice_value_bdt: 1000.126,
+        }]);
+        const findAll = jest.fn();
+        const deps = makeDeps({ imports: { findAll, lcRegister } } as any);
+
+        const result: any = await run(
+            'import_status',
+            { kind: 'lc_register', withinDays: 30, storeId: 'store-1' },
+            deps,
+        );
+
+        expect(lcRegister).toHaveBeenCalledWith('tenant-1', 30, 'store-1');
+        expect(findAll).not.toHaveBeenCalled();
+        expect(result.rows[0]).toEqual(expect.objectContaining({
+            lc_number: 'LC-9',
+            supplier: 'Acme Ltd',
+            status: 'IN_TRANSIT',
+            daysToExpiry: 12,
+            invoice_value_bdt: 1000.13,
+        }));
+    });
+
+    it('rejects an unknown kind without calling a service', async () => {
+        const findAll = jest.fn();
+        const lcRegister = jest.fn();
+        const deps = makeDeps({ imports: { findAll, lcRegister } } as any);
+
+        const result: any = await run('import_status', { kind: 'duty' }, deps);
+
+        expect(result.error).toMatch(/kind must be shipments or lc_register/);
+        expect(findAll).not.toHaveBeenCalled();
+        expect(lcRegister).not.toHaveBeenCalled();
+    });
+});
+
+describe('crm_pipeline', () => {
+    it('requires kind leads, campaigns or follow_ups and is tagged crm', () => {
+        expect(CHAT_TOOLS_BY_NAME.crm_pipeline.permission).toBe(StorePermission.VIEW_LEADS);
+        expect(CHAT_TOOLS_BY_NAME.crm_pipeline.modules).toContain('crm');
+        expect((CHAT_TOOLS_BY_NAME.crm_pipeline.parameters as any).required).toEqual(
+            expect.arrayContaining(['kind']),
+        );
+        expect((CHAT_TOOLS_BY_NAME.crm_pipeline.parameters as any).properties.kind.enum).toEqual(
+            ['leads', 'campaigns', 'follow_ups'],
+        );
+    });
+
+    it('includes open from getStatusSummary and rows from findAll with timezone', async () => {
+        const getStatusSummary = jest.fn().mockResolvedValue({
+            counts: { NEW: 2, CONTACTED: 1, QUALIFIED: 1, WON: 0 },
+            open: 4,
+        });
+        const findAll = jest.fn().mockResolvedValue({
+            items: [{
+                name: 'Rahim',
+                status: 'NEW',
+                mobile: '0171',
+                sourceOption: { name: 'Walk-in' },
+                next_step_date: new Date('2026-07-20T00:00:00Z'),
+            }],
+            total: 1,
+        });
+        const campaignsFindAll = jest.fn();
+        const followUpsFindAll = jest.fn();
+        const getTodaySummary = jest.fn();
+        const deps = makeDeps({
+            crmLeads: { findAll, getStatusSummary },
+            crmCampaigns: { findAll: campaignsFindAll },
+            crmFollowUps: { findAll: followUpsFindAll, getTodaySummary },
+        } as any);
+
+        const result: any = await run('crm_pipeline', { kind: 'leads', search: 'Rahim' }, deps);
+
+        expect(getStatusSummary).toHaveBeenCalledWith('tenant-1');
+        expect(findAll).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ timezone: 'Asia/Dhaka', search: 'Rahim' }),
+        );
+        expect(campaignsFindAll).not.toHaveBeenCalled();
+        expect(followUpsFindAll).not.toHaveBeenCalled();
+        expect(result.open).toBe(4);
+        expect(result.rows[0]).toEqual(expect.objectContaining({
+            name: 'Rahim',
+            status: 'NEW',
+            mobile: '0171',
+            source: 'Walk-in',
+        }));
+    });
+
+    it('dispatches campaigns without calling lead or follow-up services', async () => {
+        const campaignsFindAll = jest.fn().mockResolvedValue({
+            items: [{
+                name: 'Eid blast',
+                created_at: new Date('2026-07-01T04:00:00Z'),
+                _count: { recipients: 42 },
+            }],
+            total: 1,
+        });
+        const getStatusSummary = jest.fn();
+        const leadsFindAll = jest.fn();
+        const followUpsFindAll = jest.fn();
+        const getTodaySummary = jest.fn();
+        const deps = makeDeps({
+            crmLeads: { findAll: leadsFindAll, getStatusSummary },
+            crmCampaigns: { findAll: campaignsFindAll },
+            crmFollowUps: { findAll: followUpsFindAll, getTodaySummary },
+        } as any);
+
+        const result: any = await run('crm_pipeline', { kind: 'campaigns' }, deps);
+
+        expect(campaignsFindAll).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ timezone: 'Asia/Dhaka' }),
+        );
+        expect(getStatusSummary).not.toHaveBeenCalled();
+        expect(leadsFindAll).not.toHaveBeenCalled();
+        expect(followUpsFindAll).not.toHaveBeenCalled();
+        expect(getTodaySummary).not.toHaveBeenCalled();
+        expect(result.rows[0]).toEqual(expect.objectContaining({
+            name: 'Eid blast',
+            recipientCount: 42,
+        }));
+    });
+
+    it('includes today summary and default scope today calls findAll with dueToday', async () => {
+        const getTodaySummary = jest.fn().mockResolvedValue({ dueToday: 2, overdue: 1, total: 3 });
+        const findAll = jest.fn().mockResolvedValue({
+            items: [{
+                due_at: new Date('2026-07-15T04:00:00Z'),
+                status: 'PENDING',
+                customer: { name: 'Karim' },
+                lead: null,
+                assignee: { name: 'Asha' },
+            }],
+            total: 1,
+        });
+        const deps = makeDeps({
+            crmLeads: { findAll: jest.fn(), getStatusSummary: jest.fn() },
+            crmCampaigns: { findAll: jest.fn() },
+            crmFollowUps: { findAll, getTodaySummary },
+        } as any);
+
+        const result: any = await run('crm_pipeline', { kind: 'follow_ups' }, deps);
+
+        expect(getTodaySummary).toHaveBeenCalledWith('tenant-1', 'Asia/Dhaka');
+        expect(findAll).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ dueToday: true, timezone: 'Asia/Dhaka' }),
+        );
+        expect(result).toEqual(expect.objectContaining({ dueToday: 2, overdue: 1, total: 3 }));
+        expect(result.rows[0]).toEqual(expect.objectContaining({
+            party: 'Karim',
+            status: 'PENDING',
+            assignee: 'Asha',
+        }));
+    });
+
+    it('filters overdue follow-ups to due_at before today in Asia/Dhaka', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-07-15T12:00:00Z'));
+        const getTodaySummary = jest.fn().mockResolvedValue({ dueToday: 0, overdue: 1, total: 2 });
+        const findAll = jest.fn().mockResolvedValue({
+            items: [
+                {
+                    due_at: new Date('2026-07-14T10:00:00Z'),
+                    status: 'PENDING',
+                    customer: null,
+                    lead: { name: 'Nadia' },
+                    assignee: { name: 'Asha' },
+                },
+                {
+                    due_at: new Date('2026-07-16T10:00:00Z'),
+                    status: 'PENDING',
+                    customer: { name: 'Karim' },
+                    lead: null,
+                    assignee: { name: 'Asha' },
+                },
+            ],
+            total: 2,
+        });
+        const deps = makeDeps({
+            crmLeads: { findAll: jest.fn(), getStatusSummary: jest.fn() },
+            crmCampaigns: { findAll: jest.fn() },
+            crmFollowUps: { findAll, getTodaySummary },
+        } as any);
+
+        try {
+            const result: any = await run('crm_pipeline', { kind: 'follow_ups', scope: 'overdue' }, deps);
+
+            expect(findAll).toHaveBeenCalledWith(
+                'tenant-1',
+                expect.objectContaining({ status: 'PENDING', timezone: 'Asia/Dhaka', limit: 100 }),
+            );
+            expect(result.rows).toHaveLength(1);
+            expect(result.rows[0].party).toBe('Nadia');
+        } finally {
+            jest.useRealTimers();
+        }
     });
 });

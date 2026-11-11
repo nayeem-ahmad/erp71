@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { AssetsModule } from '../assets/assets.module';
 import { ImportsController } from './imports.controller';
@@ -9,7 +9,7 @@ import { ImportsService } from './imports.service';
     // AssetsModule for document uploads; JobTrackerService and AppLogger both
     // come from @Global() modules, which is why the scheduler needs no import
     // of its own.
-    imports: [AuthModule, AssetsModule],
+    imports: [forwardRef(() => AuthModule), AssetsModule],
     controllers: [ImportsController],
     providers: [ImportsService, ImportsScheduler],
     exports: [ImportsService],
