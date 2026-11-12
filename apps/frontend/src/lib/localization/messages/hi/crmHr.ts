@@ -1183,6 +1183,7 @@ export const crmHrMessages = {
                 namePlaceholder: "जैसा सीवी में लिखा है",
                 phone: "फ़ोन",
                 phonePlaceholder: '01XXXXXXXXX',
+                phoneInvalid: 'फ़ोन नंबर का प्रारूप अमान्य है',
                 email: "ईमेल",
                 source: "स्रोत",
                 sourcePlaceholder: "रेफ़रल, Facebook, वॉक-इन…",

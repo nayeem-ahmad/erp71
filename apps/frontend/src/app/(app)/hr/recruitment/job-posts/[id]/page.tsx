@@ -185,7 +185,9 @@ export default function JobPostDetailPage() {
                                                 <p className="text-sm font-medium text-gray-900">
                                                     {application.applicant?.name}
                                                 </p>
-                                                <p className="text-xs text-gray-500">{application.applicant?.phone}</p>
+                                                {application.applicant?.phone?.trim() ? (
+                                                    <p className="text-xs text-gray-500">{application.applicant.phone}</p>
+                                                ) : null}
                                                 <p className="mt-1 text-xs text-gray-400">
                                                     {t.recruitment.applications.appliedOn}: {formatDate(application.applied_at)}
                                                 </p>

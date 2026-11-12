@@ -17,6 +17,7 @@ import {
 } from '@/components/ui';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
 import { APPLICATION_STAGES, OPEN_STAGES, stageTone, type Applicant } from '../types';
+import { applicantPhoneOrNull, applicantPhoneValidationError } from '../applicant-phone';
 
 const columnHelper = createColumnHelper<Applicant>();
 /** The source chip's value for an applicant with none recorded. */
@@ -41,8 +42,8 @@ const blankForm = () => ({
 /**
  * HR > Recruitment > Applicants — the candidate list, one row per person.
  *
- * The phone number is the identity here, which is why it is required and why a
- * second application from the same person reuses this row instead of adding one.
+ * Phone is optional. When one is entered it is still how a repeat candidate is
+ * recognised, and it still has to be a phone number. An empty box is no phone.
  */
 export default function ApplicantsPage() {
     const { t, locale } = useI18n();
@@ -64,6 +65,7 @@ export default function ApplicantsPage() {
     const [form, setForm] = useState(blankForm());
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState('');
+    const [phoneError, setPhoneError] = useState('');
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -83,10 +85,11 @@ export default function ApplicantsPage() {
 
     const openModal = (editing: Applicant | null) => {
         setFormError('');
+        setPhoneError('');
         setForm(editing
             ? {
                 name: editing.name,
-                phone: editing.phone,
+                phone: editing.phone ?? '',
                 email: editing.email ?? '',
                 source: editing.source ?? '',
                 current_company: editing.current_company ?? '',
@@ -105,11 +108,16 @@ export default function ApplicantsPage() {
     const save = async (event: React.FormEvent) => {
         event.preventDefault();
         setFormError('');
+        if (applicantPhoneValidationError(form.phone)) {
+            setPhoneError(copy.form.phoneInvalid);
+            return;
+        }
+        setPhoneError('');
         setSaving(true);
         try {
             const payload = {
                 name: form.name,
-                phone: form.phone,
+                phone: applicantPhoneOrNull(form.phone),
                 email: form.email || null,
                 source: form.source || null,
                 current_company: form.current_company || null,
@@ -276,12 +284,15 @@ export default function ApplicantsPage() {
         }),
         columnHelper.accessor('phone', {
             header: copy.columns.contact,
-            cell: (info) => (
-                <div>
-                    <span className="block">{info.getValue()}</span>
-                    {info.row.original.email && <span className="block text-gray-500">{info.row.original.email}</span>}
-                </div>
-            ),
+            cell: (info) => {
+                const phone = (info.getValue() as string | null | undefined)?.trim();
+                return (
+                    <div>
+                        <span className="block">{phone || '—'}</span>
+                        {info.row.original.email && <span className="block text-gray-500">{info.row.original.email}</span>}
+                    </div>
+                );
+            },
             size: 180,
         }),
         columnHelper.accessor(
@@ -431,13 +442,18 @@ export default function ApplicantsPage() {
                                 />
                             </Field>
 
-                            <Field label={copy.form.phone} htmlFor="applicant-phone" required>
+                            <Field label={copy.form.phone} htmlFor="applicant-phone" error={phoneError}>
                                 <Input
                                     id="applicant-phone"
                                     value={form.phone}
-                                    onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
+                                    onChange={(event) => {
+                                        setPhoneError('');
+                                        setForm((prev) => ({ ...prev, phone: event.target.value }));
+                                    }}
                                     placeholder={copy.form.phonePlaceholder}
-                                    required
+                                    maxLength={30}
+                                    inputMode="tel"
+                                    aria-invalid={phoneError ? true : undefined}
                                 />
                             </Field>
 

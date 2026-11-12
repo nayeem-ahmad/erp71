@@ -19,7 +19,7 @@ export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
 export interface Applicant {
     id: string;
     name: string;
-    phone: string;
+    phone: string | null;
     email?: string | null;
     source?: string | null;
     current_company?: string | null;
@@ -85,7 +85,7 @@ export interface JobApplication {
     cover_letter?: string | null;
     rejection_reason?: string | null;
     hired_employee_id?: string | null;
-    applicant?: Partial<Applicant> & { id: string; name: string; phone: string };
+    applicant?: Partial<Applicant> & { id: string; name: string; phone: string | null };
     jobPost?: { id: string; code?: string; title: string; status?: JobPostStatus };
     hiredEmployee?: { id: string; employee_code: string; name: string } | null;
     events?: JobApplicationEvent[];

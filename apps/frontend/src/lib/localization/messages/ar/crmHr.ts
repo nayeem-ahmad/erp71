@@ -1183,6 +1183,7 @@ export const crmHrMessages = {
                 namePlaceholder: 'كما هو مكتوب في السيرة الذاتية',
                 phone: 'الهاتف',
                 phonePlaceholder: '01XXXXXXXXX',
+                phoneInvalid: 'تنسيق رقم الهاتف غير صالح',
                 email: 'البريد الإلكتروني',
                 source: 'المصدر',
                 sourcePlaceholder: 'إحالة، فيسبوك، زيارة مباشرة…',

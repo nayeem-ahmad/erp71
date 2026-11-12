@@ -1183,6 +1183,7 @@ export const crmHrMessages = {
                 namePlaceholder: "Wie im Lebenslauf angegeben",
                 phone: "Telefon",
                 phonePlaceholder: '01XXXXXXXXX',
+                phoneInvalid: 'Ungültiges Telefonnummernformat',
                 email: "E-Mail",
                 source: "Quelle",
                 sourcePlaceholder: "Empfehlung, Facebook, Direktbewerbung…",
