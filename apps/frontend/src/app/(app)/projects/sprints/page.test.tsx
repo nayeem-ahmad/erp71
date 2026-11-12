@@ -16,6 +16,7 @@ jest.mock('@/lib/api', () => ({
         getSprints: jest.fn(),
         getProjects: jest.fn(),
         createSprint: jest.fn(),
+        updateSprint: jest.fn(),
         startSprint: jest.fn(),
         completeSprint: jest.fn(),
         getSprintBurndown: jest.fn(),
@@ -187,5 +188,60 @@ describe('Sprints page', () => {
         await waitFor(() =>
             expect(api.completeSprint).toHaveBeenCalledWith('s1', expect.objectContaining({ kind: 'new', name: 'Sprint 13' })),
         );
+    });
+
+    it('renders start, edit and delete as icon buttons in the actions column', async () => {
+        render(<SprintsPage />);
+
+        const start = await screen.findByRole('button', { name: 'Start sprint' });
+        const edit = screen.getByRole('button', { name: 'Edit sprint' });
+        const remove = screen.getByRole('button', { name: 'Delete sprint' });
+
+        expect(start.querySelector('[data-testid="play-icon"]')).toBeTruthy();
+        expect(edit.querySelector('[data-testid="pencil-icon"]')).toBeTruthy();
+        expect(remove.querySelector('[data-testid="trash2-icon"]')).toBeTruthy();
+        expect(start.className).toMatch(/\bh-7\b/);
+        expect(edit.className).toMatch(/\bh-7\b/);
+        expect(screen.queryByRole('button', { name: 'Complete sprint' })).not.toBeInTheDocument();
+    });
+
+    it('renders complete as an icon button on an active sprint', async () => {
+        (api.getSprints as jest.Mock).mockResolvedValue([sprint({ status: 'ACTIVE' })]);
+        render(<SprintsPage />);
+
+        const complete = await screen.findByRole('button', { name: 'Complete sprint' });
+        expect(complete.querySelector('[data-testid="checkcircle2-icon"]')).toBeTruthy();
+        expect(complete.className).toMatch(/\bh-7\b/);
+        expect(screen.queryByRole('button', { name: 'Start sprint' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Edit sprint' }).querySelector('[data-testid="pencil-icon"]')).toBeTruthy();
+    });
+
+    it('edits a sprint from the modal and reloads the list', async () => {
+        (api.updateSprint as jest.Mock).mockResolvedValue({ id: 's1' });
+        render(<SprintsPage />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Edit sprint' }));
+
+        expect(screen.getByRole('heading', { name: 'Edit sprint' })).toBeInTheDocument();
+        expect(screen.getByLabelText(/sprint name/i)).toHaveValue('Sprint 12');
+        expect(screen.getByLabelText(/^goal/i)).toHaveValue('Finish the fit-out');
+        expect(screen.getByLabelText(/^starts/i)).toHaveValue('2026-08-01');
+        expect(screen.getByLabelText(/^ends/i)).toHaveValue('2026-08-14');
+
+        fireEvent.change(screen.getByLabelText(/sprint name/i), { target: { value: 'Sprint 12b' } });
+        fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+        await waitFor(() =>
+            expect(api.updateSprint).toHaveBeenCalledWith(
+                's1',
+                expect.objectContaining({
+                    name: 'Sprint 12b',
+                    goal: 'Finish the fit-out',
+                    startDate: '2026-08-01',
+                    endDate: '2026-08-14',
+                }),
+            ),
+        );
+        expect(api.getSprints).toHaveBeenCalledTimes(2);
     });
 });

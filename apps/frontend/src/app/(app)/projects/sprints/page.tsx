@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, CircleDashed, Plus, Timer, Trash2 } from 'lucide-react';
+import { CheckCircle2, CircleDashed, Pencil, Play, Plus, Timer, Trash2 } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
@@ -45,6 +45,11 @@ const TONE: Record<string, 'neutral' | 'info' | 'success'> = {
 };
 
 const TABLE_ID = 'project-sprints';
+const EMPTY_FORM = { name: '', goal: '', startDate: '', endDate: '' };
+
+function dateInputValue(iso: string): string {
+    return iso.slice(0, 10);
+}
 
 export default function SprintsPage() {
     const { t, locale } = useI18n();
@@ -65,10 +70,11 @@ export default function SprintsPage() {
     const { search, status, projectId } = filters;
     const [projects, setProjects] = useState<{ id: string; code: string; name: string }[]>([]);
     const [creating, setCreating] = useState(false);
+    const [editing, setEditing] = useState<Sprint | null>(null);
     const [saving, setSaving] = useState(false);
     const [pendingDelete, setPendingDelete] = useState<Sprint | null>(null);
     const [completing, setCompleting] = useState<Sprint | null>(null);
-    const [form, setForm] = useState({ name: '', goal: '', startDate: '', endDate: '' });
+    const [form, setForm] = useState(EMPTY_FORM);
 
     const load = useCallback(async () => {
         // Nothing is asked for until the remembered filters are in: otherwise a
@@ -112,20 +118,51 @@ export default function SprintsPage() {
         });
     }, [sprints, search, status]);
 
-    const create = async (e: React.FormEvent) => {
+    const closeForm = () => {
+        setCreating(false);
+        setEditing(null);
+        setForm(EMPTY_FORM);
+    };
+
+    const openCreate = () => {
+        setEditing(null);
+        setForm(EMPTY_FORM);
+        setCreating(true);
+    };
+
+    const openEdit = (sprint: Sprint) => {
+        setCreating(false);
+        setForm({
+            name: sprint.name,
+            goal: sprint.goal ?? '',
+            startDate: dateInputValue(sprint.start_date),
+            endDate: dateInputValue(sprint.end_date),
+        });
+        setEditing(sprint);
+    };
+
+    const save = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.name.trim() || !form.startDate || !form.endDate) return;
         setSaving(true);
         try {
-            await api.createSprint({
+            const payload = {
                 name: form.name.trim(),
                 goal: form.goal.trim() || undefined,
                 startDate: form.startDate,
                 endDate: form.endDate,
-            });
-            toast.success(m.sprint.created);
-            setCreating(false);
-            setForm({ name: '', goal: '', startDate: '', endDate: '' });
+            };
+            if (editing) {
+                await api.updateSprint(editing.id, {
+                    ...payload,
+                    goal: form.goal.trim(),
+                });
+                toast.success(m.sprint.updated);
+            } else {
+                await api.createSprint(payload);
+                toast.success(m.sprint.created);
+            }
+            closeForm();
             await load();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.sprint.saveFailed);
@@ -297,34 +334,35 @@ export default function SprintsPage() {
                 enableColumnFilter: false,
                 enableResizing: false,
                 cell: ({ row }: { row: { original: Sprint } }) => (
-                    <div className="flex flex-wrap items-center justify-end gap-2">
+                    <RowActions>
                         {row.original.status === 'PLANNED' && (
-                            <Button
-                                variant="secondary"
-                                className="min-h-touch"
+                            <RowActionButton
+                                icon={<Play />}
+                                label={m.sprint.start}
+                                intent="success"
                                 onClick={() => act(() => api.startSprint(row.original.id), m.sprint.started)}
-                            >
-                                {m.sprint.start}
-                            </Button>
+                            />
                         )}
                         {row.original.status === 'ACTIVE' && (
-                            <Button
-                                variant="secondary"
-                                className="min-h-touch"
-                                onClick={() => setCompleting(row.original)}
-                            >
-                                {m.sprint.complete}
-                            </Button>
-                        )}
-                        <RowActions>
                             <RowActionButton
-                                icon={<Trash2 />}
-                                label={m.sprint.deleteSprint}
-                                intent="danger"
-                                onClick={() => setPendingDelete(row.original)}
+                                icon={<CheckCircle2 />}
+                                label={m.sprint.complete}
+                                intent="success"
+                                onClick={() => setCompleting(row.original)}
                             />
-                        </RowActions>
-                    </div>
+                        )}
+                        <RowActionButton
+                            icon={<Pencil />}
+                            label={m.sprint.editSprint}
+                            onClick={() => openEdit(row.original)}
+                        />
+                        <RowActionButton
+                            icon={<Trash2 />}
+                            label={m.sprint.deleteSprint}
+                            intent="danger"
+                            onClick={() => setPendingDelete(row.original)}
+                        />
+                    </RowActions>
                 ),
             },
         ],
@@ -346,7 +384,7 @@ export default function SprintsPage() {
                     'projects',
                 )}
                 actions={
-                    <Button className="min-h-touch" onClick={() => setCreating(true)}>
+                    <Button className="min-h-touch" onClick={openCreate}>
                         <Plus className="h-4 w-4" />
                         {m.sprint.newSprint}
                     </Button>
@@ -373,10 +411,10 @@ export default function SprintsPage() {
                 viewOptions
             />
 
-            {creating && (
-            <ModalShell onBackdropClick={() => setCreating(false)}>
-                <ModalHeader title={m.sprint.newSprint} onClose={() => setCreating(false)} />
-                <form onSubmit={create}>
+            {(creating || editing) && (
+            <ModalShell onBackdropClick={closeForm}>
+                <ModalHeader title={editing ? m.sprint.editSprint : m.sprint.newSprint} onClose={closeForm} />
+                <form onSubmit={save}>
                     <div className="space-y-3 p-4">
                         <Field label={m.sprint.name} required htmlFor="sprint-name">
                             <Input
@@ -414,7 +452,7 @@ export default function SprintsPage() {
                         <p className="text-xs text-gray-500">{m.sprint.tenantHint}</p>
                     </div>
                     <ModalFooter>
-                        <Button type="button" variant="secondary" onClick={() => setCreating(false)}>
+                        <Button type="button" variant="secondary" onClick={closeForm}>
                             {t.common.cancel}
                         </Button>
                         <Button type="submit" disabled={saving}>
