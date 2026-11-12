@@ -121,43 +121,54 @@ function makeService(overrides: {
         }),
     };
 
+    const toolDeps = {
+        build: () => ({
+            salesReports,
+            inventoryReports: {} as any,
+            purchaseReports: {} as any,
+            customers: {} as any,
+            suppliers: {} as any,
+            expenses: {} as any,
+            accounting: {} as any,
+            data: chatData,
+            web: webSearch,
+            anomalies,
+        }),
+    };
+    const timezones = {
+        for: jest.fn(async () => 'Asia/Dhaka'),
+        forMany: jest.fn(async () => new Map()),
+        prime: jest.fn(),
+        invalidate: jest.fn(),
+    } as any;
     const service = new ChatService(
         db,
         ai,
         platformSettings,
         planEntitlements,
-        salesReports,
-        {} as any, // inventoryReports
-        {} as any, // purchaseReports
-        {} as any, // customers
-        {} as any, // suppliers
-        {} as any, // expenses
-        {} as any, // accounting
-        chatData,
-        webSearch,
-        anomalies,
-        {
-            for: jest.fn(async () => 'Asia/Dhaka'),
-            forMany: jest.fn(async () => new Map()),
-            prime: jest.fn(),
-            invalidate: jest.fn(),
-        } as any, // timezones
+        toolDeps as any,
+        timezones,
         new AuthCacheService({ ttlMs: 0 }),
     );
 
     return { service, db, ai, platformSettings, planEntitlements, salesReports, chatData, webSearch, anomalies };
 }
 
-const FLAGGED_TOOLS = CHAT_TOOLS.filter((tool) => tool.featureFlag);
-
 describe('ChatService.resolveTools', () => {
     it('gives an OWNER every unflagged tool without consulting per-store grants', async () => {
         const { service, db } = makeService();
-        const { tools } = await service.resolveTools(OWNER_CTX);
+        const { tools, modules } = await service.resolveTools(OWNER_CTX);
 
         // Feature-flagged tools are excluded: an owner's permissions are total, but
         // a capability the platform operator has not switched on is nobody's.
-        expect(tools).toHaveLength(CHAT_TOOLS.length - FLAGGED_TOOLS.length);
+        // Module-gated tools follow the plan, so manufacturing stays off until
+        // premiumManufacturing is entitled.
+        const expected = CHAT_TOOLS.filter((tool) => {
+            if (tool.featureFlag) return false;
+            if (!tool.modules?.length) return true;
+            return tool.modules.some((m) => modules.has(m));
+        });
+        expect(tools.map((t) => t.name)).toEqual(expected.map((t) => t.name));
         expect(db.userStorePermission.findFirst).not.toHaveBeenCalled();
     });
 
@@ -231,6 +242,8 @@ describe('ChatService.resolveTools', () => {
         expect(names).not.toContain('low_stock');
         expect(names).not.toContain('stock_on_hand');
         expect(names).not.toContain('sales_summary');
+        expect(names).not.toContain('storefront_orders');
+        expect(names).not.toContain('import_status');
         expect(names).toContain('financial_statement');
         expect(names).toContain('payables_aging');
         // The tools that carry no module tag stay available to everyone.
@@ -245,6 +258,45 @@ describe('ChatService.resolveTools', () => {
         const names = (await service.resolveTools(OWNER_CTX)).tools.map((t) => t.name);
 
         expect(names).toContain('sales_summary');
+    });
+
+    it('withholds crm-only tools when premiumCrm is off', async () => {
+        const { service } = makeService({ planFeatures: {} });
+        const { modules, tools } = await service.resolveTools(OWNER_CTX);
+        expect(modules.has('crm')).toBe(false);
+        expect(modules.has('storefront')).toBe(true);
+        expect(modules.has('imports')).toBe(true);
+        // customer_lookup is tagged retail+crm, so BASIC still sees it.
+        expect(tools.map((t) => t.name)).toContain('customer_lookup');
+        expect(tools.map((t) => t.name)).not.toContain('crm_pipeline');
+    });
+
+    it('adds crm when premiumCrm is on', async () => {
+        const { service } = makeService({ planFeatures: { premiumCrm: true } });
+        const { modules, tools } = await service.resolveTools(OWNER_CTX);
+        expect(modules.has('crm')).toBe(true);
+        expect(tools.map((t) => t.name)).toContain('crm_pipeline');
+    });
+
+    it('withholds storefront and imports from an accounting-only tenant', async () => {
+        const { service } = makeService({ planFeatures: { accountingOnly: true } });
+        const { modules, tools } = await service.resolveTools(OWNER_CTX);
+        expect(modules.has('storefront')).toBe(false);
+        expect(modules.has('imports')).toBe(false);
+        expect(modules.has('retail')).toBe(false);
+        expect(tools.map((t) => t.name)).not.toContain('import_status');
+    });
+
+    it('withholds manufacturing_summary when premiumManufacturing is off', async () => {
+        const { service } = makeService({ planFeatures: {} });
+        const names = (await service.resolveTools(OWNER_CTX)).tools.map((t) => t.name);
+        expect(names).not.toContain('manufacturing_summary');
+    });
+
+    it('offers manufacturing_summary when premiumManufacturing is on', async () => {
+        const { service } = makeService({ planFeatures: { premiumManufacturing: true } });
+        const names = (await service.resolveTools(OWNER_CTX)).tools.map((t) => t.name);
+        expect(names).toContain('manufacturing_summary');
     });
 });
 

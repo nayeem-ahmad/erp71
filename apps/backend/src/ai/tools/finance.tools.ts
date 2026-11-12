@@ -1,5 +1,15 @@
 import { StorePermission } from '@erp71/shared-types';
-import { DATE_RANGE_PROPS, money, page, PAGING_PROPS, pct, resolveStoreId, STORE_PROP, type ChatTool } from './types';
+import {
+    DATE_RANGE_PROPS,
+    isoDate,
+    money,
+    page,
+    PAGING_PROPS,
+    pct,
+    resolveStoreId,
+    STORE_PROP,
+    type ChatTool,
+} from './types';
 
 /** Caps how many ledger groups a statement hands back per section. */
 const MAX_STATEMENT_GROUPS = 12;
@@ -281,6 +291,65 @@ export const FINANCE_TOOLS: ChatTool[] = [
                     balance: money(a.balance),
                 })),
                 openCashierSessions: result.openCashierSessions,
+            };
+        },
+    },
+
+    {
+        name: 'mushak_summary',
+        permission: StorePermission.VIEW_FINANCIAL_REPORTS,
+        modules: ['retail'],
+        description:
+            'Mushak 6.2 VAT sales-book totals for a date range: invoice count, taxable value, SD, VAT and inclusive ' +
+            'total, plus a paged list of invoices. Use for "what is our Mushak VAT", "6.2 totals this month". ' +
+            'This is a summary of the book, not the full NBR form.',
+        parameters: {
+            type: 'object',
+            properties: {
+                ...DATE_RANGE_PROPS,
+                ...STORE_PROP,
+                taxableOnly: {
+                    type: 'boolean',
+                    description: 'When true, keep only invoices that carry VAT or SD.',
+                },
+                ...PAGING_PROPS,
+            },
+            required: ['from', 'to'],
+        },
+        handler: async (ctx, args, deps) => {
+            const { storeId, note } = resolveStoreId(ctx, args.storeId);
+            const result = await deps.mushak.getSalesBook(
+                ctx.tenantId,
+                {
+                    from: args.from,
+                    to: args.to,
+                    storeId,
+                    ...(args.taxableOnly === true || args.taxableOnly === 'true' ? { taxableOnly: 'true' as const } : {}),
+                },
+                ctx.timezone,
+            );
+            const paged = page(result.rows ?? [], args);
+            return {
+                ...(note ? { note } : {}),
+                form: '6.2',
+                period: result.period ?? { from: args.from, to: args.to },
+                estimated: Boolean(result.estimated),
+                totals: {
+                    invoices: result.totals.invoices,
+                    totalValue: money(result.totals.totalValue),
+                    sdAmount: money(result.totals.sdAmount),
+                    vatAmount: money(result.totals.vatAmount),
+                    inclusiveTotal: money(result.totals.inclusiveTotal),
+                },
+                ...paged,
+                rows: paged.rows.map((row: any) => ({
+                    date: isoDate(row.date),
+                    invoiceNumber: row.invoiceNumber,
+                    buyer: typeof row.buyer === 'string' ? row.buyer : row.buyer?.name ?? null,
+                    vatAmount: money(row.vatAmount),
+                    sdAmount: money(row.sdAmount),
+                    totalValue: money(row.totalValue),
+                })),
             };
         },
     },

@@ -3,6 +3,8 @@ import {
     asComparison,
     COMPARE_PROP,
     DATE_RANGE_PROPS,
+    isoDate,
+    MAX_TOOL_ROWS,
     money,
     page,
     PAGING_PROPS,
@@ -197,7 +199,82 @@ export const PURCHASING_TOOLS: ChatTool[] = [
             };
         },
     },
+
+    {
+        name: 'purchase_line_items',
+        permission: StorePermission.VIEW_FINANCIAL_REPORTS,
+        modules: ['retail', 'inventory'],
+        description:
+            'The bill lines behind a purchase total: which bill, which supplier, which product, qty and amount. ' +
+            'Use when a summary is not enough and you need to name the bills a figure came from. ' +
+            'Filter by product, supplier or free text. Does not replace purchase_summary.',
+        parameters: {
+            type: 'object',
+            properties: {
+                ...DATE_RANGE_PROPS,
+                ...STORE_PROP,
+                productId: { type: 'string', description: 'Restrict to one product id from resolve_entity.' },
+                supplierId: { type: 'string', description: 'Restrict to one supplier id from resolve_entity.' },
+                search: { type: 'string', description: 'Free-text match on product, bill number or supplier.' },
+                ...PAGING_PROPS,
+            },
+            required: ['from', 'to'],
+        },
+        handler: async (ctx, args, deps) => {
+            const { storeId, note } = resolveStoreId(ctx, args.storeId);
+            const limit = Math.min(Math.max(Number(args.limit) || MAX_TOOL_ROWS, 1), MAX_TOOL_ROWS);
+            const offset = Math.max(Number(args.offset) || 0, 0);
+            const result = await deps.purchaseLineItems.getPurchaseLineItems(
+                ctx.tenantId,
+                {
+                    from: args.from,
+                    to: args.to,
+                    storeId,
+                    limit,
+                    page: Math.floor(offset / limit) + 1,
+                    ...(args.productId ? { productId: String(args.productId) } : {}),
+                    ...(args.supplierId ? { supplierId: String(args.supplierId) } : {}),
+                    ...(args.search ? { search: String(args.search) } : {}),
+                },
+                ctx.timezone,
+            );
+            return {
+                ...(note ? { note } : {}),
+                period: { from: args.from, to: args.to },
+                summary: {
+                    lineCount: result.summary.lineCount,
+                    billCount: result.summary.billCount,
+                    quantity: result.summary.quantity,
+                    amount: money(result.summary.amount),
+                    returnedQuantity: result.summary.returnedQuantity,
+                    returnedAmount: money(result.summary.returnedAmount),
+                },
+                totalRows: result.pagination?.total ?? result.rows.length,
+                page: result.pagination?.page ?? 1,
+                rows: result.rows.map(projectPurchaseLine),
+            };
+        },
+    },
 ];
+
+function projectPurchaseLine(row: any) {
+    const purchase = row.purchase;
+    const product = row.product;
+    const unitPrice = row.unitPrice ?? row.unitCost ?? row.unit_cost;
+    const amount = row.amount ?? row.line_total ?? Number(row.quantity ?? 0) * Number(unitPrice ?? 0);
+    const supplier = row.supplier ?? purchase?.supplier;
+    return {
+        billNumber: row.billNumber ?? row.purchaseNumber ?? purchase?.purchase_number ?? null,
+        date: isoDate(row.date ?? purchase?.purchase_date),
+        supplier: typeof supplier === 'string' ? supplier : supplier?.name ?? null,
+        product: typeof product === 'string' ? product : product?.name ?? null,
+        sku: typeof product === 'string' ? null : product?.sku ?? null,
+        quantity: row.quantity,
+        unitPrice: money(unitPrice),
+        amount: money(amount),
+        returnedQuantity: row.returnedQuantity ?? 0,
+    };
+}
 
 function projectPurchaseSummary(summary: any) {
     return {

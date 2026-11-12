@@ -10,6 +10,6 @@ import { PurchaseLineItemsService } from './purchase-line-items.service';
     imports: [DatabaseModule],
     controllers: [PurchaseReportsController],
     providers: [PurchaseReportsService, PurchaseLineItemsService, SubscriptionAccessGuard, TenantRoleGuard],
-    exports: [PurchaseReportsService],
+    exports: [PurchaseReportsService, PurchaseLineItemsService],
 })
 export class PurchaseReportsModule {}

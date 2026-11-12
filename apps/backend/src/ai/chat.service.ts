@@ -5,18 +5,9 @@ import { hasStorePermission } from '../auth/permission.util';
 import { TenantContext } from '../database/tenant.decorator';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
-import { AccountingService } from '../accounting/accounting.service';
-import { CustomersService } from '../customers/customers.service';
-import { ExpensesService } from '../expenses/expenses.service';
-import { InventoryReportsService } from '../inventory-reports/inventory-reports.service';
-import { PurchaseReportsService } from '../purchase-reports/purchase-reports.service';
-import { SalesReportsService } from '../sales-reports/sales-reports.service';
-import { SuppliersService } from '../suppliers/suppliers.service';
 import { AiService, type ChatCompletionMessage } from './ai.service';
-import { AnomalyDetectionService } from './anomaly-detection.service';
 import { buildNavigationSection } from './app-navigation';
-import { ChatDataService } from './chat-data.service';
-import { WebSearchService } from './web-search.service';
+import { ChatToolDepsFactory } from './chat-tool-deps.factory';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
 import { AuthCacheService } from '../database/auth-cache.service';
 import { loadMemberStoreAccess } from '../database/member-access.loader';
@@ -70,16 +61,7 @@ export class ChatService {
         private readonly ai: AiService,
         private readonly platformSettings: PlatformSettingsService,
         private readonly planEntitlements: PlanEntitlementsService,
-        private readonly salesReports: SalesReportsService,
-        private readonly inventoryReports: InventoryReportsService,
-        private readonly purchaseReports: PurchaseReportsService,
-        private readonly customers: CustomersService,
-        private readonly suppliers: SuppliersService,
-        private readonly expenses: ExpensesService,
-        private readonly accounting: AccountingService,
-        private readonly chatData: ChatDataService,
-        private readonly webSearch: WebSearchService,
-        private readonly anomalyDetection: AnomalyDetectionService,
+        private readonly toolDeps: ChatToolDepsFactory,
         private readonly timezones: TenantTimezoneService,
         private readonly authCache: AuthCacheService,
     ) {}
@@ -104,18 +86,7 @@ export class ChatService {
     }
 
     private get deps(): ChatToolDeps {
-        return {
-            salesReports: this.salesReports,
-            inventoryReports: this.inventoryReports,
-            purchaseReports: this.purchaseReports,
-            customers: this.customers,
-            suppliers: this.suppliers,
-            expenses: this.expenses,
-            accounting: this.accounting,
-            data: this.chatData,
-            web: this.webSearch,
-            anomalies: this.anomalyDetection,
-        };
+        return this.toolDeps.build();
     }
 
     /**
@@ -162,7 +133,7 @@ export class ChatService {
     /** Platform-level capabilities that cost money per call, hence opt-in. */
     private async resolveFeatureFlags(): Promise<Set<ChatToolFeatureFlag>> {
         const flags = new Set<ChatToolFeatureFlag>();
-        if (await this.webSearch.isEnabled().catch(() => false)) flags.add('webSearch');
+        if (await this.deps.web.isEnabled().catch(() => false)) flags.add('webSearch');
         return flags;
     }
 
@@ -176,9 +147,11 @@ export class ChatService {
         if (!hasPlanEntitlement(features, 'accountingOnly')) {
             modules.add('retail');
             modules.add('inventory');
-            modules.add('crm');
             modules.add('hr');
+            modules.add('storefront');
+            modules.add('imports');
         }
+        if (hasPlanEntitlement(features, 'premiumCrm')) modules.add('crm');
         if (hasPlanEntitlement(features, 'premiumManufacturing')) modules.add('manufacturing');
 
         return modules;
@@ -265,7 +238,7 @@ export class ChatService {
         // Seeded with any link the user typed: asking the assistant to read a URL
         // you pasted is a legitimate request, and it is the one case where a
         // fetchable URL does not have to come from a search result first.
-        const fetchableUrls = new Set(this.webSearch.extractUrls(message));
+        const fetchableUrls = new Set(this.deps.web.extractUrls(message));
         const toolCredits = { total: 0 };
 
         const toolContext: ChatToolContext = {
@@ -533,7 +506,16 @@ export class ChatService {
             '- For a slice of sales, use sales_breakdown with the right groupBy rather than looking for a dedicated tool.',
             '- Sales reports come from invoices; accounting statements come from posted vouchers. They can legitimately differ. Say which source a figure came from when both could apply.',
             '- Before reporting a zero or an empty list as an answer, consider calling describe_capabilities — a period with no data and a business that never recorded that data need different answers.',
-            '- "Is anything wrong", "check for mistakes", "any unusual transactions", "is anyone stealing" — use transaction_anomalies. Do not try to spot outliers yourself by listing documents and eyeballing the amounts; you cannot see line items, and the tool has already done the comparison against this business\'s own history.',
+            '- Daily close / today\'s branch snapshot — use daily_report. It is always one branch; if several exist, pass storeId from the branch list.',
+            '- Open tills / till variance today — use cashier_sessions. There is no date; the overview is today only (open plus closed today).',
+            '- Which invoices a product or customer figure came from — use sales_line_items or purchase_line_items.',
+            '- Mushak 6.2 / VAT sales-book totals — use mushak_summary.',
+            '- Written-off customer debts — use bad_debts.',
+            '- Online storefront orders — use storefront_orders. That is the public shop, not POS sales.',
+            '- Production jobs, manufactured-product P&L, or manufacturing analytics — use manufacturing_summary with kind jobs, product_pl, or analytics.',
+            '- Import shipments or LC expiry — use import_status with kind shipments or lc_register. Duty figures are not in that tool.',
+            '- Lead lists, campaigns, or follow-ups — use crm_pipeline. open_pipeline kind=leads is only the committed-but-unfinished count; crm_pipeline is the list.',
+            '- "Is anything wrong", "check for mistakes", "any unusual transactions", "is anyone stealing" — use transaction_anomalies. Do not eyeball outliers from line-item or document lists; transaction_anomalies has already compared against this business\'s own history.',
             '',
             'REPORTING ANOMALIES:',
             '- A flag is a statistical difference from this business\'s own past, not a finding. Say what was observed, what it was compared against, and how many past transactions that comparison came from.',
