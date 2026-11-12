@@ -1037,6 +1037,54 @@ describe('TaskDetailPanel description', () => {
     });
 
     /**
+     * Grammarly's card is a custom element on the body, not inside the editor.
+     * Treating that blur as "click away" closed the description before the
+     * suggestion could land, so the correction never stuck.
+     */
+    it('stays open when focus moves to a Grammarly suggestion', async () => {
+        getProjectTask.mockResolvedValue(withDescription(null));
+        panel();
+        const editor = await edit();
+        typeInEditor(editor, 'Date wise view');
+
+        const popup = document.createElement('grammarly-popups');
+        document.body.appendChild(popup);
+        fireEvent.blur(editorShell(editor), { relatedTarget: popup });
+
+        expect(screen.getByLabelText('Description', { selector: '[contenteditable]' })).toBeInTheDocument();
+        expect(updateProjectTask).not.toHaveBeenCalled();
+        popup.remove();
+    });
+
+    /**
+     * Grammarly's card lives in a closed shadow root, so the blur that follows
+     * a click on a suggestion has no related target — the same shape as a
+     * click on empty page. The pointerdown still names the host, and that is
+     * what keeps the editor open long enough for the replacement to apply.
+     */
+    it('stays open when a Grammarly suggestion is clicked, and still saves on a real leave', async () => {
+        getProjectTask.mockResolvedValue(withDescription(null));
+        panel();
+        const editor = await edit();
+        typeInEditor(editor, 'Date wise view');
+
+        const popup = document.createElement('grammarly-popups');
+        document.body.appendChild(popup);
+        fireEvent.pointerDown(popup);
+        fireEvent.blur(editorShell(editor), { relatedTarget: null });
+
+        expect(screen.getByLabelText('Description', { selector: '[contenteditable]' })).toBeInTheDocument();
+        expect(updateProjectTask).not.toHaveBeenCalled();
+
+        leave(editor);
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { description: 'Date wise view' }),
+        );
+        popup.remove();
+    });
+
+    /**
      * Switching to another tab or app blurs the editor on the way out, with no
      * related target, the same as a click on empty page. The difference is that
      * the editor stays `document.activeElement`, and the browser focuses it again
