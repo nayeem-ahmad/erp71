@@ -168,6 +168,43 @@ describe('RecruitmentService', () => {
                 .rejects.toThrow(ConflictException);
         });
 
+        it('creates an applicant without a phone and stores null', async () => {
+            const created = await service.createApplicant('t1', { name: 'Walk-in' });
+
+            expect(db.applicant.findFirst).not.toHaveBeenCalled();
+            expect(db.applicant.create.mock.calls[0][0].data.phone).toBeNull();
+            expect(created.phone).toBeNull();
+        });
+
+        it('treats a blank phone as no phone, including a second applicant with none', async () => {
+            await service.createApplicant('t1', { name: 'A', phone: '' });
+            await service.createApplicant('t1', { name: 'B', phone: '   ' });
+
+            expect(db.applicant.findFirst).not.toHaveBeenCalled();
+            expect(db.applicant.create.mock.calls.map((call: any) => call[0].data.phone)).toEqual([null, null]);
+        });
+
+        it('rejects an invalid phone', async () => {
+            await expect(service.createApplicant('t1', { name: 'Walk-in', phone: 'not-a-phone' }))
+                .rejects.toThrow(BadRequestException);
+            expect(db.applicant.create).not.toHaveBeenCalled();
+        });
+
+        it('stores a valid phone', async () => {
+            await service.createApplicant('t1', { name: 'Rina', phone: ' 01710000000 ' });
+
+            expect(db.applicant.create.mock.calls[0][0].data.phone).toBe('01710000000');
+        });
+
+        it('clears the phone when an edit sends a blank value', async () => {
+            db.applicant.findFirst.mockResolvedValue({ id: 'cand-1', phone: '01710000000', deleted_at: null });
+
+            await service.updateApplicant('t1', 'cand-1', { name: 'Rina Akter', phone: '' });
+
+            expect(db.applicant.update.mock.calls[0][0].data.phone).toBeNull();
+            expect(db.applicant.findFirst).toHaveBeenCalledTimes(1);
+        });
+
         it('refuses to delete an applicant who is still in a pipeline', async () => {
             db.applicant.findFirst.mockResolvedValue({ id: 'cand-1', deleted_at: null });
             db.jobApplication.count.mockResolvedValue(1);
@@ -176,6 +213,21 @@ describe('RecruitmentService', () => {
     });
 
     describe('applications', () => {
+        it('creates an application for a new applicant who has no phone', async () => {
+            db.jobApplication.findFirst
+                .mockResolvedValueOnce(null)
+                .mockResolvedValueOnce(APPLICATION);
+
+            await service.createApplication('t1', {
+                job_post_id: 'post-1',
+                applicant: { name: 'Walk-in', phone: '' },
+            });
+
+            expect(db.applicant.findFirst).not.toHaveBeenCalled();
+            expect(db.applicant.create.mock.calls[0][0].data.phone).toBeNull();
+            expect(db.jobApplication.create.mock.calls[0][0].data.applicant_id).toBe('cand-new');
+        });
+
         it('reuses an existing candidate when a new application repeats their phone number', async () => {
             db.applicant.findFirst.mockResolvedValue({ id: 'cand-1', deleted_at: null });
             db.jobApplication.findFirst
@@ -299,6 +351,17 @@ describe('RecruitmentService', () => {
             expect(employees.create.mock.calls[0][1]).toMatchObject({
                 department_id: 'dept-9', designation_id: 'desig-9',
             });
+        });
+
+        it('refuses to hire an applicant who has no phone', async () => {
+            db.jobApplication.findFirst.mockResolvedValue({
+                ...APPLICATION,
+                applicant: { ...APPLICATION.applicant, phone: null },
+            });
+
+            await expect(service.hire('t1', 'app-1', { date_of_joining: '2026-09-01' }))
+                .rejects.toThrow(/phone number/);
+            expect(employees.create).not.toHaveBeenCalled();
         });
 
         it('refuses to hire the same candidate twice', async () => {

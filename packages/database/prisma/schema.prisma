@@ -7002,7 +7002,11 @@ model Applicant {
   id                  String   @id @default(uuid())
   tenant_id           String
   name                String
-  phone               String
+  /// Optional. When a number is present it is how a returning candidate is
+  /// recognised (`@@unique([tenant_id, phone])`). A blank is stored as NULL,
+  /// which Postgres treats as distinct, so more than one applicant can have
+  /// no number. Existing rows are not rewritten.
+  phone               String?
   email               String?
   /// Where they came from — referral, Facebook, walk-in. Free text because
   /// every tenant's channel list is different and none of it drives logic.
@@ -7058,8 +7062,9 @@ model JobSeeker {
   id            String    @id @default(uuid())
   user_id       String    @unique
   full_name     String
-  /// Required before applying, because `Applicant.phone` is non-null and is the
-  /// key a hiring workspace de-duplicates candidates on.
+  /// The careers board still requires this before an application is created.
+  /// HR may file an `Applicant` with no phone; a number, when present, is what
+  /// the workspace de-duplicates candidates on.
   phone         String?
   /// One-line "Senior Accountant, 6 years" self-description.
   headline      String?

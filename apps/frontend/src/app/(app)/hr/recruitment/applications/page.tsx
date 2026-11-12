@@ -187,7 +187,9 @@ export default function ApplicationsPage() {
                 return (
                     <div>
                         <span className="block">{application.applicant?.name}</span>
-                        <span className="block text-gray-500">{application.applicant?.phone}</span>
+                        {application.applicant?.phone?.trim() ? (
+                            <span className="block text-gray-500">{application.applicant.phone}</span>
+                        ) : null}
                         {application.applicant?.resume_url && (
                             <a
                                 href={application.applicant.resume_url}

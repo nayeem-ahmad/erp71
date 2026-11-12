@@ -50,9 +50,9 @@ export class CareersRegisterDto {
     full_name: string;
 
     /**
-     * Required, not optional. A hiring workspace's `Applicant.phone` is non-null
-     * and is the column it de-duplicates candidates on, so a profile with no
-     * number could never be turned into an application.
+     * Required here. HR can file an applicant with no phone, but a careers
+     * application still de-duplicates the workspace's `Applicant` row on this
+     * number, so the profile has to have one before it can apply.
      */
     @IsString() @MinLength(6) @MaxLength(30)
     phone: string;

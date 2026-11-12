@@ -1183,6 +1183,7 @@ export const crmHrMessages = {
                 namePlaceholder: 'Seperti tertulis pada resume',
                 phone: 'Telefon',
                 phonePlaceholder: '01XXXXXXXXX',
+                phoneInvalid: 'Format nombor telefon tidak sah',
                 email: 'E-mel',
                 source: 'Sumber',
                 sourcePlaceholder: 'Rujukan, Facebook, datang sendiri…',

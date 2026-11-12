@@ -5,9 +5,10 @@ import { DatabaseService } from '../database/database.service';
 import { EmployeesService } from '../employees/employees.service';
 import { TenantContext } from '../database/tenant.decorator';
 import {
-    APPLICATION_STAGES, ApplicationStage, ChangeStageDto, CreateApplicantDto,
+    APPLICANT_PHONE_PATTERN, APPLICATION_STAGES, ApplicationStage, ChangeStageDto, CreateApplicantDto,
     CreateApplicationDto, CreateJobPostDto, HireApplicationDto, ListApplicationsQueryDto,
     ListJobPostsQueryDto, UpdateApplicantDto, UpdateApplicationDto, UpdateJobPostDto,
+    blankApplicantPhoneToNull,
 } from './recruitment.dto';
 
 /**
@@ -33,6 +34,19 @@ export class RecruitmentService {
 
     private isTerminal(stage: string) {
         return RecruitmentService.TERMINAL_STAGES.includes(stage as ApplicationStage);
+    }
+
+    /**
+     * A blank phone is "no phone" (null). A value has to match the same format
+     * the DTO enforces, so a caller that skips the pipe cannot store "n/a".
+     */
+    private storedPhone(phone: string | null | undefined): string | null {
+        const normalized = blankApplicantPhoneToNull(phone ?? null);
+        if (normalized == null) return null;
+        if (typeof normalized !== 'string' || normalized.length > 30 || !APPLICANT_PHONE_PATTERN.test(normalized)) {
+            throw new BadRequestException('Invalid phone number format');
+        }
+        return normalized;
     }
 
     // ── Job posts ─────────────────────────────────────────────────────────────
@@ -320,17 +334,20 @@ export class RecruitmentService {
     }
 
     /**
-     * The phone number is the identity: `@@unique([tenant_id, phone])`.
+     * A phone number, when there is one, is the identity: `@@unique([tenant_id, phone])`.
      *
      * A soft-deleted row still holds that number, so a returning candidate is
      * restored rather than rejected as a duplicate of something the tenant
-     * cannot see.
+     * cannot see. No number is not an identity — several applicants may have
+     * a null phone, and a null must not be looked up or it would match them.
      */
     async createApplicant(tenantId: string, dto: CreateApplicantDto) {
-        const phone = dto.phone.trim();
-        const existing = await this.db.applicant.findFirst({
-            where: { tenant_id: tenantId, phone },
-        });
+        const phone = this.storedPhone(dto.phone);
+        const existing = phone
+            ? await this.db.applicant.findFirst({
+                where: { tenant_id: tenantId, phone },
+            })
+            : null;
 
         if (existing && !existing.deleted_at) {
             throw new ConflictException('An applicant with this phone number already exists.');
@@ -367,14 +384,20 @@ export class RecruitmentService {
         });
         if (!applicant) throw new NotFoundException('Applicant not found.');
 
-        if (dto.phone && dto.phone.trim() !== applicant.phone) {
-            const duplicate = await this.db.applicant.findFirst({
-                where: { tenant_id: tenantId, phone: dto.phone.trim(), deleted_at: null, NOT: { id } },
-            });
-            if (duplicate) throw new ConflictException('An applicant with this phone number already exists.');
+        const patch: any = {};
+        if (dto.phone !== undefined) {
+            const phone = this.storedPhone(dto.phone);
+            // Null is not a duplicate of another blank number. Only a real
+            // number can collide with the unique index.
+            if (phone && phone !== applicant.phone) {
+                const duplicate = await this.db.applicant.findFirst({
+                    where: { tenant_id: tenantId, phone, deleted_at: null, NOT: { id } },
+                });
+                if (duplicate) throw new ConflictException('An applicant with this phone number already exists.');
+            }
+            patch.phone = phone;
         }
 
-        const patch: any = {};
         const fields = [
             'name', 'email', 'source', 'current_company', 'current_designation',
             'resume_url', 'skills', 'notes', 'address',
@@ -382,7 +405,6 @@ export class RecruitmentService {
         for (const key of fields) {
             if (dto[key] !== undefined) patch[key] = dto[key] || null;
         }
-        if (dto.phone !== undefined) patch.phone = dto.phone.trim();
         if (dto.experience_years !== undefined) patch.experience_years = dto.experience_years;
         if (dto.expected_salary !== undefined) patch.expected_salary = dto.expected_salary;
 
@@ -479,15 +501,18 @@ export class RecruitmentService {
 
         let applicantId = dto.applicant_id;
         if (!applicantId) {
-            if (!dto.applicant?.name || !dto.applicant?.phone) {
-                throw new BadRequestException('Select an existing applicant or provide a name and phone number.');
+            if (!dto.applicant?.name?.trim()) {
+                throw new BadRequestException('Select an existing applicant or provide a name.');
             }
             // An existing candidate applying for a second role comes in through
             // this branch too — matching on phone reuses them instead of failing
-            // on the unique index.
-            const existing = await this.db.applicant.findFirst({
-                where: { tenant_id: tenantId, phone: dto.applicant.phone.trim(), deleted_at: null },
-            });
+            // on the unique index. No phone means a new row; null is not a key.
+            const phone = this.storedPhone(dto.applicant.phone);
+            const existing = phone
+                ? await this.db.applicant.findFirst({
+                    where: { tenant_id: tenantId, phone, deleted_at: null },
+                })
+                : null;
             applicantId = existing
                 ? existing.id
                 : (await this.createApplicant(tenantId, dto.applicant)).id;
@@ -632,11 +657,18 @@ export class RecruitmentService {
         await this.assertDepartment(tenantId, dto.department_id);
         await this.assertDesignation(tenantId, dto.designation_id);
 
+        const phone = application.applicant.phone?.trim() || null;
+        if (!phone) {
+            throw new BadRequestException(
+                'Add a phone number to this applicant before hiring. An employee record needs a phone number.',
+            );
+        }
+
         const employee = await this.employees.create(
             tenantId,
             {
                 name: application.applicant.name,
-                phone: application.applicant.phone,
+                phone,
                 ...(application.applicant.email ? { email: application.applicant.email } : {}),
                 date_of_joining: dto.date_of_joining,
                 ...(dto.department_id ?? application.jobPost.department_id

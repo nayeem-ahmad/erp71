@@ -1,8 +1,28 @@
 import {
     IsBoolean, IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString,
-    Max, MaxLength, Min,
+    Matches, Max, MaxLength, Min, ValidateIf, ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+
+/**
+ * Same shape as employee and customer phones: digits, spaces and hyphens,
+ * with an optional leading +. Empty is not a phone — see `blankApplicantPhoneToNull`.
+ */
+export const APPLICANT_PHONE_PATTERN = /^\+?[0-9\s\-]+$/;
+
+/** Trim a posted phone. A blank box is "no phone", not an empty string. */
+export function blankApplicantPhoneToNull(value: unknown): unknown {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    return trimmed === '' ? null : trimmed;
+}
+
+/** Format-check only a real value. Null, omitted, and a blank box are "no phone". */
+export function applicantPhoneWasEntered(_: unknown, value: unknown): boolean {
+    if (value == null) return false;
+    if (typeof value === 'string' && value.trim() === '') return false;
+    return true;
+}
 
 export const JOB_POST_STATUSES = ['DRAFT', 'OPEN', 'ON_HOLD', 'FILLED', 'CLOSED'] as const;
 export const EMPLOYMENT_TYPES = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'TEMPORARY'] as const;
@@ -53,7 +73,18 @@ export class UpdateJobPostDto extends CreateJobPostDto {
 
 export class CreateApplicantDto {
     @IsString() @MaxLength(200) name: string;
-    @IsString() @MaxLength(30) phone: string;
+
+    /**
+     * Optional. A blank or whitespace-only value is stored as null. When a
+     * number is entered it still has to match `APPLICANT_PHONE_PATTERN`.
+     */
+    @IsOptional()
+    @Transform(({ value }) => blankApplicantPhoneToNull(value))
+    @ValidateIf(applicantPhoneWasEntered)
+    @IsString()
+    @MaxLength(30)
+    @Matches(APPLICANT_PHONE_PATTERN, { message: 'Invalid phone number format' })
+    phone?: string | null;
 
     @IsOptional() @IsString() @MaxLength(200) email?: string;
     @IsOptional() @IsString() @MaxLength(100) source?: string;
@@ -71,7 +102,15 @@ export class CreateApplicantDto {
 
 export class UpdateApplicantDto extends CreateApplicantDto {
     @IsOptional() @IsString() @MaxLength(200) declare name: string;
-    @IsOptional() @IsString() @MaxLength(30) declare phone: string;
+
+    /** Same rule as create: blank clears the number, a value must still match. */
+    @IsOptional()
+    @Transform(({ value }) => blankApplicantPhoneToNull(value))
+    @ValidateIf(applicantPhoneWasEntered)
+    @IsString()
+    @MaxLength(30)
+    @Matches(APPLICANT_PHONE_PATTERN, { message: 'Invalid phone number format' })
+    declare phone?: string | null;
 }
 
 // ── Applications ──────────────────────────────────────────────────────────────
@@ -83,7 +122,10 @@ export class CreateApplicationDto {
     @IsOptional() @IsString() applicant_id?: string;
 
     /** …or a new one, created inline from the same form. */
-    @IsOptional() @Type(() => CreateApplicantDto) applicant?: CreateApplicantDto;
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => CreateApplicantDto)
+    applicant?: CreateApplicantDto;
 
     @IsOptional() @IsEnum(APPLICATION_STAGES as any) stage?: ApplicationStage;
     @IsOptional() @IsDateString() applied_at?: string;
@@ -112,8 +154,10 @@ export class ChangeStageDto {
 /**
  * Turning an accepted offer into an employee.
  *
- * Name and phone are copied from the applicant; everything here is what an
- * employee record needs and an applicant record does not have.
+ * Name is copied from the applicant. Phone is copied when the applicant has
+ * one; hiring without a phone is refused, because an employee record requires
+ * it. Everything else here is what an employee record needs and an applicant
+ * record does not have.
  */
 export class HireApplicationDto {
     @IsDateString() date_of_joining: string;

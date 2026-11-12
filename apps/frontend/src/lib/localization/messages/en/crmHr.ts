@@ -1187,6 +1187,7 @@ export const crmHrMessages = {
                 namePlaceholder: 'As written on the CV',
                 phone: 'Phone',
                 phonePlaceholder: '01XXXXXXXXX',
+                phoneInvalid: 'Invalid phone number format',
                 email: 'Email',
                 source: 'Source',
                 sourcePlaceholder: 'Referral, Facebook, walk-in…',
