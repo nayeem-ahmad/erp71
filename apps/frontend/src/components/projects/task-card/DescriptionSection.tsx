@@ -11,6 +11,7 @@ import { Markdown } from './lazy-markdown';
 import { imageKey, imageUrlsIn, urlsDropped, withoutImages } from './task-image-refs';
 import { useTaskFiles } from './task-files';
 import { useTrackedTaskImages } from './use-tracked-task-images';
+import { eventTouchesSpellcheckOverlay, isSpellcheckOverlay } from './spellcheck-overlay';
 
 const DESCRIPTION_MAX = 5000;
 
@@ -29,7 +30,10 @@ const DESCRIPTION_MAX = 5000;
  * toolbar, and a toolbar button steals focus from the textarea; committing on
  * the textarea's own blur would save (and close the editor) every time somebody
  * reached for *bold*. `relatedTarget` inside the container means focus merely
- * moved within the editor, which is not leaving it.
+ * moved within the editor, which is not leaving it. A Grammarly card is the
+ * same kind of non-leave: it sits on the body, often in a closed shadow root
+ * so the blur has no related target, and closing the editor then would drop
+ * the suggestion before it could land.
  *
  * Stored as the text the user typed rather than as HTML: it stays legible
  * everywhere else the field surfaces (exports, the API, a notification email)
@@ -59,6 +63,9 @@ export default function DescriptionSection({
        `pendingCommit` remembers that it was asked to. */
     const uploading = useRef(false);
     const pendingCommit = useRef(false);
+    /* A Grammarly click blurs with no related target. The pointerdown still
+       names the host, and the blur that follows is not leaving the edit. */
+    const ignoreBlur = useRef(false);
 
     // Not while editing: a file removed from the Attachments tab rewrites the
     // saved description, and copying that over the draft would throw away
@@ -72,6 +79,15 @@ export default function DescriptionSection({
         registerDescriptionStrip((keys) => setValue((current) => withoutImages(current, keys)));
         return () => registerDescriptionStrip(null);
     }, [editing, registerDescriptionStrip]);
+
+    useEffect(() => {
+        if (!editing) return;
+        const onPointerDown = (event: PointerEvent) => {
+            ignoreBlur.current = eventTouchesSpellcheckOverlay(event);
+        };
+        document.addEventListener('pointerdown', onPointerDown, true);
+        return () => document.removeEventListener('pointerdown', onPointerDown, true);
+    }, [editing]);
 
     const commit = async () => {
         setEditing(false);
@@ -198,6 +214,14 @@ export default function DescriptionSection({
                     // box. Opening it is not leaving the edit.
                     const next = event.relatedTarget as HTMLElement | null;
                     if (next?.closest?.('[data-image-preview]')) return;
+                    // Grammarly's card is also on the body. A click there is
+                    // a correction, not a leave — consume the pointerdown flag
+                    // so the next real click-away still saves.
+                    const fromGrammarly = ignoreBlur.current;
+                    ignoreBlur.current = false;
+                    if (fromGrammarly || isSpellcheckOverlay(next) || isSpellcheckOverlay(document.activeElement)) {
+                        return;
+                    }
                     // Switching tabs or apps blurs with no related target too,
                     // the same as a click on empty page. The difference is that
                     // the editor stays the active element and gets focus back
