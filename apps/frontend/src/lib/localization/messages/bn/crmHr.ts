@@ -1183,6 +1183,7 @@ export const crmHrMessages = {
                 namePlaceholder: "সিভিতে যেভাবে লেখা",
                 phone: "ফোন",
                 phonePlaceholder: "01XXXXXXXXX",
+                phoneInvalid: "ফোন নম্বরের ফরম্যাট সঠিক নয়",
                 email: "ইমেইল",
                 source: "উৎস",
                 sourcePlaceholder: "রেফারেল, ফেসবুক, সরাসরি…",

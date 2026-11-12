@@ -645,7 +645,12 @@ export class CareersService {
 
         // 3. The number is taken at this company and nothing proves it is
         //    theirs. Refusing is the only safe answer, and the message says how
-        //    to get past it.
+        //    to get past it. A missing number must not be queried: `phone: null`
+        //    is `IS NULL`, which would collide with every HR applicant who has
+        //    no phone.
+        if (!seeker.phone) {
+            throw new BadRequestException('Add your mobile number to your profile before applying');
+        }
         const phoneTaken = await this.db.applicant.findFirst({
             where: { tenant_id: tenantId, phone: seeker.phone },
             select: { id: true },

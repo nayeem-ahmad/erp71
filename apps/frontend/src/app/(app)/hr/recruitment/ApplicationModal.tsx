@@ -7,6 +7,7 @@ import { useToastStore } from '@/lib/toast';
 import { Alert, Button, Field, FormFooter, FormGrid, Input, Select, Textarea } from '@/components/ui';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
 import type { Applicant, JobPost } from './types';
+import { applicantPhoneOrNull, applicantPhoneValidationError } from './applicant-phone';
 
 /**
  * Adding somebody to a pipeline.
@@ -46,6 +47,7 @@ export default function ApplicationModal({
     });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const [phoneError, setPhoneError] = useState('');
 
     useEffect(() => {
         let cancelled = false;
@@ -66,6 +68,11 @@ export default function ApplicationModal({
     const submit = async (event: React.FormEvent) => {
         event.preventDefault();
         setError('');
+        if (mode === 'new' && applicantPhoneValidationError(newApplicant.phone)) {
+            setPhoneError(t.recruitment.applicants.form.phoneInvalid);
+            return;
+        }
+        setPhoneError('');
         setSaving(true);
         try {
             await api.createJobApplication({
@@ -75,7 +82,7 @@ export default function ApplicationModal({
                     : {
                         applicant: {
                             name: newApplicant.name,
-                            phone: newApplicant.phone,
+                            phone: applicantPhoneOrNull(newApplicant.phone),
                             email: newApplicant.email || undefined,
                             current_company: newApplicant.current_company || undefined,
                             experience_years: newApplicant.experience_years
@@ -152,7 +159,9 @@ export default function ApplicationModal({
                             <option value="">{copy.form.selectApplicant}</option>
                             {applicants.map((applicant) => (
                                 <option key={applicant.id} value={applicant.id}>
-                                    {applicant.name} — {applicant.phone}
+                                    {applicant.phone?.trim()
+                                        ? `${applicant.name} — ${applicant.phone}`
+                                        : applicant.name}
                                 </option>
                             ))}
                         </Select>
@@ -167,13 +176,18 @@ export default function ApplicationModal({
                                 required
                             />
                         </Field>
-                        <Field label={t.recruitment.applicants.form.phone} htmlFor="new-applicant-phone" required>
+                        <Field label={t.recruitment.applicants.form.phone} htmlFor="new-applicant-phone" error={phoneError}>
                             <Input
                                 id="new-applicant-phone"
                                 value={newApplicant.phone}
-                                onChange={(event) => setNewApplicant((prev) => ({ ...prev, phone: event.target.value }))}
+                                onChange={(event) => {
+                                    setPhoneError('');
+                                    setNewApplicant((prev) => ({ ...prev, phone: event.target.value }));
+                                }}
                                 placeholder={t.recruitment.applicants.form.phonePlaceholder}
-                                required
+                                maxLength={30}
+                                inputMode="tel"
+                                aria-invalid={phoneError ? true : undefined}
                             />
                         </Field>
                         <Field label={t.recruitment.applicants.form.email} htmlFor="new-applicant-email">

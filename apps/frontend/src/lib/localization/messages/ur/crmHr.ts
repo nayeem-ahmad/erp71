@@ -1183,6 +1183,7 @@ export const crmHrMessages = {
                 namePlaceholder: 'جیسا سی وی پر لکھا ہے',
                 phone: 'فون',
                 phonePlaceholder: '01XXXXXXXXX',
+                phoneInvalid: 'فون نمبر کی شکل درست نہیں',
                 email: 'ای میل',
                 source: 'ذریعہ',
                 sourcePlaceholder: 'حوالہ، فیس بک، واک اِن…',
