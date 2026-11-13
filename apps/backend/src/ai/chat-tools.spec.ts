@@ -2043,3 +2043,345 @@ describe('approvals_inbox', () => {
         expect(result.rows[0].details).toBeUndefined();
     });
 });
+
+describe('hr_reports', () => {
+    it('requires VIEW_HR, the hr module, and kind leave_balance, attendance or recruitment', () => {
+        expect(CHAT_TOOLS_BY_NAME.hr_reports.permission).toBe(StorePermission.VIEW_HR);
+        expect(CHAT_TOOLS_BY_NAME.hr_reports.modules).toEqual(['hr']);
+        expect((CHAT_TOOLS_BY_NAME.hr_reports.parameters as any).required).toEqual(
+            expect.arrayContaining(['kind']),
+        );
+        expect((CHAT_TOOLS_BY_NAME.hr_reports.parameters as any).properties.kind.enum).toEqual(
+            ['leave_balance', 'attendance', 'recruitment'],
+        );
+    });
+
+    it('defaults leave_balance year to the shop zone and keeps a null liability', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-11-13T12:00:00Z'));
+        const rows = Array.from({ length: 25 }, (_, i) => ({
+            employeeName: `Emp ${i}`,
+            employeeCode: `E-${i}`,
+            leaveTypeName: 'Annual',
+            entitledDays: 20,
+            usedDays: 5,
+            remainingDays: 15,
+            liability: null,
+            employeeId: `secret-${i}`,
+        }));
+        const leaveBalance = jest.fn().mockResolvedValue({
+            summary: { employees: 25, remainingDays: 375, liability: null },
+            can_view_payroll: false,
+            rows,
+        });
+        const attendanceSummary = jest.fn();
+        const summary = jest.fn();
+        const listApplications = jest.fn();
+        const deps = makeDeps({
+            hrReports: { leaveBalance, attendanceSummary, payrollCost: jest.fn() },
+            recruitment: { summary, listApplications },
+        } as any);
+
+        try {
+            const result: any = await run('hr_reports', { kind: 'leave_balance' }, deps);
+
+            expect(leaveBalance).toHaveBeenCalledWith(
+                {
+                    tenantId: 'tenant-1',
+                    storeId: 'store-1',
+                    userId: 'user-1',
+                    userRole: 'OWNER',
+                    timezone: 'Asia/Dhaka',
+                },
+                { year: 2026 },
+            );
+            expect(attendanceSummary).not.toHaveBeenCalled();
+            expect(summary).not.toHaveBeenCalled();
+            expect(result.summary).toEqual({ employees: 25, remainingDays: 375, liability: null });
+            expect(result.can_view_payroll).toBe(false);
+            expect(result.rows).toHaveLength(20);
+            expect(result.rows[0]).toEqual({
+                employeeName: 'Emp 0',
+                employeeCode: 'E-0',
+                leaveTypeName: 'Annual',
+                entitledDays: 20,
+                usedDays: 5,
+                remainingDays: 15,
+                liability: null,
+            });
+            expect(result.rows[0].employeeId).toBeUndefined();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('defaults attendance to the current shop-zone month on both ends of the range', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-11-13T12:00:00Z'));
+        const attendanceSummary = jest.fn().mockResolvedValue({
+            summary: { employees: 2, attendanceRate: 90 },
+            rows: [{
+                label: 'Asha',
+                presentDays: 20,
+                absentDays: 1,
+                leaveDays: 1,
+                attendanceRate: 90,
+                key: 'secret',
+            }],
+        });
+        const deps = makeDeps({
+            hrReports: { leaveBalance: jest.fn(), attendanceSummary, payrollCost: jest.fn() },
+        } as any);
+
+        try {
+            const result: any = await run('hr_reports', { kind: 'attendance' }, deps);
+
+            expect(attendanceSummary).toHaveBeenCalledWith('tenant-1', {
+                fromYear: 2026,
+                fromMonth: 11,
+                toYear: 2026,
+                toMonth: 11,
+            });
+            expect(result.summary).toEqual({ employees: 2, attendanceRate: 90 });
+            expect(result.rows[0]).toEqual({
+                label: 'Asha',
+                presentDays: 20,
+                absentDays: 1,
+                leaveDays: 1,
+                attendanceRate: 90,
+            });
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('always includes recruitment summary and pages applications', async () => {
+        const applications = Array.from({ length: 25 }, (_, i) => ({
+            id: `secret-${i}`,
+            stage: 'SCREENING',
+            applicant: { name: `Applicant ${i}`, phone: '0171' },
+            jobPost: { title: 'Cashier', code: 'JP-1' },
+        }));
+        const summary = jest.fn().mockResolvedValue({
+            open_posts: 2,
+            in_pipeline: 25,
+            hired_this_month: 1,
+        });
+        const listApplications = jest.fn().mockResolvedValue(applications);
+        const leaveBalance = jest.fn();
+        const deps = makeDeps({
+            hrReports: { leaveBalance, attendanceSummary: jest.fn(), payrollCost: jest.fn() },
+            recruitment: { summary, listApplications },
+        } as any);
+
+        const result: any = await run('hr_reports', { kind: 'recruitment', stage: 'SCREENING' }, deps);
+
+        expect(summary).toHaveBeenCalledWith('tenant-1');
+        expect(listApplications).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ stage: 'SCREENING' }),
+        );
+        expect(leaveBalance).not.toHaveBeenCalled();
+        expect(result.summary).toEqual({ open_posts: 2, in_pipeline: 25, hired_this_month: 1 });
+        expect(result.rows).toHaveLength(20);
+        expect(result.rows[0]).toEqual({
+            applicant: 'Applicant 0',
+            job_title: 'Cashier',
+            job_code: 'JP-1',
+            stage: 'SCREENING',
+        });
+        expect(result.rows[0].id).toBeUndefined();
+    });
+
+    it('rejects an unknown kind without calling a service', async () => {
+        const leaveBalance = jest.fn();
+        const attendanceSummary = jest.fn();
+        const summary = jest.fn();
+        const listApplications = jest.fn();
+        const deps = makeDeps({
+            hrReports: { leaveBalance, attendanceSummary, payrollCost: jest.fn() },
+            recruitment: { summary, listApplications },
+        } as any);
+
+        const result: any = await run('hr_reports', { kind: 'wages' }, deps);
+
+        expect(result.error).toMatch(/kind must be leave_balance, attendance, or recruitment/);
+        expect(leaveBalance).not.toHaveBeenCalled();
+        expect(attendanceSummary).not.toHaveBeenCalled();
+        expect(summary).not.toHaveBeenCalled();
+        expect(listApplications).not.toHaveBeenCalled();
+    });
+});
+
+describe('hr_statutory', () => {
+    it('requires VIEW_PAYROLL, the hr module, and kind wages, tax, pf or payroll_cost', () => {
+        expect(CHAT_TOOLS_BY_NAME.hr_statutory.permission).toBe(StorePermission.VIEW_PAYROLL);
+        expect(CHAT_TOOLS_BY_NAME.hr_statutory.modules).toEqual(['hr']);
+        expect((CHAT_TOOLS_BY_NAME.hr_statutory.parameters as any).required).toEqual(
+            expect.arrayContaining(['kind']),
+        );
+        expect((CHAT_TOOLS_BY_NAME.hr_statutory.parameters as any).properties.kind.enum).toEqual(
+            ['wages', 'tax', 'pf', 'payroll_cost'],
+        );
+    });
+
+    it('defaults wages to the current shop-zone month and rounds money', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-11-13T12:00:00Z'));
+        const wagesRegister = jest.fn().mockResolvedValue({
+            totals: { gross_earnings: 100.126, total_deductions: 10, net_pay: 90.126 },
+            rows: [{
+                employee_name: 'Asha',
+                employee_code: 'E-1',
+                gross_earnings: 100.126,
+                total_deductions: 10.004,
+                net_pay: 90.126,
+                items: [{ kind: 'EARNING', name: 'Basic' }],
+            }],
+        });
+        const deps = makeDeps({
+            statutoryReports: {
+                wagesRegister,
+                taxDeductionStatement: jest.fn(),
+                providentFundRegister: jest.fn(),
+            },
+        } as any);
+
+        try {
+            const result: any = await run('hr_statutory', { kind: 'wages' }, deps);
+
+            expect(wagesRegister).toHaveBeenCalledWith('tenant-1', 2026, 11);
+            expect(result.totals).toEqual({
+                gross_earnings: 100.13,
+                total_deductions: 10,
+                net_pay: 90.13,
+            });
+            expect(result.rows[0]).toEqual({
+                employee_name: 'Asha',
+                employee_code: 'E-1',
+                gross_earnings: 100.13,
+                total_deductions: 10,
+                net_pay: 90.13,
+            });
+            expect(result.rows[0].items).toBeUndefined();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('defaults tax startYear to the previous year in January and this year in August', async () => {
+        const taxDeductionStatement = jest.fn().mockResolvedValue({
+            totals: { gross_earnings: 500, tax_deducted: 50 },
+            fiscal_year: '2026-2027',
+            notes: ['The Bangladeshi income year runs July to June.'],
+            rows: [{
+                employee: { name: 'Asha', employee_code: 'E-1' },
+                gross_earnings: 500.126,
+                tax_deducted: 50.004,
+            }],
+        });
+        const providentFundRegister = jest.fn().mockResolvedValue({
+            grand_total: 80,
+            fiscal_year: '2026-2027',
+            notes: ['Employee contributions only.'],
+            rows: [{
+                employee: { name: 'Asha', employee_code: 'E-1' },
+                total_employee_contribution: 80.126,
+            }],
+        });
+        const deps = makeDeps({
+            statutoryReports: {
+                wagesRegister: jest.fn(),
+                taxDeductionStatement,
+                providentFundRegister,
+            },
+        } as any);
+
+        jest.useFakeTimers();
+        try {
+            jest.setSystemTime(new Date('2027-01-15T12:00:00Z'));
+            const january: any = await run('hr_statutory', { kind: 'tax' }, deps);
+            expect(taxDeductionStatement).toHaveBeenCalledWith('tenant-1', 2026);
+            expect(january.fiscal_year).toBe('2026-2027');
+            expect(january.rows[0]).toEqual({
+                employee_name: 'Asha',
+                employee_code: 'E-1',
+                gross_earnings: 500.13,
+                tax_deducted: 50,
+            });
+
+            jest.setSystemTime(new Date('2026-08-15T12:00:00Z'));
+            await run('hr_statutory', { kind: 'tax' }, deps);
+            expect(taxDeductionStatement).toHaveBeenLastCalledWith('tenant-1', 2026);
+
+            await run('hr_statutory', { kind: 'pf' }, deps);
+            expect(providentFundRegister).toHaveBeenCalledWith('tenant-1', 2026);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('defaults payroll_cost to the current shop-zone month', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-11-13T12:00:00Z'));
+        const payrollCost = jest.fn().mockResolvedValue({
+            summary: { employees: 2, netPay: 200 },
+            rows: [{
+                label: 'Sales',
+                employees: 2,
+                netPay: 200.126,
+                share: 100,
+                key: 'secret',
+            }],
+        });
+        const wagesRegister = jest.fn();
+        const deps = makeDeps({
+            hrReports: { leaveBalance: jest.fn(), attendanceSummary: jest.fn(), payrollCost },
+            statutoryReports: {
+                wagesRegister,
+                taxDeductionStatement: jest.fn(),
+                providentFundRegister: jest.fn(),
+            },
+        } as any);
+
+        try {
+            const result: any = await run('hr_statutory', { kind: 'payroll_cost' }, deps);
+
+            expect(payrollCost).toHaveBeenCalledWith('tenant-1', {
+                fromYear: 2026,
+                fromMonth: 11,
+                toYear: 2026,
+                toMonth: 11,
+            });
+            expect(wagesRegister).not.toHaveBeenCalled();
+            expect(result.summary).toEqual({ employees: 2, netPay: 200 });
+            expect(result.rows[0]).toEqual({
+                label: 'Sales',
+                employees: 2,
+                netPay: 200.13,
+                share: 100,
+            });
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('rejects an unknown kind without calling a service', async () => {
+        const wagesRegister = jest.fn();
+        const taxDeductionStatement = jest.fn();
+        const providentFundRegister = jest.fn();
+        const payrollCost = jest.fn();
+        const deps = makeDeps({
+            hrReports: { leaveBalance: jest.fn(), attendanceSummary: jest.fn(), payrollCost },
+            statutoryReports: { wagesRegister, taxDeductionStatement, providentFundRegister },
+        } as any);
+
+        const result: any = await run('hr_statutory', { kind: 'leave_balance' }, deps);
+
+        expect(result.error).toMatch(/kind must be wages, tax, pf, or payroll_cost/);
+        expect(wagesRegister).not.toHaveBeenCalled();
+        expect(taxDeductionStatement).not.toHaveBeenCalled();
+        expect(providentFundRegister).not.toHaveBeenCalled();
+        expect(payrollCost).not.toHaveBeenCalled();
+    });
+});

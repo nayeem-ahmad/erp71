@@ -27,6 +27,34 @@ function isoTimestamp(value: unknown): string | null {
     return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function shopZoneParts(timezone: string): { year: number; month: number } {
+    const ymd = zonedDateString(new Date(), timezone);
+    return { year: Number(ymd.slice(0, 4)), month: Number(ymd.slice(5, 7)) };
+}
+
+function asPositiveInt(value: unknown): number | undefined {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? Math.trunc(n) : undefined;
+}
+
+function monthRangeFromArgs(timezone: string, args: Record<string, unknown>) {
+    const shop = shopZoneParts(timezone);
+    return {
+        fromYear: asPositiveInt(args.fromYear) ?? shop.year,
+        fromMonth: asPositiveInt(args.fromMonth) ?? shop.month,
+        toYear: asPositiveInt(args.toYear) ?? shop.year,
+        toMonth: asPositiveInt(args.toMonth) ?? shop.month,
+    };
+}
+
+/** Bangladeshi income year opens in July. Month ≥ 7 is this calendar year; else the previous. */
+function incomeYearStart(timezone: string, startYear?: unknown): number {
+    const given = asPositiveInt(startYear);
+    if (given) return given;
+    const shop = shopZoneParts(timezone);
+    return shop.month >= 7 ? shop.year : shop.year - 1;
+}
+
 function projectFollowUp(row: any) {
     return {
         party: row.customer?.name ?? row.lead?.name ?? null,
@@ -746,6 +774,211 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
                     requested_by: item.requested_by ?? null,
                     requested_at: isoTimestamp(item.requested_at),
                     branch: item.branch ?? null,
+                })),
+            };
+        },
+    },
+
+    {
+        name: 'hr_reports',
+        permission: StorePermission.VIEW_HR,
+        modules: ['hr'],
+        description:
+            'Leave balances, attendance, and the hiring pipeline. Pass kind: leave_balance (days remaining and ' +
+            'encashment liability when the caller can see payroll), attendance (present/absent/leave for a month ' +
+            'range), or recruitment (open posts plus applications). Omit year/month for the current shop-zone period. ' +
+            'Use for "who has leave left", "attendance this month", "who is in the hiring pipeline". ' +
+            'Wages, tax, PF and payroll cost are hr_statutory.',
+        parameters: {
+            type: 'object',
+            properties: {
+                kind: {
+                    type: 'string',
+                    enum: ['leave_balance', 'attendance', 'recruitment'],
+                    description: 'Which HR view to return.',
+                },
+                year: { type: 'number', description: 'For kind=leave_balance. Omit for the current shop-zone year.' },
+                fromYear: { type: 'number', description: 'For kind=attendance. Omit for the current shop-zone year.' },
+                fromMonth: { type: 'number', description: 'For kind=attendance. Omit for the current shop-zone month.' },
+                toYear: { type: 'number', description: 'For kind=attendance. Omit for the current shop-zone year.' },
+                toMonth: { type: 'number', description: 'For kind=attendance. Omit for the current shop-zone month.' },
+                stage: { type: 'string', description: 'For kind=recruitment, restrict to one application stage.' },
+                ...PAGING_PROPS,
+            },
+            required: ['kind'],
+        },
+        handler: async (ctx, args, deps) => {
+            const kind = args.kind;
+            if (kind !== 'leave_balance' && kind !== 'attendance' && kind !== 'recruitment') {
+                return { error: 'kind must be leave_balance, attendance, or recruitment' };
+            }
+            if (kind === 'leave_balance') {
+                const year = asPositiveInt(args.year) ?? shopZoneParts(ctx.timezone).year;
+                const report = await deps.hrReports.leaveBalance(toTenantContext(ctx), { year });
+                const paged = page(report.rows ?? [], args);
+                return {
+                    kind,
+                    summary: report.summary,
+                    can_view_payroll: report.can_view_payroll,
+                    ...paged,
+                    rows: paged.rows.map((row: any) => ({
+                        employeeName: row.employeeName,
+                        employeeCode: row.employeeCode,
+                        leaveTypeName: row.leaveTypeName,
+                        entitledDays: row.entitledDays,
+                        usedDays: row.usedDays,
+                        remainingDays: row.remainingDays,
+                        liability: nullableMoney(row.liability),
+                    })),
+                };
+            }
+            if (kind === 'attendance') {
+                const range = monthRangeFromArgs(ctx.timezone, args);
+                const report = await deps.hrReports.attendanceSummary(ctx.tenantId, range);
+                const paged = page(report.rows ?? [], args);
+                return {
+                    kind,
+                    summary: report.summary,
+                    ...paged,
+                    rows: paged.rows.map((row: any) => ({
+                        label: row.label,
+                        presentDays: row.presentDays,
+                        absentDays: row.absentDays,
+                        leaveDays: row.leaveDays,
+                        attendanceRate: row.attendanceRate,
+                    })),
+                };
+            }
+            const [summary, applications] = await Promise.all([
+                deps.recruitment.summary(ctx.tenantId),
+                deps.recruitment.listApplications(ctx.tenantId, {
+                    ...(args.stage ? { stage: String(args.stage) as any } : {}),
+                }),
+            ]);
+            const paged = page(applications ?? [], args);
+            return {
+                kind,
+                summary,
+                ...paged,
+                rows: paged.rows.map((row: any) => ({
+                    applicant: row.applicant?.name ?? row.applicantName ?? null,
+                    job_title: row.jobPost?.title ?? row.job_title ?? null,
+                    job_code: row.jobPost?.code ?? row.job_code ?? null,
+                    stage: row.stage,
+                })),
+            };
+        },
+    },
+
+    {
+        name: 'hr_statutory',
+        permission: StorePermission.VIEW_PAYROLL,
+        modules: ['hr'],
+        description:
+            'Statutory payroll registers: wages, tax withheld, provident fund, and payroll cost. Pass kind: wages ' +
+            '(Labour Rules salary sheet for a month), tax (income-year tax deducted, July–June), pf (employee PF ' +
+            'contributions for the income year), or payroll_cost (settled net pay by department). Omit year/month/' +
+            'startYear for the current shop-zone period. Use for "wages register", "how much tax did we withhold", ' +
+            '"PF contributions", "what did payroll cost". Leave and attendance are hr_reports.',
+        parameters: {
+            type: 'object',
+            properties: {
+                kind: {
+                    type: 'string',
+                    enum: ['wages', 'tax', 'pf', 'payroll_cost'],
+                    description: 'Which statutory register to return.',
+                },
+                year: { type: 'number', description: 'For kind=wages. Omit for the current shop-zone year.' },
+                month: { type: 'number', description: 'For kind=wages. Omit for the current shop-zone month.' },
+                startYear: {
+                    type: 'number',
+                    description:
+                        'For kind=tax or pf: the July opening year of the Bangladeshi income year. Omit to use the ' +
+                        'income year that contains the current shop-zone date.',
+                },
+                fromYear: { type: 'number', description: 'For kind=payroll_cost. Omit for the current shop-zone year.' },
+                fromMonth: { type: 'number', description: 'For kind=payroll_cost. Omit for the current shop-zone month.' },
+                toYear: { type: 'number', description: 'For kind=payroll_cost. Omit for the current shop-zone year.' },
+                toMonth: { type: 'number', description: 'For kind=payroll_cost. Omit for the current shop-zone month.' },
+                ...PAGING_PROPS,
+            },
+            required: ['kind'],
+        },
+        handler: async (ctx, args, deps) => {
+            const kind = args.kind;
+            if (kind !== 'wages' && kind !== 'tax' && kind !== 'pf' && kind !== 'payroll_cost') {
+                return { error: 'kind must be wages, tax, pf, or payroll_cost' };
+            }
+            if (kind === 'wages') {
+                const shop = shopZoneParts(ctx.timezone);
+                const year = asPositiveInt(args.year) ?? shop.year;
+                const month = asPositiveInt(args.month) ?? shop.month;
+                const report = await deps.statutoryReports.wagesRegister(ctx.tenantId, year, month);
+                const paged = page(report.rows ?? [], args);
+                return {
+                    kind,
+                    totals: {
+                        gross_earnings: money(report.totals?.gross_earnings),
+                        total_deductions: money(report.totals?.total_deductions),
+                        net_pay: money(report.totals?.net_pay),
+                    },
+                    ...paged,
+                    rows: paged.rows.map((row: any) => ({
+                        employee_name: row.employee_name,
+                        employee_code: row.employee_code,
+                        gross_earnings: money(row.gross_earnings),
+                        total_deductions: money(row.total_deductions),
+                        net_pay: money(row.net_pay),
+                    })),
+                };
+            }
+            if (kind === 'tax') {
+                const startYear = incomeYearStart(ctx.timezone, args.startYear);
+                const report = await deps.statutoryReports.taxDeductionStatement(ctx.tenantId, startYear);
+                const paged = page(report.rows ?? [], args);
+                return {
+                    kind,
+                    totals: report.totals,
+                    fiscal_year: report.fiscal_year,
+                    notes: report.notes,
+                    ...paged,
+                    rows: paged.rows.map((row: any) => ({
+                        employee_name: row.employee?.name ?? row.employee_name ?? null,
+                        employee_code: row.employee?.employee_code ?? row.employee_code ?? null,
+                        gross_earnings: money(row.gross_earnings),
+                        tax_deducted: money(row.tax_deducted),
+                    })),
+                };
+            }
+            if (kind === 'pf') {
+                const startYear = incomeYearStart(ctx.timezone, args.startYear);
+                const report = await deps.statutoryReports.providentFundRegister(ctx.tenantId, startYear);
+                const paged = page(report.rows ?? [], args);
+                return {
+                    kind,
+                    grand_total: money(report.grand_total),
+                    fiscal_year: report.fiscal_year,
+                    notes: report.notes,
+                    ...paged,
+                    rows: paged.rows.map((row: any) => ({
+                        employee_name: row.employee?.name ?? row.employee_name ?? null,
+                        employee_code: row.employee?.employee_code ?? row.employee_code ?? null,
+                        total_employee_contribution: money(row.total_employee_contribution),
+                    })),
+                };
+            }
+            const range = monthRangeFromArgs(ctx.timezone, args);
+            const report = await deps.hrReports.payrollCost(ctx.tenantId, range);
+            const paged = page(report.rows ?? [], args);
+            return {
+                kind,
+                summary: report.summary,
+                ...paged,
+                rows: paged.rows.map((row: any) => ({
+                    label: row.label,
+                    employees: row.employees,
+                    netPay: money(row.netPay),
+                    share: row.share,
                 })),
             };
         },
