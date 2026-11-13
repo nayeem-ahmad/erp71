@@ -171,15 +171,16 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
         permission: StorePermission.EDIT_PRODUCTS,
         modules: ['manufacturing'],
         description:
-            'Production jobs, manufactured-product P&L, or manufacturing analytics. Pass kind: jobs (open and recent ' +
-            'jobs), product_pl (cost vs revenue per manufactured product), or analytics (completed volume and cost ' +
-            'headlines). Use for "what is in production", "are we making money on what we manufacture".',
+            'Production jobs, manufactured-product P&L, manufacturing analytics, or bills of materials. Pass kind: jobs ' +
+            '(open and recent jobs), product_pl (cost vs revenue per manufactured product), analytics (completed volume ' +
+            'and cost headlines), or boms (recipes: output product, quantity and component count). Use for "what is in ' +
+            'production", "are we making money on what we manufacture", "what BOMs do we have".',
         parameters: {
             type: 'object',
             properties: {
                 kind: {
                     type: 'string',
-                    enum: ['jobs', 'product_pl', 'analytics'],
+                    enum: ['jobs', 'product_pl', 'analytics', 'boms'],
                     description: 'Which manufacturing view to return.',
                 },
                 status: { type: 'string', description: 'For kind=jobs, restrict to a job status such as IN_PROGRESS.' },
@@ -189,8 +190,8 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
         },
         handler: async (ctx, args, deps) => {
             const kind = args.kind;
-            if (kind !== 'jobs' && kind !== 'product_pl' && kind !== 'analytics') {
-                return { error: 'kind must be jobs, product_pl, or analytics' };
+            if (kind !== 'jobs' && kind !== 'product_pl' && kind !== 'analytics' && kind !== 'boms') {
+                return { error: 'kind must be jobs, product_pl, analytics, or boms' };
             }
             if (kind === 'jobs') {
                 const limit = Math.min(Math.max(Number(args.limit) || MAX_TOOL_ROWS, 1), MAX_TOOL_ROWS);
@@ -234,6 +235,28 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
                         productionCost: money(p.totalProductionCost ?? p.productionCost),
                         revenue: money(p.revenue),
                         grossProfit: money(p.grossProfit),
+                    })),
+                };
+            }
+            if (kind === 'boms') {
+                const limit = Math.min(Math.max(Number(args.limit) || MAX_TOOL_ROWS, 1), MAX_TOOL_ROWS);
+                const offset = Math.max(Number(args.offset) || 0, 0);
+                const result = await deps.manufacturing.listBoms(
+                    ctx.tenantId,
+                    Math.floor(offset / limit) + 1,
+                    limit,
+                );
+                const items = result.items ?? [];
+                return {
+                    kind,
+                    totalRows: result.total ?? items.length,
+                    page: result.page ?? 1,
+                    rows: items.map((bom: any) => ({
+                        product: bom.productName ?? bom.product?.name ?? null,
+                        sku: bom.productSku ?? bom.product?.sku ?? null,
+                        outputQty: bom.outputQty,
+                        componentCount: bom.componentCount ?? bom._count?.components ?? 0,
+                        notes: bom.notes ?? null,
                     })),
                 };
             }
@@ -294,16 +317,16 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
         permission: StorePermission.VIEW_IMPORTS,
         modules: ['imports'],
         description:
-            'Open import shipments or the LC register: reference, supplier, status, ETA, LC number and days to ' +
-            'expiry. Pass kind: shipments (open shipments unless a status is given) or lc_register (letters of ' +
-            'credit, optionally those expiring within withinDays). Use for "what shipments are still open", ' +
-            '"which LCs expire soon". Duty figures are not in this tool.',
+            'Open import shipments, the LC register, or the duty / landed-cost report. Pass kind: shipments (open ' +
+            'shipments unless a status is given), lc_register (letters of credit, optionally those expiring within ' +
+            'withinDays), or duty (customs duty, VAT, AIT, RD, SD paid in a date range). Use for "what shipments are ' +
+            'still open", "which LCs expire soon", "how much duty did we pay".',
         parameters: {
             type: 'object',
             properties: {
                 kind: {
                     type: 'string',
-                    enum: ['shipments', 'lc_register'],
+                    enum: ['shipments', 'lc_register', 'duty'],
                     description: 'Which import view to return.',
                 },
                 status: {
@@ -314,6 +337,11 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
                     type: 'number',
                     description: 'For kind=lc_register, only LCs expiring within this many days.',
                 },
+                includeUnpaid: {
+                    type: 'boolean',
+                    description: 'For kind=duty, include assessed-but-unpaid duties. Omit to report paid only.',
+                },
+                ...DATE_RANGE_PROPS,
                 ...STORE_PROP,
                 ...PAGING_PROPS,
             },
@@ -321,8 +349,8 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
         },
         handler: async (ctx, args, deps) => {
             const kind = args.kind;
-            if (kind !== 'shipments' && kind !== 'lc_register') {
-                return { error: 'kind must be shipments or lc_register' };
+            if (kind !== 'shipments' && kind !== 'lc_register' && kind !== 'duty') {
+                return { error: 'kind must be shipments, lc_register, or duty' };
             }
             const { storeId, note } = resolveStoreId(ctx, args.storeId);
             if (kind === 'shipments') {
@@ -347,6 +375,32 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
                         status: shipment.status,
                         eta: isoDate(shipment.eta),
                         lc_number: shipment.lc_number ?? null,
+                    })),
+                };
+            }
+            if (kind === 'duty') {
+                const report = await deps.imports.dutyReport(ctx.tenantId, {
+                    from: asDate(args.from),
+                    to: asDate(args.to),
+                    includeUnpaid: args.includeUnpaid === true,
+                    storeId,
+                });
+                const paged = page(report.lines ?? [], args);
+                return {
+                    ...(note ? { note } : {}),
+                    kind,
+                    totals_by_type: report.totals_by_type,
+                    total_bdt: money(report.total_bdt),
+                    recoverable_bdt: money(report.recoverable_bdt),
+                    unpaid_bdt: money(report.unpaid_bdt),
+                    ...paged,
+                    rows: paged.rows.map((line: any) => ({
+                        shipment_reference: line.shipment_reference,
+                        be_number: line.be_number,
+                        cost_type: line.cost_type,
+                        amount_bdt: money(line.amount_bdt),
+                        is_paid: line.is_paid,
+                        paid_at: isoDate(line.paid_at),
                     })),
                 };
             }

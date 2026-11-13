@@ -1401,11 +1401,14 @@ describe('storefront_orders', () => {
 });
 
 describe('manufacturing_summary', () => {
-    it('requires kind jobs, product_pl or analytics', () => {
+    it('requires kind jobs, product_pl, analytics or boms', () => {
         expect(CHAT_TOOLS_BY_NAME.manufacturing_summary.permission).toBe(StorePermission.EDIT_PRODUCTS);
         expect(CHAT_TOOLS_BY_NAME.manufacturing_summary.modules).toContain('manufacturing');
         expect((CHAT_TOOLS_BY_NAME.manufacturing_summary.parameters as any).required).toEqual(
             expect.arrayContaining(['kind']),
+        );
+        expect((CHAT_TOOLS_BY_NAME.manufacturing_summary.parameters as any).properties.kind.enum).toEqual(
+            ['jobs', 'product_pl', 'analytics', 'boms'],
         );
     });
 
@@ -1499,17 +1502,48 @@ describe('manufacturing_summary', () => {
         expect(result.jobs).toBeUndefined();
         expect(result.rows[0].date).toBe('2026-07-01');
     });
+
+    it('dispatches boms to listBoms only and pages recipes', async () => {
+        const items = Array.from({ length: 20 }, (_, i) => ({
+            productName: `Finished ${i}`,
+            productSku: `F-${i}`,
+            outputQty: 1,
+            componentCount: 3,
+            notes: i === 0 ? 'keep' : null,
+            id: `secret-${i}`,
+        }));
+        const listBoms = jest.fn().mockResolvedValue({ items, total: 25, page: 1 });
+        const listJobs = jest.fn();
+        const deps = makeDeps({
+            manufacturing: { listJobs, getProductPL: jest.fn(), getAnalytics: jest.fn(), listBoms },
+        } as any);
+
+        const result: any = await run('manufacturing_summary', { kind: 'boms' }, deps);
+
+        expect(listBoms).toHaveBeenCalledWith('tenant-1', 1, 20);
+        expect(listJobs).not.toHaveBeenCalled();
+        expect(result.rows).toHaveLength(20);
+        expect(result.totalRows).toBe(25);
+        expect(result.rows[0]).toEqual({
+            product: 'Finished 0',
+            sku: 'F-0',
+            outputQty: 1,
+            componentCount: 3,
+            notes: 'keep',
+        });
+        expect(result.rows[0].id).toBeUndefined();
+    });
 });
 
 describe('import_status', () => {
-    it('requires kind shipments or lc_register and is tagged imports', () => {
+    it('requires kind shipments, lc_register or duty and is tagged imports', () => {
         expect(CHAT_TOOLS_BY_NAME.import_status.permission).toBe(StorePermission.VIEW_IMPORTS);
         expect(CHAT_TOOLS_BY_NAME.import_status.modules).toContain('imports');
         expect((CHAT_TOOLS_BY_NAME.import_status.parameters as any).required).toEqual(
             expect.arrayContaining(['kind']),
         );
         expect((CHAT_TOOLS_BY_NAME.import_status.parameters as any).properties.kind.enum).toEqual(
-            ['shipments', 'lc_register'],
+            ['shipments', 'lc_register', 'duty'],
         );
     });
 
@@ -1575,16 +1609,70 @@ describe('import_status', () => {
         }));
     });
 
+    it('dispatches duty to dutyReport and pages cost lines', async () => {
+        const lines = Array.from({ length: 25 }, (_, i) => ({
+            shipment_reference: `IMP-${i}`,
+            be_number: `BE-${i}`,
+            be_date: new Date('2026-03-01T00:00:00Z'),
+            cost_type: 'VAT',
+            amount_bdt: 10.126,
+            is_recoverable: true,
+            paid_at: new Date('2026-03-02T00:00:00Z'),
+            is_paid: true,
+        }));
+        const dutyReport = jest.fn().mockResolvedValue({
+            totals_by_type: [{ cost_type: 'VAT', amount_bdt: 253.15 }],
+            total_bdt: 253.15,
+            recoverable_bdt: 253.15,
+            unpaid_bdt: 0,
+            lines,
+        });
+        const findAll = jest.fn();
+        const lcRegister = jest.fn();
+        const deps = makeDeps({ imports: { findAll, lcRegister, dutyReport } } as any);
+
+        const result: any = await run(
+            'import_status',
+            { kind: 'duty', from: '2026-01-01', to: '2026-03-31', storeId: 'store-1' },
+            deps,
+        );
+
+        expect(dutyReport).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({
+                from: '2026-01-01',
+                to: '2026-03-31',
+                storeId: 'store-1',
+                includeUnpaid: false,
+            }),
+        );
+        expect(findAll).not.toHaveBeenCalled();
+        expect(lcRegister).not.toHaveBeenCalled();
+        expect(result.total_bdt).toBe(253.15);
+        expect(result.recoverable_bdt).toBe(253.15);
+        expect(result.rows).toHaveLength(20);
+        expect(result.rows[0]).toEqual(expect.objectContaining({
+            shipment_reference: 'IMP-0',
+            be_number: 'BE-0',
+            cost_type: 'VAT',
+            amount_bdt: 10.13,
+            is_paid: true,
+        }));
+        expect(result.rows[0].is_recoverable).toBeUndefined();
+    });
+
     it('rejects an unknown kind without calling a service', async () => {
         const findAll = jest.fn();
         const lcRegister = jest.fn();
-        const deps = makeDeps({ imports: { findAll, lcRegister } } as any);
+        const dutyReport = jest.fn();
+        const deps = makeDeps({ imports: { findAll, lcRegister, dutyReport } } as any);
 
-        const result: any = await run('import_status', { kind: 'duty' }, deps);
+        const result: any = await run('import_status', { kind: 'foo' }, deps);
 
-        expect(result.error).toMatch(/kind must be shipments or lc_register/);
+        expect(result.error).toMatch(/kind must be shipments, lc_register, or duty/);
         expect(findAll).not.toHaveBeenCalled();
         expect(lcRegister).not.toHaveBeenCalled();
+        expect(dutyReport).not.toHaveBeenCalled();
     });
 });
 
