@@ -793,6 +793,10 @@ describe('resolve_entity', () => {
 
         expect(resolveEntity).toHaveBeenCalledWith('tenant-1', 'customer', 'Karim', 10);
     });
+
+    it('accepts type contact', () => {
+        expect((CHAT_TOOLS_BY_NAME.resolve_entity.parameters as any).properties.type.enum).toContain('contact');
+    });
 });
 
 describe('list_documents', () => {
@@ -1677,14 +1681,14 @@ describe('import_status', () => {
 });
 
 describe('crm_pipeline', () => {
-    it('requires kind leads, campaigns or follow_ups and is tagged crm', () => {
+    it('requires kind leads, campaigns, follow_ups or contacts and is tagged crm', () => {
         expect(CHAT_TOOLS_BY_NAME.crm_pipeline.permission).toBe(StorePermission.VIEW_LEADS);
         expect(CHAT_TOOLS_BY_NAME.crm_pipeline.modules).toContain('crm');
         expect((CHAT_TOOLS_BY_NAME.crm_pipeline.parameters as any).required).toEqual(
             expect.arrayContaining(['kind']),
         );
         expect((CHAT_TOOLS_BY_NAME.crm_pipeline.parameters as any).properties.kind.enum).toEqual(
-            ['leads', 'campaigns', 'follow_ups'],
+            ['leads', 'campaigns', 'follow_ups', 'contacts'],
         );
     });
 
@@ -1840,6 +1844,51 @@ describe('crm_pipeline', () => {
             jest.useRealTimers();
         }
     });
+
+    it('dispatches contacts to findAll with timezone and pages to name/company/mobile/email', async () => {
+        const items = Array.from({ length: 20 }, (_, i) => ({
+            id: `secret-${i}`,
+            name: `Contact ${i}`,
+            company: i === 0 ? 'Acme' : null,
+            designation: i === 0 ? 'Buyer' : null,
+            mobile: `017${i}`,
+            email: i === 0 ? 'a@acme.test' : null,
+            assignedTo: { id: 'u1', name: 'Asha' },
+        }));
+        const findAll = jest.fn().mockResolvedValue({ items, total: 25, page: 1 });
+        const getStatusSummary = jest.fn();
+        const leadsFindAll = jest.fn();
+        const deps = makeDeps({
+            crmLeads: { findAll: leadsFindAll, getStatusSummary },
+            crmCampaigns: { findAll: jest.fn() },
+            crmFollowUps: { findAll: jest.fn(), getTodaySummary: jest.fn() },
+            crmContacts: { findAll },
+        } as any);
+
+        const result: any = await run('crm_pipeline', { kind: 'contacts', search: 'Acme' }, deps);
+
+        expect(findAll).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({
+                timezone: 'Asia/Dhaka',
+                search: 'Acme',
+                limit: 20,
+            }),
+        );
+        expect(getStatusSummary).not.toHaveBeenCalled();
+        expect(leadsFindAll).not.toHaveBeenCalled();
+        expect(result.rows).toHaveLength(20);
+        expect(result.totalRows).toBe(25);
+        expect(result.rows[0]).toEqual({
+            name: 'Contact 0',
+            company: 'Acme',
+            designation: 'Buyer',
+            mobile: '0170',
+            email: 'a@acme.test',
+        });
+        expect(result.rows[0].id).toBeUndefined();
+        expect(result.rows[0].assignedTo).toBeUndefined();
+    });
 });
 
 describe('storefront_content', () => {
@@ -1940,5 +1989,57 @@ describe('storefront_content', () => {
         expect(result.error).toMatch(/kind must be pages or menu/);
         expect(listPages).not.toHaveBeenCalled();
         expect(listMenuLinks).not.toHaveBeenCalled();
+    });
+});
+
+describe('approvals_inbox', () => {
+    it('requires MANAGE_HR and is tagged hr', () => {
+        expect(CHAT_TOOLS_BY_NAME.approvals_inbox.permission).toBe(StorePermission.MANAGE_HR);
+        expect(CHAT_TOOLS_BY_NAME.approvals_inbox.modules).toEqual(['hr']);
+    });
+
+    it('calls inbox with the tenant context and pages items without details', async () => {
+        const items = Array.from({ length: 25 }, (_, i) => ({
+            kind: i === 0 ? 'LEAVE_REQUEST' : 'EXPENSE_CLAIM',
+            id: `secret-${i}`,
+            title: `Item ${i}`,
+            amount: i === 0 ? 100.126 : i === 1 ? null : 50,
+            requested_by: 'Asha',
+            requested_at: new Date('2026-07-15T04:00:00Z'),
+            branch: 'Gulshan',
+            details: [{ label: 'secret', value: 'do not leak' }],
+        }));
+        const inbox = jest.fn().mockResolvedValue({
+            items,
+            counts: { LEAVE_REQUEST: 1, EXPENSE_CLAIM: 24 },
+            total: 25,
+            kinds: ['LEAVE_REQUEST', 'EXPENSE_CLAIM'],
+        });
+        const deps = makeDeps({ approvals: { inbox } } as any);
+
+        const result: any = await run('approvals_inbox', {}, deps);
+
+        expect(inbox).toHaveBeenCalledWith({
+            tenantId: 'tenant-1',
+            storeId: 'store-1',
+            userId: 'user-1',
+            userRole: 'OWNER',
+            timezone: 'Asia/Dhaka',
+        });
+        expect(result.total).toBe(25);
+        expect(result.counts).toEqual({ LEAVE_REQUEST: 1, EXPENSE_CLAIM: 24 });
+        expect(result.kinds).toEqual(['LEAVE_REQUEST', 'EXPENSE_CLAIM']);
+        expect(result.rows).toHaveLength(20);
+        expect(result.rows[0]).toEqual({
+            kind: 'LEAVE_REQUEST',
+            title: 'Item 0',
+            amount: 100.13,
+            requested_by: 'Asha',
+            requested_at: '2026-07-15T04:00:00.000Z',
+            branch: 'Gulshan',
+        });
+        expect(result.rows[1].amount).toBeNull();
+        expect(result.rows[0].id).toBeUndefined();
+        expect(result.rows[0].details).toBeUndefined();
     });
 });

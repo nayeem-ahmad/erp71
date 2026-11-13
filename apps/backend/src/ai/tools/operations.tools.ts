@@ -12,6 +12,7 @@ import {
     resolveRequiredStoreId,
     resolveStoreId,
     STORE_PROP,
+    toTenantContext,
     type ChatTool,
 } from './types';
 
@@ -491,19 +492,21 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
         permission: StorePermission.VIEW_LEADS,
         modules: ['crm'],
         description:
-            'Lead lists, campaigns, and follow-ups. Pass kind: leads (open counts plus matching rows), campaigns ' +
-            '(name, created date, recipient count), or follow_ups (due today by default, or overdue). Use for ' +
-            '"how many open leads", "what campaigns did we send", "which follow-ups are overdue". ' +
-            'open_pipeline kind=leads is only the committed-but-unfinished count; this tool is the list.',
+            'Lead lists, campaigns, follow-ups, and CRM contacts. Pass kind: leads (open counts plus matching rows), ' +
+            'campaigns (name, created date, recipient count), follow_ups (due today by default, or overdue), or ' +
+            'contacts (name, company, mobile, email). Use for "how many open leads", "what campaigns did we send", ' +
+            '"which follow-ups are overdue", "who is in our contact book". ' +
+            'open_pipeline kind=leads is only the committed-but-unfinished count; this tool is the list. ' +
+            'Resolve one contact by name with resolve_entity type=contact.',
         parameters: {
             type: 'object',
             properties: {
                 kind: {
                     type: 'string',
-                    enum: ['leads', 'campaigns', 'follow_ups'],
+                    enum: ['leads', 'campaigns', 'follow_ups', 'contacts'],
                     description: 'Which CRM view to return.',
                 },
-                search: { type: 'string', description: 'For kind=leads, match name, mobile or email.' },
+                search: { type: 'string', description: 'For kind=leads or contacts, match name, mobile or email.' },
                 status: { type: 'string', description: 'For kind=leads, restrict to one lead status.' },
                 scope: {
                     type: 'string',
@@ -516,8 +519,8 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
         },
         handler: async (ctx, args, deps) => {
             const kind = args.kind;
-            if (kind !== 'leads' && kind !== 'campaigns' && kind !== 'follow_ups') {
-                return { error: 'kind must be leads, campaigns, or follow_ups' };
+            if (kind !== 'leads' && kind !== 'campaigns' && kind !== 'follow_ups' && kind !== 'contacts') {
+                return { error: 'kind must be leads, campaigns, follow_ups, or contacts' };
             }
             const limit = Math.min(Math.max(Number(args.limit) || MAX_TOOL_ROWS, 1), MAX_TOOL_ROWS);
             const offset = Math.max(Number(args.offset) || 0, 0);
@@ -547,6 +550,28 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
                         mobile: lead.mobile ?? null,
                         source: lead.sourceOption?.name ?? lead.source ?? null,
                         next_step_date: isoDate(lead.next_step_date),
+                    })),
+                };
+            }
+
+            if (kind === 'contacts') {
+                const result = await deps.crmContacts.findAll(ctx.tenantId, {
+                    timezone: ctx.timezone,
+                    search: args.search ? String(args.search) : undefined,
+                    page: pageNum,
+                    limit,
+                });
+                const items = result.items ?? [];
+                return {
+                    kind,
+                    totalRows: result.total ?? items.length,
+                    page: result.page ?? pageNum,
+                    rows: items.map((contact: any) => ({
+                        name: contact.name,
+                        company: contact.company ?? null,
+                        designation: contact.designation ?? null,
+                        mobile: contact.mobile ?? null,
+                        email: contact.email ?? null,
                     })),
                 };
             }
@@ -692,6 +717,35 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
                     employee: e.employee,
                     designation: e.designation,
                     paid: money(e.paid),
+                })),
+            };
+        },
+    },
+
+    {
+        name: 'approvals_inbox',
+        permission: StorePermission.MANAGE_HR,
+        modules: ['hr'],
+        description:
+            'Items waiting on the caller to approve or reject: leave requests, expense claims, and other kinds the ' +
+            'caller may decide. Read-only — use the Approvals inbox page to decide. Use for "what is waiting on me", ' +
+            '"how many leave requests are pending".',
+        parameters: { type: 'object', properties: { ...PAGING_PROPS } },
+        handler: async (ctx, args, deps) => {
+            const inbox = await deps.approvals.inbox(toTenantContext(ctx));
+            const paged = page(inbox.items ?? [], args);
+            return {
+                total: inbox.total,
+                counts: inbox.counts,
+                kinds: inbox.kinds,
+                ...paged,
+                rows: paged.rows.map((item: any) => ({
+                    kind: item.kind,
+                    title: item.title,
+                    amount: nullableMoney(item.amount),
+                    requested_by: item.requested_by ?? null,
+                    requested_at: isoTimestamp(item.requested_at),
+                    branch: item.branch ?? null,
                 })),
             };
         },

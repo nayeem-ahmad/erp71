@@ -28,7 +28,8 @@ export type EntityType =
     | 'brand'
     | 'employee'
     | 'account'
-    | 'lead';
+    | 'lead'
+    | 'contact';
 
 export type DocumentType =
     | 'sale'
@@ -192,6 +193,22 @@ export class ChatDataService {
             }
             case 'lead': {
                 const rows = await this.db.lead.findMany({
+                    where: {
+                        tenant_id: tenantId,
+                        OR: [{ name: contains }, { mobile: contains }, { email: contains }],
+                    },
+                    select: { id: true, name: true, mobile: true, email: true },
+                    take: limit,
+                    orderBy: { name: 'asc' },
+                });
+                return rows.map((r) => ({
+                    id: r.id,
+                    label: r.name,
+                    detail: r.mobile ?? r.email ?? null,
+                }));
+            }
+            case 'contact': {
+                const rows = await this.db.crmContact.findMany({
                     where: {
                         tenant_id: tenantId,
                         OR: [{ name: contains }, { mobile: contains }, { email: contains }],
