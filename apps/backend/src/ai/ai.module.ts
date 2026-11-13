@@ -24,7 +24,13 @@ import { PurchaseReportsModule } from '../purchase-reports/purchase-reports.modu
 import { SalesReportsModule } from '../sales-reports/sales-reports.module';
 import { SubscriptionPlansModule } from '../subscription-plans/subscription-plans.module';
 import { StorefrontModule } from '../storefront/storefront.module';
+import { StorefrontPagesModule } from '../storefront-pages/storefront-pages.module';
 import { SuppliersModule } from '../suppliers/suppliers.module';
+import { CrmContactsModule } from '../crm-contacts/crm-contacts.module';
+import { ApprovalsModule } from '../approvals/approvals.module';
+import { HrReportsModule } from '../hr-reports/hr-reports.module';
+import { PayrollModule } from '../payroll/payroll.module';
+import { RecruitmentModule } from '../recruitment/recruitment.module';
 
 @Module({
     imports: [
@@ -50,9 +56,16 @@ import { SuppliersModule } from '../suppliers/suppliers.module';
         forwardRef(() => StorefrontModule),
         forwardRef(() => ManufacturingModule),
         forwardRef(() => ImportsModule),
+        StorefrontPagesModule,
         CrmLeadsModule,
         CrmCampaignsModule,
         CrmFollowUpsModule,
+        // CrmContactsModule imports AiModule for the business-card scanner.
+        forwardRef(() => CrmContactsModule),
+        ApprovalsModule,
+        HrReportsModule,
+        PayrollModule,
+        RecruitmentModule,
     ],
     controllers: [AiController],
     // ChatDataService is provided here rather than imported: it is the chatbot's

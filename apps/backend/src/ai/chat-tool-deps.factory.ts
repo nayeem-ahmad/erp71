@@ -16,7 +16,13 @@ import { PurchaseReportsService } from '../purchase-reports/purchase-reports.ser
 import { SalesLineItemsService } from '../sales-reports/sales-line-items.service';
 import { SalesReportsService } from '../sales-reports/sales-reports.service';
 import { StorefrontService } from '../storefront/storefront.service';
+import { StorefrontPagesService } from '../storefront-pages/storefront-pages.service';
 import { SuppliersService } from '../suppliers/suppliers.service';
+import { CrmContactsService } from '../crm-contacts/crm-contacts.service';
+import { ApprovalsService } from '../approvals/approvals.service';
+import { HrReportsService } from '../hr-reports/hr-reports.service';
+import { StatutoryReportsService } from '../payroll/statutory-reports.service';
+import { RecruitmentService } from '../recruitment/recruitment.service';
 import { AnomalyDetectionService } from './anomaly-detection.service';
 import { ChatDataService } from './chat-data.service';
 import type { ChatToolDeps } from './chat-tools';
@@ -51,6 +57,12 @@ export class ChatToolDepsFactory {
         private readonly crmLeads: CrmLeadsService,
         private readonly crmCampaigns: CrmCampaignsService,
         private readonly crmFollowUps: CrmFollowUpsService,
+        private readonly storefrontPages: StorefrontPagesService,
+        private readonly crmContacts: CrmContactsService,
+        private readonly approvals: ApprovalsService,
+        private readonly hrReports: HrReportsService,
+        private readonly statutoryReports: StatutoryReportsService,
+        private readonly recruitment: RecruitmentService,
     ) {}
 
     build(): ChatToolDeps {
@@ -76,6 +88,12 @@ export class ChatToolDepsFactory {
             crmLeads: this.crmLeads,
             crmCampaigns: this.crmCampaigns,
             crmFollowUps: this.crmFollowUps,
+            storefrontPages: this.storefrontPages,
+            crmContacts: this.crmContacts,
+            approvals: this.approvals,
+            hrReports: this.hrReports,
+            statutoryReports: this.statutoryReports,
+            recruitment: this.recruitment,
         };
     }
 }
