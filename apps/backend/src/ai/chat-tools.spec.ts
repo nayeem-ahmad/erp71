@@ -1841,3 +1841,104 @@ describe('crm_pipeline', () => {
         }
     });
 });
+
+describe('storefront_content', () => {
+    it('requires kind pages or menu, MANAGE_STOREFRONT_PAGES, and the storefront module', () => {
+        expect(CHAT_TOOLS_BY_NAME.storefront_content.permission).toBe(StorePermission.MANAGE_STOREFRONT_PAGES);
+        expect(CHAT_TOOLS_BY_NAME.storefront_content.modules).toEqual(['storefront']);
+        expect((CHAT_TOOLS_BY_NAME.storefront_content.parameters as any).required).toEqual(
+            expect.arrayContaining(['kind']),
+        );
+        expect((CHAT_TOOLS_BY_NAME.storefront_content.parameters as any).properties.kind.enum).toEqual(
+            ['pages', 'menu'],
+        );
+    });
+
+    it('dispatches pages to listPages, projects slug/title/status, and caps at 20', async () => {
+        const pages = Array.from({ length: 25 }, (_, i) => ({
+            id: `secret-${i}`,
+            slug: `page-${i}`,
+            title: `Page ${i}`,
+            status: i === 0 ? 'PUBLISHED' : 'DRAFT',
+            published_at: i === 0 ? new Date('2026-03-01T00:00:00Z') : null,
+            updated_at: new Date('2026-03-02T00:00:00Z'),
+            body_md: 'do not leak',
+        }));
+        const listPages = jest.fn().mockResolvedValue(pages);
+        const listMenuLinks = jest.fn();
+        const deps = makeDeps({ storefrontPages: { listPages, listMenuLinks } } as any);
+
+        const result: any = await run('storefront_content', { kind: 'pages' }, deps);
+
+        expect(listPages).toHaveBeenCalledWith('tenant-1');
+        expect(listMenuLinks).not.toHaveBeenCalled();
+        expect(result.rows).toHaveLength(20);
+        expect(result.totalRows).toBe(25);
+        expect(result.rows[0]).toEqual({
+            slug: 'page-0',
+            title: 'Page 0',
+            status: 'PUBLISHED',
+            published_at: '2026-03-01',
+            updated_at: '2026-03-02',
+        });
+        expect(result.rows[0].id).toBeUndefined();
+        expect(result.rows[0].body_md).toBeUndefined();
+    });
+
+    it('dispatches menu to listMenuLinks and projects label plus page title', async () => {
+        const listMenuLinks = jest.fn().mockResolvedValue([
+            {
+                id: 'secret-link',
+                label: 'About',
+                href: null,
+                sort_order: 1,
+                page: { id: 'p1', slug: 'about', title: 'About us', status: 'PUBLISHED', deleted_at: null },
+            },
+            {
+                id: 'secret-ext',
+                label: 'Facebook',
+                href: 'https://facebook.com/shop',
+                sort_order: 2,
+                page: null,
+            },
+        ]);
+        const listPages = jest.fn();
+        const deps = makeDeps({ storefrontPages: { listPages, listMenuLinks } } as any);
+
+        const result: any = await run('storefront_content', { kind: 'menu' }, deps);
+
+        expect(listMenuLinks).toHaveBeenCalledWith('tenant-1');
+        expect(listPages).not.toHaveBeenCalled();
+        expect(result.rows).toEqual([
+            {
+                label: 'About',
+                href: null,
+                page_title: 'About us',
+                page_slug: 'about',
+                page_status: 'PUBLISHED',
+                sort_order: 1,
+            },
+            {
+                label: 'Facebook',
+                href: 'https://facebook.com/shop',
+                page_title: null,
+                page_slug: null,
+                page_status: null,
+                sort_order: 2,
+            },
+        ]);
+        expect(result.rows[0].id).toBeUndefined();
+    });
+
+    it('rejects an unknown kind without calling a service', async () => {
+        const listPages = jest.fn();
+        const listMenuLinks = jest.fn();
+        const deps = makeDeps({ storefrontPages: { listPages, listMenuLinks } } as any);
+
+        const result: any = await run('storefront_content', { kind: 'blog' }, deps);
+
+        expect(result.error).toMatch(/kind must be pages or menu/);
+        expect(listPages).not.toHaveBeenCalled();
+        expect(listMenuLinks).not.toHaveBeenCalled();
+    });
+});

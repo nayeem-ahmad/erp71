@@ -313,6 +313,63 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
     },
 
     {
+        name: 'storefront_content',
+        permission: StorePermission.MANAGE_STOREFRONT_PAGES,
+        modules: ['storefront'],
+        description:
+            'Storefront CMS pages and the public menu. Pass kind: pages (slug, title, published status) or menu ' +
+            '(label, linked page or href, sort order). Use for "what pages are on the shop", "is the about page live", ' +
+            '"what is in the storefront menu". This is the shop website, not POS.',
+        parameters: {
+            type: 'object',
+            properties: {
+                kind: {
+                    type: 'string',
+                    enum: ['pages', 'menu'],
+                    description: 'Which storefront content view to return.',
+                },
+                ...PAGING_PROPS,
+            },
+            required: ['kind'],
+        },
+        handler: async (ctx, args, deps) => {
+            const kind = args.kind;
+            if (kind !== 'pages' && kind !== 'menu') {
+                return { error: 'kind must be pages or menu' };
+            }
+            if (kind === 'pages') {
+                const pages = await deps.storefrontPages.listPages(ctx.tenantId);
+                const paged = page(pages ?? [], args);
+                return {
+                    kind,
+                    ...paged,
+                    rows: paged.rows.map((row: any) => ({
+                        slug: row.slug,
+                        title: row.title,
+                        status: row.status,
+                        published_at: isoDate(row.published_at),
+                        updated_at: isoDate(row.updated_at),
+                    })),
+                };
+            }
+            const links = await deps.storefrontPages.listMenuLinks(ctx.tenantId);
+            const paged = page(links ?? [], args);
+            return {
+                kind,
+                ...paged,
+                rows: paged.rows.map((link: any) => ({
+                    label: link.label,
+                    href: link.href ?? null,
+                    page_title: link.page?.title ?? null,
+                    page_slug: link.page?.slug ?? null,
+                    page_status: link.page?.status ?? null,
+                    sort_order: link.sort_order,
+                })),
+            };
+        },
+    },
+
+    {
         name: 'import_status',
         permission: StorePermission.VIEW_IMPORTS,
         modules: ['imports'],
