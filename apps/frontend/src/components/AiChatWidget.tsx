@@ -62,11 +62,15 @@ const TOOL_ROUTES: Record<string, string> = {
     cash_position: '/accounting/reports/cashbook',
     // Operations
     storefront_orders: '/storefront',
+    storefront_content: '/storefront/pages',
     manufacturing_summary: '/manufacturing/jobs',
     import_status: '/purchases/imports',
     crm_pipeline: '/crm/leads',
     open_pipeline: '/sales/orders',
     workforce_summary: '/hr/attendance',
+    approvals_inbox: '/crm/approvals-inbox',
+    hr_reports: '/hr/reports/leave-balance',
+    hr_statutory: '/hr/reports/wages-register',
     loyalty_summary: '/sales/loyalty',
     // Help answers come from the Help Center, so that is the right page to cite.
     search_help: '/help',

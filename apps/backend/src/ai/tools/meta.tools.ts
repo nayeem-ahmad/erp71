@@ -12,6 +12,7 @@ const ENTITY_TYPES = [
     'employee',
     'account',
     'lead',
+    'contact',
 ] as const;
 
 const DOCUMENT_TYPES = [
@@ -38,7 +39,7 @@ export const META_TOOLS: ChatTool[] = [
         permission: StorePermission.VIEW_PRODUCT_CATALOG,
         description:
             'Turn a name the user typed into the id other tools need. Search products, customers, suppliers, branches, ' +
-            'warehouses, categories, brands, employees, ledger accounts or leads. ' +
+            'warehouses, categories, brands, employees, ledger accounts, leads or contacts. ' +
             'Call this FIRST whenever a question names something specific and you need to filter by it — ' +
             'never guess or invent an id.',
         parameters: {

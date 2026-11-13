@@ -130,6 +130,10 @@ export const helpMessages = {
                     q: 'How do I pay suppliers and see what I owe?',
                     a: 'Record payments under Purchase → Supplier Payment — you can pay or receive, allocate a payment across specific bills, and leave any remainder as an advance to allocate later. Purchase → Supplier Ledger shows each supplier\'s running balance, and every supplier also has a billing summary and credit ledger.',
                 },
+                {
+                    q: 'Can the AI assistant see import shipments, LCs, and duty?',
+                    a: 'Yes. Ask which shipments are still open, which LCs expire soon, or how much duty you paid, and it reads Purchase → Import shipments, the LC register, and the Import duty report. Recording a shipment or paying a duty still happens on those pages.',
+                },
             ],
         },
         accounting: {
@@ -175,8 +179,8 @@ export const helpMessages = {
                     a: 'Follow-ups (CRM → Follow-ups) are a single queue of reminders — General, Collection, Birthday, or Reorder — created from a customer\'s or a lead\'s detail page, with Birthday and Reorder reminders also generated automatically. Conversations (CRM → Conversations) is a read-only, filterable log of every touchpoint (call, SMS, WhatsApp, visit, and so on) recorded against leads across your whole team; you log a new one from the lead\'s detail page.',
                 },
                 {
-                    q: 'Can the AI assistant see leads, campaigns, and follow-ups?',
-                    a: 'Yes. Ask how many open leads you have, which campaigns went out, or which follow-ups are overdue, and it reads CRM → Leads, Campaigns, and Follow-ups. Creating a lead or marking a follow-up done still happens on those pages.',
+                    q: 'Can the AI assistant see leads, campaigns, follow-ups, and contacts?',
+                    a: 'Yes. Ask how many open leads you have, which campaigns went out, which follow-ups are overdue, or who is in the contact book, and it reads CRM → Leads, Campaigns, Follow-ups, and Contacts. Creating a lead or marking a follow-up done still happens on those pages.',
                 },
             ],
         },
@@ -197,8 +201,8 @@ export const helpMessages = {
                     a: 'On completion, material cost is snapshotted from each component\'s latest cost, and you can add further cost lines (labour, printing, transport, overhead, and so on), optionally drawn from a service purchase bill. The job then shows a total cost and cost per unit, and for completed jobs a Pricing panel suggests a cost-plus sale price you can apply to the product.',
                 },
                 {
-                    q: 'Can the AI assistant see production jobs and manufactured-product P&L?',
-                    a: 'Yes. Ask what is in production, job cost, or whether manufactured products are making money, and it reads Production Jobs, Manufactured product P&L, and manufacturing analytics. Starting or completing a job still happens on those pages.',
+                    q: 'Can the AI assistant see production jobs, manufactured-product P&L, and BOMs?',
+                    a: 'Yes. Ask what is in production, job cost, whether manufactured products are making money, or what BOMs you have, and it reads Production Jobs, Manufactured product P&L, manufacturing analytics, and Bills of materials. Starting or completing a job still happens on those pages.',
                 },
             ],
         },
@@ -218,6 +222,18 @@ export const helpMessages = {
                     q: 'How do I pay salaries?',
                     a: 'Use HR → Salary Payments → "Pay Salary", pick the employee and pay period, and record the amount (pre-filled from their basic salary) and method. Each payment posts an accounting voucher (debit Salary Payable, credit the payment account). Payments are single flat amounts — there are no payslips or allowance/deduction breakdowns yet.',
                 },
+                {
+                    q: 'Can the AI assistant see leave balance, attendance, and the hiring pipeline?',
+                    a: 'Yes. Ask who has leave left, what attendance looks like this month, or who is in the hiring pipeline, and it reads HR → Leave Balance & Liability, Attendance Summary, and Recruitment applications. Approving leave or hiring someone still happens on those pages.',
+                },
+                {
+                    q: 'Can the AI assistant see the wages register, tax, PF, and payroll cost?',
+                    a: 'Yes. Ask for the wages register, tax withheld, provident fund contributions, or what payroll cost, and it reads HR → Wages Register, Tax Deduction Statement, Provident Fund Register, and Payroll Cost Summary. Running payroll still happens on those pages.',
+                },
+                {
+                    q: 'Can the AI assistant see items waiting on me to approve?',
+                    a: 'Yes. Ask what is waiting on you, and it reads CRM → Approvals inbox (leave requests, expense claims, and other kinds you may decide). Deciding still happens on that page — the assistant is read-only. Approvals inbox needs Manage HR.',
+                },
             ],
         },
         aiAssistant: {
@@ -230,7 +246,7 @@ export const helpMessages = {
                 },
                 {
                     q: 'What can it actually see, and can I trust the answers?',
-                    a: 'Ask "what can you do?" and it reports your branches, how far back your records go, and which tools it can use — so an empty answer means an empty period, not a broken query. Every answer lists its Sources (the exact reports and date ranges it used) so you can verify it. You can also ask it to check for unusual transactions — sales below cost, duplicate invoices, big price outliers — and it will tell you if any check could not complete rather than implying all is clean. It can also look up the Daily Report for a branch, today\'s open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, production jobs and manufactured-product P&L, import shipments and the LC register, and CRM leads, campaigns, and follow-ups.',
+                    a: 'Ask "what can you do?" and it reports your branches, how far back your records go, and which tools it can use — so an empty answer means an empty period, not a broken query. Every answer lists its Sources (the exact reports and date ranges it used) so you can verify it. You can also ask it to check for unusual transactions — sales below cost, duplicate invoices, big price outliers — and it will tell you if any check could not complete rather than implying all is clean. It can also look up the Daily Report for a branch, today\'s open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, storefront pages and menu, production jobs, manufactured-product P&L and bills of materials, import shipments, the LC register and duty, CRM leads, campaigns, follow-ups and contacts, the approvals inbox, leave balance and attendance, recruitment, and the wages, tax, PF and payroll-cost registers.',
                 },
                 {
                     q: 'What are AI credits and how do I get more?',
@@ -283,6 +299,10 @@ export const helpMessages = {
                 {
                     q: 'Can the AI assistant see my online orders?',
                     a: 'Yes. Ask the assistant about pending online orders or who ordered what, and it reads Storefront → Online Orders. It is read-only — confirming or cancelling an order still happens on that page.',
+                },
+                {
+                    q: 'Can the AI assistant see storefront pages and the menu?',
+                    a: 'Yes. Ask which pages are on the shop or what is in the storefront menu, and it reads Storefront → Pages and Storefront → Menu. Publishing a page or rearranging the menu still happens on those pages.',
                 },
             ],
         },

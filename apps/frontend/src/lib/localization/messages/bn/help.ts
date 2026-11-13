@@ -130,6 +130,10 @@ export const helpMessages = {
                     q: 'সরবরাহকারীদের কীভাবে টাকা দেব এবং কত বকেয়া তা দেখব?',
                     a: 'Purchase → Supplier Payment-এ পেমেন্ট রেকর্ড করুন — আপনি দিতে বা নিতে পারেন, নির্দিষ্ট বিলের বিপরীতে একটি পেমেন্ট বরাদ্দ করতে পারেন, এবং বাকি অংশ পরে বরাদ্দের জন্য অগ্রিম হিসেবে রেখে দিতে পারেন। Purchase → Supplier Ledger প্রতিটি সরবরাহকারীর চলমান ব্যালেন্স দেখায়, এবং প্রতিটি সরবরাহকারীর একটি বিলিং সারসংক্ষেপ ও ক্রেডিট লেজারও থাকে।',
                 },
+                {
+                    q: 'Can the AI assistant see import shipments, LCs, and duty?',
+                    a: 'Yes. Ask which shipments are still open, which LCs expire soon, or how much duty you paid, and it reads Purchase → Import shipments, the LC register, and the Import duty report. Recording a shipment or paying a duty still happens on those pages.',
+                },
             ],
         },
         accounting: {
@@ -175,8 +179,8 @@ export const helpMessages = {
                     a: 'Follow-ups (CRM → Follow-ups) হলো রিমাইন্ডারের একটি একক সারি — General, Collection, Birthday বা Reorder — যা কাস্টমার বা লিডের বিস্তারিত পেজ থেকে তৈরি হয়, আর Birthday ও Reorder রিমাইন্ডার স্বয়ংক্রিয়ভাবেও তৈরি হয়। Conversations (CRM → Conversations) হলো আপনার পুরো টিম জুড়ে লিডের বিপরীতে রেকর্ড করা প্রতিটি টাচপয়েন্টের (কল, SMS, WhatsApp, ভিজিট, ইত্যাদি) একটি রিড-অনলি, ফিল্টারযোগ্য লগ; আপনি লিডের বিস্তারিত পেজ থেকে নতুন একটি লগ করেন।',
                 },
                 {
-                    q: 'Can the AI assistant see leads, campaigns, and follow-ups?',
-                    a: 'Yes. Ask how many open leads you have, which campaigns went out, or which follow-ups are overdue, and it reads CRM → Leads, Campaigns, and Follow-ups. Creating a lead or marking a follow-up done still happens on those pages.',
+                    q: 'Can the AI assistant see leads, campaigns, follow-ups, and contacts?',
+                    a: 'Yes. Ask how many open leads you have, which campaigns went out, which follow-ups are overdue, or who is in the contact book, and it reads CRM → Leads, Campaigns, Follow-ups, and Contacts. Creating a lead or marking a follow-up done still happens on those pages.',
                 },
             ],
         },
@@ -197,8 +201,8 @@ export const helpMessages = {
                     a: 'সম্পূর্ণ হওয়ার সময়, প্রতিটি উপাদানের সর্বশেষ খরচ থেকে ম্যাটেরিয়াল খরচের স্ন্যাপশট নেওয়া হয়, এবং আপনি আরও খরচ লাইন যোগ করতে পারেন (শ্রম, প্রিন্টিং, পরিবহন, ওভারহেড ইত্যাদি), চাইলে একটি সার্ভিস পারচেজ বিল থেকে টানা। জবটি তখন একটি মোট খরচ ও প্রতি ইউনিট খরচ দেখায়, এবং সম্পূর্ণ জবের জন্য একটি Pricing প্যানেল একটি কস্ট-প্লাস বিক্রয়মূল্যের পরামর্শ দেয় যা আপনি পণ্যে প্রয়োগ করতে পারেন।',
                 },
                 {
-                    q: 'Can the AI assistant see production jobs and manufactured-product P&L?',
-                    a: 'Yes. Ask what is in production, job cost, or whether manufactured products are making money, and it reads Production Jobs, Manufactured product P&L, and manufacturing analytics. Starting or completing a job still happens on those pages.',
+                    q: 'Can the AI assistant see production jobs, manufactured-product P&L, and BOMs?',
+                    a: 'Yes. Ask what is in production, job cost, whether manufactured products are making money, or what BOMs you have, and it reads Production Jobs, Manufactured product P&L, manufacturing analytics, and Bills of materials. Starting or completing a job still happens on those pages.',
                 },
             ],
         },
@@ -218,6 +222,18 @@ export const helpMessages = {
                     q: 'বেতন কীভাবে দেব?',
                     a: 'HR → Salary Payments → "Pay Salary" ব্যবহার করুন, কর্মচারী ও বেতনকাল বেছে নিন, এবং পরিমাণ (তাদের মূল বেতন থেকে আগে থেকে পূরণ করা) ও পদ্ধতি রেকর্ড করুন। প্রতিটি পেমেন্ট একটি অ্যাকাউন্টিং ভাউচার পোস্ট করে (Salary Payable ডেবিট, পেমেন্ট অ্যাকাউন্ট ক্রেডিট)। পেমেন্টগুলো একক ফ্ল্যাট পরিমাণ — এখনও কোনো পেস্লিপ বা ভাতা/কর্তনের ব্রেকডাউন নেই।',
                 },
+                {
+                    q: 'Can the AI assistant see leave balance, attendance, and the hiring pipeline?',
+                    a: 'Yes. Ask who has leave left, what attendance looks like this month, or who is in the hiring pipeline, and it reads HR → Leave Balance & Liability, Attendance Summary, and Recruitment applications. Approving leave or hiring someone still happens on those pages.',
+                },
+                {
+                    q: 'Can the AI assistant see the wages register, tax, PF, and payroll cost?',
+                    a: 'Yes. Ask for the wages register, tax withheld, provident fund contributions, or what payroll cost, and it reads HR → Wages Register, Tax Deduction Statement, Provident Fund Register, and Payroll Cost Summary. Running payroll still happens on those pages.',
+                },
+                {
+                    q: 'Can the AI assistant see items waiting on me to approve?',
+                    a: 'Yes. Ask what is waiting on you, and it reads CRM → Approvals inbox (leave requests, expense claims, and other kinds you may decide). Deciding still happens on that page — the assistant is read-only. Approvals inbox needs Manage HR.',
+                },
             ],
         },
         aiAssistant: {
@@ -230,7 +246,7 @@ export const helpMessages = {
                 },
                 {
                     q: 'এটি আসলে কী দেখতে পারে, এবং উত্তরগুলো কি বিশ্বাস করা যায়?',
-                    a: '"what can you do?" জিজ্ঞাসা করুন এবং এটি আপনার শাখাগুলো, আপনার রেকর্ড কতদূর পেছনের, এবং কোন কোন টুল ব্যবহার করতে পারে তা জানায় — তাই একটি খালি উত্তরের মানে একটি খালি সময়কাল, ভাঙা কোয়েরি নয়। প্রতিটি উত্তর তার Sources (যে রিপোর্ট ও তারিখ পরিসর ব্যবহার করেছে) তালিকাভুক্ত করে যাতে আপনি যাচাই করতে পারেন। আপনি এটিকে অস্বাভাবিক লেনদেন খুঁজতেও বলতে পারেন — খরচের নিচে বিক্রি, ডুপ্লিকেট ইনভয়েস, বড় মূল্য বিচ্যুতি — এবং কোনো পরীক্ষা সম্পূর্ণ না হলে এটি আপনাকে জানাবে, সব ঠিক আছে এমন ইঙ্গিত না দিয়ে। It can also look up the Daily Report for a branch, today\'s open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, production jobs and manufactured-product P&L, import shipments and the LC register, and CRM leads, campaigns, and follow-ups.',
+                    a: '"what can you do?" জিজ্ঞাসা করুন এবং এটি আপনার শাখাগুলো, আপনার রেকর্ড কতদূর পেছনের, এবং কোন কোন টুল ব্যবহার করতে পারে তা জানায় — তাই একটি খালি উত্তরের মানে একটি খালি সময়কাল, ভাঙা কোয়েরি নয়। প্রতিটি উত্তর তার Sources (যে রিপোর্ট ও তারিখ পরিসর ব্যবহার করেছে) তালিকাভুক্ত করে যাতে আপনি যাচাই করতে পারেন। আপনি এটিকে অস্বাভাবিক লেনদেন খুঁজতেও বলতে পারেন — খরচের নিচে বিক্রি, ডুপ্লিকেট ইনভয়েস, বড় মূল্য বিচ্যুতি — এবং কোনো পরীক্ষা সম্পূর্ণ না হলে এটি আপনাকে জানাবে, সব ঠিক আছে এমন ইঙ্গিত না দিয়ে। It can also look up the Daily Report for a branch, today\'s open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, storefront pages and menu, production jobs, manufactured-product P&L and bills of materials, import shipments, the LC register and duty, CRM leads, campaigns, follow-ups and contacts, the approvals inbox, leave balance and attendance, recruitment, and the wages, tax, PF and payroll-cost registers.',
                 },
                 {
                     q: 'AI ক্রেডিট কী এবং আরও কীভাবে পাব?',
@@ -283,6 +299,10 @@ export const helpMessages = {
                 {
                     q: 'Can the AI assistant see my online orders?',
                     a: 'Yes. Ask the assistant about pending online orders or who ordered what, and it reads Storefront → Online Orders. It is read-only — confirming or cancelling an order still happens on that page.',
+                },
+                {
+                    q: 'Can the AI assistant see storefront pages and the menu?',
+                    a: 'Yes. Ask which pages are on the shop or what is in the storefront menu, and it reads Storefront → Pages and Storefront → Menu. Publishing a page or rearranging the menu still happens on those pages.',
                 },
             ],
         },

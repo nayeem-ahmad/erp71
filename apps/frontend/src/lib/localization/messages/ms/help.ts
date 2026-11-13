@@ -130,6 +130,10 @@ export const helpMessages = {
                     q: 'Bagaimana saya membayar pembekal dan melihat apa yang saya berhutang?',
                     a: 'Rekodkan pembayaran di bawah Pembelian → Pembayaran Pembekal — anda boleh membayar atau menerima, memperuntukkan pembayaran merentasi bil tertentu, dan meninggalkan sebarang baki sebagai pendahuluan untuk diperuntukkan kemudian. Pembelian → Lejar Pembekal menunjukkan baki berjalan setiap pembekal, dan setiap pembekal juga mempunyai ringkasan pengebilan dan lejar kredit.',
                 },
+                {
+                    q: 'Can the AI assistant see import shipments, LCs, and duty?',
+                    a: 'Yes. Ask which shipments are still open, which LCs expire soon, or how much duty you paid, and it reads Purchase → Import shipments, the LC register, and the Import duty report. Recording a shipment or paying a duty still happens on those pages.',
+                },
             ],
         },
         accounting: {
@@ -175,8 +179,8 @@ export const helpMessages = {
                     a: 'Susulan (CRM → Susulan) ialah satu baris gilir peringatan — Umum, Kutipan, Hari Lahir, atau Pesanan Semula — dicipta dari halaman butiran pelanggan atau prospek, dengan peringatan Hari Lahir dan Pesanan Semula turut dijana secara automatik. Perbualan (CRM → Perbualan) ialah log baca sahaja yang boleh ditapis bagi setiap titik sentuh (panggilan, SMS, WhatsApp, lawatan, dan sebagainya) yang direkodkan terhadap prospek merentasi seluruh pasukan anda; anda log yang baharu dari halaman butiran prospek.',
                 },
                 {
-                    q: 'Can the AI assistant see leads, campaigns, and follow-ups?',
-                    a: 'Yes. Ask how many open leads you have, which campaigns went out, or which follow-ups are overdue, and it reads CRM → Leads, Campaigns, and Follow-ups. Creating a lead or marking a follow-up done still happens on those pages.',
+                    q: 'Can the AI assistant see leads, campaigns, follow-ups, and contacts?',
+                    a: 'Yes. Ask how many open leads you have, which campaigns went out, which follow-ups are overdue, or who is in the contact book, and it reads CRM → Leads, Campaigns, Follow-ups, and Contacts. Creating a lead or marking a follow-up done still happens on those pages.',
                 },
             ],
         },
@@ -197,8 +201,8 @@ export const helpMessages = {
                     a: 'Pada penyelesaian, kos bahan diambil syot kilat daripada kos terkini setiap komponen, dan anda boleh menambah baris kos lanjut (buruh, percetakan, pengangkutan, overhed, dan sebagainya), yang boleh diambil daripada bil pembelian perkhidmatan. Kerja itu kemudian menunjukkan jumlah kos dan kos seunit, dan bagi kerja yang selesai panel Penetapan Harga mencadangkan harga jualan kos-tambah yang boleh anda terapkan pada produk.',
                 },
                 {
-                    q: 'Can the AI assistant see production jobs and manufactured-product P&L?',
-                    a: 'Yes. Ask what is in production, job cost, or whether manufactured products are making money, and it reads Production Jobs, Manufactured product P&L, and manufacturing analytics. Starting or completing a job still happens on those pages.',
+                    q: 'Can the AI assistant see production jobs, manufactured-product P&L, and BOMs?',
+                    a: 'Yes. Ask what is in production, job cost, whether manufactured products are making money, or what BOMs you have, and it reads Production Jobs, Manufactured product P&L, manufacturing analytics, and Bills of materials. Starting or completing a job still happens on those pages.',
                 },
             ],
         },
@@ -218,6 +222,18 @@ export const helpMessages = {
                     q: 'Bagaimana saya membayar gaji?',
                     a: 'Gunakan HR → Pembayaran Gaji → "Pay Salary", pilih pekerja dan tempoh pembayaran, dan rekodkan jumlah (diisi dahulu daripada gaji asas mereka) dan kaedah. Setiap pembayaran mengepos baucar perakaunan (debit Gaji Belum Bayar, kredit akaun pembayaran). Pembayaran adalah jumlah rata tunggal — belum ada slip gaji atau pecahan elaun/potongan lagi.',
                 },
+                {
+                    q: 'Can the AI assistant see leave balance, attendance, and the hiring pipeline?',
+                    a: 'Yes. Ask who has leave left, what attendance looks like this month, or who is in the hiring pipeline, and it reads HR → Leave Balance & Liability, Attendance Summary, and Recruitment applications. Approving leave or hiring someone still happens on those pages.',
+                },
+                {
+                    q: 'Can the AI assistant see the wages register, tax, PF, and payroll cost?',
+                    a: 'Yes. Ask for the wages register, tax withheld, provident fund contributions, or what payroll cost, and it reads HR → Wages Register, Tax Deduction Statement, Provident Fund Register, and Payroll Cost Summary. Running payroll still happens on those pages.',
+                },
+                {
+                    q: 'Can the AI assistant see items waiting on me to approve?',
+                    a: 'Yes. Ask what is waiting on you, and it reads CRM → Approvals inbox (leave requests, expense claims, and other kinds you may decide). Deciding still happens on that page — the assistant is read-only. Approvals inbox needs Manage HR.',
+                },
             ],
         },
         aiAssistant: {
@@ -230,7 +246,7 @@ export const helpMessages = {
                 },
                 {
                     q: 'Apa yang sebenarnya boleh dilihatnya, dan bolehkah saya mempercayai jawapannya?',
-                    a: 'Tanya "what can you do?" dan ia melaporkan cawangan anda, sejauh mana rekod anda terkebelakang, dan alat mana yang boleh digunakannya — jadi jawapan kosong bermaksud tempoh kosong, bukan pertanyaan yang rosak. Setiap jawapan menyenaraikan Sumbernya (laporan dan julat tarikh tepat yang digunakannya) supaya anda boleh mengesahkannya. Anda juga boleh memintanya menyemak transaksi luar biasa — jualan di bawah kos, invois pendua, sisihan harga besar — dan ia akan memberitahu anda jika mana-mana semakan tidak dapat diselesaikan dan bukannya menyiratkan semuanya bersih. It can also look up the Daily Report for a branch, today\'s open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, production jobs and manufactured-product P&L, import shipments and the LC register, and CRM leads, campaigns, and follow-ups.',
+                    a: 'Tanya "what can you do?" dan ia melaporkan cawangan anda, sejauh mana rekod anda terkebelakang, dan alat mana yang boleh digunakannya — jadi jawapan kosong bermaksud tempoh kosong, bukan pertanyaan yang rosak. Setiap jawapan menyenaraikan Sumbernya (laporan dan julat tarikh tepat yang digunakannya) supaya anda boleh mengesahkannya. Anda juga boleh memintanya menyemak transaksi luar biasa — jualan di bawah kos, invois pendua, sisihan harga besar — dan ia akan memberitahu anda jika mana-mana semakan tidak dapat diselesaikan dan bukannya menyiratkan semuanya bersih. It can also look up the Daily Report for a branch, today\'s open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, storefront pages and menu, production jobs, manufactured-product P&L and bills of materials, import shipments, the LC register and duty, CRM leads, campaigns, follow-ups and contacts, the approvals inbox, leave balance and attendance, recruitment, and the wages, tax, PF and payroll-cost registers.',
                 },
                 {
                     q: 'Apakah kredit AI dan bagaimana saya mendapatkan lebih banyak?',
@@ -283,6 +299,10 @@ export const helpMessages = {
                 {
                     q: 'Can the AI assistant see my online orders?',
                     a: 'Yes. Ask the assistant about pending online orders or who ordered what, and it reads Storefront → Online Orders. It is read-only — confirming or cancelling an order still happens on that page.',
+                },
+                {
+                    q: 'Can the AI assistant see storefront pages and the menu?',
+                    a: 'Yes. Ask which pages are on the shop or what is in the storefront menu, and it reads Storefront → Pages and Storefront → Menu. Publishing a page or rearranging the menu still happens on those pages.',
                 },
             ],
         },

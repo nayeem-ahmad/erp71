@@ -130,6 +130,10 @@ export const helpMessages = {
                     q: "كيف أدفع للمورّدين وأرى ما عليّ؟",
                     a: "سجّل الدفعات من الشراء ← دفعة مورّد — يمكنك الدفع أو الاستلام، وتوزيع الدفعة على فواتير محددة، وترك الباقي دفعة مقدّمة لتوزيعها لاحقًا. ويعرض الشراء ← دفتر أستاذ المورّدين الرصيد المتجدّد لكل مورّد، ولكل مورّد أيضًا ملخص فوترة ودفتر ائتمان.",
                 },
+                {
+                    q: 'Can the AI assistant see import shipments, LCs, and duty?',
+                    a: 'Yes. Ask which shipments are still open, which LCs expire soon, or how much duty you paid, and it reads Purchase → Import shipments, the LC register, and the Import duty report. Recording a shipment or paying a duty still happens on those pages.',
+                },
             ],
         },
         accounting: {
@@ -175,8 +179,8 @@ export const helpMessages = {
                     a: "المتابعات (CRM ← المتابعات) قائمة انتظار واحدة للتذكيرات — عامة أو تحصيل أو عيد ميلاد أو إعادة طلب — تُنشأ من صفحة عميل أو عميل محتمل، وتُنشأ تذكيرات عيد الميلاد وإعادة الطلب تلقائيًا كذلك. أما المحادثات (CRM ← المحادثات) فسجل للقراءة فقط وقابل للتصفية لكل نقطة تواصل (مكالمة، رسالة نصية، WhatsApp، زيارة وغيرها) سُجّلت على العملاء المحتملين عبر فريقك كله؛ وتسجّل محادثة جديدة من صفحة العميل المحتمل.",
                 },
                 {
-                    q: 'Can the AI assistant see leads, campaigns, and follow-ups?',
-                    a: 'Yes. Ask how many open leads you have, which campaigns went out, or which follow-ups are overdue, and it reads CRM → Leads, Campaigns, and Follow-ups. Creating a lead or marking a follow-up done still happens on those pages.',
+                    q: 'Can the AI assistant see leads, campaigns, follow-ups, and contacts?',
+                    a: 'Yes. Ask how many open leads you have, which campaigns went out, which follow-ups are overdue, or who is in the contact book, and it reads CRM → Leads, Campaigns, Follow-ups, and Contacts. Creating a lead or marking a follow-up done still happens on those pages.',
                 },
             ],
         },
@@ -197,8 +201,8 @@ export const helpMessages = {
                     a: "عند الإتمام تُلتقط تكلفة المواد من أحدث تكلفة لكل مكوّن، ويمكنك إضافة أسطر تكلفة أخرى (عمالة، طباعة، نقل، مصروفات غير مباشرة وغيرها)، مسحوبة اختياريًا من فاتورة شراء خدمة. عندها يعرض الأمر إجمالي التكلفة وتكلفة الوحدة، ولأوامر مكتملة تقترح لوحة التسعير سعر بيع بهامش فوق التكلفة يمكنك تطبيقه على المنتج.",
                 },
                 {
-                    q: 'Can the AI assistant see production jobs and manufactured-product P&L?',
-                    a: 'Yes. Ask what is in production, job cost, or whether manufactured products are making money, and it reads Production Jobs, Manufactured product P&L, and manufacturing analytics. Starting or completing a job still happens on those pages.',
+                    q: 'Can the AI assistant see production jobs, manufactured-product P&L, and BOMs?',
+                    a: 'Yes. Ask what is in production, job cost, whether manufactured products are making money, or what BOMs you have, and it reads Production Jobs, Manufactured product P&L, manufacturing analytics, and Bills of materials. Starting or completing a job still happens on those pages.',
                 },
             ],
         },
@@ -218,6 +222,18 @@ export const helpMessages = {
                     q: "كيف أدفع الرواتب؟",
                     a: "استخدم الموارد البشرية ← دفعات الرواتب ← ”صرف راتب“، واختر الموظف وفترة الصرف، وسجّل المبلغ (يُملأ مسبقًا من راتبه الأساسي) وطريقة الدفع. وتسجّل كل دفعة قيدًا محاسبيًا (مدين: رواتب مستحقة، دائن: حساب الدفع). والدفعات مبالغ مقطوعة — ولا توجد بعد قسائم رواتب ولا تفصيل للبدلات والاستقطاعات.",
                 },
+                {
+                    q: 'Can the AI assistant see leave balance, attendance, and the hiring pipeline?',
+                    a: 'Yes. Ask who has leave left, what attendance looks like this month, or who is in the hiring pipeline, and it reads HR → Leave Balance & Liability, Attendance Summary, and Recruitment applications. Approving leave or hiring someone still happens on those pages.',
+                },
+                {
+                    q: 'Can the AI assistant see the wages register, tax, PF, and payroll cost?',
+                    a: 'Yes. Ask for the wages register, tax withheld, provident fund contributions, or what payroll cost, and it reads HR → Wages Register, Tax Deduction Statement, Provident Fund Register, and Payroll Cost Summary. Running payroll still happens on those pages.',
+                },
+                {
+                    q: 'Can the AI assistant see items waiting on me to approve?',
+                    a: 'Yes. Ask what is waiting on you, and it reads CRM → Approvals inbox (leave requests, expense claims, and other kinds you may decide). Deciding still happens on that page — the assistant is read-only. Approvals inbox needs Manage HR.',
+                },
             ],
         },
         aiAssistant: {
@@ -230,7 +246,7 @@ export const helpMessages = {
                 },
                 {
                     q: "ماذا يرى فعليًا، وهل يمكن الوثوق بإجاباته؟",
-                    a: "اسأله ”ماذا تستطيع أن تفعل؟“ فيخبرك بفروعك، وإلى أي مدى تعود سجلاتك، وأي الأدوات يستطيع استخدامها — فالإجابة الفارغة تعني فترة فارغة لا استعلامًا معطلًا. وكل إجابة تُدرج مصادرها (التقارير والفترات الزمنية التي استخدمها بالضبط) لتتحقق منها بنفسك. ويمكنك أيضًا أن تطلب منه فحص المعاملات غير المعتادة — بيع دون التكلفة، فواتير مكرّرة، انحرافات سعرية كبيرة — وسيخبرك إن تعذّر إتمام أي فحص بدل أن يوحي بأن كل شيء سليم. It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, production jobs and manufactured-product P&L, import shipments and the LC register, and CRM leads, campaigns, and follow-ups.",
+                    a: "اسأله ”ماذا تستطيع أن تفعل؟“ فيخبرك بفروعك، وإلى أي مدى تعود سجلاتك، وأي الأدوات يستطيع استخدامها — فالإجابة الفارغة تعني فترة فارغة لا استعلامًا معطلًا. وكل إجابة تُدرج مصادرها (التقارير والفترات الزمنية التي استخدمها بالضبط) لتتحقق منها بنفسك. ويمكنك أيضًا أن تطلب منه فحص المعاملات غير المعتادة — بيع دون التكلفة، فواتير مكرّرة، انحرافات سعرية كبيرة — وسيخبرك إن تعذّر إتمام أي فحص بدل أن يوحي بأن كل شيء سليم. It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, storefront pages and menu, production jobs, manufactured-product P&L and bills of materials, import shipments, the LC register and duty, CRM leads, campaigns, follow-ups and contacts, the approvals inbox, leave balance and attendance, recruitment, and the wages, tax, PF and payroll-cost registers.",
                 },
                 {
                     q: "ما أرصدة الذكاء الاصطناعي وكيف أحصل على المزيد؟",
@@ -283,6 +299,10 @@ export const helpMessages = {
                 {
                     q: 'Can the AI assistant see my online orders?',
                     a: 'Yes. Ask the assistant about pending online orders or who ordered what, and it reads Storefront → Online Orders. It is read-only — confirming or cancelling an order still happens on that page.',
+                },
+                {
+                    q: 'Can the AI assistant see storefront pages and the menu?',
+                    a: 'Yes. Ask which pages are on the shop or what is in the storefront menu, and it reads Storefront → Pages and Storefront → Menu. Publishing a page or rearranging the menu still happens on those pages.',
                 },
             ],
         },

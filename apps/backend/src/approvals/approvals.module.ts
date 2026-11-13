@@ -27,5 +27,6 @@ import {
         VoucherApprovals,
         WarehouseTransferApprovals,
     ],
+    exports: [ApprovalsService],
 })
 export class ApprovalsModule {}

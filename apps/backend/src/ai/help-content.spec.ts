@@ -58,6 +58,23 @@ describe('searchHelp', () => {
         expect(lines).toContain('/crm/leads');
     });
 
+    it('finds leave balance and wages register among the HR FAQs', () => {
+        const leave = searchHelp('leave balance');
+        expect(leave.some((r) => /leave balance/i.test(r.q) || /leave balance/i.test(r.a))).toBe(true);
+        const wages = searchHelp('wages register');
+        expect(wages.some((r) => /wages register/i.test(r.q) || /wages register/i.test(r.a))).toBe(true);
+    });
+
+    it('lists Wave 2 leftover and Wave 3 pages when those modules are on the plan', () => {
+        const lines = buildNavigationSection(
+            new Set(['hr', 'storefront', 'imports', 'manufacturing']),
+        ).join('\n');
+        expect(lines).toContain('/hr/recruitment/applications');
+        expect(lines).toContain('/storefront/pages');
+        expect(lines).toContain('/purchases/imports/duty-report');
+        expect(lines).toMatch(/- \/manufacturing —/);
+    });
+
     it('exposes the section titles for the empty-result fallback', () => {
         const titles = helpSectionTitles();
         expect(titles).toContain('Point of Sale (POS)');
