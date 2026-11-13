@@ -1939,15 +1939,22 @@ describe('storefront_content', () => {
             {
                 id: 'secret-link',
                 label: 'About',
-                href: null,
+                url: null,
                 sort_order: 1,
                 page: { id: 'p1', slug: 'about', title: 'About us', status: 'PUBLISHED', deleted_at: null },
             },
             {
                 id: 'secret-ext',
                 label: 'Facebook',
-                href: 'https://facebook.com/shop',
+                url: 'https://facebook.com/shop',
                 sort_order: 2,
+                page: null,
+            },
+            {
+                id: 'secret-shop',
+                label: 'Shop',
+                url: '/shop',
+                sort_order: 3,
                 page: null,
             },
         ]);
@@ -1974,6 +1981,14 @@ describe('storefront_content', () => {
                 page_slug: null,
                 page_status: null,
                 sort_order: 2,
+            },
+            {
+                label: 'Shop',
+                href: '/shop',
+                page_title: null,
+                page_slug: null,
+                page_status: null,
+                sort_order: 3,
             },
         ]);
         expect(result.rows[0].id).toBeUndefined();

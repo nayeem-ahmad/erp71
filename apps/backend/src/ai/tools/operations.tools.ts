@@ -388,7 +388,7 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
                 ...paged,
                 rows: paged.rows.map((link: any) => ({
                     label: link.label,
-                    href: link.href ?? null,
+                    href: link.href ?? link.url ?? null,
                     page_title: link.page?.title ?? null,
                     page_slug: link.page?.slug ?? null,
                     page_status: link.page?.status ?? null,
