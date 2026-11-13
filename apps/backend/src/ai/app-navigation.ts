@@ -61,6 +61,7 @@ const APP_PAGES: AppPage[] = [
     { path: '/crm/leads', label: 'Leads', description: 'the lead pipeline: open leads, stages and next steps', modules: ['crm'] },
     { path: '/crm/campaigns', label: 'Campaigns', description: 'CRM campaigns and who they were sent to', modules: ['crm'] },
     { path: '/crm/follow-ups', label: 'Follow-ups', description: 'follow-ups due today and overdue', modules: ['crm'] },
+    { path: '/crm/approvals-inbox', label: 'Approvals inbox', description: 'leave, expense claims and other items waiting on the caller to decide', modules: ['hr'] },
 
     // Inventory
     { path: '/inventory', label: 'Inventory', description: 'stock overview', modules: ['inventory'] },
@@ -83,11 +84,15 @@ const APP_PAGES: AppPage[] = [
     { path: '/purchases/reports/line-items', label: 'Purchase Line Items', description: 'every purchase bill line, searchable by period, supplier, product or branch', modules: ['retail'] },
     { path: '/purchases/imports', label: 'Import shipments', description: 'open import shipments: reference, supplier, status, ETA and LC number', modules: ['imports'] },
     { path: '/purchases/imports/lc-register', label: 'LC register', description: 'letters of credit, expiry dates and days to expiry', modules: ['imports'] },
+    { path: '/purchases/imports/duty-report', label: 'Import duty report', description: 'customs duty, VAT, AIT, RD and SD paid on import shipments', modules: ['imports'] },
 
     // Storefront
     { path: '/storefront', label: 'Online Orders', description: 'orders from the public online shop', modules: ['storefront'] },
+    { path: '/storefront/pages', label: 'Storefront pages', description: 'CMS pages on the public shop: slug, title and published status', modules: ['storefront'] },
+    { path: '/storefront/menu', label: 'Storefront menu', description: 'the public shop navigation: labels, linked pages and hrefs', modules: ['storefront'] },
 
     // Manufacturing
+    { path: '/manufacturing', label: 'Bills of materials', description: 'recipes: output product, quantity and component count', modules: ['manufacturing'] },
     { path: '/manufacturing/jobs', label: 'Production Jobs', description: 'open and recent production jobs', modules: ['manufacturing'] },
     { path: '/manufacturing/product-pl', label: 'Manufactured product P&L', description: 'cost vs revenue per manufactured product', modules: ['manufacturing'] },
     { path: '/manufacturing/analytics', label: 'Manufacturing analytics', description: 'completed volume and manufacturing cost headlines', modules: ['manufacturing'] },
@@ -112,6 +117,8 @@ const APP_PAGES: AppPage[] = [
     { path: '/hr/reports/tax-deduction', label: 'Tax Deduction Statement', description: 'income tax withheld per employee across the July-June income year', modules: ['hr'] },
     { path: '/hr/reports/provident-fund', label: 'Provident Fund Register', description: 'employee provident fund contributions across the income year', modules: ['hr'] },
     { path: '/hr/reports/service-book', label: 'Service Book', description: 'one employee\'s record: joining, salary revisions, leave taken and exit', modules: ['hr'] },
+    { path: '/hr/recruitment/applications', label: 'Recruitment applications', description: 'applicants in the hiring pipeline, by stage', modules: ['hr'] },
+    { path: '/hr/recruitment/job-posts', label: 'Job posts', description: 'open and closed job posts', modules: ['hr'] },
 ];
 
 /** The pages this tenant's plan actually has, given its resolved modules. */

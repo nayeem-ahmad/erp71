@@ -130,6 +130,10 @@ export const helpMessages = {
                     q: "سپلائرز کو ادائیگی کیسے کروں اور اپنے واجبات کیسے دیکھوں؟",
                     a: "ادائیگیاں خریداری → سپلائر ادائیگی کے تحت درج کریں — آپ ادا یا وصول کر سکتے ہیں، ایک ادائیگی کو مخصوص بلوں میں تقسیم کر سکتے ہیں، اور بچی ہوئی رقم بعد میں تقسیم کے لیے پیشگی چھوڑ سکتے ہیں۔ خریداری → سپلائر کھاتہ ہر سپلائر کا چلتا بیلنس دکھاتا ہے، اور ہر سپلائر کے پاس بلنگ خلاصہ اور ادھار کھاتہ بھی ہوتا ہے۔",
                 },
+                {
+                    q: 'Can the AI assistant see import shipments, LCs, and duty?',
+                    a: 'Yes. Ask which shipments are still open, which LCs expire soon, or how much duty you paid, and it reads Purchase → Import shipments, the LC register, and the Import duty report. Recording a shipment or paying a duty still happens on those pages.',
+                },
             ],
         },
         accounting: {
@@ -175,8 +179,8 @@ export const helpMessages = {
                     a: "فالو اپ (CRM → فالو اپ) یاد دہانیوں کی ایک ہی قطار ہے — عمومی، وصولی، سالگرہ یا دوبارہ آرڈر — جو گاہک یا لیڈ کے تفصیلی صفحے سے بنتی ہے، جبکہ سالگرہ اور دوبارہ آرڈر کی یاد دہانیاں خودکار بھی بنتی ہیں۔ گفتگو (CRM → گفتگو) پوری ٹیم کی جانب سے لیڈز پر درج ہر رابطے (کال، SMS، WhatsApp، ملاقات وغیرہ) کا صرف پڑھنے کے قابل، قابلِ فلٹر ریکارڈ ہے؛ نئی گفتگو لیڈ کے تفصیلی صفحے سے درج کی جاتی ہے۔",
                 },
                 {
-                    q: 'Can the AI assistant see leads, campaigns, and follow-ups?',
-                    a: 'Yes. Ask how many open leads you have, which campaigns went out, or which follow-ups are overdue, and it reads CRM → Leads, Campaigns, and Follow-ups. Creating a lead or marking a follow-up done still happens on those pages.',
+                    q: 'Can the AI assistant see leads, campaigns, follow-ups, and contacts?',
+                    a: 'Yes. Ask how many open leads you have, which campaigns went out, which follow-ups are overdue, or who is in the contact book, and it reads CRM → Leads, Campaigns, Follow-ups, and Contacts. Creating a lead or marking a follow-up done still happens on those pages.',
                 },
             ],
         },
@@ -197,8 +201,8 @@ export const helpMessages = {
                     a: "مکمل ہونے پر ہر جزو کی تازہ ترین لاگت سے مادی لاگت محفوظ ہو جاتی ہے، اور آپ مزید لاگت کی سطریں شامل کر سکتے ہیں (مزدوری، چھپائی، نقل و حمل، اوپری اخراجات وغیرہ)، چاہیں تو کسی خدماتی خریداری بل سے۔ پھر کام کی کل لاگت اور فی یونٹ لاگت نظر آتی ہے، اور مکمل کاموں کے لیے ایک قیمتی پینل لاگت پر منافع جوڑ کر فروخت کی قیمت تجویز کرتا ہے جسے آپ پروڈکٹ پر لاگو کر سکتے ہیں۔",
                 },
                 {
-                    q: 'Can the AI assistant see production jobs and manufactured-product P&L?',
-                    a: 'Yes. Ask what is in production, job cost, or whether manufactured products are making money, and it reads Production Jobs, Manufactured product P&L, and manufacturing analytics. Starting or completing a job still happens on those pages.',
+                    q: 'Can the AI assistant see production jobs, manufactured-product P&L, and BOMs?',
+                    a: 'Yes. Ask what is in production, job cost, whether manufactured products are making money, or what BOMs you have, and it reads Production Jobs, Manufactured product P&L, manufacturing analytics, and Bills of materials. Starting or completing a job still happens on those pages.',
                 },
             ],
         },
@@ -218,6 +222,18 @@ export const helpMessages = {
                     q: "تنخواہیں کیسے ادا کروں؟",
                     a: "HR → تنخواہ کی ادائیگیاں → ”تنخواہ ادا کریں“ استعمال کریں، ملازم اور مدت منتخب کریں، اور رقم (اُن کی بنیادی تنخواہ سے پہلے سے بھری ہوئی) اور طریقہ درج کریں۔ ہر ادائیگی ایک اکاؤنٹنگ واؤچر درج کرتی ہے (تنخواہ واجب الادا ڈیبٹ، ادائیگی کھاتہ کریڈٹ)۔ ادائیگیاں یکمشت رقم ہیں — ابھی تنخواہ کی پرچی یا الاؤنس/کٹوتی کی تفصیل نہیں ہے۔",
                 },
+                {
+                    q: 'Can the AI assistant see leave balance, attendance, and the hiring pipeline?',
+                    a: 'Yes. Ask who has leave left, what attendance looks like this month, or who is in the hiring pipeline, and it reads HR → Leave Balance & Liability, Attendance Summary, and Recruitment applications. Approving leave or hiring someone still happens on those pages.',
+                },
+                {
+                    q: 'Can the AI assistant see the wages register, tax, PF, and payroll cost?',
+                    a: 'Yes. Ask for the wages register, tax withheld, provident fund contributions, or what payroll cost, and it reads HR → Wages Register, Tax Deduction Statement, Provident Fund Register, and Payroll Cost Summary. Running payroll still happens on those pages.',
+                },
+                {
+                    q: 'Can the AI assistant see items waiting on me to approve?',
+                    a: 'Yes. Ask what is waiting on you, and it reads CRM → Approvals inbox (leave requests, expense claims, and other kinds you may decide). Deciding still happens on that page — the assistant is read-only. Approvals inbox needs Manage HR.',
+                },
             ],
         },
         aiAssistant: {
@@ -230,7 +246,7 @@ export const helpMessages = {
                 },
                 {
                     q: "یہ اصل میں کیا دیکھ سکتا ہے، اور کیا جوابات پر بھروسہ کیا جا سکتا ہے؟",
-                    a: "پوچھیں ”تم کیا کر سکتے ہو؟“ اور یہ آپ کی شاخیں، آپ کے ریکارڈ کتنے پرانے ہیں، اور کون سے اوزار استعمال کر سکتا ہے، سب بتا دیتا ہے — یعنی خالی جواب کا مطلب خالی مدت ہے، ٹوٹی ہوئی کوئری نہیں۔ ہر جواب اپنے ذرائع (استعمال کی گئی عین رپورٹس اور مدت) دکھاتا ہے تاکہ آپ تصدیق کر سکیں۔ آپ اس سے غیر معمولی لین دین بھی جانچنے کو کہہ سکتے ہیں — لاگت سے کم فروخت، دہرے انوائس، قیمت میں بڑے فرق — اور اگر کوئی جانچ مکمل نہ ہو سکے تو یہ بتا دیتا ہے، سب ٹھیک ہونے کا تاثر نہیں دیتا۔ It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, production jobs and manufactured-product P&L, import shipments and the LC register, and CRM leads, campaigns, and follow-ups.",
+                    a: "پوچھیں ”تم کیا کر سکتے ہو؟“ اور یہ آپ کی شاخیں، آپ کے ریکارڈ کتنے پرانے ہیں، اور کون سے اوزار استعمال کر سکتا ہے، سب بتا دیتا ہے — یعنی خالی جواب کا مطلب خالی مدت ہے، ٹوٹی ہوئی کوئری نہیں۔ ہر جواب اپنے ذرائع (استعمال کی گئی عین رپورٹس اور مدت) دکھاتا ہے تاکہ آپ تصدیق کر سکیں۔ آپ اس سے غیر معمولی لین دین بھی جانچنے کو کہہ سکتے ہیں — لاگت سے کم فروخت، دہرے انوائس، قیمت میں بڑے فرق — اور اگر کوئی جانچ مکمل نہ ہو سکے تو یہ بتا دیتا ہے، سب ٹھیک ہونے کا تاثر نہیں دیتا۔ It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, storefront pages and menu, production jobs, manufactured-product P&L and bills of materials, import shipments, the LC register and duty, CRM leads, campaigns, follow-ups and contacts, the approvals inbox, leave balance and attendance, recruitment, and the wages, tax, PF and payroll-cost registers.",
                 },
                 {
                     q: "AI کریڈٹس کیا ہیں اور مزید کیسے حاصل کروں؟",
@@ -283,6 +299,10 @@ export const helpMessages = {
                 {
                     q: 'Can the AI assistant see my online orders?',
                     a: 'Yes. Ask the assistant about pending online orders or who ordered what, and it reads Storefront → Online Orders. It is read-only — confirming or cancelling an order still happens on that page.',
+                },
+                {
+                    q: 'Can the AI assistant see storefront pages and the menu?',
+                    a: 'Yes. Ask which pages are on the shop or what is in the storefront menu, and it reads Storefront → Pages and Storefront → Menu. Publishing a page or rearranging the menu still happens on those pages.',
                 },
             ],
         },

@@ -243,6 +243,7 @@ describe('ChatService.resolveTools', () => {
         expect(names).not.toContain('stock_on_hand');
         expect(names).not.toContain('sales_summary');
         expect(names).not.toContain('storefront_orders');
+        expect(names).not.toContain('storefront_content');
         expect(names).not.toContain('import_status');
         expect(names).toContain('financial_statement');
         expect(names).toContain('payables_aging');
