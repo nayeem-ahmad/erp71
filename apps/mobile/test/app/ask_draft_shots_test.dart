@@ -11,17 +11,32 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Renders the confirmation cards and, when the artifacts folder is there,
 /// writes a PNG of each. The assertions run either way.
+/// Real faces, when this machine has them, so a saved screenshot is readable.
+/// GitHub's runner does not ship these files; the widget checks still run.
 Future<void> _loadFonts() async {
-  Future<ByteData> bytes(String path) async =>
-      ByteData.sublistView(await File(path).readAsBytes());
+  Future<void> load(String family, List<String> paths) async {
+    final files = [
+      for (final path in paths) File(path),
+    ].where((file) => file.existsSync());
+    if (files.isEmpty) return;
+    final loader = FontLoader(family);
+    for (final file in files) {
+      loader.addFont(
+        Future.value(ByteData.sublistView(await file.readAsBytes())),
+      );
+    }
+    await loader.load();
+  }
+
   const root = '/usr/share/fonts/truetype/noto';
-  final sans = FontLoader('NotoSans')
-    ..addFont(bytes('$root/NotoSans-Regular.ttf'))
-    ..addFont(bytes('$root/NotoSans-Bold.ttf'));
-  final bangla = FontLoader('NotoSansBengali')
-    ..addFont(bytes('$root/NotoSansBengali-Regular.ttf'))
-    ..addFont(bytes('$root/NotoSansBengali-Bold.ttf'));
-  await Future.wait([sans.load(), bangla.load()]);
+  await load('NotoSans', [
+    '$root/NotoSans-Regular.ttf',
+    '$root/NotoSans-Bold.ttf',
+  ]);
+  await load('NotoSansBengali', [
+    '$root/NotoSansBengali-Regular.ttf',
+    '$root/NotoSansBengali-Bold.ttf',
+  ]);
 }
 
 const _shotFont = TextStyle(
