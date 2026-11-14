@@ -76,6 +76,7 @@ import { printBranch } from '@/lib/print/print-branch';
 import { resolvePrintPaper } from '@/lib/hooks/useSalePrintPrefs';
 import BulkActionBar, { type BulkAction } from './BulkActionBar';
 import ExportDialog, { type ExportFormat, type ExportRowScope } from './ExportDialog';
+import AnchoredDropdown from '@/components/document-entry/AnchoredDropdown';
 import { toast } from '@/lib/toast';
 
 declare module '@tanstack/react-table' {
@@ -657,8 +658,9 @@ export default function DataTable<T>({
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [activePreset, setActivePreset] = useState<string | null>(null);
 
-    // Refs for click-outside
+    // The button, and the portalled panel — a click on the list is not "outside".
     const columnSelectorRef = useRef<HTMLDivElement>(null);
+    const columnSelectorPanelRef = useRef<HTMLDivElement>(null);
     const tableScrollRef = useRef<HTMLDivElement>(null);
     const tableRef = useRef<HTMLTableElement>(null);
     const [tableCanScroll, setTableCanScroll] = useState(false);
@@ -878,16 +880,38 @@ export default function DataTable<T>({
         };
     }, [data, effectiveColumnVisibility, isLoading, effectiveColumnOrder, fitWidth]);
 
-    // Click outside handlers
+    // Outside click, Escape, and a scroll that moves the button. The panel is
+    // portalled, so it is not inside the button's box. Scrolling the column
+    // list itself, or the table under it, is not a reason to shut it — hiding
+    // a column can nudge the table scroller, and that must not dismiss the menu
+    // mid-tick. The page shell is the app's scroller (`overflow-y-auto` on
+    // PageShell), and that one does contain the button.
     useEffect(() => {
-        function handleClickOutside(e: MouseEvent) {
-            if (columnSelectorRef.current && !columnSelectorRef.current.contains(e.target as Node)) {
-                setShowColumnSelector(false);
-            }
-        }
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+        if (!showColumnSelector) return;
+        const onPointer = (event: MouseEvent) => {
+            const target = event.target as Node;
+            if (columnSelectorRef.current?.contains(target) || columnSelectorPanelRef.current?.contains(target)) return;
+            setShowColumnSelector(false);
+        };
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setShowColumnSelector(false);
+        };
+        const onScroll = (event: Event) => {
+            const target = event.target as Node | null;
+            const panel = columnSelectorPanelRef.current;
+            if (target && panel && (target === panel || panel.contains(target))) return;
+            const anchor = columnSelectorRef.current;
+            if (target && anchor && target.contains(anchor)) setShowColumnSelector(false);
+        };
+        document.addEventListener('mousedown', onPointer);
+        document.addEventListener('keydown', onKey);
+        window.addEventListener('scroll', onScroll, true);
+        return () => {
+            document.removeEventListener('mousedown', onPointer);
+            document.removeEventListener('keydown', onKey);
+            window.removeEventListener('scroll', onScroll, true);
+        };
+    }, [showColumnSelector]);
 
     // DnD column reorder
     const handleDragEnd = (event: DragEndEvent) => {
@@ -1187,24 +1211,39 @@ export default function DataTable<T>({
                             </button>
                         )}
 
-                        {/* Column Selector */}
+                        {/* Column Selector. Portaled and fixed, same as the filter
+                            More menu: the toolbar row scrolls (`scrollFilterRow`)
+                            and the table scroller paints over an in-flow z-50
+                            panel, so the list was clipped under the header. */}
                         <div className="relative" ref={columnSelectorRef}>
                             <button
+                                type="button"
                                 onClick={() => setShowColumnSelector(!showColumnSelector)}
                                 className={toolbarBtnBase}
                                 title={t.common.dataTable.columns}
+                                aria-expanded={showColumnSelector}
+                                aria-haspopup="dialog"
                             >
                                 <Columns3 className="w-3.5 h-3.5" />
                                 <span className={iconOnlyToolbar ? 'sr-only' : undefined}>{t.common.dataTable.columns}</span>
                             </button>
                             {showColumnSelector && (
-                                <div className="absolute end-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 max-h-72 overflow-y-auto">
+                                <AnchoredDropdown
+                                    anchorRef={columnSelectorRef}
+                                    panelRef={columnSelectorPanelRef}
+                                    matchAnchorWidth={false}
+                                    align={typeof document !== 'undefined' && document.documentElement.dir === 'rtl' ? 'start' : 'end'}
+                                    role="dialog"
+                                    aria-label={t.common.dataTable.columns}
+                                    maxHeight={288}
+                                    className="w-56 rounded-xl border-gray-200 py-2"
+                                >
                                     {table.getAllLeafColumns()
                                         .filter((c) => c.id !== PINNED_FIRST_COLUMN_ID)
                                         .map((column) => (
                                             <label
                                                 key={column.id}
-                                                className="flex items-center px-3 py-1.5 hover:bg-gray-50 cursor-pointer"
+                                                className="flex items-center px-3 py-1.5 hover:bg-gray-50 cursor-pointer max-md:min-h-touch"
                                             >
                                                 <div className={`w-4 h-4 rounded border me-2.5 flex items-center justify-center transition-colors ${
                                                     column.getIsVisible()
@@ -1226,7 +1265,7 @@ export default function DataTable<T>({
                                                 </span>
                                             </label>
                                         ))}
-                                </div>
+                                </AnchoredDropdown>
                             )}
                         </div>
 
