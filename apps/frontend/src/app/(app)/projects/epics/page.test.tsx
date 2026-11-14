@@ -26,6 +26,25 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+// jsdom's matchMedia never matches, so `useIsMdUp` flips false and DataTable
+// drops every `hideOnMobile` column — Stories among them. This suite is a
+// desktop list.
+beforeAll(() => {
+    Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        value: (query: string) => ({
+            matches: query.includes('min-width'),
+            media: query,
+            onchange: null,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            addListener: () => {},
+            removeListener: () => {},
+            dispatchEvent: () => false,
+        }),
+    });
+});
+
 jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 
 jest.mock('@/components/projects/TaskDetailPanel', () => {
@@ -57,10 +76,10 @@ const epicList = () => [
         color: 'PURPLE',
         project: { id: 'p1', code: 'PRJ-0001', name: 'Till rebuild' },
         progress: {
-            storyCount: 2,
-            doneStoryCount: 1,
-            storyPoints: 8,
-            doneStoryPoints: 3,
+            storyCount: 128,
+            doneStoryCount: 42,
+            storyPoints: 256,
+            doneStoryPoints: 80,
             taskCount: 0,
             doneTaskCount: 0,
             percentComplete: 50,
@@ -112,6 +131,15 @@ describe('ProjectEpicsPage — list view', () => {
         expect(screen.getByRole('region', { name: 'Epics summary' })).toBeInTheDocument();
         expect(api.getProjectEpics).toHaveBeenCalled();
         expect(api.getAllProjectsBacklog).not.toHaveBeenCalled();
+    });
+
+    it('keeps a multi-digit story count, including the points, fully in its column', async () => {
+        render(<ProjectEpicsPage />);
+        const count = await screen.findByText(/42\/128 stories/);
+        expect(count).toHaveClass('whitespace-nowrap');
+        expect(count.textContent).toContain('80/256 pts');
+        const header = screen.getByRole('columnheader', { name: 'Stories' });
+        expect(header).toHaveStyle({ width: '300px', minWidth: '300px' });
     });
 
     it('asks for a project, then creates the epic', async () => {

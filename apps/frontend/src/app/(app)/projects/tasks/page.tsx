@@ -555,6 +555,10 @@ function TasksPage() {
             {
                 id: 'remaining',
                 header: m.overview.remaining,
+                // The figure plus the 56px trend. The 150px default clips a
+                // long hour value once the sparkline is beside it.
+                size: 180,
+                minSize: 180,
                 meta: { hideOnMobile: true, align: 'end' },
                 // The figure, and where it has been. A column of bare numbers
                 // cannot tell a task converging from one stuck at 12h for a
@@ -563,8 +567,8 @@ function TasksPage() {
                 cell: ({ row }: { row: { original: TaskRow } }) => {
                     const trend = row.original.remaining_trend;
                     return (
-                        <span className="flex items-center justify-end gap-2">
-                            <span className="tabular-nums">{num(row.original.remaining_hours)}h</span>
+                        <span className="flex items-center justify-end gap-2 whitespace-nowrap">
+                            <span className="shrink-0 whitespace-nowrap tabular-nums">{num(row.original.remaining_hours)}h</span>
                             {trend && trend.length > 1 && (
                                 <span className="w-14 shrink-0" data-testid="remaining-trend">
                                     <Sparkline

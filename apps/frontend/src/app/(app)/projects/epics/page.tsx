@@ -380,11 +380,17 @@ function ProjectEpicsList() {
                 id: 'stories',
                 header: m.epicList.stories,
                 accessorFn: (row: Epic) => row.progress?.storyCount ?? 0,
+                // "{done}/{total} stories · {done}/{total} pts". An end-aligned
+                // column keeps the table default of 150px, and that clips a
+                // multi-digit count — widest is four digits in Urdu at the
+                // largest list type (~285px with cozy padding).
+                size: 300,
+                minSize: 300,
                 meta: { hideOnMobile: true, align: 'end' as const },
                 cell: ({ row }: { row: { original: Epic } }) => {
                     const progress = row.original.progress;
                     return (
-                        <span className="tabular-nums text-gray-600">
+                        <span className="whitespace-nowrap tabular-nums text-gray-600">
                             {fmt(m.epics.storyProgress, {
                                 done: progress?.doneStoryCount ?? 0,
                                 total: progress?.storyCount ?? 0,

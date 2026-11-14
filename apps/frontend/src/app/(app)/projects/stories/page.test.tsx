@@ -27,6 +27,24 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+// jsdom's matchMedia never matches, so the tasks and points columns (both
+// `hideOnMobile`) would be dropped. This suite is a desktop list.
+beforeAll(() => {
+    Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        value: (query: string) => ({
+            matches: query.includes('min-width'),
+            media: query,
+            onchange: null,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            addListener: () => {},
+            removeListener: () => {},
+            dispatchEvent: () => false,
+        }),
+    });
+});
+
 jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 
 jest.mock('@/components/projects/TaskDetailPanel', () => {
@@ -73,7 +91,7 @@ const storyList = () => [
         story_points: 5,
         project: { id: 'p1', code: 'OTB', name: 'Online till' },
         epic: { id: 'e1', code: 'OTB-E1', title: 'Online payments', color: 'BLUE' },
-        progress: { taskCount: 1, doneTaskCount: 0, percentComplete: 0 },
+        progress: { taskCount: 128, doneTaskCount: 42, percentComplete: 33 },
     },
     {
         id: 's2',
@@ -121,6 +139,16 @@ describe('ProjectStoriesPage — list view', () => {
         expect(screen.getByRole('region', { name: 'Stories summary' })).toBeInTheDocument();
         expect(api.getProjectStories).toHaveBeenCalled();
         expect(api.getAllProjectsBacklog).not.toHaveBeenCalled();
+    });
+
+    it('keeps a multi-digit task count fully in its column', async () => {
+        render(<ProjectStoriesPage />);
+        const count = await screen.findByText('42/128 tasks');
+        expect(count).toHaveClass('whitespace-nowrap');
+        const header = screen.getByRole('columnheader', { name: 'Tasks' });
+        expect(header).toHaveStyle({ width: '180px', minWidth: '180px' });
+        // Points stay on the default column: "5 pts" is much narrower than 150px.
+        expect(screen.getByRole('cell', { name: '5 pts' })).toHaveClass('whitespace-nowrap');
     });
 
     it('asks for a project, offering ones with no stories yet, then creates the story', async () => {
