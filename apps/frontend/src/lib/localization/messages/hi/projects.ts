@@ -23,6 +23,14 @@ export const projectsMessages = {
         },
     },
 
+    workList: {
+        owner: 'मालिक',
+        noOwner: 'कोई मालिक नहीं',
+        createdBetween: 'बनाए जाने के बीच',
+        startBetween: 'शुरू होने के बीच',
+        targetBetween: 'लक्ष्य के बीच',
+        storyPoints: 'स्टोरी पॉइंट',
+    },
 
     fields: {
         code: "कोड",

@@ -2,7 +2,11 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import ProjectEpicsPage from './page';
 import { api } from '@/lib/api';
 
-jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));
+jest.mock('next/navigation', () => ({
+    useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
+    usePathname: () => '/projects/epics',
+    useSearchParams: () => new URLSearchParams(),
+}));
 
 jest.mock('next/link', () => {
     const MockLink = ({ children, href }: any) => <a href={href}>{children}</a>;
@@ -15,6 +19,7 @@ jest.mock('@/lib/api', () => ({
         getAllProjectsBacklog: jest.fn(),
         getProjectEpics: jest.fn(),
         getProjects: jest.fn(),
+        getMe: jest.fn().mockResolvedValue({ id: 'user-me' }),
         createProjectEpic: jest.fn(),
         importProjectEpics: jest.fn(),
         reorderBacklogScope: jest.fn(),
@@ -84,6 +89,7 @@ const epicList = () => [
 beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+    sessionStorage.clear();
     (api.getAllProjectsBacklog as jest.Mock).mockResolvedValue(backlog());
     (api.getProjectEpics as jest.Mock).mockResolvedValue(epicList());
     (api.getProjects as jest.Mock).mockResolvedValue({ items: [{ id: 'p1', code: 'PRJ-0001', name: 'Till rebuild' }] });

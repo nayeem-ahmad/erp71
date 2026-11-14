@@ -50,7 +50,7 @@ function readStored<T>(key: string): Partial<T> | null {
  * filter to a page does not invalidate what is already remembered — the new one
  * simply starts at its default.
  */
-export function useRememberedFilters<T extends Record<string, unknown>>(
+export function useRememberedFilters<T extends object>(
     key: string,
     defaults: T,
     overrides?: ReadonlyArray<keyof T>,

@@ -193,6 +193,12 @@ export interface DataTableProps<T> {
      */
     filterLayout?: 'wrap' | 'row';
     /**
+     * Keep the one-row filters on a phone and let that row scroll, instead of
+     * folding them into the Filters sheet. The More menu is portaled, so the
+     * scroll does not clip it.
+     */
+    scrollFilterRow?: boolean;
+    /**
      * Figures over the rows the filters match, in a strip of tiles above the
      * list — counted by the page, usually from the server. A Σ button in the
      * toolbar folds the strip away, and this browser remembers it.
@@ -480,6 +486,7 @@ export default function DataTable<T>({
     viewLayout,
     filters,
     filterLayout = 'wrap',
+    scrollFilterRow = false,
     stats,
     footerLabel,
 }: DataTableProps<T>) {
@@ -966,8 +973,8 @@ export default function DataTable<T>({
         });
         return { label: footerLabel, cells };
     };
-    /** The one-row toolbar, on a screen wide enough to hold it. */
-    const rowLayout = filterLayout === 'row' && isMdUp;
+    /** The one-row toolbar. A phone keeps the sheet unless the page asks the row to scroll. */
+    const rowLayout = filterLayout === 'row' && (isMdUp || scrollFilterRow);
     const iconOnlyToolbar = isCompact || rowLayout;
     const statsHidden = stats ? prefs.isStatsHidden(tableId) : false;
 
@@ -1112,10 +1119,10 @@ export default function DataTable<T>({
         <div className={`bg-white ${d.wrapper} shadow-sm border border-gray-100`}>
             {/* ── Toolbar ─────────────────────────────────────────── */}
             <div className={d.toolbar}>
-                <div className={rowLayout ? 'flex flex-nowrap items-center gap-2' : 'flex items-center justify-between gap-3 flex-wrap'}>
+                <div className={rowLayout ? `flex flex-nowrap items-center gap-2 ${scrollFilterRow ? 'overflow-x-auto' : ''}` : 'flex items-center justify-between gap-3 flex-wrap'}>
                     {/* Search */}
                     {showSearch && (
-                        <div className={rowLayout ? 'relative w-44 shrink-0 lg:w-56 xl:w-64' : 'relative flex-1 min-w-[200px] max-w-md'}>
+                        <div className={rowLayout ? (scrollFilterRow ? 'relative w-36 shrink-0 sm:w-44 lg:w-56' : 'relative w-44 shrink-0 lg:w-56 xl:w-64') : 'relative flex-1 min-w-[200px] max-w-md'}>
                             <Search className={`absolute top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 ${isCompact ? 'start-2.5' : 'start-3'}`} />
                             <input
                                 type="text"

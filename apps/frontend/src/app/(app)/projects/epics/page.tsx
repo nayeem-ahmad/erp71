@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
     CheckCircle2,
     CircleDashed,
@@ -30,6 +31,17 @@ import {
     type EpicProjectOption,
 } from '@/components/projects/EpicFormModal';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
+import { useFilterUrl } from '@/components/projects/use-filter-url';
+import {
+    EMPTY_EPIC_FILTERS,
+    epicRange,
+    filterEpics,
+    parseEpicFilters,
+    epicFiltersToQuery,
+    type EpicFilterDimension,
+    type EpicFilterState,
+} from '@/components/projects/work-list-filters';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
@@ -93,42 +105,44 @@ function useRememberedView(): [EpicView, (view: EpicView) => void] {
  * Every project's epics on one screen. The default is the standard list UI
  * (filter row, stats strip, View options); Hierarchy keeps the backlog tree.
  */
-export default function ProjectEpicsPage() {
+function ProjectEpicsList() {
     const { t, fmt, locale } = useI18n();
     const m = t.projects;
     const listUi = m.epicList.listUi;
+    const copy = t.projects.sprint.filters;
+    const work = t.projects.workList;
+    const searchParams = useSearchParams();
+    // Read once, at mount: from here on the controls own these.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const initial = useMemo(() => parseEpicFilters(searchParams), []);
 
     const [view, setView] = useRememberedView();
-    const [epics, setEpics] = useState<Epic[]>([]);
+    const [epics, setEpics] = useState<(Epic & { creator?: { id: string; name?: string | null; email?: string } | null; created_by?: string | null; created_at?: string | null })[]>([]);
     const [projects, setProjects] = useState<EpicProjectOption[]>([]);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
 
-    const [filters, setFilter, filtersReady] = useRememberedFilters('project-epics', {
-        search: '',
-        projectId: '',
-        status: '',
-        priority: '',
-    });
-    const { search, projectId, status, priority } = filters;
+    const [filters, setFilter, filtersReady] = useRememberedFilters<EpicFilterState>(
+        'project-epics',
+        { ...EMPTY_EPIC_FILTERS, ...initial.filters },
+        initial.owned,
+    );
+    const [userId, setUserId] = useState<string | null>(null);
+    useFilterUrl(filtersReady, filters, epicFiltersToQuery);
 
     const load = useCallback(async () => {
-        if (!filtersReady || view !== 'list') return;
+        if (view !== 'list') return;
         setLoading(true);
         try {
-            const list = await api.getProjectEpics({
-                projectId: projectId || undefined,
-                status: status || undefined,
-                priority: priority || undefined,
-            });
-            setEpics(Array.isArray(list) ? (list as Epic[]) : []);
+            const list = await api.getProjectEpics();
+            setEpics(Array.isArray(list) ? (list as typeof epics) : []);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.epics.loadFailed);
         } finally {
             setLoading(false);
         }
-    }, [filtersReady, m.epics.loadFailed, priority, projectId, status, view]);
+    }, [m.epics.loadFailed, view]);
 
     useEffect(() => {
         void load();
@@ -138,54 +152,111 @@ export default function ProjectEpicsPage() {
         api.getProjects({ limit: 100 })
             .then((res) => setProjects((res?.items ?? []) as EpicProjectOption[]))
             .catch(() => setProjects([]));
+        void Promise.resolve().then(() => fetchMe()).then((me) => setUserId(me?.id ?? null)).catch(() => setUserId(null));
     }, []);
 
-    const filtered = useMemo(() => {
-        const term = search.trim().toLowerCase();
-        if (!term) return epics;
-        return epics.filter(
-            (epic) => epic.code.toLowerCase().includes(term) || epic.title.toLowerCase().includes(term),
-        );
-    }, [epics, search]);
+    const filtered = useMemo(() => filterEpics(epics, filters, userId), [epics, filters, userId]);
+    const countEpics = (omit: EpicFilterDimension, pick: (epic: (typeof epics)[number]) => boolean) =>
+        filterEpics(epics, filters, userId, omit).filter(pick).length;
 
-    const listFilters = useMemo<ListFilter[]>(
-        () => [
-            {
-                id: 'project',
-                type: 'select',
-                label: m.fields.project,
-                value: projectId || null,
-                onChange: (next) => setFilter('projectId', next ?? ''),
-                options: projects.map((project) => ({
-                    value: project.id,
-                    label: `${project.code} · ${project.name}`,
-                })),
-            },
+    const listFilters = useMemo<ListFilter[]>(() => {
+        const owners = new Map<string, string>();
+        for (const epic of epics) {
+            if (epic.creator?.id) owners.set(epic.creator.id, epic.creator.name || epic.creator.email || epic.creator.id);
+        }
+        return [
             {
                 id: 'status',
-                type: 'select',
+                type: 'multi-select',
                 label: m.fields.status,
-                value: status || null,
-                onChange: (next) => setFilter('status', next ?? ''),
+                value: filters.statuses,
+                onChange: (statuses) => setFilter('statuses', statuses),
                 options: EPIC_STATUSES.map((value) => ({
                     value,
                     label: m.epics.statuses[value],
+                    count: countEpics('status', (epic) => epic.status === value),
                 })),
             },
             {
                 id: 'priority',
-                type: 'select',
+                type: 'multi-select',
                 label: m.fields.priority,
-                value: priority || null,
-                onChange: (next) => setFilter('priority', next ?? ''),
+                value: filters.priorities,
+                onChange: (priorities) => setFilter('priorities', priorities),
                 options: PRIORITIES.map((value) => ({
                     value,
                     label: m.priority[value],
+                    count: countEpics('priority', (epic) => epic.priority === value),
                 })),
             },
-        ],
-        [m, projectId, projects, status, priority, setFilter],
-    );
+            {
+                id: 'project',
+                type: 'multi-select',
+                label: m.fields.project,
+                value: filters.projectIds,
+                onChange: (projectIds) => setFilter('projectIds', projectIds),
+                options: projects.map((project) => ({
+                    value: project.id,
+                    label: `${project.code} · ${project.name}`,
+                    count: countEpics('project', (epic) => epic.project?.id === project.id),
+                })),
+            },
+            {
+                id: 'owner',
+                type: 'multi-select',
+                label: work.owner,
+                more: true,
+                value: filters.ownerIds,
+                onChange: (ownerIds) => setFilter('ownerIds', ownerIds),
+                options: [
+                    { value: 'me', label: copy.me, count: countEpics('owner', (epic) => (epic.creator?.id ?? epic.created_by) === userId) },
+                    { value: 'none', label: work.noOwner, count: countEpics('owner', (epic) => !(epic.creator?.id ?? epic.created_by)) },
+                    ...[...owners.entries()].map(([value, label]) => ({
+                        value,
+                        label,
+                        count: countEpics('owner', (epic) => (epic.creator?.id ?? epic.created_by) === value),
+                    })),
+                ],
+            },
+            {
+                id: 'start',
+                type: 'date-range',
+                label: work.startBetween,
+                more: true,
+                value: epicRange(filters, 'start'),
+                presets: [],
+                onChange: (next) => {
+                    setFilter('startFrom', next?.from ?? '');
+                    setFilter('startTo', next?.to ?? '');
+                },
+            },
+            {
+                id: 'target',
+                type: 'date-range',
+                label: work.targetBetween,
+                more: true,
+                value: epicRange(filters, 'target'),
+                presets: [],
+                onChange: (next) => {
+                    setFilter('targetFrom', next?.from ?? '');
+                    setFilter('targetTo', next?.to ?? '');
+                },
+            },
+            {
+                id: 'created',
+                type: 'date-range',
+                label: work.createdBetween,
+                more: true,
+                value: epicRange(filters, 'created'),
+                presets: [],
+                onChange: (next) => {
+                    setFilter('createdFrom', next?.from ?? '');
+                    setFilter('createdTo', next?.to ?? '');
+                },
+            },
+        ];
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [m, work, copy, filters, projects, epics, userId, setFilter]);
 
     const stats = useMemo(() => {
         const n = (value: number) => value.toLocaleString(locale);
@@ -364,7 +435,7 @@ export default function ProjectEpicsPage() {
         [fmt, m],
     );
 
-    const anyFilter = Boolean(search.trim() || projectId || status || priority);
+    const anyFilter = filtered.length !== epics.length || Boolean(filters.search.trim());
 
     const headerActions = (onNew: () => void, onReload?: () => void) => (
         <>
@@ -450,10 +521,11 @@ export default function ProjectEpicsPage() {
                 emptyMessage={anyFilter ? m.epicList.emptyFiltered : m.epicList.empty}
                 emptyIcon={<Layers className="h-16 w-16 text-gray-200" />}
                 searchPlaceholder={m.epicList.searchPlaceholder}
-                searchValue={search}
+                searchValue={filters.search}
                 onSearchChange={(value) => setFilter('search', value)}
                 filters={listFilters}
                 filterLayout="row"
+                scrollFilterRow
                 stats={stats}
                 enableColumnFilters={false}
                 viewOptions
@@ -464,7 +536,7 @@ export default function ProjectEpicsPage() {
                 <EpicFormModal
                     projects={projects}
                     epic={null}
-                    initialProjectId={projectId || undefined}
+                    initialProjectId={filters.projectIds.length === 1 ? filters.projectIds[0] : undefined}
                     onClose={() => setCreating(false)}
                     onSaved={async () => {
                         setCreating(false);
@@ -473,5 +545,13 @@ export default function ProjectEpicsPage() {
                 />
             )}
         </PageShell>
+    );
+}
+
+export default function ProjectEpicsPage() {
+    return (
+        <Suspense fallback={null}>
+            <ProjectEpicsList />
+        </Suspense>
     );
 }

@@ -7,6 +7,21 @@ import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { BoardColumnsService } from './board-columns.service';
 import { ProjectTasksService } from './project-tasks.service';
 import { slugFallback, slugify, uniqueSlug } from './url-keys/board-slug';
+import { createdAtRange } from '../common/created-range.util';
+import { csvIds } from './list-query.util';
+
+/** Optional list narrowing. Every field absent keeps the list the callers already get. */
+export interface ListBoardsQuery {
+    projectId?: string;
+    projectIds?: string;
+    /** A user id, or `none`. */
+    ownerId?: string;
+    ownerIds?: string;
+    createdFrom?: string;
+    createdTo?: string;
+    updatedFrom?: string;
+    updatedTo?: string;
+}
 import {
     CreateBoardCardDto,
     CreateBoardDto,
@@ -113,7 +128,7 @@ export class BoardsService {
         return board;
     }
 
-    async list(viewer: ProjectViewer) {
+    async list(viewer: ProjectViewer, query: ListBoardsQuery = {}) {
         const tenantId = viewer.tenantId;
         const visible = await this.access.taskFilter(viewer);
         // Someone reaching only the projects they are on is shown only the boards
@@ -127,8 +142,34 @@ export class BoardsService {
                   ],
               }
             : {};
+        const visibleTask = { deleted_at: null, ...visible };
+        const projectIds = [...csvIds(query.projectIds), ...(query.projectId ? [query.projectId] : [])];
+        const ownerTokens = [
+            ...csvIds(query.ownerIds),
+            ...(query.ownerId ? [query.ownerId] : []),
+            ...(query.ownerIds ?? '').split(',').map((value) => value.trim()).filter((value) => value === 'none'),
+        ];
+        const created = createdAtRange(query.createdFrom, query.createdTo, viewer.timezone);
+        const updated = createdAtRange(query.updatedFrom, query.updatedTo, viewer.timezone);
+        const extra: Record<string, unknown>[] = [];
+        if (projectIds.length) {
+            extra.push({
+                cards: { some: { task: { ...visibleTask, project_id: projectIds.length === 1 ? projectIds[0] : { in: projectIds } } } },
+            });
+        }
+        if (ownerTokens.length) {
+            const ids = ownerTokens.filter((id) => id !== 'none');
+            const ors: Record<string, unknown>[] = [];
+            if (ids.length) ors.push({ created_by: ids.length === 1 ? ids[0] : { in: ids } });
+            if (ownerTokens.includes('none')) ors.push({ created_by: null });
+            extra.push(ors.length === 1 ? ors[0] : { OR: ors });
+        }
+        if (created) extra.push({ created_at: created });
+        if (updated) extra.push({ updated_at: updated });
+        const where: Record<string, unknown> = { tenant_id: tenantId, deleted_at: null, ...boardScope };
+        if (extra.length) where.AND = extra;
         const boards = await this.db.board.findMany({
-            where: { tenant_id: tenantId, deleted_at: null, ...boardScope } as never,
+            where: where as never,
             orderBy: { created_at: 'desc' },
             // Scoped to non-deleted tasks: an unscoped count would advertise
             // cards that findOne() then hides, e.g. "8 cards" rendering as 6.
@@ -136,9 +177,16 @@ export class BoardsService {
             // a disclosure too, and boards are shared across projects. A viewer
             // who only reads their own records counts only their own cards, so
             // the number still matches the board they then open.
+            // `cards` is only the project id, so the list can filter by project
+            // without shipping every card.
             include: {
                 _count: {
-                    select: { cards: { where: { task: { deleted_at: null, ...visible } } } },
+                    select: { cards: { where: { task: visibleTask } } },
+                },
+                creator: { select: { id: true, name: true, email: true } },
+                cards: {
+                    where: { task: visibleTask },
+                    select: { task: { select: { project_id: true } } },
                 },
             } as never,
         });
@@ -147,6 +195,12 @@ export class BoardsService {
             name: board.name,
             description: board.description,
             created_at: board.created_at,
+            updated_at: board.updated_at ?? null,
+            created_by: board.created_by ?? board.creator?.id ?? null,
+            creator: board.creator
+                ? { id: board.creator.id, name: board.creator.name, email: board.creator.email }
+                : null,
+            project_ids: [...new Set((board.cards ?? []).map((card: { task?: { project_id?: string } }) => card.task?.project_id).filter(Boolean))],
             background_color: board.background_color,
             background_image_url: board.background_image_url,
             card_count: board._count.cards,

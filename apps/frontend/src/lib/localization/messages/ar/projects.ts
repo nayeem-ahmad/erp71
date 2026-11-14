@@ -23,6 +23,14 @@ export const projectsMessages = {
         },
     },
 
+    workList: {
+        owner: 'المالك',
+        noOwner: 'بلا مالك',
+        createdBetween: 'أُنشئ بين',
+        startBetween: 'يبدأ بين',
+        targetBetween: 'الهدف بين',
+        storyPoints: 'نقاط القصة',
+    },
 
     fields: {
         code: "الرمز",

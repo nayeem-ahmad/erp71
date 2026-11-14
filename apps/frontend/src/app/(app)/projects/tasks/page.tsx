@@ -43,7 +43,6 @@ import {
     assigneeKeyOf,
     assigneeLabelOf,
     assigneeNoteFor,
-    defaultAssigneeFor,
 } from '@/components/projects/task-assignee';
 import { Sparkline } from '@/components/dashboard/Sparkline';
 import { useServerList } from '@/hooks/useServerList';
@@ -55,13 +54,19 @@ import { routes } from '@/lib/routes';
 import { formatDate } from '@/lib/format';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useRememberedFilters } from '@/lib/use-remembered-filters';
+import { useFilterUrl } from '@/components/projects/use-filter-url';
+import { composerAssigneeKey } from '@/components/projects/sprint-filters';
+import {
+    EMPTY_TASK_FILTERS,
+    coerceTaskFilters,
+    parseTaskFilters,
+    taskFiltersToQuery,
+    taskListParams,
+    type TaskFilterState,
+} from '@/components/projects/work-list-filters';
+import type { NumberCondition } from '@/lib/number-condition';
 import { readsOwnRecordsOnly, tenantFromMe } from '@/lib/permissions';
 import { getWorkspaceItem } from '@/lib/session-store';
-import {
-    applyCreatedRangeQuery,
-    isCreatedRangeEmpty,
-    type CreatedRange,
-} from '@/lib/created-range';
 
 interface TaskRow {
     id: string;
@@ -127,49 +132,6 @@ const IMPORT_FIELDS: ImportField[] = [
  * `user:`/`employee:` keys the server hands back — the same key space the task
  * detail panel's picker uses.
  */
-const DEFAULT_FILTERS = {
-    search: '',
-    // Defaults to the signed-in user, so this page opens on what "My Tasks"
-    // used to show rather than on every task in the workspace.
-    assignee: 'me' as string,
-    projectId: '',
-    statusCategory: '',
-    priority: '',
-    createdRange: null as CreatedRange | null,
-};
-
-/** What the chosen assignee means to `/project-tasks`, once "me" knows who that is. */
-function assigneeQuery(
-    assignee: string,
-    userId: string | null,
-): { assigneeId?: string; assigneeEmployeeId?: string; unassigned?: string } {
-    if (assignee === 'anyone') return {};
-    if (assignee === 'unassigned') return { unassigned: 'true' };
-    if (assignee === 'me') return { assigneeId: userId ?? undefined };
-    if (assignee.startsWith('user:')) return { assigneeId: assignee.slice('user:'.length) };
-    if (assignee.startsWith('employee:')) {
-        return { assigneeEmployeeId: assignee.slice('employee:'.length) };
-    }
-    return {};
-}
-
-/**
- * Staffing cells and person names link here with `assignee` / `projectId`.
- * Anything the filter does not already understand is ignored, so a hand-edited
- * URL opens the default slice rather than an empty one.
- */
-function readAssigneeParam(value: string | null): string {
-    if (!value) return '';
-    if (value === 'me' || value === 'anyone' || value === 'unassigned') return value;
-    if (value.startsWith('user:') && value.length > 'user:'.length) return value;
-    if (value.startsWith('employee:') && value.length > 'employee:'.length) return value;
-    return '';
-}
-
-function readProjectIdParam(value: string | null): string {
-    return value?.trim() ?? '';
-}
-
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
 
 const assigneeLabel = (task: TaskRow): string => assigneeLabelOf(task);
@@ -178,34 +140,29 @@ function TasksPage() {
     const { t, fmt, locale, localeInfo } = useI18n();
     const m = t.projects;
     const listUi = m.tasks.listUi;
+    const copy = m.sprint.filters;
+    const work = m.workList;
 
     // Filters can arrive in the URL so staffing can link at a specific slice —
     // a cell that counted Rina's remaining hours on one project is a lie if the
-    // list it opens is still "my tasks". Read once, into the initial state
-    // below: from here on the controls own these.
+    // list it opens is still "my tasks". Read once: from here on the controls
+    // own these, and write them back so the link is the view.
     const searchParams = useSearchParams();
-    const assigneeParam = readAssigneeParam(searchParams.get('assignee'));
-    const projectIdParam = readProjectIdParam(searchParams.get('projectId'));
+    // Read once, at mount: from here on the controls own these.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const urlSeed = useMemo(() => parseTaskFilters(searchParams), []);
 
-    const urlSeeded = useMemo(() => {
-        const seeded: Array<'assignee' | 'projectId'> = [];
-        if (assigneeParam) seeded.push('assignee');
-        if (projectIdParam) seeded.push('projectId');
-        return seeded;
-        // Read once, at mount: from here on the controls own these.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    const [filters, setFilter, filtersReady] = useRememberedFilters(
+    const [rawFilters, setFilter, filtersReady] = useRememberedFilters<TaskFilterState>(
         'project-tasks',
-        {
-            ...DEFAULT_FILTERS,
-            assignee: assigneeParam || DEFAULT_FILTERS.assignee,
-            projectId: projectIdParam,
-        },
-        urlSeeded,
+        urlSeed.filters,
+        urlSeed.owned,
     );
-    const { search, assignee, projectId, statusCategory, priority, createdRange } = filters;
+    const filters = useMemo(() => {
+        if (!filtersReady) return rawFilters;
+        return coerceTaskFilters(rawFilters as unknown as Record<string, unknown>, rawFilters);
+    }, [filtersReady, rawFilters]);
+    useFilterUrl(filtersReady, filters, taskFiltersToQuery);
+    const { search, assignees, projectIds } = filters;
 
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [typing, setTyping] = useState(false);
@@ -216,7 +173,7 @@ function TasksPage() {
     const [ownRecordsOnly, setOwnRecordsOnly] = useState(false);
     const [scopeReady, setScopeReady] = useState(false);
     const [projects, setProjects] = useState<{ id: string; code: string; name: string }[]>([]);
-    const [assignees, setAssignees] = useState<AssigneeOption[]>([]);
+    const [holders, setHolders] = useState<AssigneeOption[]>([]);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
     /** The New Task dialog, open on these values; null while it is closed. */
     const [creating, setCreating] = useState<Partial<TaskEntryValues> | null>(null);
@@ -231,6 +188,9 @@ function TasksPage() {
     // project is one choice rather than one per task.
     const [quickProject, setQuickProject] = useState('');
     const [allLabels, setAllLabels] = useState<ProjectLabel[]>([]);
+    const [sprints, setSprints] = useState<{ id: string; name: string }[]>([]);
+    const [storyOptions, setStoryOptions] = useState<{ id: string; code: string; title: string }[]>([]);
+    const [epicOptions, setEpicOptions] = useState<{ id: string; code: string; title: string }[]>([]);
     const projectMeta = useProjectMeta();
 
     // Debounced only while somebody is actually typing, so a remembered search
@@ -262,13 +222,22 @@ function TasksPage() {
             .then((res) => setProjects((res?.items ?? []) as { id: string; code: string; name: string }[]))
             .catch(() => setProjects([]));
         api.getProjectTaskAssignees()
-            .then((rows: unknown) => setAssignees(Array.isArray(rows) ? (rows as AssigneeOption[]) : []))
-            .catch(() => setAssignees([]));
+            .then((rows: unknown) => setHolders(Array.isArray(rows) ? (rows as AssigneeOption[]) : []))
+            .catch(() => setHolders([]));
         // For the composer's `#label` tokens. A tenant with no labels simply has
         // no `#` grammar; nothing else depends on this.
         api.getProjectLabels()
             .then((rows: unknown) => setAllLabels(Array.isArray(rows) ? (rows as ProjectLabel[]) : []))
             .catch(() => setAllLabels([]));
+        api.getSprints()
+            .then((rows: unknown) => setSprints(Array.isArray(rows) ? (rows as { id: string; name: string }[]) : []))
+            .catch(() => setSprints([]));
+        api.getProjectStories()
+            .then((rows: unknown) => setStoryOptions(Array.isArray(rows) ? (rows as { id: string; code: string; title: string }[]) : []))
+            .catch(() => setStoryOptions([]));
+        api.getProjectEpics()
+            .then((rows: unknown) => setEpicOptions(Array.isArray(rows) ? (rows as { id: string; code: string; title: string }[]) : []))
+            .catch(() => setEpicOptions([]));
     }, []);
 
     /**
@@ -281,7 +250,10 @@ function TasksPage() {
      * their scope being widened later, and so the list is fetched once rather
      * than once per correction.
      */
-    const effectiveAssignee = ownRecordsOnly ? 'anyone' : assignee;
+    // A member who reads only their own records has nothing to pick: the server
+    // already limits them, and "me" would drop tasks they raised that nobody holds.
+    const queryFilters: TaskFilterState = ownRecordsOnly ? { ...filters, assignees: [] } : { ...filters, search: debouncedSearch };
+    const meUnresolved = !ownRecordsOnly && filters.assignees.includes('me') && userId === null;
 
     // Holding the fetch until the user id resolves keeps the default filter from
     // briefly showing everyone's tasks and then narrowing; holding it until the
@@ -289,44 +261,23 @@ function TasksPage() {
     // slice and then the remembered one. `scopeReady` is the same argument for
     // the record scope: fetching before it lands would send a filter the member
     // does not in fact have.
-    const ready = filtersReady && scopeReady && (effectiveAssignee !== 'me' || userId !== null);
+    const ready = filtersReady && scopeReady && !meUnresolved;
 
-    const { items, loading, serverPagination, reload } = useServerList<TaskRow>({
+    const { items, loading, serverPagination, reload, response } = useServerList<TaskRow>({
         tableId: 'project-tasks',
         enabled: ready,
         initialSort: { id: 'due_date', desc: false },
-        deps: [
-            debouncedSearch,
-            effectiveAssignee,
-            projectId,
-            statusCategory,
-            priority,
-            createdRange?.from,
-            createdRange?.to,
-            userId,
-        ],
+        deps: [JSON.stringify(taskListParams(queryFilters, userId))],
         columnFilters: true,
         fetch: (params) =>
             api.getProjectTasks({
                 ...params,
-                search: debouncedSearch || undefined,
-                ...assigneeQuery(effectiveAssignee, userId),
-                projectId: projectId || undefined,
-                statusCategory: statusCategory || undefined,
-                priority: priority || undefined,
-                ...applyCreatedRangeQuery(createdRange),
+                ...taskListParams(queryFilters, userId),
             }),
     });
+    const counts = response?.counts;
 
-    const filtered =
-        Boolean(debouncedSearch)
-        // The effective one: a hidden, inert assignee filter must not light up
-        // the "filters applied" state for a member who cannot change it.
-        || effectiveAssignee !== 'anyone'
-        || Boolean(projectId)
-        || Boolean(statusCategory)
-        || Boolean(priority)
-        || !isCreatedRangeEmpty(createdRange);
+    const filtered = Boolean(debouncedSearch) || JSON.stringify(queryFilters) !== JSON.stringify({ ...EMPTY_TASK_FILTERS, search: '', assignees: ownRecordsOnly ? [] : ['me'] });
 
     const typeSearch = useCallback((next: string) => {
         setTyping(true);
@@ -338,18 +289,14 @@ function TasksPage() {
 
     // Whatever project the list is filtered to is almost always the one a new
     // task belongs to; a single-project workspace never has to choose.
-    const presetProject = projectId || (projects.length === 1 ? projects[0].id : '');
+    const presetProject = projectIds.length === 1 ? projectIds[0] : (projects.length === 1 ? projects[0].id : '');
 
     const openCreate = () => {
         setCreating({
             projectId: quickProject || presetProject,
             // The holder the task would get anyway, shown rather than implied —
             // the field is there to be changed, not to be a surprise.
-            assignee: assignee.startsWith('user:') || assignee.startsWith('employee:')
-                ? assignee
-                : assignee === 'unassigned' || !userId
-                  ? ''
-                  : `user:${userId}`,
+            assignee: composerAssigneeKey(assignees, userId),
         });
     };
 
@@ -366,7 +313,13 @@ function TasksPage() {
         const holder =
             parsed.assigneeId || parsed.assigneeEmployeeId
                 ? { assigneeId: parsed.assigneeId, assigneeEmployeeId: parsed.assigneeEmployeeId }
-                : defaultAssigneeFor(assignee, userId);
+                : (() => {
+                    const key = composerAssigneeKey(assignees, userId);
+                    if (!key) return {};
+                    return key.startsWith('employee:')
+                        ? { assigneeEmployeeId: key.slice('employee:'.length) }
+                        : { assigneeId: key.slice('user:'.length) };
+                })();
         try {
             await api.createProjectTask({
                 projectId: quickProject || presetProject,
@@ -400,7 +353,10 @@ function TasksPage() {
             // same default the composer uses.
             ...(values.assignee
                 ? assigneeColumns(values.assignee)
-                : defaultAssigneeFor(assignee, userId)),
+                : (() => {
+                    const key = composerAssigneeKey(assignees, userId);
+                    return key ? assigneeColumns(key) : { assigneeId: '', assigneeEmployeeId: '' };
+                })()),
         });
         // The task now lands inside the current filter, so the list showing
         // it is the confirmation — no second dialog, which is what the
@@ -671,59 +627,211 @@ function TasksPage() {
     );
 
     /**
-     * Page-owned: each goes to the server with the page query. The assignee's
-     * "All" is `anyone`, so Clear all widens to the whole workspace rather than
-     * narrowing back to the signed-in user, the page's own default.
+     * Page-owned: each goes to the server with the page query. Clearing the
+     * assignee (Clear all, or the chip's ✕) widens to the whole workspace
+     * rather than back to the signed-in user, the page's own default.
      */
-    const listFilters = useMemo<ListFilter[]>(() => [
-        ...(ownRecordsOnly
-            ? []
-            : [{
+    const listFilters = useMemo<ListFilter[]>(() => {
+        const count = (group: string, key: string) => counts?.[group]?.[key];
+        const dueRange = filters.dueFrom || filters.dueTo
+            ? { ...(filters.dueFrom ? { from: filters.dueFrom } : {}), ...(filters.dueTo ? { to: filters.dueTo } : {}) }
+            : null;
+        const updatedRange = filters.updatedFrom || filters.updatedTo
+            ? { ...(filters.updatedFrom ? { from: filters.updatedFrom } : {}), ...(filters.updatedTo ? { to: filters.updatedTo } : {}) }
+            : null;
+        const createdRange = filters.createdFrom || filters.createdTo
+            ? { ...(filters.createdFrom ? { from: filters.createdFrom } : {}), ...(filters.createdTo ? { to: filters.createdTo } : {}) }
+            : null;
+        return [
+            ...(ownRecordsOnly ? [] : [{
                 id: 'assignee',
-                type: 'select' as const,
+                type: 'multi-select' as const,
                 label: m.fields.assignee,
-                value: assignee === 'anyone' ? null : assignee,
-                onChange: (next: string | null) => setFilter('assignee', next ?? 'anyone'),
+                value: filters.assignees,
+                onChange: (next: string[]) => setFilter('assignees', next),
                 options: [
-                    { value: 'me', label: m.tasks.mine },
-                    { value: 'unassigned', label: m.task.unassigned },
-                    ...assignees.map((person) => ({
+                    { value: 'me', label: copy.me, count: userId ? count('assignee', `user:${userId}`) : undefined },
+                    { value: 'unassigned', label: copy.unassigned, count: count('assignee', 'unassigned') },
+                    ...holders.map((person) => ({
                         value: person.key,
                         label: person.noLogin ? `${person.name} (${m.team.noLogin})` : person.name,
+                        count: count('assignee', person.key),
                     })),
                 ],
             }]),
-        {
-            id: 'project',
-            type: 'select',
-            label: m.fields.project,
-            value: projectId || null,
-            onChange: (next) => setFilter('projectId', next ?? ''),
-            options: projects.map((project) => ({ value: project.id, label: `${project.code} · ${project.name}` })),
-        },
-        {
-            id: 'statusCategory',
-            type: 'select',
-            label: m.fields.status,
-            value: statusCategory || null,
-            onChange: (next) => setFilter('statusCategory', next ?? ''),
-            options: (['TODO', 'IN_PROGRESS', 'DONE'] as const).map((key) => ({ value: key, label: m.statusCategory[key] })),
-        },
-        {
-            id: 'priority',
-            type: 'select',
-            label: m.fields.priority,
-            value: priority || null,
-            onChange: (next) => setFilter('priority', next ?? ''),
-            options: Object.entries(m.priority).map(([key, label]) => ({ value: key, label })),
-        },
-        {
-            id: 'created',
-            type: 'date-range',
-            value: createdRange,
-            onChange: (next) => setFilter('createdRange', next),
-        },
-    ], [m, ownRecordsOnly, assignee, assignees, projectId, projects, statusCategory, priority, createdRange, setFilter]);
+            {
+                id: 'status',
+                type: 'multi-select',
+                label: m.fields.status,
+                value: filters.statusCategories,
+                onChange: (statusCategories) => setFilter('statusCategories', statusCategories),
+                options: (['TODO', 'IN_PROGRESS', 'DONE'] as const).map((key) => ({
+                    value: key,
+                    label: m.statusCategory[key],
+                    count: count('status', key),
+                })),
+            },
+            {
+                id: 'hideDone',
+                type: 'toggle',
+                label: copy.hideDone,
+                pressed: filters.hideDone,
+                onChange: (hideDone) => setFilter('hideDone', hideDone),
+            },
+            {
+                id: 'priority',
+                type: 'multi-select',
+                label: m.fields.priority,
+                value: filters.priorities,
+                onChange: (priorities) => setFilter('priorities', priorities),
+                options: (['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const).map((key) => ({
+                    value: key,
+                    label: m.priority[key],
+                    count: count('priority', key),
+                })),
+            },
+            {
+                id: 'due',
+                type: 'multi-select',
+                label: copy.due,
+                value: filters.due,
+                onChange: (due) => setFilter('due', due.filter((value): value is TaskFilterState['due'][number] => value === 'overdue' || value === 'today' || value === 'week')),
+                options: [
+                    { value: 'overdue', label: copy.overdue, count: count('due', 'overdue') },
+                    { value: 'today', label: copy.today, count: count('due', 'today') },
+                    { value: 'week', label: copy.thisWeek, count: count('due', 'week') },
+                ],
+            },
+            {
+                id: 'project',
+                type: 'multi-select',
+                label: m.fields.project,
+                value: filters.projectIds,
+                onChange: (next) => setFilter('projectIds', next),
+                options: projects.map((project) => ({
+                    value: project.id,
+                    label: `${project.code} · ${project.name}`,
+                    count: count('project', project.id),
+                })),
+            },
+            {
+                id: 'sprint',
+                type: 'multi-select',
+                label: m.board.filters.sprint,
+                more: true,
+                value: filters.sprintIds,
+                onChange: (sprintIds) => setFilter('sprintIds', sprintIds),
+                options: [
+                    { value: 'none', label: m.board.filters.noSprint, count: count('sprint', 'none') },
+                    ...sprints.map((sprint) => ({ value: sprint.id, label: sprint.name, count: count('sprint', sprint.id) })),
+                ],
+            },
+            {
+                id: 'epic',
+                type: 'multi-select',
+                label: m.epics.field,
+                more: true,
+                value: filters.epicIds,
+                onChange: (epicIds) => setFilter('epicIds', epicIds),
+                options: [
+                    { value: 'none', label: m.epics.none, count: count('epic', 'none') },
+                    ...epicOptions.map((epic) => ({ value: epic.id, label: `${epic.code} · ${epic.title}`, count: count('epic', epic.id) })),
+                ],
+            },
+            {
+                id: 'story',
+                type: 'multi-select',
+                label: m.stories.field,
+                more: true,
+                value: filters.storyIds,
+                onChange: (storyIds) => setFilter('storyIds', storyIds),
+                options: [
+                    { value: 'none', label: m.stories.none, count: count('story', 'none') },
+                    ...storyOptions.map((story) => ({ value: story.id, label: `${story.code} · ${story.title}`, count: count('story', story.id) })),
+                ],
+            },
+            {
+                id: 'labels',
+                type: 'multi-select',
+                label: copy.labels,
+                more: true,
+                value: filters.labelIds,
+                onChange: (labelIds) => setFilter('labelIds', labelIds),
+                options: allLabels.map((label) => ({ value: label.id, label: label.name, count: count('label', label.id) })),
+            },
+            {
+                id: 'dueBetween',
+                type: 'date-range',
+                label: copy.dueBetween,
+                more: true,
+                value: dueRange,
+                presets: [],
+                onChange: (next) => {
+                    setFilter('dueFrom', next?.from ?? '');
+                    setFilter('dueTo', next?.to ?? '');
+                },
+            },
+            {
+                id: 'time',
+                type: 'multi-select',
+                label: copy.time,
+                more: true,
+                value: filters.time,
+                onChange: (time) => setFilter('time', time),
+                options: [
+                    { value: 'over', label: copy.overEstimate, count: count('time', 'over') },
+                    { value: 'none', label: copy.noHours, count: count('time', 'none') },
+                    { value: 'no-estimate', label: copy.noEstimate, count: count('time', 'no-estimate') },
+                ],
+            },
+            {
+                id: 'hours',
+                type: 'number',
+                label: copy.loggedHours,
+                more: true,
+                value: filters.hours,
+                onChange: (hours: NumberCondition | null) => setFilter('hours', hours),
+            },
+            {
+                id: 'updated',
+                type: 'multi-select',
+                label: copy.updated,
+                more: true,
+                value: filters.updated,
+                onChange: (updated) => setFilter('updated', updated.filter((value): value is TaskFilterState['updated'][number] => value === 'd2' || value === 'd3' || value === 'd7')),
+                options: [
+                    { value: 'd2', label: copy.stale2, count: count('updated', 'd2') },
+                    { value: 'd3', label: copy.stale3, count: count('updated', 'd3') },
+                    { value: 'd7', label: copy.stale7, count: count('updated', 'd7') },
+                ],
+            },
+            {
+                id: 'updatedBetween',
+                type: 'date-range',
+                label: copy.updatedBetween,
+                more: true,
+                value: updatedRange,
+                presets: [],
+                onChange: (next) => {
+                    setFilter('updatedFrom', next?.from ?? '');
+                    setFilter('updatedTo', next?.to ?? '');
+                },
+            },
+            {
+                id: 'created',
+                type: 'date-range',
+                label: work.createdBetween,
+                more: true,
+                value: createdRange,
+                presets: [],
+                onChange: (next) => {
+                    setFilter('createdFrom', next?.from ?? '');
+                    setFilter('createdTo', next?.to ?? '');
+                },
+            },
+        ];
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [m, copy, work, filters, ownRecordsOnly, holders, projects, sprints, storyOptions, epicOptions, allLabels, counts, userId, setFilter]);
 
     const stats = useMemo(() => {
         const n = (value: number) => value.toLocaleString(locale);
@@ -817,7 +925,7 @@ function TasksPage() {
                 onProjectChange={setQuickProject}
                 vocabulary={{
                     labels: allLabels,
-                    assignees: assignees
+                    assignees: holders
                         .filter((option) => option.key.includes(':'))
                         .map((option) => ({ key: option.key, name: option.name })),
                     locale: localeInfo.dateLocale,
@@ -852,6 +960,7 @@ function TasksPage() {
                 searchValue={search}
                 filters={listFilters}
                 filterLayout="row"
+                scrollFilterRow
                 stats={stats}
                 enableColumnFilters={false}
                 viewOptions
@@ -878,7 +987,7 @@ function TasksPage() {
                     projects={projects}
                     initial={creating}
                     projectMeta={projectMeta}
-                    assigneeName={(key) => assignees.find((a) => a.key === key)?.name}
+                    assigneeName={(key) => holders.find((a) => a.key === key)?.name}
                     onSubmit={createTask}
                     onClose={() => setCreating(null)}
                 />
@@ -891,7 +1000,7 @@ function TasksPage() {
                     projectIds={bulkProjectIds}
                     projects={projects}
                     labels={allLabels}
-                    assignees={assignees
+                    assignees={holders
                         .filter((option) => option.key.includes(':'))
                         .map((option) => ({ key: option.key, label: option.name }))}
                     projectMeta={projectMeta}

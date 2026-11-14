@@ -946,6 +946,8 @@ export interface Paginated<T = any> {
     page: number;
     limit: number;
     pages: number;
+    /** Per-option counts, when a list asked for them. Absent on every other list. */
+    counts?: Record<string, Record<string, number>>;
 }
 
 /**
@@ -994,8 +996,9 @@ export async function fetchPaginated<T = any>(endpoint: string, options: Request
     const page = meta.page ?? json?.page ?? inner.page ?? 1;
     const limit = meta.limit ?? json?.limit ?? inner.limit ?? items.length;
     const pages = meta.pages ?? json?.pages ?? inner.pages ?? 1;
+    const counts = meta.counts ?? json?.counts ?? inner.counts;
 
-    return { items, total, page, limit, pages };
+    return counts && typeof counts === 'object' ? { items, total, page, limit, pages, counts } : { items, total, page, limit, pages };
 }
 
 /** Backend `PaginationDto` caps `limit` at 100, so that is the largest useful page. */

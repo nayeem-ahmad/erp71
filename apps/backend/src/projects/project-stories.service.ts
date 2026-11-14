@@ -23,6 +23,8 @@ import {
     requiredText,
 } from './project-import.util';
 import { assertStoryStatusAllowed, type StoryStatus, type TaskCategory } from './story-status.util';
+import { createdAtRange } from '../common/created-range.util';
+import { csvIds, csvOf, equalityOrIn, parseNumberParam } from './list-query.util';
 
 /** What a story shows beside its title wherever it is listed. */
 const STORY_INCLUDE = {
@@ -66,17 +68,73 @@ export class ProjectStoriesService {
         const tenantId = viewer.tenantId;
         if (query.projectId) await this.access.assertProjectVisible(viewer, query.projectId);
 
+        const statuses = csvOf(query.statuses, Object.values(UserStoryStatusDto));
+        const priorities = csvOf(query.priorities, Object.values(ProjectPriorityDto));
+        const projects = csvIds(query.projectIds);
+        const epics = [...csvIds(query.epicIds), ...((query.epicIds ?? '').split(',').map((v) => v.trim()).filter((v) => v === 'none'))];
+        const owners = [...csvIds(query.ownerIds), ...((query.ownerIds ?? '').split(',').map((v) => v.trim()).filter((v) => v === 'none'))];
+        const created = createdAtRange(query.createdFrom, query.createdTo, viewer.timezone);
+        const updated = createdAtRange(query.updatedFrom, query.updatedTo, viewer.timezone);
+        const points = parseNumberParam(query.points);
+
         const base: Record<string, unknown> = {
             tenant_id: tenantId,
-            ...(query.projectId ? { project_id: query.projectId } : {}),
-            ...(query.status ? { status: query.status } : {}),
-            ...(query.priority ? { priority: query.priority } : {}),
-            ...(query.epicId ? { epic_id: query.epicId } : {}),
-            ...(query.noEpic === 'true' ? { epic_id: null } : {}),
+            ...(projects.length
+                ? { project_id: equalityOrIn(projects) }
+                : query.projectId
+                  ? { project_id: query.projectId }
+                  : {}),
+            ...(statuses.length
+                ? { status: equalityOrIn(statuses) }
+                : query.status
+                  ? { status: query.status }
+                  : {}),
+            ...(priorities.length
+                ? { priority: equalityOrIn(priorities) }
+                : query.priority
+                  ? { priority: query.priority }
+                  : {}),
+            ...(epics.length
+                ? {}
+                : query.epicId
+                  ? { epic_id: query.epicId }
+                  : {}),
+            ...(!epics.length && query.noEpic === 'true' ? { epic_id: null } : {}),
+            ...(created ? { created_at: created } : {}),
+            ...(updated ? { updated_at: updated } : {}),
             // A soft-deleted project keeps its rows; its stories must not keep
             // showing up in a cross-project list.
             project: { deleted_at: null },
         };
+        if (epics.length) {
+            const ids = epics.filter((id) => id !== 'none');
+            const ors: Record<string, unknown>[] = [];
+            if (ids.length) ors.push({ epic_id: equalityOrIn(ids) });
+            if (epics.includes('none')) ors.push({ epic_id: null });
+            base.AND = ors.length === 1 ? ors : [{ OR: ors }];
+        }
+        if (owners.length) {
+            const ids = owners.filter((id) => id !== 'none');
+            const ors: Record<string, unknown>[] = [];
+            if (ids.length) ors.push({ created_by: equalityOrIn(ids) });
+            if (owners.includes('none')) ors.push({ created_by: null });
+            const clause = ors.length === 1 ? ors[0] : { OR: ors };
+            base.AND = [...(Array.isArray(base.AND) ? base.AND : []), clause];
+        }
+        if (points) {
+            const upper = points.to ?? points.value;
+            const low = Math.min(points.value, upper);
+            const high = Math.max(points.value, upper);
+            const storyPoints =
+                points.op === 'gt'
+                    ? { gt: points.value }
+                    : points.op === 'lt'
+                      ? { lt: points.value }
+                      : points.op === 'eq'
+                        ? { equals: points.value }
+                        : { gte: low, lte: high };
+            base.story_points = storyPoints;
+        }
 
         const search = query.search?.trim();
         if (search) {

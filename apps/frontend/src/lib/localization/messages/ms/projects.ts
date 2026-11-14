@@ -23,6 +23,14 @@ export const projectsMessages = {
         },
     },
 
+    workList: {
+        owner: 'Pemilik',
+        noOwner: 'Tiada pemilik',
+        createdBetween: 'Dicipta antara',
+        startBetween: 'Bermula antara',
+        targetBetween: 'Sasaran antara',
+        storyPoints: 'Mata cerita',
+    },
 
     fields: {
         code: 'Kod',

@@ -23,6 +23,14 @@ export const projectsMessages = {
         },
     },
 
+    workList: {
+        owner: 'Responsable',
+        noOwner: 'Sin responsable',
+        createdBetween: 'Creado entre',
+        startBetween: 'Empieza entre',
+        targetBetween: 'Objetivo entre',
+        storyPoints: 'Puntos de historia',
+    },
 
     fields: {
         code: "Código",

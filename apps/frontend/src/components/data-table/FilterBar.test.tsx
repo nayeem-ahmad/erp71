@@ -180,6 +180,19 @@ describe('FilterBar — one row with More', () => {
         }
     });
 
+    it('renders More in a portal so a scrolling toolbar cannot clip it', () => {
+        render(
+            <div style={{ overflow: 'hidden', height: 40 }}>
+                <Harness />
+            </div>,
+        );
+        fireEvent.click(chip('More'));
+        const more = screen.getByRole('dialog', { name: 'More' });
+        expect(more.parentElement).toBe(document.body);
+        expect(more.className).toContain('overflow-y-auto');
+        expect(more.style.maxHeight).not.toBe('');
+    });
+
     it('clears every filter, the ones behind More included', () => {
         render(<Harness />);
         fireEvent.click(chip('Status'));

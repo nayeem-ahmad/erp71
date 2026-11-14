@@ -23,6 +23,8 @@ import {
     nameIndex,
     requiredText,
 } from './project-import.util';
+import { calendarDateRange, createdAtRange } from '../common/created-range.util';
+import { csvIds, csvOf, equalityOrIn } from './list-query.util';
 
 /** What an epic shows beside its title wherever it is listed. */
 const EPIC_INCLUDE = {
@@ -54,13 +56,46 @@ export class ProjectEpicsService {
         const tenantId = viewer.tenantId;
         if (query.projectId) await this.access.assertProjectVisible(viewer, query.projectId);
 
+        const statuses = csvOf(query.statuses, Object.values(EpicStatusDto));
+        const priorities = csvOf(query.priorities, Object.values(ProjectPriorityDto));
+        const projects = csvIds(query.projectIds);
+        const owners = [
+            ...csvIds(query.ownerIds),
+            ...(query.ownerIds ?? '').split(',').map((value) => value.trim()).filter((value) => value === 'none'),
+        ];
+        const start = calendarDateRange(query.startFrom, query.startTo);
+        const target = calendarDateRange(query.targetFrom, query.targetTo);
+        const created = createdAtRange(query.createdFrom, query.createdTo, viewer.timezone);
+
         const base: Record<string, unknown> = {
             tenant_id: tenantId,
-            ...(query.projectId ? { project_id: query.projectId } : {}),
-            ...(query.status ? { status: query.status } : {}),
-            ...(query.priority ? { priority: query.priority } : {}),
+            ...(projects.length
+                ? { project_id: equalityOrIn(projects) }
+                : query.projectId
+                  ? { project_id: query.projectId }
+                  : {}),
+            ...(statuses.length
+                ? { status: equalityOrIn(statuses) }
+                : query.status
+                  ? { status: query.status }
+                  : {}),
+            ...(priorities.length
+                ? { priority: equalityOrIn(priorities) }
+                : query.priority
+                  ? { priority: query.priority }
+                  : {}),
+            ...(start ? { start_date: start } : {}),
+            ...(target ? { target_date: target } : {}),
+            ...(created ? { created_at: created } : {}),
             project: { deleted_at: null },
         };
+        if (owners.length) {
+            const ids = owners.filter((id) => id !== 'none');
+            const ors: Record<string, unknown>[] = [];
+            if (ids.length) ors.push({ created_by: equalityOrIn(ids) });
+            if (owners.includes('none')) ors.push({ created_by: null });
+            base.AND = ors.length === 1 ? ors : [{ OR: ors }];
+        }
 
         const search = query.search?.trim();
         if (search) {
