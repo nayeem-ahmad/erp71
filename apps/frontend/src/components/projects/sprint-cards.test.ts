@@ -70,6 +70,13 @@ describe('matchesSprintSearch', () => {
         expect(matchesSprintSearch(t, 'bkash nagad')).toBe(false);
         expect(matchesSprintSearch(t, '   ')).toBe(true);
     });
+
+    it('matches the task key and the description', () => {
+        const withKey = task('a', { reference: 14, description: 'Wait on the Nagad callback', title: 'Wire' });
+        expect(matchesSprintSearch(withKey, 'otb-14')).toBe(true);
+        expect(matchesSprintSearch(withKey, 'nagad')).toBe(true);
+        expect(matchesSprintSearch(withKey, '14')).toBe(true);
+    });
 });
 
 describe('sortOrderForDrop', () => {
