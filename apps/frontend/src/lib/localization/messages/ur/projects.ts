@@ -23,6 +23,14 @@ export const projectsMessages = {
         },
     },
 
+    workList: {
+        owner: 'مالک',
+        noOwner: 'کوئی مالک نہیں',
+        createdBetween: 'تخلیق کے درمیان',
+        startBetween: 'آغاز کے درمیان',
+        targetBetween: 'ہدف کے درمیان',
+        storyPoints: 'اسٹوری پوائنٹس',
+    },
 
     fields: {
         code: "کوڈ",

@@ -272,6 +272,39 @@ export class ListUserStoriesDto {
 
     @IsOptional() @IsString() @MaxLength(200)
     search?: string;
+
+    /** Comma-separated. A single `status` / `priority` / `projectId` / `epicId` still works. */
+    @IsOptional() @IsString() @MaxLength(200)
+    statuses?: string;
+
+    @IsOptional() @IsString() @MaxLength(200)
+    priorities?: string;
+
+    @IsOptional() @IsString() @MaxLength(4000)
+    projectIds?: string;
+
+    @IsOptional() @IsString() @MaxLength(4000)
+    epicIds?: string;
+
+    /** User ids, plus `none` for a story nobody created. */
+    @IsOptional() @IsString() @MaxLength(4000)
+    ownerIds?: string;
+
+    @IsOptional() @IsString()
+    createdFrom?: string;
+
+    @IsOptional() @IsString()
+    createdTo?: string;
+
+    @IsOptional() @IsString()
+    updatedFrom?: string;
+
+    @IsOptional() @IsString()
+    updatedTo?: string;
+
+    /** `gt:4` or `between:1,8` — story points. */
+    @IsOptional() @IsString() @MaxLength(40)
+    points?: string;
 }
 
 /**
@@ -359,6 +392,37 @@ export class ListEpicsDto {
 
     @IsOptional() @IsString() @MaxLength(200)
     search?: string;
+
+    @IsOptional() @IsString() @MaxLength(200)
+    statuses?: string;
+
+    @IsOptional() @IsString() @MaxLength(200)
+    priorities?: string;
+
+    @IsOptional() @IsString() @MaxLength(4000)
+    projectIds?: string;
+
+    /** User ids, plus `none` for an epic nobody created. */
+    @IsOptional() @IsString() @MaxLength(4000)
+    ownerIds?: string;
+
+    @IsOptional() @IsString()
+    startFrom?: string;
+
+    @IsOptional() @IsString()
+    startTo?: string;
+
+    @IsOptional() @IsString()
+    targetFrom?: string;
+
+    @IsOptional() @IsString()
+    targetTo?: string;
+
+    @IsOptional() @IsString()
+    createdFrom?: string;
+
+    @IsOptional() @IsString()
+    createdTo?: string;
 }
 
 /** Everything an epic carries except its project — see `UserStoryFieldsDto`. */
@@ -487,6 +551,71 @@ export class ListTasksDto {
 
     @IsOptional() @IsString()
     sortDir?: string;
+
+    /**
+     * Multi-selects, comma-separated. A single `priority` / `projectId` /
+     * `assigneeId` still means what it always meant; these are added when the
+     * Tasks page ticks more than one. `none` on sprint, story and epic is
+     * "no sprint" / "no story" / "story with no epic".
+     */
+    @IsOptional() @IsString() @MaxLength(2000)
+    priorities?: string;
+
+    @IsOptional() @IsString() @MaxLength(2000)
+    statusCategories?: string;
+
+    @IsOptional() @IsString() @MaxLength(4000)
+    projectIds?: string;
+
+    /** `user:<uuid>`, `employee:<uuid>`, `unassigned`, comma-separated. */
+    @IsOptional() @IsString() @MaxLength(4000)
+    assignees?: string;
+
+    @IsOptional() @IsString() @MaxLength(4000)
+    labelIds?: string;
+
+    @IsOptional() @IsString() @MaxLength(4000)
+    sprintIds?: string;
+
+    @IsOptional() @IsString() @MaxLength(4000)
+    storyIds?: string;
+
+    @IsOptional() @IsString() @MaxLength(4000)
+    epicIds?: string;
+
+    @IsOptional() @IsString() @MaxLength(40)
+    due?: string;
+
+    @IsOptional() @IsString()
+    dueFrom?: string;
+
+    @IsOptional() @IsString()
+    dueTo?: string;
+
+    @IsOptional() @IsString() @MaxLength(40)
+    updated?: string;
+
+    @IsOptional() @IsString()
+    updatedFrom?: string;
+
+    @IsOptional() @IsString()
+    updatedTo?: string;
+
+    /** `true` hides tasks whose column means DONE. */
+    @IsOptional() @IsString()
+    hideDone?: string;
+
+    /** `over`, `none`, `no-estimate`, comma-separated. */
+    @IsOptional() @IsString() @MaxLength(80)
+    time?: string;
+
+    /** `gt:4` or `between:1,8` — logged hours. */
+    @IsOptional() @IsString() @MaxLength(40)
+    hours?: string;
+
+    /** `true` asks for per-option counts beside the page. Lists that omit it stay the payload they were. */
+    @IsOptional() @IsString()
+    counts?: string;
 }
 
 /**

@@ -141,10 +141,27 @@ describe('BoardsService', () => {
         expect(db.board.findMany).toHaveBeenCalledWith({
             where: { tenant_id: tenantId, deleted_at: null },
             orderBy: { created_at: 'desc' },
-            include: { _count: { select: { cards: { where: { task: { deleted_at: null } } } } } },
+            include: {
+                _count: { select: { cards: { where: { task: { deleted_at: null } } } } },
+                creator: { select: { id: true, name: true, email: true } },
+                cards: {
+                    where: { task: { deleted_at: null } },
+                    select: { task: { select: { project_id: true } } },
+                },
+            },
         });
         expect(boards).toEqual([
-            { id: 'b1', name: 'Release', description: null, created_at: createdAt, card_count: 6 },
+            {
+                id: 'b1',
+                name: 'Release',
+                description: null,
+                created_at: createdAt,
+                updated_at: null,
+                created_by: null,
+                creator: null,
+                project_ids: [],
+                card_count: 6,
+            },
         ]);
     });
 
@@ -177,7 +194,9 @@ describe('BoardsService', () => {
 
             expect(db.board.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    include: { _count: { select: { cards: { where: { task: visibleCard } } } } },
+                    include: expect.objectContaining({
+                        _count: { select: { cards: { where: { task: visibleCard } } } },
+                    }),
                 }),
             );
         });

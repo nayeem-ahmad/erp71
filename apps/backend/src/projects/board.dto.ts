@@ -24,6 +24,33 @@ import { ProjectPriorityDto } from './project.dto';
 const CATEGORIES = ['TODO', 'IN_PROGRESS', 'DONE'] as const;
 export type BoardColumnCategory = (typeof CATEGORIES)[number];
 
+/** Every field optional. Absent, the list is the one it has always been. */
+export class ListBoardsDto {
+    @IsOptional() @IsUUID()
+    projectId?: string;
+
+    @IsOptional() @IsString() @MaxLength(4000)
+    projectIds?: string;
+
+    @IsOptional() @IsString() @MaxLength(80)
+    ownerId?: string;
+
+    @IsOptional() @IsString() @MaxLength(4000)
+    ownerIds?: string;
+
+    @IsOptional() @IsString()
+    createdFrom?: string;
+
+    @IsOptional() @IsString()
+    createdTo?: string;
+
+    @IsOptional() @IsString()
+    updatedFrom?: string;
+
+    @IsOptional() @IsString()
+    updatedTo?: string;
+}
+
 export class CreateBoardDto {
     @IsString()
     @MinLength(1)

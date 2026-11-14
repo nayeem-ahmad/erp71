@@ -49,6 +49,7 @@ jest.mock('@/lib/api', () => ({
         bulkUpdateProjectTasks: jest.fn(),
         getSprints: jest.fn(),
         getProjectStories: jest.fn(),
+        getProjectEpics: jest.fn().mockResolvedValue([]),
         importProjectTasks: jest.fn(),
     },
 }));
@@ -78,9 +79,14 @@ const lastQuery = () => getProjectTasks.mock.calls.at(-1)?.[0];
 
 const isFilter = (element: HTMLElement) => !element.getAttribute('data-testid');
 
-/** The toolbar's assignee filter — rows carry a picker of the same name. */
-const assigneeSelect = () =>
-    screen.getAllByLabelText(/assignee/i).filter(isFilter)[0] as HTMLElement;
+/** The assignee chip. Rows and the composer also say Assignee, so take the one that opens a dialog. */
+const assigneeChip = () =>
+    screen.getAllByRole('button', { name: /^Assignee/ }).find((button) => button.getAttribute('aria-haspopup') === 'dialog') as HTMLElement;
+
+const openAssignee = async () => {
+    fireEvent.click(assigneeChip());
+    return screen.findByRole('dialog', { name: 'Assignee' });
+};
 
 
 beforeEach(() => {
@@ -335,33 +341,32 @@ describe('Tasks page', () => {
             render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
 
-            // The toolbar select's own "All" is "anyone".
-            await waitFor(() => expect(within(assigneeSelect()).getAllByRole('option')).toHaveLength(5));
-            const options = within(assigneeSelect()).getAllByRole('option');
-            expect(options.map((option) => (option as HTMLOptionElement).value)).toEqual([
-                '',
-                'me',
-                'unassigned',
-                'user:user-9',
-                'employee:emp-3',
+            const dialog = await openAssignee();
+            const boxes = within(dialog).getAllByRole('checkbox');
+            expect(boxes.map((box) => box.closest('label')?.textContent)).toEqual([
+                expect.stringMatching(/^Me/),
+                expect.stringMatching(/^Unassigned/),
+                expect.stringMatching(/^Karim/),
+                expect.stringMatching(/^Rahim Uddin/),
             ]);
-            expect((assigneeSelect() as HTMLSelectElement).value).toBe('me');
+            expect(within(dialog).getByRole('checkbox', { name: /^Me/ })).toBeChecked();
         });
 
         it('marks an employee with no workspace account, who cannot be “me”', async () => {
             render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
 
-            expect(await within(assigneeSelect()).findByRole('option', { name: /Rahim Uddin \(no login\)/ }))
-                .toBeInTheDocument();
+            const dialog = await openAssignee();
+            expect(within(dialog).getByRole('checkbox', { name: /Rahim Uddin \(no login\)/ })).toBeInTheDocument();
         });
 
         it('filters to one person by their user id', async () => {
             render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
 
-            await within(assigneeSelect()).findByRole('option', { name: 'Karim' });
-            fireEvent.change(assigneeSelect(), { target: { value: 'user:user-9' } });
+            const dialog = await openAssignee();
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Clear' }));
+            fireEvent.click(within(dialog).getByRole('checkbox', { name: /^Karim/ }));
 
             await waitFor(() => expect(lastQuery()).toMatchObject({ assigneeId: 'user-9' }));
             expect(lastQuery().unassigned).toBeUndefined();
@@ -373,8 +378,9 @@ describe('Tasks page', () => {
             render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
 
-            await within(assigneeSelect()).findByRole('option', { name: /Rahim Uddin/ });
-            fireEvent.change(assigneeSelect(), { target: { value: 'employee:emp-3' } });
+            const dialog = await openAssignee();
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Clear' }));
+            fireEvent.click(within(dialog).getByRole('checkbox', { name: /Rahim Uddin/ }));
 
             await waitFor(() => expect(lastQuery()).toMatchObject({ assigneeEmployeeId: 'emp-3' }));
             expect(lastQuery().assigneeId).toBeUndefined();
@@ -384,7 +390,9 @@ describe('Tasks page', () => {
             render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
 
-            fireEvent.change(assigneeSelect(), { target: { value: 'unassigned' } });
+            const dialog = await openAssignee();
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Clear' }));
+            fireEvent.click(within(dialog).getByRole('checkbox', { name: /^Unassigned/ }));
 
             await waitFor(() => expect(lastQuery()).toMatchObject({ unassigned: 'true' }));
             expect(lastQuery().assigneeId).toBeUndefined();
@@ -394,7 +402,8 @@ describe('Tasks page', () => {
             render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
 
-            fireEvent.change(assigneeSelect(), { target: { value: '' } });
+            const dialog = await openAssignee();
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Clear' }));
 
             await waitFor(() => expect(lastQuery().assigneeId).toBeUndefined());
             expect(lastQuery().unassigned).toBeUndefined();
@@ -407,7 +416,8 @@ describe('Tasks page', () => {
             render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
 
-            expect(within(assigneeSelect()).getAllByRole('option')).toHaveLength(3);
+            const dialog = await openAssignee();
+            expect(within(dialog).getAllByRole('checkbox')).toHaveLength(2);
         });
     });
 
@@ -466,9 +476,11 @@ describe('Tasks page', () => {
             await screen.findByText('Wire the meter');
 
             expect(screen.getAllByPlaceholderText(/search task title/i)).toHaveLength(1);
-            expect(screen.getByRole('combobox', { name: 'Project' })).toBeInTheDocument();
-            // Rows carry a status picker of the same name.
-            expect(screen.getAllByRole('combobox', { name: 'Status' }).filter(isFilter)).toHaveLength(1);
+            const chip = (name: RegExp) =>
+                screen.getAllByRole('button', { name }).find((button) => button.getAttribute('aria-haspopup') === 'dialog');
+            expect(chip(/^Project/)).toBeTruthy();
+            // Rows carry a status picker of the same name; the filter is the chip.
+            expect(chip(/^Status/)).toBeTruthy();
             expect(screen.getByRole('button', { name: 'View options' })).toBeInTheDocument();
             const remaining = screen.getByRole('columnheader', { name: /remaining/i });
             expect(remaining.className).toContain('text-end');
@@ -478,7 +490,8 @@ describe('Tasks page', () => {
             render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
 
-            fireEvent.change(screen.getByLabelText(/^priority$/i), { target: { value: 'URGENT' } });
+            fireEvent.click(screen.getAllByRole('button', { name: /^Priority/ }).find((button) => button.getAttribute('aria-haspopup') === 'dialog')!);
+            fireEvent.click(screen.getByRole('checkbox', { name: /^Urgent/ }));
 
             await waitFor(() => expect(lastQuery()).toMatchObject({ priority: 'URGENT' }));
         });
@@ -486,7 +499,8 @@ describe('Tasks page', () => {
         it('clears every filter back to the whole workspace, not back to me', async () => {
             render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
-            fireEvent.change(screen.getByLabelText(/^priority$/i), { target: { value: 'HIGH' } });
+            fireEvent.click(screen.getAllByRole('button', { name: /^Priority/ }).find((button) => button.getAttribute('aria-haspopup') === 'dialog')!);
+            fireEvent.click(screen.getByRole('checkbox', { name: /^High/ }));
             await waitFor(() => expect(lastQuery()).toMatchObject({ priority: 'HIGH' }));
 
             fireEvent.click(screen.getByRole('button', { name: /clear all/i }));
@@ -498,8 +512,9 @@ describe('Tasks page', () => {
         it('remembers the slice for the next visit to the page', async () => {
             const { unmount } = render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
-            await within(assigneeSelect()).findByRole('option', { name: 'Karim' });
-            fireEvent.change(assigneeSelect(), { target: { value: 'user:user-9' } });
+            const dialog = await openAssignee();
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Clear' }));
+            fireEvent.click(within(dialog).getByRole('checkbox', { name: /^Karim/ }));
             await waitFor(() => expect(lastQuery()).toMatchObject({ assigneeId: 'user-9' }));
             unmount();
 
@@ -676,7 +691,7 @@ describe('Tasks page', () => {
             render(<TasksPage />);
 
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
-            expect(assigneeSelect()).toBeInTheDocument();
+            expect(assigneeChip()).toBeInTheDocument();
         });
     });
 });
