@@ -13,7 +13,10 @@ people who sell for it:
 - **Cashiers**: open tills and today's closed shifts, with their drawer counts.
 - **The CRM**: leads, activities and contacts.
 - **Ask ERP71**: questions about the business, typed or spoken, in English or
-  Bangla.
+  Bangla. A task or a lead the assistant understood shows as a card under the
+  reply; nothing is saved until Save, and Save stays off while the phone is
+  offline. The phone's speech recognizer is the default. Better Bangla, off
+  until it is turned on, sends the recording to Whisper and spends AI credits.
 - **App lock**: optional, using the phone's fingerprint, face or PIN.
 
 It talks to the same NestJS API as the web app. The plan behind it is
