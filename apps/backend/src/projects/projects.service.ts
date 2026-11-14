@@ -55,6 +55,10 @@ const MEMBER_INCLUDE = {
     employee: { select: { id: true, name: true, employee_code: true } },
 } as const;
 
+const PROJECT_SKILL_INCLUDE = {
+    skill: { select: { id: true, name: true, category: true, is_active: true } },
+} as const;
+
 @Injectable()
 export class ProjectsService {
     constructor(
@@ -233,6 +237,10 @@ export class ProjectsService {
                     orderBy: { created_at: 'asc' },
                 },
                 milestones: { orderBy: [{ sort_order: 'asc' }, { created_at: 'asc' }] },
+                skills: {
+                    include: { skill: { select: { id: true, name: true, category: true, is_active: true } } },
+                    orderBy: { created_at: 'asc' },
+                },
             },
         });
         if (!project) throw new NotFoundException('Project not found');
@@ -654,6 +662,74 @@ export class ProjectsService {
             update: { role },
             include: MEMBER_INCLUDE,
         });
+    }
+
+    async addSkill(
+        viewer: ProjectViewer,
+        projectId: string,
+        dto: { skillId: string; requirement?: string; minProficiency?: string | null },
+    ) {
+        const tenantId = viewer.tenantId;
+        await this.assertProject(viewer, projectId);
+        const skill = await this.db.skill.findFirst({
+            where: { id: dto.skillId, tenant_id: tenantId, deleted_at: null },
+        });
+        if (!skill) throw new BadRequestException('Skill not found.');
+        if (skill.is_active === false) throw new BadRequestException('This skill is inactive.');
+
+        const existing = await this.db.projectSkill.findFirst({
+            where: { tenant_id: tenantId, project_id: projectId, skill_id: skill.id },
+        });
+        const data = {
+            requirement: (dto.requirement ?? 'REQUIRED') as never,
+            min_proficiency: (dto.minProficiency ?? null) as never,
+        };
+        if (existing) {
+            return this.db.projectSkill.update({
+                where: { id: existing.id },
+                data,
+                include: PROJECT_SKILL_INCLUDE,
+            });
+        }
+        return this.db.projectSkill.create({
+            data: {
+                tenant_id: tenantId,
+                project_id: projectId,
+                skill_id: skill.id,
+                ...data,
+            },
+            include: PROJECT_SKILL_INCLUDE,
+        });
+    }
+
+    async updateSkill(
+        viewer: ProjectViewer,
+        projectId: string,
+        assignmentId: string,
+        dto: { requirement?: string; minProficiency?: string | null },
+    ) {
+        await this.assertProject(viewer, projectId);
+        const row = await this.db.projectSkill.findFirst({
+            where: { id: assignmentId, tenant_id: viewer.tenantId, project_id: projectId },
+        });
+        if (!row) throw new NotFoundException('Skill assignment not found.');
+        return this.db.projectSkill.update({
+            where: { id: assignmentId },
+            data: {
+                ...(dto.requirement !== undefined ? { requirement: dto.requirement as never } : {}),
+                ...(dto.minProficiency !== undefined ? { min_proficiency: dto.minProficiency as never } : {}),
+            },
+            include: PROJECT_SKILL_INCLUDE,
+        });
+    }
+
+    async removeSkill(viewer: ProjectViewer, projectId: string, assignmentId: string) {
+        await this.assertProject(viewer, projectId);
+        const result = await this.db.projectSkill.deleteMany({
+            where: { tenant_id: viewer.tenantId, project_id: projectId, id: assignmentId },
+        });
+        if (result.count === 0) throw new NotFoundException('Skill assignment not found.');
+        return { success: true };
     }
 
     /** Keyed on the member row, not the user — an employee member has no user id. */

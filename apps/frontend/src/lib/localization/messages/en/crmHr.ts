@@ -755,6 +755,7 @@ export const crmHrMessages = {
                 departments: { title: 'Departments', description: 'Company departments for organizing staff.' },
                 designations: { title: 'Designations', description: 'Job titles and role classifications.' },
                 designationLevels: { title: 'Designation Levels', description: 'Seniority bands designations sit in.' },
+                skills: { title: 'Skills', description: 'Capabilities assigned to people and to projects.' },
                 attendance: { title: 'Attendance', description: 'Track daily check-in and check-out records.' },
                 attendancePunches: { title: 'In/Out Records', description: 'Every clock-in and clock-out behind the daily attendance.' },
                 leaves: { title: 'Leaves', description: 'Leave requests, approvals, and balances.' },
@@ -779,6 +780,7 @@ export const crmHrMessages = {
             departmentsStats: 'Department summary',
             designationsStats: 'Designation summary',
             levelsStats: 'Level summary',
+            skillsStats: 'Skill summary',
             jobPostsStats: 'Job post summary',
             applicantsStats: 'Applicant summary',
             applicationsStats: 'Application summary',
@@ -1547,6 +1549,50 @@ export const crmHrMessages = {
             "name": "e.g. Department Head"
         }
     },
+    "skills": {
+        "title": "Skills",
+        "subtitle": "Capabilities assigned to people and projects",
+        "newSkill": "New Skill",
+        "emptyMessage": "No skills yet",
+        "searchPlaceholder": "Search skills...",
+        "nameRequired": "Skill name is required",
+        "saveFailed": "Failed to save skill",
+        "deleteTitle": "Delete Skill",
+        "deleteDescription": "Delete this skill? Only a skill nobody uses can be deleted.",
+        "deleteFailed": "Failed to delete skill",
+        "saving": "Saving...",
+        "editSkill": "Edit Skill",
+        "inUse": "In use",
+        "description": "Description",
+        "sortOrder": "Sort order",
+        "columns": {
+            "name": "Skill",
+            "category": "Category",
+            "people": "People",
+            "projects": "Projects"
+        },
+        "placeholders": {
+            "name": "e.g. Welding"
+        },
+        "category": {
+            "TECHNICAL": "Technical",
+            "LANGUAGE": "Language",
+            "SOFT": "Soft skill",
+            "TOOL": "Tool",
+            "CERTIFICATION": "Certification",
+            "OTHER": "Other"
+        },
+        "proficiency": {
+            "BEGINNER": "Beginner",
+            "INTERMEDIATE": "Intermediate",
+            "ADVANCED": "Advanced",
+            "EXPERT": "Expert"
+        },
+        "requirement": {
+            "REQUIRED": "Required",
+            "NICE_TO_HAVE": "Nice to have"
+        }
+    },
     "employees": {
         "title": "Employees",
         "subtitle": "Manage staff records, departments, and system access",
@@ -1613,7 +1659,22 @@ export const crmHrMessages = {
             "unlink": "Unlink",
             "link": "Link",
             "linkDescription": "Link this employee to a system user account so they can log in.",
-            "linkTip": "Tip: find the user ID from Settings > Users, then paste it here."
+            "linkTip": "Tip: find the user ID from Settings > Users, then paste it here.",
+            "skills": {
+                "title": "Skills",
+                "add": "Add skill",
+                "empty": "No skills assigned yet.",
+                "skill": "Skill",
+                "proficiency": "Proficiency",
+                "notes": "Notes",
+                "added": "Skill added",
+                "addFailed": "Could not add that skill",
+                "updated": "Skill updated",
+                "updateFailed": "Could not update that skill",
+                "removed": "Skill removed",
+                "removeFailed": "Could not remove that skill",
+                "remove": "Remove skill"
+            }
         },
         "editEmployee": "Edit Employee",
         "statuses": {

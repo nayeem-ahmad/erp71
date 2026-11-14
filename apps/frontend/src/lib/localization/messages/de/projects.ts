@@ -163,6 +163,23 @@ export const projectsMessages = {
         noLoginHint: "Mitarbeitende ohne Arbeitsbereichskonto können im Team stehen und Aufgaben halten, sich aber nicht anmelden, um sie zu sehen.",
     },
 
+    skills: {
+        title: "Benötigte Fähigkeiten",
+        add: "Fähigkeit hinzufügen",
+        empty: "Für dieses Projekt sind noch keine Fähigkeiten hinterlegt.",
+        skill: "Fähigkeit",
+        requirement: "Anforderung",
+        minProficiency: "Mindestniveau",
+        added: "Fähigkeit hinzugefügt",
+        addFailed: "Diese Fähigkeit konnte nicht hinzugefügt werden",
+        updated: "Fähigkeit aktualisiert",
+        updateFailed: "Diese Fähigkeit konnte nicht aktualisiert werden",
+        removed: "Fähigkeit entfernt",
+        removeFailed: "Diese Fähigkeit konnte nicht entfernt werden",
+        remove: "Fähigkeit entfernen",
+        none: "Jedes Niveau",
+    },
+
     milestones: {
         add: "Meilenstein hinzufügen",
         name: "Name des Meilensteins",

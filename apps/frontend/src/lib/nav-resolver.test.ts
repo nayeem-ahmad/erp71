@@ -194,6 +194,7 @@ describe('nav-resolver', () => {
             '/hr/employees/departments',
             '/hr/employees/designations',
             '/hr/employees/designation-levels',
+            '/hr/employees/skills',
             '/hr/schedules',
         ]);
     });

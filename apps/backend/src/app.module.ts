@@ -94,6 +94,7 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { TenantMessagingModule } from './tenant-messaging/tenant-messaging.module';
 import { DiscountCodesModule } from './discount-codes/discount-codes.module';
 import { EmployeesModule } from './employees/employees.module';
+import { SkillsModule } from './skills/skills.module';
 import { CountersModule } from './counters/counters.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { EmployeePortalModule } from './employee-portal/employee-portal.module';
@@ -245,6 +246,7 @@ import { Meet71Module } from './meet71/meet71.module';
         LoyaltyModule,
         DiscountCodesModule,
         EmployeesModule,
+        SkillsModule,
         CountersModule,
         AttendanceModule,
         EmployeePortalModule,
