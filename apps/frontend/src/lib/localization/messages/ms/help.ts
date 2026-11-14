@@ -242,7 +242,7 @@ export const helpMessages = {
             faqs: [
                 {
                     q: 'Apakah pembantu perniagaan AI dan bagaimana saya membukanya?',
-                    a: 'Ia ialah panel sembang — ikon robot "Ask the business assistant" — yang menjawab soalan tentang data anda sendiri: jualan, stok, pelanggan, penghutang, dan banyak lagi. Ia baca sahaja secara ketat: ia boleh mencari perkara dan menerangkannya, tetapi ia tidak boleh mengubah apa-apa. Pembantu ini ialah ciri pelan Premium, jadi ikon hanya muncul apabila pelan anda menyertakannya.',
+                    a: 'Ia ialah panel sembang — ikon robot "Ask the business assistant" — yang menjawab soalan tentang data anda sendiri: jualan, stok, pelanggan, penghutang, dan banyak lagi. Ia juga boleh sediakan tugasan atau prospek daripada apa yang anda katakan; tiada apa disimpan sehingga anda semak kad dan tekan Simpan. Selain itu ia tidak boleh mengubah apa-apa. Pembantu ini ialah ciri pelan Premium, jadi ikon hanya muncul apabila pelan anda menyertakannya.',
                 },
                 {
                     q: 'Apa yang sebenarnya boleh dilihatnya, dan bolehkah saya mempercayai jawapannya?',

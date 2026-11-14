@@ -1,4 +1,5 @@
 import { AUDIT_TOOLS } from './tools/audit.tools';
+import { DRAFT_TOOLS } from './tools/draft.tools';
 import { FINANCE_TOOLS } from './tools/finance.tools';
 import { HELP_TOOLS } from './tools/help.tools';
 import { INVENTORY_TOOLS } from './tools/inventory.tools';
@@ -11,15 +12,18 @@ import { WEB_TOOLS } from './tools/web.tools';
 import type { ChatTool } from './tools/types';
 
 /**
- * The read-only tool menu the data chatbot may call, assembled from the
- * per-domain files under `./tools`.
+ * The tool menu the data chatbot may call, assembled from the per-domain
+ * files under `./tools`. Lookups are read-only. The draft tools prepare a
+ * task or a lead for a confirmation card and do not save.
  *
  * Ordering is not cosmetic: the model reads the list top to bottom, and the
  * general-purpose lookups (`resolve_entity`, `describe_capabilities`) belong
  * near the front because almost every specific question starts with one.
+ * Draft tools sit with them so "create a task" is not buried under reports.
  */
 export const CHAT_TOOLS: ChatTool[] = [
     ...META_TOOLS,
+    ...DRAFT_TOOLS,
     // How-to / product questions are common and orthogonal to the data tools, so
     // the help lookup sits near the front where the model reads it early.
     ...HELP_TOOLS,

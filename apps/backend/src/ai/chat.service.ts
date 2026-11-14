@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { AI_TOKENS_PER_CREDIT, StorePermission, hasPlanEntitlement, type AiChatToolCall } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
-import { hasStorePermission } from '../auth/permission.util';
+import { hasAnyStorePermission, hasStorePermission } from '../auth/permission.util';
 import { TenantContext } from '../database/tenant.decorator';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
@@ -12,6 +12,7 @@ import { TenantTimezoneService } from '../database/tenant-timezone.service';
 import { AuthCacheService } from '../database/auth-cache.service';
 import { loadMemberStoreAccess } from '../database/member-access.loader';
 import { startOfZonedToday } from '../common/tenant-time.util';
+import { draftFromToolOutput } from './drafts';
 import {
     CHAT_TOOLS,
     CHAT_TOOLS_BY_NAME,
@@ -123,11 +124,27 @@ export class ChatService {
         for (const tool of CHAT_TOOLS) {
             if (tool.modules && !tool.modules.some((module) => modules.has(module))) continue;
             if (tool.featureFlag && !flags.has(tool.featureFlag)) continue;
-            if (await hasStorePermission(this.db, ctx, tool.permission)) {
+            if (await this.toolPermitted(ctx, tool)) {
                 allowed.push(tool);
             }
         }
         return { tools: allowed, modules };
+    }
+
+    /**
+     * Whether this caller may run the tool. The menu is filtered with the same
+     * check, and execution checks again: the model can name a tool that was
+     * not on the list it was given, and a draft must not be built for someone
+     * who could not save it.
+     *
+     * `anyPermissions` matches routes that accept any one of a set (CRM write).
+     * A single `permission` is the usual case.
+     */
+    private async toolPermitted(ctx: TenantContext, tool: ChatTool): Promise<boolean> {
+        if (tool.anyPermissions?.length) {
+            return hasAnyStorePermission(this.db, ctx, tool.anyPermissions);
+        }
+        return hasStorePermission(this.db, ctx, tool.permission);
     }
 
     /** Platform-level capabilities that cost money per call, hence opt-in. */
@@ -247,6 +264,7 @@ export class ChatService {
             userRole: ctx.userRole,
             storeId: ctx.storeId,
             timezone: ctx.timezone,
+            recordScope: ctx.recordScope,
             stores,
             hasConsolidatedAccess,
             fetchableUrls,
@@ -393,8 +411,18 @@ export class ChatService {
             };
         }
 
+        if (!(await this.toolPermitted(ctx, tool))) {
+            return {
+                result: JSON.stringify({
+                    error: 'You do not have permission to do that. Do not try again or invent a result.',
+                }),
+                trace: { name, args, ms: Date.now() - startedAt, error: 'permission' },
+            };
+        }
+
         try {
             const output = await tool.handler(ctx, args, this.deps);
+            const draft = draftFromToolOutput(output);
             const rowCount = Array.isArray((output as any)?.rows) ? (output as any).rows.length : undefined;
             // Web tools return the pages they read as `sources`. Those URLs are the
             // only grounds a web-derived claim has, so they belong in the trace the
@@ -421,6 +449,7 @@ export class ChatService {
                     args,
                     rowCount,
                     ...(urls?.length ? { urls } : {}),
+                    ...(draft ? { draft } : {}),
                     ms: Date.now() - startedAt,
                     ...(refusedReason ? { error: refusedReason } : {}),
                 },
@@ -457,6 +486,32 @@ export class ChatService {
         }
     }
 
+    /**
+     * Create commands are drafts. Without the tools, the assistant stays
+     * read-only and must not offer to create something the caller cannot save.
+     */
+    private creatingRules(tools: ChatTool[]): string[] {
+        const task = tools.some((tool) => tool.name === 'propose_create_task');
+        const lead = tools.some((tool) => tool.name === 'propose_create_lead');
+        if (!task && !lead) {
+            return [
+                '- You are read-only. You cannot create, edit or delete anything. If asked to, explain that and link to the page where the user can do it (see "Pages you can link to" below).',
+            ];
+        }
+        const which = [task ? 'a task (propose_create_task)' : null, lead ? 'a lead (propose_create_lead)' : null]
+            .filter(Boolean)
+            .join(' or ');
+        return [
+            `- You cannot edit or delete anything, and you cannot save. You can prepare ${which} by calling that tool. The user reviews a card and presses Save. You never save.`,
+            '- Call the tool even when a required field is missing. Pass names, never ids. If they did not name a project, omit it. If they did not name an assignee, omit it — a task with no assignee stays unassigned.',
+            '- Set assignToMe only when they said the task is for themselves. A lead\'s owner is the person who presses Save; do not pass an owner.',
+            '- A company spoken for a lead goes in the company argument. It is stored in the note. Do not create a contact or a company.',
+            '- Resolve "tomorrow", "Friday", "আগামীকাল" and mixed Bangla/English dates to YYYY-MM-DD using today and the timezone below before you call the tool.',
+            '- After the tool returns, tell them to check the card. If status is needs_input, say what is missing. Never say the task or lead was created.',
+            '- Anything else they ask you to create (a ticket, an expense, a customer) you cannot do. Explain that and link to the page.',
+        ];
+    }
+
     private buildSystemPrompt(
         tools: ChatTool[],
         modules: Set<ChatToolModule>,
@@ -486,8 +541,8 @@ export class ChatService {
             '- Never state a number that did not come from a tool result in this conversation. Do not estimate, extrapolate, or recall figures from earlier context that you did not look up.',
             '- If no available tool can answer the question, say plainly what you cannot see and link to the report page to open (see "Pages you can link to" below). Do not guess.',
             '- If a tool result says it was truncated, say so — e.g. "the top 20 of 143". If it reports hasMore, you can request the next page with the offset parameter.',
-            '- Never invent an id. When a question names a specific product, customer, supplier, warehouse or account, call resolve_entity first and use the id it returns. Branch ids are listed below and need no lookup.',
-            '- You are read-only. You cannot create, edit or delete anything. If asked to, explain that and link to the page where the user can do it (see "Pages you can link to" below).',
+            '- Never invent an id. When a question names a specific product, customer, supplier, warehouse, account or project, call resolve_entity first and use the id it returns. Branch ids are listed below and need no lookup. If resolve_entity returns more than one match, ask which one — do not pick.',
+            ...this.creatingRules(tools),
             '',
             ...(hasHelp
                 ? [
