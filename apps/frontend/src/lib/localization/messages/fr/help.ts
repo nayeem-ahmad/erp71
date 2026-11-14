@@ -130,6 +130,10 @@ export const helpMessages = {
                     q: "Comment payer mes fournisseurs et voir ce que je dois ?",
                     a: "Enregistrez les règlements dans Achat → Paiement fournisseur — vous pouvez payer ou recevoir, imputer un règlement sur des factures précises et laisser le reliquat en acompte à imputer plus tard. Achat → Grand livre fournisseurs affiche le solde courant de chaque fournisseur, et chaque fournisseur dispose aussi d'un récapitulatif de facturation et d'un grand livre crédit.",
                 },
+                {
+                    q: 'Can the AI assistant see import shipments, LCs, and duty?',
+                    a: 'Yes. Ask which shipments are still open, which LCs expire soon, or how much duty you paid, and it reads Purchase → Import shipments, the LC register, and the Import duty report. Recording a shipment or paying a duty still happens on those pages.',
+                },
             ],
         },
         accounting: {
@@ -175,8 +179,8 @@ export const helpMessages = {
                     a: "Les relances (CRM → Relances) forment une file unique de rappels — Générale, Recouvrement, Anniversaire ou Réapprovisionnement — créés depuis la fiche d'un client ou d'un prospect, les rappels Anniversaire et Réapprovisionnement étant aussi générés automatiquement. Les échanges (CRM → Échanges) constituent un journal filtrable et en lecture seule de chaque point de contact (appel, SMS, WhatsApp, visite, etc.) enregistré sur les prospects par toute votre équipe ; vous en créez un depuis la fiche du prospect.",
                 },
                 {
-                    q: 'Can the AI assistant see leads, campaigns, and follow-ups?',
-                    a: 'Yes. Ask how many open leads you have, which campaigns went out, or which follow-ups are overdue, and it reads CRM → Leads, Campaigns, and Follow-ups. Creating a lead or marking a follow-up done still happens on those pages.',
+                    q: 'Can the AI assistant see leads, campaigns, follow-ups, and contacts?',
+                    a: 'Yes. Ask how many open leads you have, which campaigns went out, which follow-ups are overdue, or who is in the contact book, and it reads CRM → Leads, Campaigns, Follow-ups, and Contacts. Creating a lead or marking a follow-up done still happens on those pages.',
                 },
             ],
         },
@@ -197,8 +201,8 @@ export const helpMessages = {
                     a: "À la clôture, le coût matière est figé d'après le dernier coût de chaque composant, et vous pouvez ajouter d'autres lignes de coût (main-d'œuvre, impression, transport, frais généraux, etc.), éventuellement reprises d'une facture d'achat de services. L'ordre affiche alors un coût total et un coût unitaire, et pour les ordres clôturés un panneau de tarification propose un prix de vente en coût majoré, applicable au produit.",
                 },
                 {
-                    q: 'Can the AI assistant see production jobs and manufactured-product P&L?',
-                    a: 'Yes. Ask what is in production, job cost, or whether manufactured products are making money, and it reads Production Jobs, Manufactured product P&L, and manufacturing analytics. Starting or completing a job still happens on those pages.',
+                    q: 'Can the AI assistant see production jobs, manufactured-product P&L, and BOMs?',
+                    a: 'Yes. Ask what is in production, job cost, whether manufactured products are making money, or what BOMs you have, and it reads Production Jobs, Manufactured product P&L, manufacturing analytics, and Bills of materials. Starting or completing a job still happens on those pages.',
                 },
             ],
         },
@@ -218,6 +222,18 @@ export const helpMessages = {
                     q: "Comment verser les salaires ?",
                     a: "Utilisez RH → Paiements de salaire → « Verser un salaire », choisissez le salarié et la période, puis saisissez le montant (prérempli à partir du salaire de base) et le mode de règlement. Chaque versement génère une écriture comptable (débit Salaires à payer, crédit compte de règlement). Les versements sont des montants forfaitaires uniques — il n'y a pas encore de bulletins de paie ni de détail des primes et retenues.",
                 },
+                {
+                    q: 'Can the AI assistant see leave balance, attendance, and the hiring pipeline?',
+                    a: 'Yes. Ask who has leave left, what attendance looks like this month, or who is in the hiring pipeline, and it reads HR → Leave Balance & Liability, Attendance Summary, and Recruitment applications. Approving leave or hiring someone still happens on those pages.',
+                },
+                {
+                    q: 'Can the AI assistant see the wages register, tax, PF, and payroll cost?',
+                    a: 'Yes. Ask for the wages register, tax withheld, provident fund contributions, or what payroll cost, and it reads HR → Wages Register, Tax Deduction Statement, Provident Fund Register, and Payroll Cost Summary. Running payroll still happens on those pages.',
+                },
+                {
+                    q: 'Can the AI assistant see items waiting on me to approve?',
+                    a: 'Yes. Ask what is waiting on you, and it reads CRM → Approvals inbox (leave requests, expense claims, and other kinds you may decide). Deciding still happens on that page — the assistant is read-only. Approvals inbox needs Manage HR.',
+                },
             ],
         },
         aiAssistant: {
@@ -230,7 +246,7 @@ export const helpMessages = {
                 },
                 {
                     q: "Que voit-il réellement, et puis-je me fier à ses réponses ?",
-                    a: "Demandez-lui « que sais-tu faire ? » : il indique vos succursales, jusqu'où remontent vos données et les outils qu'il peut utiliser — une réponse vide signifie donc une période vide, pas une requête défaillante. Chaque réponse liste ses sources (les rapports et périodes exacts utilisés) afin que vous puissiez la vérifier. Vous pouvez aussi lui demander de repérer les opérations inhabituelles — ventes à perte, factures en double, écarts de prix importants — et il vous signalera toute vérification qui n'a pas pu aboutir plutôt que de laisser croire que tout est en ordre. It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, production jobs and manufactured-product P&L, import shipments and the LC register, and CRM leads, campaigns, and follow-ups.",
+                    a: "Demandez-lui « que sais-tu faire ? » : il indique vos succursales, jusqu'où remontent vos données et les outils qu'il peut utiliser — une réponse vide signifie donc une période vide, pas une requête défaillante. Chaque réponse liste ses sources (les rapports et périodes exacts utilisés) afin que vous puissiez la vérifier. Vous pouvez aussi lui demander de repérer les opérations inhabituelles — ventes à perte, factures en double, écarts de prix importants — et il vous signalera toute vérification qui n'a pas pu aboutir plutôt que de laisser croire que tout est en ordre. It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, storefront pages and menu, production jobs, manufactured-product P&L and bills of materials, import shipments, the LC register and duty, CRM leads, campaigns, follow-ups and contacts, the approvals inbox, leave balance and attendance, recruitment, and the wages, tax, PF and payroll-cost registers.",
                 },
                 {
                     q: "Que sont les crédits IA et comment en obtenir davantage ?",
@@ -283,6 +299,10 @@ export const helpMessages = {
                 {
                     q: 'Can the AI assistant see my online orders?',
                     a: 'Yes. Ask the assistant about pending online orders or who ordered what, and it reads Storefront → Online Orders. It is read-only — confirming or cancelling an order still happens on that page.',
+                },
+                {
+                    q: 'Can the AI assistant see storefront pages and the menu?',
+                    a: 'Yes. Ask which pages are on the shop or what is in the storefront menu, and it reads Storefront → Pages and Storefront → Menu. Publishing a page or rearranging the menu still happens on those pages.',
                 },
             ],
         },

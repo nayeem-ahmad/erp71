@@ -35,6 +35,7 @@ function makeDb() {
         voucher: model(),
         voucherDetail: model(),
         lead: model(),
+        crmContact: model(),
         salesExchange: model(),
         warrantyClaim: model(),
         deliveryOrder: model(),
@@ -69,13 +70,13 @@ describe('ChatDataService.resolveEntity', () => {
      * assistant.
      */
     it('scopes every entity search to the caller\'s tenant', async () => {
-        for (const type of ['product', 'customer', 'supplier', 'branch', 'warehouse', 'category', 'brand', 'employee', 'account', 'lead'] as const) {
+        for (const type of ['product', 'customer', 'supplier', 'branch', 'warehouse', 'category', 'brand', 'employee', 'account', 'lead', 'contact'] as const) {
             await service.resolveEntity(TENANT, type, 'anything');
         }
 
         const calls = [
             db.product, db.customer, db.supplier, db.store,
-            db.warehouse, db.productGroup, db.brand, db.employee, db.account, db.lead,
+            db.warehouse, db.productGroup, db.brand, db.employee, db.account, db.lead, db.crmContact,
         ];
         for (const model of calls) {
             expect(model.findMany).toHaveBeenCalledWith(
@@ -132,6 +133,34 @@ describe('ChatDataService.resolveEntity', () => {
             { name: { contains: 'Rahim', mode: 'insensitive' } },
             { mobile: { contains: 'Rahim', mode: 'insensitive' } },
             { email: { contains: 'Rahim', mode: 'insensitive' } },
+        ]);
+    });
+
+    it('matches a contact on name, mobile or email and uses mobile or email as detail', async () => {
+        db.crmContact.findMany.mockResolvedValue([
+            { id: 'ct1', name: 'Nadia', mobile: '0181', email: 'n@acme.test' },
+        ]);
+
+        expect(await service.resolveEntity(TENANT, 'contact', 'Nadia')).toEqual([
+            { id: 'ct1', label: 'Nadia', detail: '0181' },
+        ]);
+        const where = db.crmContact.findMany.mock.calls[0][0].where;
+        expect(where.tenant_id).toBe(TENANT);
+        expect(where.deleted_at).toBeUndefined();
+        expect(where.OR).toEqual([
+            { name: { contains: 'Nadia', mode: 'insensitive' } },
+            { mobile: { contains: 'Nadia', mode: 'insensitive' } },
+            { email: { contains: 'Nadia', mode: 'insensitive' } },
+        ]);
+    });
+
+    it('falls back to a contact email when no mobile is recorded', async () => {
+        db.crmContact.findMany.mockResolvedValue([
+            { id: 'ct2', name: 'Karim', mobile: null, email: 'k@shop.test' },
+        ]);
+
+        expect(await service.resolveEntity(TENANT, 'contact', 'Karim')).toEqual([
+            { id: 'ct2', label: 'Karim', detail: 'k@shop.test' },
         ]);
     });
 });

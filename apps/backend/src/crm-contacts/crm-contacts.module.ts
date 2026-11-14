@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { CrmContactsController } from './crm-contacts.controller';
 import { CrmContactsService } from './crm-contacts.service';
 import { AiModule } from '../ai/ai.module';
@@ -13,7 +13,8 @@ import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
     // where the scanned card image is kept once a contact is saved. CrmPhotosModule
     // supplies assertTenantPhotoKey, which guards the client-supplied photo key
     // before it can reach cloudinary.destroy.
-    imports: [AiModule, AssetsModule, CrmPhotosModule],
+    // forwardRef: AiModule now imports this module for the contacts list tool.
+    imports: [forwardRef(() => AiModule), AssetsModule, CrmPhotosModule],
     controllers: [CrmContactsController],
     providers: [CrmContactsService, SubscriptionAccessGuard],
     exports: [CrmContactsService],

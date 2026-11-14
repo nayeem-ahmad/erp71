@@ -12,6 +12,7 @@ import {
     resolveRequiredStoreId,
     resolveStoreId,
     STORE_PROP,
+    toTenantContext,
     type ChatTool,
 } from './types';
 
@@ -24,6 +25,34 @@ function isoTimestamp(value: unknown): string | null {
     if (!value) return null;
     const date = value instanceof Date ? value : new Date(String(value));
     return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function shopZoneParts(timezone: string): { year: number; month: number } {
+    const ymd = zonedDateString(new Date(), timezone);
+    return { year: Number(ymd.slice(0, 4)), month: Number(ymd.slice(5, 7)) };
+}
+
+function asPositiveInt(value: unknown): number | undefined {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? Math.trunc(n) : undefined;
+}
+
+function monthRangeFromArgs(timezone: string, args: Record<string, unknown>) {
+    const shop = shopZoneParts(timezone);
+    return {
+        fromYear: asPositiveInt(args.fromYear) ?? shop.year,
+        fromMonth: asPositiveInt(args.fromMonth) ?? shop.month,
+        toYear: asPositiveInt(args.toYear) ?? shop.year,
+        toMonth: asPositiveInt(args.toMonth) ?? shop.month,
+    };
+}
+
+/** Bangladeshi income year opens in July. Month ≥ 7 is this calendar year; else the previous. */
+function incomeYearStart(timezone: string, startYear?: unknown): number {
+    const given = asPositiveInt(startYear);
+    if (given) return given;
+    const shop = shopZoneParts(timezone);
+    return shop.month >= 7 ? shop.year : shop.year - 1;
 }
 
 function projectFollowUp(row: any) {
@@ -171,15 +200,16 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
         permission: StorePermission.EDIT_PRODUCTS,
         modules: ['manufacturing'],
         description:
-            'Production jobs, manufactured-product P&L, or manufacturing analytics. Pass kind: jobs (open and recent ' +
-            'jobs), product_pl (cost vs revenue per manufactured product), or analytics (completed volume and cost ' +
-            'headlines). Use for "what is in production", "are we making money on what we manufacture".',
+            'Production jobs, manufactured-product P&L, manufacturing analytics, or bills of materials. Pass kind: jobs ' +
+            '(open and recent jobs), product_pl (cost vs revenue per manufactured product), analytics (completed volume ' +
+            'and cost headlines), or boms (recipes: output product, quantity and component count). Use for "what is in ' +
+            'production", "are we making money on what we manufacture", "what BOMs do we have".',
         parameters: {
             type: 'object',
             properties: {
                 kind: {
                     type: 'string',
-                    enum: ['jobs', 'product_pl', 'analytics'],
+                    enum: ['jobs', 'product_pl', 'analytics', 'boms'],
                     description: 'Which manufacturing view to return.',
                 },
                 status: { type: 'string', description: 'For kind=jobs, restrict to a job status such as IN_PROGRESS.' },
@@ -189,8 +219,8 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
         },
         handler: async (ctx, args, deps) => {
             const kind = args.kind;
-            if (kind !== 'jobs' && kind !== 'product_pl' && kind !== 'analytics') {
-                return { error: 'kind must be jobs, product_pl, or analytics' };
+            if (kind !== 'jobs' && kind !== 'product_pl' && kind !== 'analytics' && kind !== 'boms') {
+                return { error: 'kind must be jobs, product_pl, analytics, or boms' };
             }
             if (kind === 'jobs') {
                 const limit = Math.min(Math.max(Number(args.limit) || MAX_TOOL_ROWS, 1), MAX_TOOL_ROWS);
@@ -234,6 +264,28 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
                         productionCost: money(p.totalProductionCost ?? p.productionCost),
                         revenue: money(p.revenue),
                         grossProfit: money(p.grossProfit),
+                    })),
+                };
+            }
+            if (kind === 'boms') {
+                const limit = Math.min(Math.max(Number(args.limit) || MAX_TOOL_ROWS, 1), MAX_TOOL_ROWS);
+                const offset = Math.max(Number(args.offset) || 0, 0);
+                const result = await deps.manufacturing.listBoms(
+                    ctx.tenantId,
+                    Math.floor(offset / limit) + 1,
+                    limit,
+                );
+                const items = result.items ?? [];
+                return {
+                    kind,
+                    totalRows: result.total ?? items.length,
+                    page: result.page ?? 1,
+                    rows: items.map((bom: any) => ({
+                        product: bom.productName ?? bom.product?.name ?? null,
+                        sku: bom.productSku ?? bom.product?.sku ?? null,
+                        outputQty: bom.outputQty,
+                        componentCount: bom.componentCount ?? bom._count?.components ?? 0,
+                        notes: bom.notes ?? null,
                     })),
                 };
             }
@@ -290,20 +342,77 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
     },
 
     {
-        name: 'import_status',
-        permission: StorePermission.VIEW_IMPORTS,
-        modules: ['imports'],
+        name: 'storefront_content',
+        permission: StorePermission.MANAGE_STOREFRONT_PAGES,
+        modules: ['storefront'],
         description:
-            'Open import shipments or the LC register: reference, supplier, status, ETA, LC number and days to ' +
-            'expiry. Pass kind: shipments (open shipments unless a status is given) or lc_register (letters of ' +
-            'credit, optionally those expiring within withinDays). Use for "what shipments are still open", ' +
-            '"which LCs expire soon". Duty figures are not in this tool.',
+            'Storefront CMS pages and the public menu. Pass kind: pages (slug, title, published status) or menu ' +
+            '(label, linked page or href, sort order). Use for "what pages are on the shop", "is the about page live", ' +
+            '"what is in the storefront menu". This is the shop website, not POS.',
         parameters: {
             type: 'object',
             properties: {
                 kind: {
                     type: 'string',
-                    enum: ['shipments', 'lc_register'],
+                    enum: ['pages', 'menu'],
+                    description: 'Which storefront content view to return.',
+                },
+                ...PAGING_PROPS,
+            },
+            required: ['kind'],
+        },
+        handler: async (ctx, args, deps) => {
+            const kind = args.kind;
+            if (kind !== 'pages' && kind !== 'menu') {
+                return { error: 'kind must be pages or menu' };
+            }
+            if (kind === 'pages') {
+                const pages = await deps.storefrontPages.listPages(ctx.tenantId);
+                const paged = page(pages ?? [], args);
+                return {
+                    kind,
+                    ...paged,
+                    rows: paged.rows.map((row: any) => ({
+                        slug: row.slug,
+                        title: row.title,
+                        status: row.status,
+                        published_at: isoDate(row.published_at),
+                        updated_at: isoDate(row.updated_at),
+                    })),
+                };
+            }
+            const links = await deps.storefrontPages.listMenuLinks(ctx.tenantId);
+            const paged = page(links ?? [], args);
+            return {
+                kind,
+                ...paged,
+                rows: paged.rows.map((link: any) => ({
+                    label: link.label,
+                    href: link.href ?? link.url ?? null,
+                    page_title: link.page?.title ?? null,
+                    page_slug: link.page?.slug ?? null,
+                    page_status: link.page?.status ?? null,
+                    sort_order: link.sort_order,
+                })),
+            };
+        },
+    },
+
+    {
+        name: 'import_status',
+        permission: StorePermission.VIEW_IMPORTS,
+        modules: ['imports'],
+        description:
+            'Open import shipments, the LC register, or the duty / landed-cost report. Pass kind: shipments (open ' +
+            'shipments unless a status is given), lc_register (letters of credit, optionally those expiring within ' +
+            'withinDays), or duty (customs duty, VAT, AIT, RD, SD paid in a date range). Use for "what shipments are ' +
+            'still open", "which LCs expire soon", "how much duty did we pay".',
+        parameters: {
+            type: 'object',
+            properties: {
+                kind: {
+                    type: 'string',
+                    enum: ['shipments', 'lc_register', 'duty'],
                     description: 'Which import view to return.',
                 },
                 status: {
@@ -314,6 +423,11 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
                     type: 'number',
                     description: 'For kind=lc_register, only LCs expiring within this many days.',
                 },
+                includeUnpaid: {
+                    type: 'boolean',
+                    description: 'For kind=duty, include assessed-but-unpaid duties. Omit to report paid only.',
+                },
+                ...DATE_RANGE_PROPS,
                 ...STORE_PROP,
                 ...PAGING_PROPS,
             },
@@ -321,8 +435,8 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
         },
         handler: async (ctx, args, deps) => {
             const kind = args.kind;
-            if (kind !== 'shipments' && kind !== 'lc_register') {
-                return { error: 'kind must be shipments or lc_register' };
+            if (kind !== 'shipments' && kind !== 'lc_register' && kind !== 'duty') {
+                return { error: 'kind must be shipments, lc_register, or duty' };
             }
             const { storeId, note } = resolveStoreId(ctx, args.storeId);
             if (kind === 'shipments') {
@@ -347,6 +461,32 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
                         status: shipment.status,
                         eta: isoDate(shipment.eta),
                         lc_number: shipment.lc_number ?? null,
+                    })),
+                };
+            }
+            if (kind === 'duty') {
+                const report = await deps.imports.dutyReport(ctx.tenantId, {
+                    from: asDate(args.from),
+                    to: asDate(args.to),
+                    includeUnpaid: args.includeUnpaid === true,
+                    storeId,
+                });
+                const paged = page(report.lines ?? [], args);
+                return {
+                    ...(note ? { note } : {}),
+                    kind,
+                    totals_by_type: report.totals_by_type,
+                    total_bdt: money(report.total_bdt),
+                    recoverable_bdt: money(report.recoverable_bdt),
+                    unpaid_bdt: money(report.unpaid_bdt),
+                    ...paged,
+                    rows: paged.rows.map((line: any) => ({
+                        shipment_reference: line.shipment_reference,
+                        be_number: line.be_number,
+                        cost_type: line.cost_type,
+                        amount_bdt: money(line.amount_bdt),
+                        is_paid: line.is_paid,
+                        paid_at: isoDate(line.paid_at),
                     })),
                 };
             }
@@ -380,19 +520,21 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
         permission: StorePermission.VIEW_LEADS,
         modules: ['crm'],
         description:
-            'Lead lists, campaigns, and follow-ups. Pass kind: leads (open counts plus matching rows), campaigns ' +
-            '(name, created date, recipient count), or follow_ups (due today by default, or overdue). Use for ' +
-            '"how many open leads", "what campaigns did we send", "which follow-ups are overdue". ' +
-            'open_pipeline kind=leads is only the committed-but-unfinished count; this tool is the list.',
+            'Lead lists, campaigns, follow-ups, and CRM contacts. Pass kind: leads (open counts plus matching rows), ' +
+            'campaigns (name, created date, recipient count), follow_ups (due today by default, or overdue), or ' +
+            'contacts (name, company, mobile, email). Use for "how many open leads", "what campaigns did we send", ' +
+            '"which follow-ups are overdue", "who is in our contact book". ' +
+            'open_pipeline kind=leads is only the committed-but-unfinished count; this tool is the list. ' +
+            'Resolve one contact by name with resolve_entity type=contact.',
         parameters: {
             type: 'object',
             properties: {
                 kind: {
                     type: 'string',
-                    enum: ['leads', 'campaigns', 'follow_ups'],
+                    enum: ['leads', 'campaigns', 'follow_ups', 'contacts'],
                     description: 'Which CRM view to return.',
                 },
-                search: { type: 'string', description: 'For kind=leads, match name, mobile or email.' },
+                search: { type: 'string', description: 'For kind=leads or contacts, match name, mobile or email.' },
                 status: { type: 'string', description: 'For kind=leads, restrict to one lead status.' },
                 scope: {
                     type: 'string',
@@ -405,8 +547,8 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
         },
         handler: async (ctx, args, deps) => {
             const kind = args.kind;
-            if (kind !== 'leads' && kind !== 'campaigns' && kind !== 'follow_ups') {
-                return { error: 'kind must be leads, campaigns, or follow_ups' };
+            if (kind !== 'leads' && kind !== 'campaigns' && kind !== 'follow_ups' && kind !== 'contacts') {
+                return { error: 'kind must be leads, campaigns, follow_ups, or contacts' };
             }
             const limit = Math.min(Math.max(Number(args.limit) || MAX_TOOL_ROWS, 1), MAX_TOOL_ROWS);
             const offset = Math.max(Number(args.offset) || 0, 0);
@@ -436,6 +578,28 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
                         mobile: lead.mobile ?? null,
                         source: lead.sourceOption?.name ?? lead.source ?? null,
                         next_step_date: isoDate(lead.next_step_date),
+                    })),
+                };
+            }
+
+            if (kind === 'contacts') {
+                const result = await deps.crmContacts.findAll(ctx.tenantId, {
+                    timezone: ctx.timezone,
+                    search: args.search ? String(args.search) : undefined,
+                    page: pageNum,
+                    limit,
+                });
+                const items = result.items ?? [];
+                return {
+                    kind,
+                    totalRows: result.total ?? items.length,
+                    page: result.page ?? pageNum,
+                    rows: items.map((contact: any) => ({
+                        name: contact.name,
+                        company: contact.company ?? null,
+                        designation: contact.designation ?? null,
+                        mobile: contact.mobile ?? null,
+                        email: contact.email ?? null,
                     })),
                 };
             }
@@ -581,6 +745,240 @@ export const OPERATIONS_TOOLS: ChatTool[] = [
                     employee: e.employee,
                     designation: e.designation,
                     paid: money(e.paid),
+                })),
+            };
+        },
+    },
+
+    {
+        name: 'approvals_inbox',
+        permission: StorePermission.MANAGE_HR,
+        modules: ['hr'],
+        description:
+            'Items waiting on the caller to approve or reject: leave requests, expense claims, and other kinds the ' +
+            'caller may decide. Read-only — use the Approvals inbox page to decide. Use for "what is waiting on me", ' +
+            '"how many leave requests are pending".',
+        parameters: { type: 'object', properties: { ...PAGING_PROPS } },
+        handler: async (ctx, args, deps) => {
+            const inbox = await deps.approvals.inbox(toTenantContext(ctx));
+            const paged = page(inbox.items ?? [], args);
+            return {
+                total: inbox.total,
+                counts: inbox.counts,
+                kinds: inbox.kinds,
+                ...paged,
+                rows: paged.rows.map((item: any) => ({
+                    kind: item.kind,
+                    title: item.title,
+                    amount: nullableMoney(item.amount),
+                    requested_by: item.requested_by ?? null,
+                    requested_at: isoTimestamp(item.requested_at),
+                    branch: item.branch ?? null,
+                })),
+            };
+        },
+    },
+
+    {
+        name: 'hr_reports',
+        permission: StorePermission.VIEW_HR,
+        modules: ['hr'],
+        description:
+            'Leave balances, attendance, and the hiring pipeline. Pass kind: leave_balance (days remaining and ' +
+            'encashment liability when the caller can see payroll), attendance (present/absent/leave for a month ' +
+            'range), or recruitment (open posts plus applications). Omit year/month for the current shop-zone period. ' +
+            'Use for "who has leave left", "attendance this month", "who is in the hiring pipeline". ' +
+            'Wages, tax, PF and payroll cost are hr_statutory.',
+        parameters: {
+            type: 'object',
+            properties: {
+                kind: {
+                    type: 'string',
+                    enum: ['leave_balance', 'attendance', 'recruitment'],
+                    description: 'Which HR view to return.',
+                },
+                year: { type: 'number', description: 'For kind=leave_balance. Omit for the current shop-zone year.' },
+                fromYear: { type: 'number', description: 'For kind=attendance. Omit for the current shop-zone year.' },
+                fromMonth: { type: 'number', description: 'For kind=attendance. Omit for the current shop-zone month.' },
+                toYear: { type: 'number', description: 'For kind=attendance. Omit for the current shop-zone year.' },
+                toMonth: { type: 'number', description: 'For kind=attendance. Omit for the current shop-zone month.' },
+                stage: { type: 'string', description: 'For kind=recruitment, restrict to one application stage.' },
+                ...PAGING_PROPS,
+            },
+            required: ['kind'],
+        },
+        handler: async (ctx, args, deps) => {
+            const kind = args.kind;
+            if (kind !== 'leave_balance' && kind !== 'attendance' && kind !== 'recruitment') {
+                return { error: 'kind must be leave_balance, attendance, or recruitment' };
+            }
+            if (kind === 'leave_balance') {
+                const year = asPositiveInt(args.year) ?? shopZoneParts(ctx.timezone).year;
+                const report = await deps.hrReports.leaveBalance(toTenantContext(ctx), { year });
+                const paged = page(report.rows ?? [], args);
+                return {
+                    kind,
+                    summary: report.summary,
+                    can_view_payroll: report.can_view_payroll,
+                    ...paged,
+                    rows: paged.rows.map((row: any) => ({
+                        employeeName: row.employeeName,
+                        employeeCode: row.employeeCode,
+                        leaveTypeName: row.leaveTypeName,
+                        entitledDays: row.entitledDays,
+                        usedDays: row.usedDays,
+                        remainingDays: row.remainingDays,
+                        liability: nullableMoney(row.liability),
+                    })),
+                };
+            }
+            if (kind === 'attendance') {
+                const range = monthRangeFromArgs(ctx.timezone, args);
+                const report = await deps.hrReports.attendanceSummary(ctx.tenantId, range);
+                const paged = page(report.rows ?? [], args);
+                return {
+                    kind,
+                    summary: report.summary,
+                    ...paged,
+                    rows: paged.rows.map((row: any) => ({
+                        label: row.label,
+                        presentDays: row.presentDays,
+                        absentDays: row.absentDays,
+                        leaveDays: row.leaveDays,
+                        attendanceRate: row.attendanceRate,
+                    })),
+                };
+            }
+            const [summary, applications] = await Promise.all([
+                deps.recruitment.summary(ctx.tenantId),
+                deps.recruitment.listApplications(ctx.tenantId, {
+                    ...(args.stage ? { stage: String(args.stage) as any } : {}),
+                }),
+            ]);
+            const paged = page(applications ?? [], args);
+            return {
+                kind,
+                summary,
+                ...paged,
+                rows: paged.rows.map((row: any) => ({
+                    applicant: row.applicant?.name ?? row.applicantName ?? null,
+                    job_title: row.jobPost?.title ?? row.job_title ?? null,
+                    job_code: row.jobPost?.code ?? row.job_code ?? null,
+                    stage: row.stage,
+                })),
+            };
+        },
+    },
+
+    {
+        name: 'hr_statutory',
+        permission: StorePermission.VIEW_PAYROLL,
+        modules: ['hr'],
+        description:
+            'Statutory payroll registers: wages, tax withheld, provident fund, and payroll cost. Pass kind: wages ' +
+            '(Labour Rules salary sheet for a month), tax (income-year tax deducted, July–June), pf (employee PF ' +
+            'contributions for the income year), or payroll_cost (settled net pay by department). Omit year/month/' +
+            'startYear for the current shop-zone period. Use for "wages register", "how much tax did we withhold", ' +
+            '"PF contributions", "what did payroll cost". Leave and attendance are hr_reports.',
+        parameters: {
+            type: 'object',
+            properties: {
+                kind: {
+                    type: 'string',
+                    enum: ['wages', 'tax', 'pf', 'payroll_cost'],
+                    description: 'Which statutory register to return.',
+                },
+                year: { type: 'number', description: 'For kind=wages. Omit for the current shop-zone year.' },
+                month: { type: 'number', description: 'For kind=wages. Omit for the current shop-zone month.' },
+                startYear: {
+                    type: 'number',
+                    description:
+                        'For kind=tax or pf: the July opening year of the Bangladeshi income year. Omit to use the ' +
+                        'income year that contains the current shop-zone date.',
+                },
+                fromYear: { type: 'number', description: 'For kind=payroll_cost. Omit for the current shop-zone year.' },
+                fromMonth: { type: 'number', description: 'For kind=payroll_cost. Omit for the current shop-zone month.' },
+                toYear: { type: 'number', description: 'For kind=payroll_cost. Omit for the current shop-zone year.' },
+                toMonth: { type: 'number', description: 'For kind=payroll_cost. Omit for the current shop-zone month.' },
+                ...PAGING_PROPS,
+            },
+            required: ['kind'],
+        },
+        handler: async (ctx, args, deps) => {
+            const kind = args.kind;
+            if (kind !== 'wages' && kind !== 'tax' && kind !== 'pf' && kind !== 'payroll_cost') {
+                return { error: 'kind must be wages, tax, pf, or payroll_cost' };
+            }
+            if (kind === 'wages') {
+                const shop = shopZoneParts(ctx.timezone);
+                const year = asPositiveInt(args.year) ?? shop.year;
+                const month = asPositiveInt(args.month) ?? shop.month;
+                const report = await deps.statutoryReports.wagesRegister(ctx.tenantId, year, month);
+                const paged = page(report.rows ?? [], args);
+                return {
+                    kind,
+                    totals: {
+                        gross_earnings: money(report.totals?.gross_earnings),
+                        total_deductions: money(report.totals?.total_deductions),
+                        net_pay: money(report.totals?.net_pay),
+                    },
+                    ...paged,
+                    rows: paged.rows.map((row: any) => ({
+                        employee_name: row.employee_name,
+                        employee_code: row.employee_code,
+                        gross_earnings: money(row.gross_earnings),
+                        total_deductions: money(row.total_deductions),
+                        net_pay: money(row.net_pay),
+                    })),
+                };
+            }
+            if (kind === 'tax') {
+                const startYear = incomeYearStart(ctx.timezone, args.startYear);
+                const report = await deps.statutoryReports.taxDeductionStatement(ctx.tenantId, startYear);
+                const paged = page(report.rows ?? [], args);
+                return {
+                    kind,
+                    totals: report.totals,
+                    fiscal_year: report.fiscal_year,
+                    notes: report.notes,
+                    ...paged,
+                    rows: paged.rows.map((row: any) => ({
+                        employee_name: row.employee?.name ?? row.employee_name ?? null,
+                        employee_code: row.employee?.employee_code ?? row.employee_code ?? null,
+                        gross_earnings: money(row.gross_earnings),
+                        tax_deducted: money(row.tax_deducted),
+                    })),
+                };
+            }
+            if (kind === 'pf') {
+                const startYear = incomeYearStart(ctx.timezone, args.startYear);
+                const report = await deps.statutoryReports.providentFundRegister(ctx.tenantId, startYear);
+                const paged = page(report.rows ?? [], args);
+                return {
+                    kind,
+                    grand_total: money(report.grand_total),
+                    fiscal_year: report.fiscal_year,
+                    notes: report.notes,
+                    ...paged,
+                    rows: paged.rows.map((row: any) => ({
+                        employee_name: row.employee?.name ?? row.employee_name ?? null,
+                        employee_code: row.employee?.employee_code ?? row.employee_code ?? null,
+                        total_employee_contribution: money(row.total_employee_contribution),
+                    })),
+                };
+            }
+            const range = monthRangeFromArgs(ctx.timezone, args);
+            const report = await deps.hrReports.payrollCost(ctx.tenantId, range);
+            const paged = page(report.rows ?? [], args);
+            return {
+                kind,
+                summary: report.summary,
+                ...paged,
+                rows: paged.rows.map((row: any) => ({
+                    label: row.label,
+                    employees: row.employees,
+                    netPay: money(row.netPay),
+                    share: row.share,
                 })),
             };
         },

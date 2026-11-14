@@ -130,6 +130,10 @@ export const helpMessages = {
                     q: "Wie bezahle ich Lieferanten und sehe meine Verbindlichkeiten?",
                     a: "Erfassen Sie Zahlungen unter Einkauf → Lieferantenzahlung — Sie können zahlen oder Geld erhalten, eine Zahlung auf bestimmte Rechnungen verteilen und einen Rest als Anzahlung für später stehen lassen. Einkauf → Lieferantenkonto zeigt den laufenden Saldo je Lieferant, und zu jedem Lieferanten gibt es zudem eine Abrechnungsübersicht und ein Kreditkonto.",
                 },
+                {
+                    q: 'Can the AI assistant see import shipments, LCs, and duty?',
+                    a: 'Yes. Ask which shipments are still open, which LCs expire soon, or how much duty you paid, and it reads Purchase → Import shipments, the LC register, and the Import duty report. Recording a shipment or paying a duty still happens on those pages.',
+                },
             ],
         },
         accounting: {
@@ -175,8 +179,8 @@ export const helpMessages = {
                     a: "Wiedervorlagen (CRM → Wiedervorlagen) sind eine einzige Warteschlange von Erinnerungen — Allgemein, Inkasso, Geburtstag oder Nachbestellung —, die von der Detailseite eines Kunden oder Leads aus entstehen; Geburtstags- und Nachbestellerinnerungen werden zusätzlich automatisch erzeugt. Konversationen (CRM → Konversationen) ist ein schreibgeschütztes, filterbares Protokoll jedes Kontaktpunkts (Anruf, SMS, WhatsApp, Besuch usw.), der teamweit zu Leads erfasst wurde; einen neuen Eintrag erfassen Sie auf der Detailseite des Leads.",
                 },
                 {
-                    q: 'Can the AI assistant see leads, campaigns, and follow-ups?',
-                    a: 'Yes. Ask how many open leads you have, which campaigns went out, or which follow-ups are overdue, and it reads CRM → Leads, Campaigns, and Follow-ups. Creating a lead or marking a follow-up done still happens on those pages.',
+                    q: 'Can the AI assistant see leads, campaigns, follow-ups, and contacts?',
+                    a: 'Yes. Ask how many open leads you have, which campaigns went out, which follow-ups are overdue, or who is in the contact book, and it reads CRM → Leads, Campaigns, Follow-ups, and Contacts. Creating a lead or marking a follow-up done still happens on those pages.',
                 },
             ],
         },
@@ -197,8 +201,8 @@ export const helpMessages = {
                     a: "Beim Abschluss wird der Materialaufwand aus den jeweils letzten Kosten jeder Komponente festgehalten, und Sie können weitere Kostenzeilen ergänzen (Lohn, Druck, Transport, Gemeinkosten usw.), optional aus einer Dienstleistungsrechnung übernommen. Der Auftrag weist dann Gesamtkosten und Kosten je Einheit aus, und für abgeschlossene Aufträge schlägt ein Preisbereich einen Verkaufspreis nach dem Zuschlagsprinzip vor, den Sie auf das Produkt anwenden können.",
                 },
                 {
-                    q: 'Can the AI assistant see production jobs and manufactured-product P&L?',
-                    a: 'Yes. Ask what is in production, job cost, or whether manufactured products are making money, and it reads Production Jobs, Manufactured product P&L, and manufacturing analytics. Starting or completing a job still happens on those pages.',
+                    q: 'Can the AI assistant see production jobs, manufactured-product P&L, and BOMs?',
+                    a: 'Yes. Ask what is in production, job cost, whether manufactured products are making money, or what BOMs you have, and it reads Production Jobs, Manufactured product P&L, manufacturing analytics, and Bills of materials. Starting or completing a job still happens on those pages.',
                 },
             ],
         },
@@ -218,6 +222,18 @@ export const helpMessages = {
                     q: "Wie zahle ich Gehälter aus?",
                     a: "Nutzen Sie Personal → Gehaltszahlungen → „Gehalt zahlen“, wählen Sie Person und Abrechnungszeitraum und erfassen Sie Betrag (aus dem Grundgehalt vorbelegt) und Zahlungsart. Jede Zahlung erzeugt einen Buchungsbeleg (Soll: Verbindlichkeiten aus Löhnen, Haben: Zahlungskonto). Zahlungen sind einzelne Pauschalbeträge — Lohnabrechnungen oder Zuschlags-/Abzugsaufstellungen gibt es noch nicht.",
                 },
+                {
+                    q: 'Can the AI assistant see leave balance, attendance, and the hiring pipeline?',
+                    a: 'Yes. Ask who has leave left, what attendance looks like this month, or who is in the hiring pipeline, and it reads HR → Leave Balance & Liability, Attendance Summary, and Recruitment applications. Approving leave or hiring someone still happens on those pages.',
+                },
+                {
+                    q: 'Can the AI assistant see the wages register, tax, PF, and payroll cost?',
+                    a: 'Yes. Ask for the wages register, tax withheld, provident fund contributions, or what payroll cost, and it reads HR → Wages Register, Tax Deduction Statement, Provident Fund Register, and Payroll Cost Summary. Running payroll still happens on those pages.',
+                },
+                {
+                    q: 'Can the AI assistant see items waiting on me to approve?',
+                    a: 'Yes. Ask what is waiting on you, and it reads CRM → Approvals inbox (leave requests, expense claims, and other kinds you may decide). Deciding still happens on that page — the assistant is read-only. Approvals inbox needs Manage HR.',
+                },
             ],
         },
         aiAssistant: {
@@ -230,7 +246,7 @@ export const helpMessages = {
                 },
                 {
                     q: "Was sieht er tatsächlich, und kann ich den Antworten trauen?",
-                    a: "Fragen Sie „Was kannst du?“, und er nennt Ihre Filialen, wie weit Ihre Aufzeichnungen zurückreichen und welche Werkzeuge er nutzen kann — eine leere Antwort bedeutet also einen leeren Zeitraum, keine fehlerhafte Abfrage. Jede Antwort führt ihre Quellen auf (die genauen Berichte und Zeiträume), sodass Sie sie überprüfen können. Sie können ihn auch bitten, auf auffällige Vorgänge zu prüfen — Verkäufe unter Einstandspreis, doppelte Rechnungen, große Preisausreißer — und er sagt Ihnen, wenn eine Prüfung nicht abgeschlossen werden konnte, statt Unbedenklichkeit zu suggerieren. It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, production jobs and manufactured-product P&L, import shipments and the LC register, and CRM leads, campaigns, and follow-ups.",
+                    a: "Fragen Sie „Was kannst du?“, und er nennt Ihre Filialen, wie weit Ihre Aufzeichnungen zurückreichen und welche Werkzeuge er nutzen kann — eine leere Antwort bedeutet also einen leeren Zeitraum, keine fehlerhafte Abfrage. Jede Antwort führt ihre Quellen auf (die genauen Berichte und Zeiträume), sodass Sie sie überprüfen können. Sie können ihn auch bitten, auf auffällige Vorgänge zu prüfen — Verkäufe unter Einstandspreis, doppelte Rechnungen, große Preisausreißer — und er sagt Ihnen, wenn eine Prüfung nicht abgeschlossen werden konnte, statt Unbedenklichkeit zu suggerieren. It can also look up the Daily Report for a branch, today's open and closed tills, invoice and bill lines, Mushak 6.2 totals, written-off customer debts, sales exchanges, warranty claims, online storefront orders, storefront pages and menu, production jobs, manufactured-product P&L and bills of materials, import shipments, the LC register and duty, CRM leads, campaigns, follow-ups and contacts, the approvals inbox, leave balance and attendance, recruitment, and the wages, tax, PF and payroll-cost registers.",
                 },
                 {
                     q: "Was sind KI-Credits und wie bekomme ich mehr?",
@@ -283,6 +299,10 @@ export const helpMessages = {
                 {
                     q: 'Can the AI assistant see my online orders?',
                     a: 'Yes. Ask the assistant about pending online orders or who ordered what, and it reads Storefront → Online Orders. It is read-only — confirming or cancelling an order still happens on that page.',
+                },
+                {
+                    q: 'Can the AI assistant see storefront pages and the menu?',
+                    a: 'Yes. Ask which pages are on the shop or what is in the storefront menu, and it reads Storefront → Pages and Storefront → Menu. Publishing a page or rearranging the menu still happens on those pages.',
                 },
             ],
         },

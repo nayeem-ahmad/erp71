@@ -16,7 +16,14 @@ import type { PurchaseReportsService } from '../../purchase-reports/purchase-rep
 import type { SalesLineItemsService } from '../../sales-reports/sales-line-items.service';
 import type { SalesReportsService } from '../../sales-reports/sales-reports.service';
 import type { StorefrontService } from '../../storefront/storefront.service';
+import type { StorefrontPagesService } from '../../storefront-pages/storefront-pages.service';
 import type { SuppliersService } from '../../suppliers/suppliers.service';
+import type { CrmContactsService } from '../../crm-contacts/crm-contacts.service';
+import type { ApprovalsService } from '../../approvals/approvals.service';
+import type { HrReportsService } from '../../hr-reports/hr-reports.service';
+import type { StatutoryReportsService } from '../../payroll/statutory-reports.service';
+import type { RecruitmentService } from '../../recruitment/recruitment.service';
+import type { TenantContext } from '../../database/tenant.decorator';
 import type { AnomalyDetectionService } from '../anomaly-detection.service';
 import type { ChatDataService } from '../chat-data.service';
 import type { WebSearchService } from '../web-search.service';
@@ -59,6 +66,12 @@ export interface ChatToolDeps {
     crmLeads: CrmLeadsService;
     crmCampaigns: CrmCampaignsService;
     crmFollowUps: CrmFollowUpsService;
+    storefrontPages: StorefrontPagesService;
+    crmContacts: CrmContactsService;
+    approvals: ApprovalsService;
+    hrReports: HrReportsService;
+    statutoryReports: StatutoryReportsService;
+    recruitment: RecruitmentService;
 }
 
 export interface ChatToolContext {
@@ -269,6 +282,17 @@ export function asDate(value: unknown): string | undefined {
 /** Only forwards a comparison mode the report layer actually understands. */
 export function asComparison(value: unknown): 'previous_period' | 'previous_year' | undefined {
     return value === 'previous_period' || value === 'previous_year' ? value : undefined;
+}
+
+/** The subset of request tenant context the report services need. */
+export function toTenantContext(ctx: ChatToolContext): TenantContext {
+    return {
+        tenantId: ctx.tenantId,
+        storeId: ctx.storeId,
+        userId: ctx.userId,
+        userRole: ctx.userRole,
+        timezone: ctx.timezone,
+    };
 }
 
 export function isoDate(value: unknown): string | null {

@@ -154,6 +154,25 @@ permission-filter regression.
 | 59 | How many open leads do we have? | `crm_pipeline` `leads` | `kind: leads`; quotes `open` from the status summary |
 | 60 | What follow-ups are overdue? | `crm_pipeline` `follow_ups` | `kind: follow_ups` `scope: overdue`; names parties due before today |
 
+## Wave 2 leftovers (5)
+
+| # | Question | Expected tool | Pass criteria |
+|---|---|---|---|
+| 61 | What BOMs do we have? | `manufacturing_summary` `boms` | `kind: boms`; names products and component counts, not jobs |
+| 62 | How much duty did we pay this year? | `import_status` `duty` | `kind: duty`; quotes `total_bdt`; does not answer from shipments |
+| 63 | Which storefront pages are published? | `storefront_content` `pages` | `kind: pages`; names slugs and status |
+| 64 | Who is the contact named Nadia? | `resolve_entity` (`type: contact`) | Resolves the contact; does not treat Nadia as a lead or customer |
+| 65 | What is waiting on me to approve? | `approvals_inbox` | Lists pending kinds and titles; does not claim to have decided anything |
+
+## Wave 3 HR (4)
+
+| # | Question | Expected tool | Pass criteria |
+|---|---|---|---|
+| 66 | Who has leave left this year? | `hr_reports` `leave_balance` | `kind: leave_balance`; remaining days; liability only if payroll is visible |
+| 67 | Show me the wages register for this month | `hr_statutory` `wages` | `kind: wages`; names employees and net pay |
+| 68 | How much tax did we withhold this income year? | `hr_statutory` `tax` | `kind: tax`; July–June startYear; quotes `totals.tax_deducted` |
+| 69 | Who is in the hiring pipeline? | `hr_reports` `recruitment` | `kind: recruitment`; includes summary and applicant/stage rows |
+
 ## Module spot-check
 
 Switch a test tenant to an **accounting-only** plan and ask #1, #7 and #35.
