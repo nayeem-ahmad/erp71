@@ -85,4 +85,14 @@ describe('useServerList page size', () => {
 
         expect(result.current.pageSize).toBe(100);
     });
+
+    it('clamps a stored pageSize above the API limit so the list still loads', async () => {
+        hydrate({ 'test-list': { pageSize: 500 } });
+
+        const { result } = renderHook(() => useServerList({ fetch, tableId: 'test-list' }));
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        expect(result.current.pageSize).toBe(100);
+        expect(fetch).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 100 }));
+    });
 });
