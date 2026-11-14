@@ -251,10 +251,18 @@ describe('route authorization by role', () => {
             const reachable = routes
                 .filter((r) => r.gate === 'permission')
                 .filter((r) => !r.file.startsWith('projects/') && !r.file.startsWith('chat/'))
+                // Catalogue read is the picker a project uses for requirements.
+                .filter((r) => !(r.verb === 'GET' && r.route === '/skills'))
                 .filter((r) => passes(projectUser, r))
                 .map((r) => `${r.verb} ${r.route}  (${r.key})`);
 
             expect(reachable).toEqual([]);
+        });
+
+        it('can list the skill catalogue so a project can pick requirements', () => {
+            expect(passes(projectUser, route('GET /skills'))).toBe(true);
+            expect(passes(projectUser, route('POST /skills'))).toBe(false);
+            expect(passes(projectUser, route('POST /skills/people'))).toBe(false);
         });
     });
 });
