@@ -33,6 +33,13 @@ describe('ProjectsService — members and deletion', () => {
                 createMany: jest.fn().mockResolvedValue({ count: 0 }),
             },
             projectMember: { upsert: jest.fn().mockResolvedValue({}), deleteMany: jest.fn().mockResolvedValue({}) },
+            skill: { findFirst: jest.fn() },
+            projectSkill: {
+                findFirst: jest.fn().mockResolvedValue(null),
+                create: jest.fn().mockResolvedValue({}),
+                update: jest.fn().mockResolvedValue({}),
+                deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+            },
             tenantUser: {
                 findFirst: jest.fn().mockResolvedValue({ id: 'tu-1' }),
                 findMany: jest.fn().mockResolvedValue([]),
@@ -113,6 +120,34 @@ describe('ProjectsService — members and deletion', () => {
             await expect(
                 service.addMember(OWNER, 'project-1', { employeeId: 'emp-x' } as never),
             ).rejects.toBeInstanceOf(BadRequestException);
+        });
+    });
+
+    describe('addSkill', () => {
+        it('adds an active skill as required', async () => {
+            db.skill.findFirst.mockResolvedValue({ id: 's1', is_active: true });
+            db.projectSkill.create.mockResolvedValue({ id: 'ps1' });
+
+            await service.addSkill(OWNER, 'project-1', { skillId: 's1' });
+
+            expect(db.projectSkill.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        project_id: 'project-1',
+                        skill_id: 's1',
+                        requirement: 'REQUIRED',
+                    }),
+                }),
+            );
+        });
+
+        it('refuses an inactive skill', async () => {
+            db.skill.findFirst.mockResolvedValue({ id: 's1', is_active: false });
+
+            await expect(
+                service.addSkill(OWNER, 'project-1', { skillId: 's1' }),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(db.projectSkill.create).not.toHaveBeenCalled();
         });
     });
 

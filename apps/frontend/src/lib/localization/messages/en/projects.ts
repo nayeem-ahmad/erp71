@@ -163,6 +163,23 @@ export const projectsMessages = {
         noLoginHint: 'Employees without a workspace account can be on the team and hold tasks, but cannot sign in to see them.',
     },
 
+    skills: {
+        title: 'Skills needed',
+        add: 'Add skill',
+        empty: 'No skills listed for this project yet.',
+        skill: 'Skill',
+        requirement: 'Requirement',
+        minProficiency: 'Minimum proficiency',
+        added: 'Skill added',
+        addFailed: 'Could not add that skill',
+        updated: 'Skill updated',
+        updateFailed: 'Could not update that skill',
+        removed: 'Skill removed',
+        removeFailed: 'Could not remove that skill',
+        remove: 'Remove skill',
+        none: 'Any level',
+    },
+
     milestones: {
         add: 'Add milestone',
         name: 'Milestone name',

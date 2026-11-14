@@ -3288,6 +3288,41 @@ describe('api.getDepartments', () => {
     });
 });
 
+describe('api.getSkills', () => {
+    it('fetches /skills', async () => {
+        mockOk({ data: [] });
+        await api.getSkills();
+        expect(lastUrl()).toContain('/skills');
+    });
+});
+
+describe('api.createSkill', () => {
+    it('posts to /skills', async () => {
+        mockOk({ data: {} });
+        await api.createSkill({ name: 'Welding' });
+        expect(lastOpts().method).toBe('POST');
+        expect(lastUrl()).toContain('/skills');
+    });
+});
+
+describe('api.addPersonSkill', () => {
+    it('posts to /skills/people', async () => {
+        mockOk({ data: {} });
+        await api.addPersonSkill({ employeeId: 'e1', skillId: 's1' });
+        expect(lastOpts().method).toBe('POST');
+        expect(lastUrl()).toContain('/skills/people');
+    });
+});
+
+describe('api.addProjectSkill', () => {
+    it('posts to /projects/:id/skills', async () => {
+        mockOk({ data: {} });
+        await api.addProjectSkill('p1', { skillId: 's1' });
+        expect(lastOpts().method).toBe('POST');
+        expect(lastUrl()).toContain('/projects/p1/skills');
+    });
+});
+
 describe('api.createDepartment', () => {
     it('posts to /employees/departments', async () => {
         mockOk({ data: {} });

@@ -163,6 +163,23 @@ export const projectsMessages = {
         noLoginHint: "Pekerja tanpa akaun ruang kerja boleh berada dalam pasukan dan memegang tugasan, tetapi tidak boleh log masuk untuk melihatnya.",
     },
 
+    skills: {
+        title: "Kemahiran diperlukan",
+        add: "Tambah kemahiran",
+        empty: "Belum ada kemahiran disenaraikan untuk projek ini.",
+        skill: "Kemahiran",
+        requirement: "Keperluan",
+        minProficiency: "Tahap minimum",
+        added: "Kemahiran ditambah",
+        addFailed: "Kemahiran itu tidak dapat ditambah",
+        updated: "Kemahiran dikemas kini",
+        updateFailed: "Kemahiran itu tidak dapat dikemas kini",
+        removed: "Kemahiran dibuang",
+        removeFailed: "Kemahiran itu tidak dapat dibuang",
+        remove: "Buang kemahiran",
+        none: "Sebarang tahap",
+    },
+
     milestones: {
         add: 'Tambah pencapaian',
         name: 'Nama pencapaian',

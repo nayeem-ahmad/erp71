@@ -21,6 +21,10 @@ jest.mock('@/lib/api', () => ({
         updateEmployee: jest.fn(),
         getDepartments: jest.fn(),
         getDesignations: jest.fn(),
+        getSkills: jest.fn(),
+        addPersonSkill: jest.fn(),
+        updatePersonSkill: jest.fn(),
+        removePersonSkill: jest.fn(),
         linkEmployeeUser: jest.fn(),
         unlinkEmployeeUser: jest.fn(),
         grantEmployeePortalAccess: jest.fn(),
@@ -74,6 +78,7 @@ describe('EmployeeDetailPage', () => {
         api.updateEmployee.mockResolvedValue({ ...mockEmployee, name: 'Jane Updated' });
         api.getDepartments.mockResolvedValue(mockDepartments);
         api.getDesignations.mockResolvedValue(mockDesignations);
+        api.getSkills.mockResolvedValue([]);
         api.linkEmployeeUser.mockResolvedValue({ ...mockEmployee, user_id: 'user-1' });
         api.unlinkEmployeeUser.mockResolvedValue({ ...mockEmployee, user_id: null });
         api.createEmployeeLogin.mockResolvedValue({

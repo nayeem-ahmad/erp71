@@ -589,6 +589,7 @@ export const coreMessages = {
             departments: "विभाग",
             designations: "पदनाम",
             designationLevels: "पदनाम स्तर",
+            skills: "कौशल",
             attendance: "उपस्थिति",
             attendanceRecords: "उपस्थिति रिकॉर्ड",
             attendancePunches: "इन/आउट रिकॉर्ड",

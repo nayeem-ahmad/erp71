@@ -751,6 +751,7 @@ export const crmHrMessages = {
                 departments: { title: "Services", description: "Services de l'entreprise pour organiser le personnel." },
                 designations: { title: "Fonctions", description: "Intitulés de poste et classifications de rôles." },
                 designationLevels: { title: "Niveaux de fonction", description: "Niveaux hiérarchiques auxquels appartiennent les fonctions." },
+                skills: { title: "Compétences", description: "Capacités attribuées aux personnes et aux projets." },
                 attendance: { title: "Présences", description: "Suivez les pointages d'arrivée et de départ quotidiens." },
                 attendancePunches: { title: "Pointages", description: "Chaque arrivée et chaque départ derrière la présence quotidienne." },
                 leaves: { title: "Congés", description: "Demandes de congé, approbations et soldes." },
@@ -775,6 +776,7 @@ export const crmHrMessages = {
             departmentsStats: "Synthèse des services",
             designationsStats: "Synthèse des postes",
             levelsStats: "Synthèse des niveaux",
+            skillsStats: "Synthèse des compétences",
             jobPostsStats: "Synthèse des offres d’emploi",
             applicantsStats: "Synthèse des candidats",
             applicationsStats: "Synthèse des candidatures",
@@ -1543,6 +1545,50 @@ export const crmHrMessages = {
             "name": "ex. Chef de service",
         },
     },
+    "skills": {
+        "title": "Compétences",
+        "subtitle": "Capacités attribuées aux personnes et aux projets",
+        "newSkill": "Nouvelle compétence",
+        "emptyMessage": "Aucune compétence pour le moment",
+        "searchPlaceholder": "Rechercher des compétences...",
+        "nameRequired": "Le nom de la compétence est obligatoire",
+        "saveFailed": "Impossible d'enregistrer la compétence",
+        "deleteTitle": "Supprimer la compétence",
+        "deleteDescription": "Supprimer cette compétence ? Seule une compétence inutilisée peut être supprimée.",
+        "deleteFailed": "Impossible de supprimer la compétence",
+        "saving": "Enregistrement...",
+        "editSkill": "Modifier la compétence",
+        "inUse": "Utilisée",
+        "description": "Description",
+        "sortOrder": "Ordre",
+        "columns": {
+            "name": "Compétence",
+            "category": "Catégorie",
+            "people": "Personnes",
+            "projects": "Projets"
+        },
+        "placeholders": {
+            "name": "ex. Soudure"
+        },
+        "category": {
+            "TECHNICAL": "Technique",
+            "LANGUAGE": "Langue",
+            "SOFT": "Savoir-être",
+            "TOOL": "Outil",
+            "CERTIFICATION": "Certification",
+            "OTHER": "Autre"
+        },
+        "proficiency": {
+            "BEGINNER": "Débutant",
+            "INTERMEDIATE": "Intermédiaire",
+            "ADVANCED": "Avancé",
+            "EXPERT": "Expert"
+        },
+        "requirement": {
+            "REQUIRED": "Obligatoire",
+            "NICE_TO_HAVE": "Souhaitable"
+        }
+    },
     "employees": {
         "title": "Employés",
         "subtitle": "Gérez les dossiers du personnel, les services et l'accès au système",
@@ -1609,7 +1655,22 @@ export const crmHrMessages = {
             "unlink": "Dissocier",
             "link": "Associer",
             "linkDescription": "Associez cet employé à un compte utilisateur du système pour qu'il puisse se connecter.",
-            "linkTip": "Astuce : trouvez l'ID utilisateur dans Paramètres > Utilisateurs, puis collez-le ici."
+            "linkTip": "Astuce : trouvez l'ID utilisateur dans Paramètres > Utilisateurs, puis collez-le ici.",
+            "skills": {
+                "title": "Compétences",
+                "add": "Ajouter une compétence",
+                "empty": "Aucune compétence attribuée pour le moment.",
+                "skill": "Compétence",
+                "proficiency": "Niveau",
+                "notes": "Notes",
+                "added": "Compétence ajoutée",
+                "addFailed": "Impossible d'ajouter cette compétence",
+                "updated": "Compétence mise à jour",
+                "updateFailed": "Impossible de mettre à jour cette compétence",
+                "removed": "Compétence retirée",
+                "removeFailed": "Impossible de retirer cette compétence",
+                "remove": "Retirer la compétence"
+            }
         },
         "editEmployee": "Modifier l'employé",
         "statuses": {

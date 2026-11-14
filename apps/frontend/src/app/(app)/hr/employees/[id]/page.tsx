@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { User, Phone, Mail, Calendar, Briefcase, KeyRound, LinkIcon, Unlink, Save } from 'lucide-react';
-import { api, type EmployeeLoginState } from '@/lib/api';
+import { api, type EmployeeLoginState, type PersonSkillAssignment } from '@/lib/api';
+import EmployeeSkillsCard from '@/components/hr/EmployeeSkillsCard';
 import { fetchMe } from '@/hooks/use-me';
 import { displayEmail } from '@erp71/shared-types';
 import { formatDate } from '@/lib/format';
@@ -46,6 +47,7 @@ interface Employee {
         mobile?: string | null;
         must_change_password?: boolean;
     } | null;
+    skills?: PersonSkillAssignment[];
 }
 
 export default function EmployeeDetailPage() {
@@ -256,6 +258,11 @@ export default function EmployeeDetailPage() {
         }
     };
 
+    const reloadEmployee = async () => {
+        const emp = await api.getEmployee(id);
+        setEmployee(emp);
+    };
+
     const handleUnlinkUser = async () => {
         setLinkLoading(true);
         setError('');
@@ -464,6 +471,12 @@ export default function EmployeeDetailPage() {
                         </Button>
                     </div>
                 </form>
+
+                <EmployeeSkillsCard
+                    employeeId={employee.id}
+                    assignments={employee.skills ?? []}
+                    onChanged={reloadEmployee}
+                />
 
                 {/*
                   * System access.

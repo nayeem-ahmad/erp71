@@ -751,6 +751,7 @@ export const crmHrMessages = {
                 departments: { title: "विभाग", description: "स्टाफ़ व्यवस्थित करने के लिए कंपनी विभाग।" },
                 designations: { title: "पदनाम", description: "पद नाम और भूमिका वर्गीकरण।" },
                 designationLevels: { title: "पदनाम स्तर", description: "वरिष्ठता के स्तर जिनमें पदनाम आते हैं।" },
+                skills: { title: "कौशल", description: "लोगों और परियोजनाओं को दी जाने वाली क्षमताएँ।" },
                 attendance: { title: "उपस्थिति", description: "दैनिक आगमन और प्रस्थान रिकॉर्ड पर नज़र रखें।" },
                 attendancePunches: { title: "आवक/जावक रिकॉर्ड", description: "दैनिक उपस्थिति के पीछे हर क्लॉक-इन और क्लॉक-आउट।" },
                 leaves: { title: "छुट्टियाँ", description: "छुट्टी के अनुरोध, स्वीकृतियाँ और शेष।" },
@@ -775,6 +776,7 @@ export const crmHrMessages = {
             departmentsStats: "विभाग सारांश",
             designationsStats: "पदनाम सारांश",
             levelsStats: "स्तर सारांश",
+            skillsStats: "कौशल सारांश",
             jobPostsStats: "जॉब पोस्ट सारांश",
             applicantsStats: "आवेदक सारांश",
             applicationsStats: "आवेदन सारांश",
@@ -1543,6 +1545,50 @@ export const crmHrMessages = {
             "name": "जैसे विभाग प्रमुख",
         },
     },
+    "skills": {
+        "title": "कौशल",
+        "subtitle": "लोगों और परियोजनाओं को दी जाने वाली क्षमताएँ",
+        "newSkill": "नया कौशल",
+        "emptyMessage": "अभी कोई कौशल नहीं",
+        "searchPlaceholder": "कौशल खोजें...",
+        "nameRequired": "कौशल का नाम आवश्यक है",
+        "saveFailed": "कौशल सहेजा नहीं जा सका",
+        "deleteTitle": "कौशल हटाएँ",
+        "deleteDescription": "यह कौशल हटाएँ? केवल वही कौशल हटाया जा सकता है जिसे कोई उपयोग न करता हो।",
+        "deleteFailed": "कौशल नहीं हटाया जा सका",
+        "saving": "सहेजा जा रहा है...",
+        "editSkill": "कौशल संपादित करें",
+        "inUse": "उपयोग में",
+        "description": "विवरण",
+        "sortOrder": "क्रम",
+        "columns": {
+            "name": "कौशल",
+            "category": "श्रेणी",
+            "people": "लोग",
+            "projects": "परियोजनाएँ"
+        },
+        "placeholders": {
+            "name": "जैसे वेल्डिंग"
+        },
+        "category": {
+            "TECHNICAL": "तकनीकी",
+            "LANGUAGE": "भाषा",
+            "SOFT": "सॉफ्ट स्किल",
+            "TOOL": "टूल",
+            "CERTIFICATION": "प्रमाणन",
+            "OTHER": "अन्य"
+        },
+        "proficiency": {
+            "BEGINNER": "शुरुआती",
+            "INTERMEDIATE": "मध्यम",
+            "ADVANCED": "उन्नत",
+            "EXPERT": "विशेषज्ञ"
+        },
+        "requirement": {
+            "REQUIRED": "आवश्यक",
+            "NICE_TO_HAVE": "हो तो अच्छा"
+        }
+    },
     "employees": {
         "title": "कर्मचारी",
         "subtitle": "कर्मचारी रिकॉर्ड, विभाग और सिस्टम पहुँच प्रबंधित करें",
@@ -1609,7 +1655,22 @@ export const crmHrMessages = {
             "unlink": "अलग करें",
             "link": "जोड़ें",
             "linkDescription": "इस कर्मचारी को सिस्टम उपयोगकर्ता खाते से जोड़ें ताकि वे लॉग इन कर सकें।",
-            "linkTip": "सुझाव: सेटिंग्स > उपयोगकर्ता से उपयोगकर्ता ID खोजें, फिर उसे यहाँ चिपकाएँ।"
+            "linkTip": "सुझाव: सेटिंग्स > उपयोगकर्ता से उपयोगकर्ता ID खोजें, फिर उसे यहाँ चिपकाएँ।",
+            "skills": {
+                "title": "कौशल",
+                "add": "कौशल जोड़ें",
+                "empty": "अभी कोई कौशल नहीं जोड़ा गया।",
+                "skill": "कौशल",
+                "proficiency": "दक्षता",
+                "notes": "नोट्स",
+                "added": "कौशल जोड़ा गया",
+                "addFailed": "वह कौशल नहीं जोड़ा जा सका",
+                "updated": "कौशल अपडेट हुआ",
+                "updateFailed": "वह कौशल अपडेट नहीं हो सका",
+                "removed": "कौशल हटाया गया",
+                "removeFailed": "वह कौशल नहीं हटाया जा सका",
+                "remove": "कौशल हटाएँ"
+            }
         },
         "editEmployee": "कर्मचारी संपादित करें",
         "statuses": {

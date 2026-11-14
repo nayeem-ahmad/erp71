@@ -589,6 +589,7 @@ export const coreMessages = {
                 departments: "বিভাগ",
                 designations: "পদবী",
                 designationLevels: "পদবীর স্তর",
+                skills: "দক্ষতা",
                 attendance: "উপস্থিতি",
                 attendanceRecords: "উপস্থিতির রেকর্ড",
                 attendancePunches: "ইন/আউট রেকর্ড",

@@ -589,6 +589,7 @@ export const coreMessages = {
             departments: 'الأقسام',
             designations: 'المسميات الوظيفية',
             designationLevels: "المستويات الوظيفية",
+            skills: 'المهارات',
             attendance: 'الحضور',
             attendanceRecords: 'سجلات الحضور',
             attendancePunches: 'سجلات الدخول/الخروج',

@@ -70,6 +70,39 @@ export interface DesignationInput {
     is_active?: boolean;
 }
 
+export interface SkillInput {
+    name: string;
+    description?: string | null;
+    category?: string;
+    is_active?: boolean;
+    sort_order?: number;
+}
+
+export interface SkillRecord {
+    id: string;
+    name: string;
+    description?: string | null;
+    category: string;
+    is_active: boolean;
+    sort_order: number;
+    created_at?: string;
+    _count?: { personSkills: number; projectSkills: number };
+}
+
+export interface PersonSkillAssignment {
+    id: string;
+    proficiency: string;
+    notes?: string | null;
+    skill: { id: string; name: string; category: string; is_active: boolean };
+}
+
+export interface ProjectSkillAssignment {
+    id: string;
+    requirement: string;
+    min_proficiency?: string | null;
+    skill: { id: string; name: string; category: string; is_active: boolean };
+}
+
 /** Per-tenant feature state: platform defaults, this tenant's overrides, and the result. */
 export type AdminTenantFeatures = {
     platform_defaults: PlatformFeatures;
@@ -6088,6 +6121,37 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteDepartment: (id: string) => fetchWithAuth(`/employees/departments/${id}`, { method: 'DELETE' }),
+    getSkills: (params?: { status?: 'active' | 'inactive' }): Promise<SkillRecord[]> =>
+        fetchWithAuth(params?.status ? `/skills?status=${params.status}` : '/skills'),
+    createSkill: (data: SkillInput) => fetchWithAuth('/skills', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateSkill: (id: string, data: Partial<SkillInput>) => fetchWithAuth(`/skills/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    deleteSkill: (id: string) => fetchWithAuth(`/skills/${id}`, { method: 'DELETE' }),
+    addPersonSkill: (data: {
+        employeeId?: string;
+        userId?: string;
+        skillId: string;
+        proficiency?: string;
+        notes?: string | null;
+    }) => fetchWithAuth('/skills/people', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updatePersonSkill: (id: string, data: { proficiency?: string; notes?: string | null }) =>
+        fetchWithAuth(`/skills/people/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    removePersonSkill: (id: string) => fetchWithAuth(`/skills/people/${id}`, { method: 'DELETE' }),
     getDesignations: (params?: { departmentId?: string; levelId?: string; status?: 'active' | 'inactive' }): Promise<Designation[]> => {
         const query = new URLSearchParams();
         if (params?.departmentId) query.set('departmentId', params.departmentId);
@@ -6959,6 +7023,25 @@ export const api = {
     /** Keyed on the member row — an employee member has no user id. */
     removeProjectMember: (projectId: string, memberId: string) =>
         fetchWithAuth(`/projects/${projectId}/members/${memberId}`, { method: 'DELETE' }),
+    addProjectSkill: (projectId: string, data: {
+        skillId: string;
+        requirement?: string;
+        minProficiency?: string | null;
+    }) => fetchWithAuth(`/projects/${projectId}/skills`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateProjectSkill: (projectId: string, assignmentId: string, data: {
+        requirement?: string;
+        minProficiency?: string | null;
+    }) => fetchWithAuth(`/projects/${projectId}/skills/${assignmentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    removeProjectSkill: (projectId: string, assignmentId: string) =>
+        fetchWithAuth(`/projects/${projectId}/skills/${assignmentId}`, { method: 'DELETE' }),
 
     createProjectMilestone: (projectId: string, data: Record<string, unknown>) =>
         fetchWithAuth(`/projects/${projectId}/milestones`, {

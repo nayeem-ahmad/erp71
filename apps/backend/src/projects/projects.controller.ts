@@ -36,6 +36,7 @@ import {
     UpdateTaskStatusDto,
     UpsertProjectMemberDto,
 } from './project.dto';
+import { AssignProjectSkillDto, UpdateProjectSkillDto } from '../skills/skill.dto';
 
 @Controller('projects')
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
@@ -295,6 +296,37 @@ export class ProjectsController {
         @Param('memberId') memberId: string,
     ) {
         return this.projects.removeMember(tenant, id, memberId);
+    }
+
+    @Post(':id/skills')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    addSkill(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: AssignProjectSkillDto,
+    ) {
+        return this.projects.addSkill(tenant, id, dto);
+    }
+
+    @Patch(':id/skills/:assignmentId')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    updateSkill(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Param('assignmentId') assignmentId: string,
+        @Body() dto: UpdateProjectSkillDto,
+    ) {
+        return this.projects.updateSkill(tenant, id, assignmentId, dto);
+    }
+
+    @Delete(':id/skills/:assignmentId')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    removeSkill(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Param('assignmentId') assignmentId: string,
+    ) {
+        return this.projects.removeSkill(tenant, id, assignmentId);
     }
 
     // ── Milestones ─────────────────────────────────────────────────────────

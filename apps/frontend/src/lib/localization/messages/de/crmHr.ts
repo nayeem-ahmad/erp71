@@ -751,6 +751,7 @@ export const crmHrMessages = {
                 departments: { title: "Abteilungen", description: "Unternehmensabteilungen zur Organisation der Belegschaft." },
                 designations: { title: "Positionen", description: "Stellenbezeichnungen und Rollenklassifizierungen." },
                 designationLevels: { title: "Positionsebenen", description: "Hierarchiestufen, denen Positionen zugeordnet sind." },
+                skills: { title: "Fähigkeiten", description: "Fähigkeiten, die Personen und Projekten zugeordnet werden." },
                 attendance: { title: "Anwesenheit", description: "Tägliche Check-in- und Check-out-Erfassung verfolgen." },
                 attendancePunches: { title: "Ein-/Ausstempelungen", description: "Jedes Ein- und Ausstempeln hinter der täglichen Anwesenheit." },
                 leaves: { title: "Urlaub", description: "Urlaubsanträge, Genehmigungen und Salden." },
@@ -775,6 +776,7 @@ export const crmHrMessages = {
             departmentsStats: "Abteilungsübersicht",
             designationsStats: "Positionsübersicht",
             levelsStats: "Stufenübersicht",
+            skillsStats: "Fähigkeitenübersicht",
             jobPostsStats: "Stellenanzeigen-Übersicht",
             applicantsStats: "Bewerberübersicht",
             applicationsStats: "Bewerbungsübersicht",
@@ -1543,6 +1545,50 @@ export const crmHrMessages = {
             "name": "z. B. Abteilungsleitung",
         },
     },
+    "skills": {
+        "title": "Fähigkeiten",
+        "subtitle": "Fähigkeiten für Personen und Projekte",
+        "newSkill": "Neue Fähigkeit",
+        "emptyMessage": "Noch keine Fähigkeiten",
+        "searchPlaceholder": "Fähigkeiten suchen...",
+        "nameRequired": "Der Name der Fähigkeit ist erforderlich",
+        "saveFailed": "Fähigkeit konnte nicht gespeichert werden",
+        "deleteTitle": "Fähigkeit löschen",
+        "deleteDescription": "Diese Fähigkeit löschen? Nur eine ungenutzte Fähigkeit kann gelöscht werden.",
+        "deleteFailed": "Fähigkeit konnte nicht gelöscht werden",
+        "saving": "Wird gespeichert...",
+        "editSkill": "Fähigkeit bearbeiten",
+        "inUse": "In Verwendung",
+        "description": "Beschreibung",
+        "sortOrder": "Reihenfolge",
+        "columns": {
+            "name": "Fähigkeit",
+            "category": "Kategorie",
+            "people": "Personen",
+            "projects": "Projekte"
+        },
+        "placeholders": {
+            "name": "z. B. Schweißen"
+        },
+        "category": {
+            "TECHNICAL": "Technisch",
+            "LANGUAGE": "Sprache",
+            "SOFT": "Soft Skill",
+            "TOOL": "Werkzeug",
+            "CERTIFICATION": "Zertifizierung",
+            "OTHER": "Sonstiges"
+        },
+        "proficiency": {
+            "BEGINNER": "Anfänger",
+            "INTERMEDIATE": "Fortgeschritten",
+            "ADVANCED": "Erfahren",
+            "EXPERT": "Experte"
+        },
+        "requirement": {
+            "REQUIRED": "Erforderlich",
+            "NICE_TO_HAVE": "Wünschenswert"
+        }
+    },
     "employees": {
         "title": "Mitarbeiter",
         "subtitle": "Personalakten, Abteilungen und Systemzugang verwalten",
@@ -1609,7 +1655,22 @@ export const crmHrMessages = {
             "unlink": "Verknüpfung aufheben",
             "link": "Verknüpfen",
             "linkDescription": "Verknüpfen Sie diesen Mitarbeiter mit einem Systembenutzerkonto, damit er sich anmelden kann.",
-            "linkTip": "Tipp: Die Benutzer-ID finden Sie unter Einstellungen > Benutzer; fügen Sie sie dann hier ein."
+            "linkTip": "Tipp: Die Benutzer-ID finden Sie unter Einstellungen > Benutzer; fügen Sie sie dann hier ein.",
+            "skills": {
+                "title": "Fähigkeiten",
+                "add": "Fähigkeit hinzufügen",
+                "empty": "Noch keine Fähigkeiten zugewiesen.",
+                "skill": "Fähigkeit",
+                "proficiency": "Niveau",
+                "notes": "Notizen",
+                "added": "Fähigkeit hinzugefügt",
+                "addFailed": "Diese Fähigkeit konnte nicht hinzugefügt werden",
+                "updated": "Fähigkeit aktualisiert",
+                "updateFailed": "Diese Fähigkeit konnte nicht aktualisiert werden",
+                "removed": "Fähigkeit entfernt",
+                "removeFailed": "Diese Fähigkeit konnte nicht entfernt werden",
+                "remove": "Fähigkeit entfernen"
+            }
         },
         "editEmployee": "Mitarbeiter bearbeiten",
         "statuses": {
