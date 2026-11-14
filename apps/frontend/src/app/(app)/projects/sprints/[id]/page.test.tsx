@@ -2,11 +2,14 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import SprintDetailPage from './page';
 import { api } from '@/lib/api';
 
+const replace = jest.fn();
+let search = '';
+
 jest.mock('next/navigation', () => ({
     useParams: () => ({ id: 's1' }),
-    useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
+    useRouter: () => ({ push: jest.fn(), replace }),
     usePathname: () => '/projects/sprints/s1',
-    useSearchParams: () => new URLSearchParams(),
+    useSearchParams: () => new URLSearchParams(search),
 }));
 
 jest.mock('next/link', () => {
@@ -72,6 +75,8 @@ const tasks = [
 
 beforeEach(() => {
     localStorage.clear();
+    search = '';
+    replace.mockClear();
     (api.getSprint as jest.Mock).mockReset().mockResolvedValue({
         id: 's1',
         name: 'Sprint 7',
@@ -184,7 +189,7 @@ describe('Sprint detail page', () => {
         render(<SprintDetailPage />);
         await screen.findByText('Wire the bKash callback');
 
-        fireEvent.change(screen.getByRole('searchbox', { name: /search tasks/i }), {
+        fireEvent.change(screen.getByRole('searchbox', { name: /search title/i }), {
             target: { value: 'rahim' },
         });
 
@@ -194,10 +199,10 @@ describe('Sprint detail page', () => {
         const footer = screen.getByText('Total').closest('tr')!;
         expect(within(footer).getAllByRole('cell')[1]).toHaveTextContent('8');
 
-        fireEvent.change(screen.getByRole('searchbox', { name: /search tasks/i }), {
+        fireEvent.change(screen.getByRole('searchbox', { name: /search title/i }), {
             target: { value: 'nothing-like-this' },
         });
-        expect(screen.getByText(/no tasks match the search/i)).toBeInTheDocument();
+        expect(screen.getByText(/no tasks match these filters/i)).toBeInTheDocument();
     });
 
     it('shows a card view with one column per status, remembered per browser', async () => {
@@ -243,25 +248,49 @@ describe('Sprint detail page', () => {
         expect(lanes[1]).toHaveTextContent('Unassigned');
     });
 
-    it('filters by assignee, with Unassigned as a choice, alongside the search', async () => {
+    it('filters by assignee, with Me and Unassigned, and shares the choice in the URL', async () => {
         render(<SprintDetailPage />);
         await screen.findByText('Wire the bKash callback');
 
-        const filter = screen.getByTestId('sprint-assignee-filter');
-        expect(within(filter).getAllByRole('option').map((o) => o.textContent)).toEqual([
-            'Everyone',
-            'Rahim',
-            'Unassigned',
-        ]);
+        fireEvent.click(screen.getByRole('button', { name: 'Assignee' }));
+        const panel = screen.getByRole('dialog', { name: 'Assignee' });
+        expect(within(panel).getByRole('checkbox', { name: /Me/ })).toBeInTheDocument();
+        expect(within(panel).getByRole('checkbox', { name: /Rahim/ })).toBeInTheDocument();
+        fireEvent.click(within(panel).getByRole('checkbox', { name: /Unassigned/ }));
 
-        fireEvent.change(filter, { target: { value: 'none' } });
         expect(screen.getAllByTestId('sprint-task-row')).toHaveLength(1);
         expect(screen.getByText('Receipt email')).toBeInTheDocument();
+        await waitFor(() =>
+            expect(replace).toHaveBeenCalledWith('/projects/sprints/s1?assignee=unassigned', { scroll: false }),
+        );
 
-        fireEvent.change(screen.getByRole('searchbox', { name: /search tasks/i }), {
+        fireEvent.change(screen.getByRole('searchbox', { name: /search title/i }), {
             target: { value: 'bkash' },
         });
-        expect(screen.getByText(/no tasks match the search/i)).toBeInTheDocument();
+        expect(screen.getByText(/no tasks match these filters/i)).toBeInTheDocument();
+    });
+
+    it('keeps the less-used filters behind More, and reads a shared priority from the URL', async () => {
+        (api.getProjectTasks as jest.Mock).mockResolvedValue({
+            items: [
+                { ...tasks[0], priority: 'HIGH' },
+                { ...tasks[1], priority: 'LOW' },
+            ],
+        });
+        search = 'priority=HIGH';
+        render(<SprintDetailPage />);
+        await screen.findByText('Wire the bKash callback');
+        expect(screen.queryByText('Receipt email')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /^More/ }));
+        const more = screen.getByRole('dialog', { name: 'More' });
+        expect(within(more).getByRole('button', { name: /^Time/ })).toBeInTheDocument();
+        expect(within(more).getByRole('button', { name: /^Logged hours/ })).toBeInTheDocument();
+        expect(within(more).getByRole('button', { name: /^Labels/ })).toBeInTheDocument();
+        expect(within(more).getByRole('button', { name: /^Carried over/ })).toBeInTheDocument();
+        expect(within(more).getByRole('button', { name: /^Last updated/ })).toBeInTheDocument();
+        expect(within(more).queryByRole('button', { name: /^Type/ })).not.toBeInTheDocument();
+        expect(within(more).queryByRole('button', { name: /Blocked/ })).not.toBeInTheDocument();
     });
 
     it('shows the sprint\'s goal, dates and how much of its time has passed', async () => {

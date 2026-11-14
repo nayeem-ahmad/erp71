@@ -108,6 +108,7 @@ describe('ProjectTasksService', () => {
             projectAttachment: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
             boardTask: { findMany: jest.fn().mockResolvedValue([]) },
             sprint: { findFirst: jest.fn().mockResolvedValue({ id: 'sprint-1', project_id: 'project-1' }) },
+            sprintTask: { findMany: jest.fn().mockResolvedValue([]) },
             projectUserStory: {
                 findFirst: jest.fn().mockResolvedValue({ id: 'story-1', project_id: 'project-1' }),
                 findMany: jest.fn().mockResolvedValue([]),
@@ -1391,6 +1392,26 @@ describe('ProjectTasksService', () => {
             it('asks for no history when no sprint is named', async () => {
                 await service.list(OWNER, {} as never);
                 expect(db.projectTask.findMany.mock.calls.at(-1)[0].include).not.toHaveProperty('sprintMemberships');
+                expect(db.sprintTask.findMany).not.toHaveBeenCalled();
+            });
+
+            it('marks tasks carried into the sprint being listed', async () => {
+                db.$queryRaw = jest.fn().mockResolvedValue([]);
+                db.projectTask.findMany.mockResolvedValue([{ id: 'task-1' }, { id: 'task-2' }]);
+                db.sprintTask.findMany.mockResolvedValue([{ task_id: 'task-1' }]);
+
+                const result = await service.list(OWNER, { sprintId: 'sprint-7' } as never);
+
+                expect(db.sprintTask.findMany).toHaveBeenCalledWith({
+                    where: {
+                        tenant_id: 'tenant-1',
+                        carried_to_sprint_id: 'sprint-7',
+                        task_id: { in: ['task-1', 'task-2'] },
+                    },
+                    select: { task_id: true },
+                });
+                expect(result.items[0]).toMatchObject({ carried_in: true });
+                expect(result.items[1]).toMatchObject({ carried_in: false });
             });
         });
 

@@ -286,7 +286,32 @@ export class ProjectTasksService {
         const rows = query.sprintId ? (items as TaskRow[]).map(withSprintMembership) : items;
         const withLogged = await this.attachLoggedHours(tenantId, rows as TaskRow[]);
         const withTrend = await this.attachRemainingTrend(tenantId, withLogged as TaskRow[]);
-        return paginate(withTrend, total, page, limit);
+        const decorated = query.sprintId
+            ? await this.attachCarriedIn(tenantId, query.sprintId, withTrend)
+            : withTrend;
+        return paginate(decorated, total, page, limit);
+    }
+
+    /**
+     * Whether each task was carried into this sprint from an earlier one.
+     *
+     * The list already returns the task's stay in *this* sprint. Carry-in is
+     * the other row: a closed stay whose `carried_to_sprint_id` names this
+     * sprint. One query for the page, tenant-scoped. Lists that are not a
+     * sprint omit the field, so they stay the payload they always were.
+     */
+    private async attachCarriedIn(tenantId: string, sprintId: string, tasks: TaskRow[]) {
+        if (tasks.length === 0) return tasks;
+        const rows = await this.db.sprintTask.findMany({
+            where: {
+                tenant_id: tenantId,
+                carried_to_sprint_id: sprintId,
+                task_id: { in: tasks.map((task) => task.id) },
+            },
+            select: { task_id: true },
+        });
+        const carried = new Set(rows.map((row) => row.task_id));
+        return tasks.map((task) => ({ ...task, carried_in: carried.has(task.id) }));
     }
 
     /**

@@ -39,6 +39,11 @@ export interface SprintCardTask extends SprintTask {
     cover_color?: string | null;
     sort_order?: number;
     labels?: { label: { id: string; name: string; color: string } }[];
+    /** Within the project. With `project.code` it is the task key, `OTB-14`. */
+    reference?: number | null;
+    updated_at?: string | null;
+    /** True when an earlier sprint carried this task into the one being listed. */
+    carried_in?: boolean | null;
     _count?: { subtasks?: number; comments?: number } | null;
 }
 
@@ -105,9 +110,17 @@ export function tasksByColumn(tasks: SprintCardTask[]): Record<string, SprintCar
     return out;
 }
 
+/** `<code>-<reference>`, composed the way the task list shows a key. */
+function taskKey(task: SprintCardTask): string {
+    const code = task.project?.code;
+    const reference = task.reference;
+    if (!code || reference == null || !Number.isFinite(Number(reference))) return '';
+    return `${code}-${reference}`;
+}
+
 /**
  * Every word must match, in any field and any order — the board's rule — over
- * what a sprint reader would search by: title, description, project, story,
+ * what a sprint reader would search by: title, key, description, project, story,
  * status, assignee and labels.
  */
 export function matchesSprintSearch(task: SprintCardTask, text: string): boolean {
@@ -115,6 +128,8 @@ export function matchesSprintSearch(task: SprintCardTask, text: string): boolean
     if (terms.length === 0) return true;
     const haystack = [
         task.title,
+        taskKey(task),
+        task.reference != null ? String(task.reference) : '',
         task.description ?? '',
         task.project?.code ?? '',
         task.project?.name ?? '',

@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { CheckCircle2, Eye, LayoutGrid, Pencil, Plus, Search, Settings, Table2, Trash2, Undo2 } from 'lucide-react';
+import { CheckCircle2, Eye, LayoutGrid, Pencil, Plus, Settings, Table2, Trash2, Undo2 } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
@@ -11,7 +11,6 @@ import {
     Select,
     StatusBadge,
     ConfirmDialog,
-    Input,
 } from '@/components/ui';
 import BoardCardComposer, {
     type ComposerCard,
@@ -39,7 +38,14 @@ import {
 } from '@/components/projects/board-lane-storage';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import TaskEntryModal, { type TaskEntryValues } from '@/components/projects/TaskEntryModal';
-import { assigneeColumns, defaultAssigneeKeyFor } from '@/components/projects/task-assignee';
+import { assigneeColumns } from '@/components/projects/task-assignee';
+import SprintFilterRow from '@/components/projects/SprintFilterRow';
+import {
+    composerAssigneeKey,
+    filterSprintTasks,
+    sprintFiltersToQuery,
+} from '@/components/projects/sprint-filters';
+import { useSprintFilters } from '@/components/projects/use-sprint-filters';
 import { useProjectMeta } from '@/components/projects/use-project-meta';
 import {
     NO_LANE,
@@ -49,7 +55,6 @@ import {
     busiestProjectId,
     groupSprintTasks,
     hours,
-    laneKeyOf,
     sprintStats,
     sprintTimeline,
     sumHours,
@@ -60,7 +65,6 @@ import {
 } from '@/components/projects/sprint-table';
 import {
     buildStatusColumns,
-    matchesSprintSearch,
     type ProjectStatusColumn,
     type SprintCardTask,
     type StatusColumn,
@@ -72,6 +76,7 @@ import { useI18n } from '@/lib/i18n';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { formatCalendarDate } from '@/lib/format';
+import { tenantDateOnly } from '@/lib/created-range';
 
 interface Sprint extends BoardBackground {
     id: string;
@@ -168,10 +173,8 @@ export default function SprintDetailPage() {
     const [sprint, setSprint] = useState<Sprint | null>(null);
     const [tasks, setTasks] = useState<SprintCardTask[]>([]);
     const [projectColumns, setProjectColumns] = useState<Record<string, ProjectStatusColumn[]>>({});
-    const [search, setSearch] = useState('');
+    const [filters, setFilters] = useSprintFilters();
     const [viewMode, setViewMode] = useState<SprintViewMode>('table');
-    // `all`, or an assignee key as `laneKeyOf(task, 'assignee')` gives it.
-    const [assignee, setAssignee] = useState('all');
     const [burndown, setBurndown] = useState<SprintBurndown | null>(null);
     const [completing, setCompleting] = useState(false);
     const [laneMode, setLaneMode] = useState<SprintLaneMode>('none');
@@ -190,13 +193,14 @@ export default function SprintDetailPage() {
     const [userId, setUserId] = useState<string | null>(null);
     const [entry, setEntry] = useState<TaskEntry | null>(null);
     /**
-     * Tasks composed on this visit. They stay on screen whatever the search
-     * and the assignee filter say until the reader next changes them, as on a
-     * board: a task typed under a search it does not match would otherwise
-     * vanish the moment it saved, which reads as a save that failed.
+     * Tasks composed on this visit. They stay on screen whatever the filters
+     * say until the reader next changes them, as on a board: a task typed
+     * under a search it does not match would otherwise vanish the moment it
+     * saved, which reads as a save that failed.
      */
     const [composed, setComposed] = useState<string[]>([]);
-    useEffect(() => setComposed([]), [search, assignee]);
+    const filterKey = sprintFiltersToQuery(new URLSearchParams(), filters);
+    useEffect(() => setComposed([]), [filterKey]);
     /** The composers' assignee pickers draw on the chosen project's roster. */
     const projectMeta = useProjectMeta();
     // The same per-browser appearance the boards use: card size, column width
@@ -219,7 +223,19 @@ export default function SprintDetailPage() {
                 api.getSprintBurndown(sprintId).catch(() => null),
             ]);
             const loaded = detail as Sprint;
-            const items = (sprintPage?.items ?? []) as SprintCardTask[];
+            let items = (sprintPage?.items ?? []) as SprintCardTask[];
+            // The list caps a page at 200. A longer sprint still has to be
+            // filtered whole, so the rest of the pages are loaded too.
+            const total = typeof sprintPage?.total === 'number' ? sprintPage.total : items.length;
+            if (total > items.length) {
+                const extra = Math.min(Math.ceil(total / 200) - 1, 24);
+                const rest = await Promise.all(
+                    Array.from({ length: extra }, (_, index) =>
+                        api.getProjectTasks({ sprintId, limit: 200, page: index + 2 }),
+                    ),
+                );
+                for (const page of rest) items = items.concat((page?.items ?? []) as SprintCardTask[]);
+            }
             setSprint(loaded);
             setTasks(loaded.status === 'COMPLETED' ? items.map(asClosed) : items);
             const chart = burndownRes as Partial<SprintBurndown> | null;
@@ -309,22 +325,17 @@ export default function SprintDetailPage() {
     };
 
     const today = todayKey();
+    const filterToday = tenantDateOnly();
     const people = useMemo(() => assigneeOptions(tasks), [tasks]);
-    // A person who has since left the sprint would filter it to nothing.
-    const assigneeFilter = people.some((option) => option.key === assignee) ? assignee : 'all';
-    // Search and the assignee filter narrow both views and their totals; the
-    // stats and the charts beside them stay whole, because they describe the sprint.
+    // Search and the filters narrow both views and their totals; the stats and
+    // the charts beside them stay whole, because they describe the sprint.
     const keep = useMemo(() => new Set(composed), [composed]);
-    const visibleTasks = useMemo(
-        () =>
-            tasks.filter(
-                (task) =>
-                    keep.has(task.id) ||
-                    (matchesSprintSearch(task, search) &&
-                        (assigneeFilter === 'all' || laneKeyOf(task, 'assignee') === assigneeFilter)),
-            ),
-        [tasks, search, assigneeFilter, keep],
-    );
+    const visibleTasks = useMemo(() => {
+        const matched = new Set(
+            filterSprintTasks(tasks, filters, { today: filterToday, userId }).map((task) => task.id),
+        );
+        return tasks.filter((task) => keep.has(task.id) || matched.has(task.id));
+    }, [tasks, filters, filterToday, userId, keep]);
     const lanes = useMemo(() => groupSprintTasks(visibleTasks, laneMode), [visibleTasks, laneMode]);
     const statusColumns = useMemo(() => buildStatusColumns(tasks, projectColumns), [tasks, projectColumns]);
     const totals = useMemo(() => sumHours(visibleTasks), [visibleTasks]);
@@ -357,7 +368,7 @@ export default function SprintDetailPage() {
      * is filtered to, so a run of tasks typed while looking at Rafi's work is
      * Rafi's and does not vanish from the view (the board's rule).
      */
-    const composerAssignee = defaultAssigneeKeyFor(assigneeFilter, userId);
+    const composerAssignee = composerAssigneeKey(filters.assignee, userId);
     const composerAssigneeLabel =
         people.find((option) => option.key === composerAssignee)?.label ?? m.quickAdd.me;
     const canCompose = Boolean(sprint) && !closed;
@@ -578,21 +589,7 @@ export default function SprintDetailPage() {
                 }
             />
 
-            <div className="flex flex-wrap items-center gap-2 rounded-md border border-gray-200 bg-white p-2">
-                <div className="relative min-w-0 flex-1 basis-64">
-                    <Search
-                        className="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
-                        aria-hidden
-                    />
-                    <Input
-                        type="search"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder={m.sprint.searchTasks}
-                        aria-label={m.sprint.searchTasks}
-                        className="ps-8"
-                    />
-                </div>
+            <SprintFilterRow tasks={tasks} userId={userId} filters={filters} onChange={setFilters}>
                 <div
                     role="group"
                     aria-label={m.sprint.viewLabel}
@@ -619,22 +616,6 @@ export default function SprintDetailPage() {
                     ))}
                 </div>
                 <label className="flex items-center gap-2 text-xs text-gray-600">
-                    {m.fields.assignee}
-                    <Select
-                        value={assigneeFilter}
-                        onChange={(e) => setAssignee(e.target.value)}
-                        className="w-40"
-                        data-testid="sprint-assignee-filter"
-                    >
-                        <option value="all">{m.sprint.everyone}</option>
-                        {people.map((option) => (
-                            <option key={option.key} value={option.key}>
-                                {option.label ?? m.board.laneUnassigned}
-                            </option>
-                        ))}
-                    </Select>
-                </label>
-                <label className="flex items-center gap-2 text-xs text-gray-600">
                     {m.board.view.swimlanes}
                     <Select
                         value={laneMode}
@@ -647,7 +628,7 @@ export default function SprintDetailPage() {
                         <option value="story">{m.board.view.swimlanesStory}</option>
                     </Select>
                 </label>
-            </div>
+            </SprintFilterRow>
 
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
                 <section className="min-w-0 rounded-md border border-gray-200 bg-white">

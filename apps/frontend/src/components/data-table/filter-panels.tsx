@@ -10,6 +10,8 @@ import { NUMBER_CONDITION_OPS, type NumberCondition, type NumberConditionOp } fr
 export interface ListFilterOption {
     value: string;
     label: string;
+    /** How many rows currently match, drawn beside the label when the list is cheap to count. */
+    count?: number;
 }
 
 /**
@@ -203,7 +205,10 @@ export function MultiSelectPanel({
                                 onChange={() => toggle(option.value)}
                                 className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/40"
                             />
-                            <span className="truncate">{option.label}</span>
+                            <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                            {option.count != null ? (
+                                <span className="shrink-0 tabular-nums text-gray-400">{option.count}</span>
+                            ) : null}
                         </label>
                     ))
                 )}
@@ -304,7 +309,10 @@ export function SingleSelectPanel({
                                 }`}
                             >
                                 <Check aria-hidden className={`h-3.5 w-3.5 shrink-0 ${chosen ? '' : 'invisible'}`} />
-                                <span className="truncate">{option.label}</span>
+                                <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                                {option.count != null ? (
+                                    <span className="shrink-0 tabular-nums text-gray-400">{option.count}</span>
+                                ) : null}
                             </button>
                         );
                     })
