@@ -249,9 +249,8 @@ const SELECT_HIT_AREA =
     'inline-flex cursor-pointer items-center justify-center max-md:min-h-touch max-md:min-w-touch';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 500];
-/** Mirrors the backend `PaginationDto` hard cap on `take` (e.g. crm-leads.service.ts). Server-mode
- *  page-size options must not exceed this, or requesting a larger size silently gets clamped
- *  server-side while the client still believes it fetched that many rows. */
+/** Mirrors the backend `PaginationDto` `@Max(100)` on `limit`. Server-mode
+ *  page-size options must not exceed this: a request above it 400s the list. */
 const SERVER_MAX_PAGE_SIZE = 100;
 
 /* --------------------------------------------------------------- */
