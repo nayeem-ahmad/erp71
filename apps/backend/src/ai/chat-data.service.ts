@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AccountCategory, AccountType } from '../accounting/accounting.constants';
 import { DatabaseService } from '../database/database.service';
+import { ProjectAccessService, type ProjectViewer } from '../projects/project-access.service';
 import { ACTIVE_PURCHASE } from '../purchases/purchase-status';
 
 /**
@@ -29,7 +30,8 @@ export type EntityType =
     | 'employee'
     | 'account'
     | 'lead'
-    | 'contact';
+    | 'contact'
+    | 'project';
 
 export type DocumentType =
     | 'sale'
@@ -50,6 +52,8 @@ export interface ResolvedEntity {
     id: string;
     label: string;
     detail?: string | null;
+    /** Set for people: a login, or a team member who has no login. */
+    kind?: 'user' | 'employee';
 }
 
 export interface DocumentQuery {
@@ -71,7 +75,10 @@ const OPEN_STATUSES: Record<Exclude<PipelineKind, 'leads'>, string[]> = {
 
 @Injectable()
 export class ChatDataService {
-    constructor(private readonly db: DatabaseService) {}
+    constructor(
+        private readonly db: DatabaseService,
+        private readonly access: ProjectAccessService,
+    ) {}
 
     // ── Entity resolution ────────────────────────────────────────────────────
 
@@ -84,7 +91,13 @@ export class ChatDataService {
      * plausible-looking uuid, which the store guard rejects but the warehouse
      * and product filters would silently accept.
      */
-    async resolveEntity(tenantId: string, type: EntityType, query: string, limit = 10): Promise<ResolvedEntity[]> {
+    async resolveEntity(
+        tenantId: string,
+        type: EntityType,
+        query: string,
+        limit = 10,
+        viewer?: ProjectViewer,
+    ): Promise<ResolvedEntity[]> {
         const search = query.trim();
         if (!search) return [];
         const contains = { contains: search, mode: 'insensitive' as const };
@@ -207,6 +220,8 @@ export class ChatDataService {
                     detail: r.mobile ?? r.email ?? null,
                 }));
             }
+            case 'project':
+                return this.searchProjects(tenantId, contains, limit, viewer);
             case 'contact': {
                 const rows = await this.db.crmContact.findMany({
                     where: {
@@ -233,6 +248,99 @@ export class ChatDataService {
                 return rows.map((r) => ({ id: r.id, label: r.name, detail: [r.code, r.type].filter(Boolean).join(' · ') }));
             }
         }
+    }
+
+    /**
+     * Projects this person can see. No viewer means no rows: a private project
+     * must not leak because a caller forgot to pass who is asking.
+     * The name filter and the visibility filter each carry an `OR`, so they are
+     * combined with `merge` rather than spread.
+     */
+    private async searchProjects(
+        tenantId: string,
+        contains: { contains: string; mode: 'insensitive' },
+        limit: number,
+        viewer?: ProjectViewer,
+    ): Promise<ResolvedEntity[]> {
+        if (!viewer?.userId) return [];
+        const visibility = await this.access.projectFilter({ ...viewer, tenantId });
+        const where = ProjectAccessService.merge(
+            {
+                tenant_id: tenantId,
+                deleted_at: null,
+                OR: [{ name: contains }, { code: contains }],
+            },
+            visibility,
+        );
+        const rows = await this.db.project.findMany({
+            where: where as never,
+            select: { id: true, name: true, code: true },
+            take: limit,
+            orderBy: { name: 'asc' },
+        });
+        return rows.map((row) => ({ id: row.id, label: row.name, detail: row.code }));
+    }
+
+    /** Every project the caller can see, for the card's picker when no name was spoken. */
+    async listVisibleProjects(viewer: ProjectViewer, limit = 20): Promise<ResolvedEntity[]> {
+        if (!viewer.userId) return [];
+        const visibility = await this.access.projectFilter(viewer);
+        const where = ProjectAccessService.merge(
+            { tenant_id: viewer.tenantId, deleted_at: null },
+            visibility,
+        );
+        const rows = await this.db.project.findMany({
+            where: where as never,
+            select: { id: true, name: true, code: true },
+            take: limit,
+            orderBy: { name: 'asc' },
+        });
+        return rows.map((row) => ({ id: row.id, label: row.name, detail: row.code }));
+    }
+
+    /**
+     * People a task can be assigned to: logins in this tenant, and employees
+     * who may have no login. Both are tenant-scoped. A name that hits both is
+     * returned as two rows so the card asks which one.
+     */
+    async resolveAssignees(tenantId: string, query: string, limit = 10): Promise<ResolvedEntity[]> {
+        const search = query.trim();
+        if (search.length < 2) return [];
+        const contains = { contains: search, mode: 'insensitive' as const };
+        const [members, employees] = await Promise.all([
+            this.db.tenantUser.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    user: { OR: [{ name: contains }, { email: contains }] },
+                },
+                select: { user: { select: { id: true, name: true, email: true } } },
+                take: limit,
+            }),
+            this.db.employee.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    deleted_at: null,
+                    OR: [{ name: contains }, { employee_code: contains }],
+                },
+                select: { id: true, name: true, employee_code: true },
+                take: limit,
+            }),
+        ]);
+        const people: ResolvedEntity[] = [
+            ...members.map((member) => ({
+                id: member.user.id,
+                label: member.user.name?.trim() || member.user.email,
+                detail: member.user.email,
+                kind: 'user' as const,
+            })),
+            ...employees.map((employee) => ({
+                id: employee.id,
+                label: employee.name,
+                detail: employee.employee_code,
+                kind: 'employee' as const,
+            })),
+        ];
+        return people.slice(0, limit);
     }
 
     async tenantName(tenantId: string): Promise<string> {

@@ -2002,9 +2002,59 @@ export interface AiUsageLogEntry {
 // ---------------------------------------------------------------------------
 
 /**
- * One tool the assistant ran while answering. Deliberately carries no result
- * payload — enough to show the user (and an auditor) what was looked at, not a
- * second copy of the business data itself.
+ * One person the assistant matched, or one option on the confirmation card.
+ * `kind` distinguishes a login (`user`) from a team member with no login
+ * (`employee`) when the card is assigning a task.
+ */
+export interface AiDraftChoice {
+  id: string;
+  label: string;
+  detail?: string | null;
+  kind?: "user" | "employee";
+}
+
+/**
+ * A task or lead the assistant understood but did not save. The card edits
+ * these fields and the existing create endpoint saves them on confirm.
+ */
+export interface AiCreateDraftFields {
+  title?: string;
+  description?: string;
+  projectId?: string;
+  projectName?: string;
+  projectChoices?: AiDraftChoice[];
+  assigneeId?: string;
+  assigneeEmployeeId?: string;
+  assigneeName?: string;
+  assigneeChoices?: AiDraftChoice[];
+  /** The user named someone and it did not resolve to one person. */
+  assigneeUnresolved?: boolean;
+  dueDate?: string;
+  priority?: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+  name?: string;
+  mobile?: string;
+  email?: string;
+  remarks?: string;
+}
+
+/**
+ * Proposed create. `needs_input` means a required decision is still open
+ * (no project, two people with the same name). The card, not the model, saves.
+ */
+export interface AiCreateDraft {
+  kind: "task" | "lead";
+  status: "ready" | "needs_input";
+  /** Which decisions are still open: `title`, `project`, `assignee`, `name`, `email`. */
+  missing: string[];
+  warnings: string[];
+  fields: AiCreateDraftFields;
+}
+
+/**
+ * One tool the assistant ran while answering. Lookup traces carry no result
+ * payload — enough to show what was looked at, not a second copy of the
+ * business data. A create draft is the exception: it is the form the user
+ * asked for, and the card needs it when the conversation is reopened.
  */
 export interface AiChatToolCall {
   name: string;
@@ -2018,6 +2068,8 @@ export interface AiChatToolCall {
   urls?: string[];
   ms?: number;
   error?: string;
+  /** Present only for propose_create_task / propose_create_lead. Nothing was saved. */
+  draft?: AiCreateDraft;
 }
 
 export interface AiChatMessage {
@@ -2055,6 +2107,8 @@ export const AI_CHAT_TOOL_NAMES = [
   "resolve_entity",
   "list_documents",
   "describe_capabilities",
+  "propose_create_task",
+  "propose_create_lead",
   "search_help",
   "sales_summary",
   "sales_trend",

@@ -256,7 +256,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         faqs: [
             {
                 q: 'What is the AI business assistant and how do I open it?',
-                a: 'It is a chat panel — the "Ask the business assistant" robot icon — that answers questions about your own data: sales, stock, customers, receivables, and more. It is strictly read-only: it can look things up and explain them, but it cannot change anything. The assistant is a Premium-plan feature, so the icon only appears when your plan includes it.',
+                a: 'It is a chat panel — the "Ask the business assistant" robot icon — that answers questions about your own data: sales, stock, customers, receivables, and more. It can also prepare a task or a lead from what you say, in English or Bangla; nothing is saved until you review the card and press Save. It cannot change anything else. The assistant is a Premium-plan feature, so the icon only appears when your plan includes it.',
             },
             {
                 q: 'What can it actually see, and can I trust the answers?',

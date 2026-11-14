@@ -7,6 +7,7 @@ import type { AiChatConversationSummary, AiChatMessage, AiChatToolCall } from '@
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useBrowserSpeechToText } from '@/hooks/useBrowserSpeechToText';
+import AiCreateDraftCard from '@/components/AiCreateDraftCard';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 
@@ -333,6 +334,7 @@ export default function AiChatWidget() {
                                                 m.suggestions.s3,
                                                 m.suggestions.s4,
                                                 m.suggestions.s5,
+                                                m.suggestions.s6,
                                             ]}
                                             onPick={send}
                                         />
@@ -602,7 +604,19 @@ function MessageBubble({
                     <Markdown content={message.content} onNavigate={onNavigate} />
                 </Suspense>
             </div>
-            {message.tool_calls?.length ? <Sources calls={message.tool_calls} label={sourcesLabel} /> : null}
+            {message.tool_calls?.map((call, callIndex) => (
+                call.draft ? (
+                    <AiCreateDraftCard
+                        key={`${message.id}-draft-${callIndex}`}
+                        messageId={message.id}
+                        index={callIndex}
+                        draft={call.draft}
+                    />
+                ) : null
+            ))}
+            {message.tool_calls?.length ? (
+                <Sources calls={message.tool_calls.filter((call) => !call.draft)} label={sourcesLabel} />
+            ) : null}
         </div>
     );
 }

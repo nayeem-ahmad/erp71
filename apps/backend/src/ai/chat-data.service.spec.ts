@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DatabaseService } from '../database/database.service';
+import { ProjectAccessService } from '../projects/project-access.service';
 import { ChatDataService } from './chat-data.service';
 
 const TENANT = 'tenant-1';
@@ -44,12 +45,21 @@ function makeDb() {
         salaryPayment: model(),
         inventoryMovement: model(),
         tenant: model(),
+        project: model(),
+        tenantUser: model(),
     };
 }
 
-async function makeService(db: any) {
+async function makeService(db: any, access?: { projectFilter: jest.Mock }) {
     const module: TestingModule = await Test.createTestingModule({
-        providers: [ChatDataService, { provide: DatabaseService, useValue: db }],
+        providers: [
+            ChatDataService,
+            { provide: DatabaseService, useValue: db },
+            {
+                provide: ProjectAccessService,
+                useValue: access ?? { projectFilter: jest.fn().mockResolvedValue({}) },
+            },
+        ],
     }).compile();
     return module.get(ChatDataService);
 }
@@ -162,6 +172,79 @@ describe('ChatDataService.resolveEntity', () => {
         expect(await service.resolveEntity(TENANT, 'contact', 'Karim')).toEqual([
             { id: 'ct2', label: 'Karim', detail: 'k@shop.test' },
         ]);
+    });
+
+    it('does not search projects without a viewer, so a private project cannot leak', async () => {
+        expect(await service.resolveEntity(TENANT, 'project', 'showroom')).toEqual([]);
+        expect(db.project.findMany).not.toHaveBeenCalled();
+    });
+
+    it('scopes a project search to the tenant and the visibility filter', async () => {
+        const visibility = { OR: [{ visibility: 'PUBLIC' }, { manager_id: 'user-1' }] };
+        const access = { projectFilter: jest.fn().mockResolvedValue(visibility) };
+        const scoped = await makeService(db, access);
+        db.project.findMany.mockResolvedValue([{ id: 'prj-1', name: 'Showroom', code: 'SH' }]);
+
+        const rows = await scoped.resolveEntity(TENANT, 'project', 'show', 10, {
+            tenantId: TENANT,
+            userId: 'user-1',
+            userRole: 'CASHIER',
+        });
+
+        expect(rows).toEqual([{ id: 'prj-1', label: 'Showroom', detail: 'SH' }]);
+        expect(access.projectFilter).toHaveBeenCalledWith(expect.objectContaining({ tenantId: TENANT, userId: 'user-1' }));
+        const where = db.project.findMany.mock.calls[0][0].where;
+        expect(where.tenant_id).toBe(TENANT);
+        expect(where.deleted_at).toBeNull();
+        expect(where.AND).toEqual([visibility]);
+        expect(where.OR).toEqual([
+            { name: { contains: 'show', mode: 'insensitive' } },
+            { code: { contains: 'show', mode: 'insensitive' } },
+        ]);
+    });
+
+    it('lists only the projects the caller can see', async () => {
+        const visibility = { OR: [{ manager_id: 'user-2' }] };
+        const access = { projectFilter: jest.fn().mockResolvedValue(visibility) };
+        const scoped = await makeService(db, access);
+        db.project.findMany.mockResolvedValue([]);
+
+        await scoped.listVisibleProjects({ tenantId: TENANT, userId: 'user-2' });
+
+        const where = db.project.findMany.mock.calls[0][0].where;
+        expect(where.tenant_id).toBe(TENANT);
+        expect(where.AND).toEqual([visibility]);
+        expect(where.OR).toBeUndefined();
+    });
+});
+
+describe('ChatDataService.resolveAssignees', () => {
+    it('returns a login and an employee as separate matches and stays in the tenant', async () => {
+        const db = makeDb();
+        const service = await makeService(db);
+        db.tenantUser.findMany.mockResolvedValue([
+            { user: { id: 'user-9', name: 'Karim', email: 'karim@shop.test' } },
+        ]);
+        db.employee.findMany.mockResolvedValue([
+            { id: 'emp-9', name: 'Karim', employee_code: 'E-9' },
+        ]);
+
+        const rows = await service.resolveAssignees(TENANT, 'Karim');
+
+        expect(rows).toEqual([
+            { id: 'user-9', label: 'Karim', detail: 'karim@shop.test', kind: 'user' },
+            { id: 'emp-9', label: 'Karim', detail: 'E-9', kind: 'employee' },
+        ]);
+        expect(db.tenantUser.findMany.mock.calls[0][0].where.tenant_id).toBe(TENANT);
+        expect(db.employee.findMany.mock.calls[0][0].where.tenant_id).toBe(TENANT);
+        expect(db.employee.findMany.mock.calls[0][0].where.deleted_at).toBeNull();
+    });
+
+    it('does not search on a one-letter name', async () => {
+        const db = makeDb();
+        const service = await makeService(db);
+        expect(await service.resolveAssignees(TENANT, 'K')).toEqual([]);
+        expect(db.tenantUser.findMany).not.toHaveBeenCalled();
     });
 });
 

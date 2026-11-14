@@ -242,7 +242,7 @@ export const helpMessages = {
             faqs: [
                 {
                     q: "Was ist der KI-Geschäftsassistent und wie öffne ich ihn?",
-                    a: "Es ist ein Chat-Bereich — das Roboter-Symbol „Den Geschäftsassistenten fragen“ —, der Fragen zu Ihren eigenen Daten beantwortet: Verkäufe, Bestand, Kunden, Forderungen und mehr. Er ist streng schreibgeschützt: Er kann nachschlagen und erklären, aber nichts verändern. Der Assistent ist eine Funktion des Premium-Tarifs, das Symbol erscheint also nur, wenn Ihr Tarif ihn enthält.",
+                    a: "Es ist ein Chat-Bereich — das Roboter-Symbol „Den Geschäftsassistenten fragen“ —, der Fragen zu Ihren eigenen Daten beantwortet: Verkäufe, Bestand, Kunden, Forderungen und mehr. Er kann aus dem Gesagten auch eine Aufgabe oder einen Lead vorbereiten; gespeichert wird nichts, bis Sie die Karte prüfen und auf Speichern drücken. Sonst kann er nichts verändern. Der Assistent ist eine Funktion des Premium-Tarifs, das Symbol erscheint also nur, wenn Ihr Tarif ihn enthält.",
                 },
                 {
                     q: "Was sieht er tatsächlich, und kann ich den Antworten trauen?",
