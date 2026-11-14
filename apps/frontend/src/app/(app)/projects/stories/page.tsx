@@ -488,12 +488,17 @@ function ProjectStoriesList() {
                 id: 'tasks',
                 header: m.fields.tasks,
                 accessorFn: (row: StoryRow) => row.progress?.taskCount ?? 0,
+                // "{done}/{total} tasks". Same clip as the epic story count:
+                // the 150px default is short of four-digit counts in the
+                // longer labels (German "Aufgaben") at the largest list type.
+                size: 180,
+                minSize: 180,
                 meta: { hideOnMobile: true, align: 'end' as const },
                 cell: ({ row }: { row: { original: StoryRow } }) => {
                     const progress = row.original.progress
                         ?? { taskCount: 0, doneTaskCount: 0, percentComplete: 0 };
                     return (
-                        <span className="tabular-nums text-gray-600">
+                        <span className="whitespace-nowrap tabular-nums text-gray-600">
                             {fmt(m.stories.taskProgress, {
                                 done: progress.doneTaskCount,
                                 total: progress.taskCount,

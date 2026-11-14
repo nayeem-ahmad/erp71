@@ -1005,6 +1005,12 @@ describe('Tasks page remaining trend', () => {
         render(<TasksPage />);
 
         expect(await screen.findByTestId('remaining-trend')).toBeInTheDocument();
+        const figure = screen.getByText('5h');
+        expect(figure).toHaveClass('shrink-0', 'whitespace-nowrap');
+        expect(screen.getByRole('columnheader', { name: /remaining/i })).toHaveStyle({
+            width: '180px',
+            minWidth: '180px',
+        });
     });
 
     // One reading has no shape; the column shows the figure alone.
