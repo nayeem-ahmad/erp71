@@ -4,9 +4,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Paginated } from '@/lib/api';
 import { useTablePreferences } from '@/components/data-table/useTablePreferences';
 import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
-import { fetchAllPages, type FetchAllPagesResult } from '@/components/data-table/fetch-all-pages';
+import { EXPORT_FETCH_PAGE_SIZE, fetchAllPages, type FetchAllPagesResult } from '@/components/data-table/fetch-all-pages';
 import type { ColumnFiltersState } from '@tanstack/react-table';
 import { useServerColumnFilters, type ColumnFilterParam } from '@/lib/column-filters';
+
+/**
+ * `PaginationDto.limit` is `@Max(100)`. A client-paginated table may still
+ * store 500 as `pageSize`; sending that on a server list 400s the whole page.
+ */
+function clampServerPageSize(size: number | undefined, fallback: number): number {
+    const n = size ?? fallback;
+    if (!Number.isFinite(n) || n < 1) return fallback;
+    return Math.min(EXPORT_FETCH_PAGE_SIZE, Math.trunc(n));
+}
 
 export interface ServerListParams {
     page: number;
@@ -111,7 +121,7 @@ export function useServerList<T, R extends Paginated<T> = Paginated<T>>({
     );
     const personLoaded = useTablePreferences((s) => s.personColumns !== null);
     const [pageSize, setPageSize] = useState(
-        savedPageSize ?? initialPageSize ?? DEFAULT_PAGE_SIZE,
+        clampServerPageSize(savedPageSize ?? initialPageSize, DEFAULT_PAGE_SIZE),
     );
     // Until the viewer picks a size on this list, it follows the member's saved one: their
     // preferences usually land after a first visit's list has mounted. Once they pick, the
@@ -119,7 +129,7 @@ export function useServerList<T, R extends Paginated<T> = Paginated<T>>({
     const pickedPageSize = useRef(false);
     useEffect(() => {
         if (!tableId || !personLoaded || pickedPageSize.current) return;
-        const next = savedPageSize ?? initialPageSize ?? DEFAULT_PAGE_SIZE;
+        const next = clampServerPageSize(savedPageSize ?? initialPageSize, DEFAULT_PAGE_SIZE);
         if (next === pageSize) return;
         setPageSize(next);
         setPage(1);
@@ -148,7 +158,7 @@ export function useServerList<T, R extends Paginated<T> = Paginated<T>>({
         try {
             const result = await fetchRef.current({
                 page,
-                limit: pageSize,
+                limit: clampServerPageSize(pageSize, DEFAULT_PAGE_SIZE),
                 sortBy: sort?.id,
                 sortDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
                 ...(filters ? { filters } : {}),
@@ -200,7 +210,11 @@ export function useServerList<T, R extends Paginated<T> = Paginated<T>>({
         onPageChange: setPage,
         // DataTable requires the page reset here, or the new size is requested
         // against a stale page index and returns an empty result.
-        onPageSizeChange: (size: number) => { pickedPageSize.current = true; setPageSize(size); setPage(1); },
+        onPageSizeChange: (size: number) => {
+            pickedPageSize.current = true;
+            setPageSize(clampServerPageSize(size, DEFAULT_PAGE_SIZE));
+            setPage(1);
+        },
         sort,
         onSortChange: setSort,
         fetchAllRows,
