@@ -274,6 +274,95 @@ describe('DataTable', () => {
         expect(screen.getAllByText(/name/i).length).toBeGreaterThan(0);
     });
 
+    /**
+     * Tasks, stories, epics and boards put this button on a row with
+     * `overflow-x-auto` (`scrollFilterRow`). An absolute list was clipped by
+     * that row and painted under the table. The same menu is what every
+     * DataTable opens, on a phone as well as a desktop.
+     */
+    it('portals the column selector so a scrolling toolbar and the table cannot clip it', () => {
+        render(
+            <div data-testid="page-shell" className="overflow-y-auto">
+                <DataTable {...defaultProps} filterLayout="row" scrollFilterRow />
+            </div>,
+        );
+        fireEvent.click(screen.getByRole('button', { name: /columns/i }));
+        const panel = screen.getByRole('dialog', { name: /columns/i });
+        const button = screen.getByRole('button', { name: /columns/i });
+
+        expect(panel.parentElement).toBe(document.body);
+        expect(panel).toHaveClass('z-dropdown', 'overflow-y-auto');
+        expect(panel).toHaveStyle({ position: 'fixed' });
+        expect(panel.style.maxHeight).not.toBe('');
+        expect(screen.getByTestId('page-shell')).not.toContainElement(panel);
+        for (const scroller of document.querySelectorAll('.overflow-x-auto')) {
+            expect(scroller).not.toContainElement(panel);
+        }
+
+        // Ticking a column keeps the list open — the table scroller can move
+        // when a column disappears, and that is not "click outside".
+        fireEvent.click(screen.getByRole('checkbox', { name: /amount/i }));
+        expect(screen.getByRole('dialog', { name: /columns/i })).toBeInTheDocument();
+        expect(screen.queryByRole('columnheader', { name: 'Amount' })).not.toBeInTheDocument();
+
+        fireEvent.scroll(panel);
+        expect(screen.getByRole('dialog', { name: /columns/i })).toBeInTheDocument();
+
+        const tableScroller = [...document.querySelectorAll('.overflow-x-auto')].find((node) => node.querySelector('table'));
+        expect(tableScroller).toBeTruthy();
+        fireEvent.scroll(tableScroller!);
+        expect(screen.getByRole('dialog', { name: /columns/i })).toBeInTheDocument();
+
+        fireEvent.scroll(screen.getByTestId('page-shell'));
+        expect(screen.queryByRole('dialog', { name: /columns/i })).not.toBeInTheDocument();
+
+        fireEvent.click(button);
+        fireEvent.keyDown(document, { key: 'Escape' });
+        expect(screen.queryByRole('dialog', { name: /columns/i })).not.toBeInTheDocument();
+
+        fireEvent.click(button);
+        fireEvent.mouseDown(document.body);
+        expect(screen.queryByRole('dialog', { name: /columns/i })).not.toBeInTheDocument();
+    });
+
+    it('flips and clamps the column selector into a phone viewport', () => {
+        const realRect = Element.prototype.getBoundingClientRect;
+        const realScrollWidth = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollWidth');
+        const realWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+        const realHeight = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 });
+        Object.defineProperty(window, 'innerHeight', { configurable: true, value: 640 });
+        // w-56 is 224px. jsdom does not apply Tailwind, so the width is stated.
+        Object.defineProperty(Element.prototype, 'scrollWidth', { configurable: true, get: () => 224 });
+        // The button sits on the bottom-right of a 360px screen, where an
+        // absolute menu would run off the right edge and under the table.
+        Element.prototype.getBoundingClientRect = function () {
+            if ((this as HTMLElement).querySelector?.('[aria-haspopup="dialog"]')) {
+                return { top: 560, bottom: 600, left: 300, right: 348, width: 48, height: 40, x: 300, y: 560, toJSON: () => ({}) } as DOMRect;
+            }
+            return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+        };
+        try {
+            render(<DataTable {...defaultProps} filterLayout="row" scrollFilterRow />);
+            fireEvent.click(screen.getByRole('button', { name: /columns/i }));
+            const panel = screen.getByRole('dialog', { name: /columns/i });
+            // Not enough room below the button: the panel hangs above it.
+            expect(panel.style.bottom).not.toBe('');
+            expect(panel.style.top).toBe('');
+            // Right edge of the button (348) minus the panel (224) = 124, and
+            // 124 + 224 stays inside the 8px gutter of a 360px screen.
+            expect(panel.style.left).toBe('124px');
+            expect(panel.style.maxWidth).toBe('344px');
+            expect(parseFloat(panel.style.maxHeight)).toBeGreaterThan(0);
+            expect(parseFloat(panel.style.maxHeight)).toBeLessThanOrEqual(288);
+        } finally {
+            Element.prototype.getBoundingClientRect = realRect;
+            if (realScrollWidth) Object.defineProperty(Element.prototype, 'scrollWidth', realScrollWidth);
+            if (realWidth) Object.defineProperty(window, 'innerWidth', realWidth);
+            if (realHeight) Object.defineProperty(window, 'innerHeight', realHeight);
+        }
+    });
+
     it('opens the export dialog when Export is clicked', () => {
         render(<DataTable {...defaultProps} />);
         fireEvent.click(screen.getByRole('button', { name: /export/i }));
