@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, InternalServerErro
 import { DatabaseService } from '../database/database.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ProductsService } from '../products/products.service';
-import { NarrateReportDto, DraftMessageDto, ParseVoiceEntryDto, VoiceEntryType } from './ai.dto';
+import { NarrateReportDto, DraftMessageDto, ParseVoiceEntryDto, TranscribeAudioDto, VoiceEntryType } from './ai.dto';
 import {
     AI_TOKENS_PER_CREDIT,
     hasPlanEntitlement,
@@ -327,13 +327,14 @@ export class AiService {
 
         let transcript = dto.transcript?.trim() ?? '';
         if (!transcript && dto.audioBase64) {
-            transcript = await this.transcribeAudio(
+            const heard = await this.transcribeAudio(
                 tenantId,
                 dto.audioBase64,
                 dto.audioFormat ?? 'webm',
                 dto.locale,
-                entryType,
+                `voice_${entryType}_transcription`,
             );
+            transcript = heard.text;
         }
         if (!transcript) {
             throw new BadRequestException('Provide a transcript or audio recording.');
@@ -669,13 +670,44 @@ Rules:
         return { draft: response };
     }
 
+    /**
+     * Whisper only, for Ask's Better Bangla option. The phone's own recognizer
+     * stays the default; this runs only after someone turns the option on.
+     *
+     * Billed from the same monthly AI credits as chat. When Whisper reports
+     * tokens, that is 1 credit per 1,000 tokens. When it reports only a length,
+     * the charge is the clip's minutes, and never less than 0.05 credits.
+     * Nothing is saved except the usage row.
+     */
+    async transcribe(
+        tenantId: string,
+        dto: TranscribeAudioDto,
+    ): Promise<{ transcript: string; credits_used: number }> {
+        const audio = dto.audioBase64?.trim() ?? '';
+        if (!audio) {
+            throw new BadRequestException('Provide an audio recording.');
+        }
+        await this.enforceCredits(tenantId);
+        const heard = await this.transcribeAudio(
+            tenantId,
+            audio,
+            dto.audioFormat?.trim() || 'm4a',
+            dto.locale,
+            'ask_transcription',
+        );
+        return {
+            transcript: heard.text,
+            credits_used: Math.round(heard.creditsUsed * 100) / 100,
+        };
+    }
+
     private async transcribeAudio(
         tenantId: string,
         audioBase64: string,
         format: string,
-        locale?: string,
-        entryType: VoiceEntryType = 'sale',
-    ): Promise<string> {
+        locale: string | undefined,
+        feature: string,
+    ): Promise<{ text: string; creditsUsed: number }> {
         if (audioBase64.length > MAX_AUDIO_BASE64_LENGTH) {
             throw new BadRequestException('Audio recording is too long. Keep it under 30 seconds.');
         }
@@ -743,7 +775,7 @@ Rules:
         await this.db.aiUsageLog.create({
             data: {
                 tenant_id: tenantId,
-                feature: `voice_${entryType}_transcription`,
+                feature,
                 model: WHISPER_MODEL,
                 input_tokens: usage.input_tokens ?? 0,
                 output_tokens: usage.output_tokens ?? 0,
@@ -752,7 +784,7 @@ Rules:
             },
         });
 
-        return text;
+        return { text, creditsUsed };
     }
 
     private extractJson<T>(raw: string): T {
