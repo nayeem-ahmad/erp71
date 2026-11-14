@@ -4,7 +4,9 @@ import 'package:erp71_mobile/core/auth/token_store.dart';
 import 'package:erp71_mobile/core/format/format.dart';
 import 'package:erp71_mobile/core/providers.dart';
 import 'package:erp71_mobile/core/push/push_channel.dart';
+import 'package:erp71_mobile/core/network/online_status.dart';
 import 'package:erp71_mobile/core/voice/speech_input.dart';
+import 'package:erp71_mobile/core/voice/voice_recorder.dart';
 import 'package:erp71_mobile/core/security/app_lock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,6 +26,8 @@ Future<void> pumpApp(
   FakeDeviceAuthenticator? authenticator,
   FakePushChannel? push,
   FakeSpeechInput? speech,
+  FakeVoiceRecorder? recorder,
+  FakeOnlineStatus? online,
   Size size = const Size(360, 780),
 }) async {
   tester.view.physicalSize = size * 3;
@@ -48,6 +52,10 @@ Future<void> pumpApp(
         ),
         pushChannelProvider.overrideWithValue(push ?? FakePushChannel()),
         speechInputProvider.overrideWithValue(speech ?? FakeSpeechInput()),
+        voiceRecorderProvider.overrideWithValue(
+          recorder ?? FakeVoiceRecorder(),
+        ),
+        onlineStatusProvider.overrideWithValue(online ?? FakeOnlineStatus()),
       ],
       child: const Erp71App(),
     ),

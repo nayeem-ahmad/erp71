@@ -65,6 +65,29 @@ export class ParseVoiceEntryDto {
 /** @deprecated Use ParseVoiceEntryDto */
 export class ParseVoiceSaleDto extends ParseVoiceEntryDto {}
 
+/**
+ * Audio for Whisper only. Ask uses this when someone turns on Better Bangla.
+ * It does not parse a sale and it does not save anything.
+ */
+export class TranscribeAudioDto {
+    @ApiProperty({ description: 'Base64-encoded audio recording (no data-URI prefix)' })
+    @IsString()
+    @IsNotEmpty()
+    audioBase64!: string;
+
+    @ApiPropertyOptional({ description: 'Audio format: m4a, webm, wav, mp3, ogg' })
+    @IsString()
+    @IsOptional()
+    @MaxLength(16)
+    audioFormat?: string;
+
+    @ApiPropertyOptional({ description: 'Spoken language hint: en or bn' })
+    @IsString()
+    @IsOptional()
+    @IsIn(['en', 'bn'])
+    locale?: string;
+}
+
 export class DraftMessageDto {
     @ApiProperty({ description: 'Channel: whatsapp | sms | email' })
     @IsString()
