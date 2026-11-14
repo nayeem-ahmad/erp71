@@ -8,6 +8,8 @@ jest.mock('@/lib/api', () => ({
         getAiConversation: jest.fn(),
         deleteAiConversation: jest.fn(),
         getAiChatTools: jest.fn(),
+        createProjectTask: jest.fn(),
+        createLead: jest.fn(),
     },
 }));
 
@@ -22,6 +24,8 @@ const { api } = jest.requireMock('@/lib/api') as {
         getAiConversation: jest.Mock;
         deleteAiConversation: jest.Mock;
         getAiChatTools: jest.Mock;
+        createProjectTask: jest.Mock;
+        createLead: jest.Mock;
     };
 };
 
@@ -46,11 +50,14 @@ function openHistory() {
 }
 
 beforeEach(() => {
+    sessionStorage.clear();
     api.aiChat.mockReset();
     api.getAiConversations.mockReset().mockResolvedValue([]);
     api.getAiConversation.mockReset();
     api.deleteAiConversation.mockReset().mockResolvedValue({ deleted: true });
     api.getAiChatTools.mockReset().mockResolvedValue({ tools: ['sales_summary'] });
+    api.createProjectTask.mockReset().mockResolvedValue({ id: 'task-1' });
+    api.createLead.mockReset().mockResolvedValue({ id: 'lead-1' });
     Element.prototype.scrollTo = jest.fn();
 });
 
@@ -369,6 +376,110 @@ describe('AiChatWidget', () => {
                 'How much did we sell last month?',
             );
             expect(api.aiChat).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('create drafts', () => {
+        const taskDraft = {
+            kind: 'task' as const,
+            status: 'needs_input' as const,
+            missing: ['project'],
+            warnings: [],
+            fields: {
+                title: 'Call the supplier',
+                description: 'About the rice order',
+                projectChoices: [
+                    { id: 'p-show', label: 'Showroom', detail: 'SH' },
+                    { id: 'p-shop', label: 'Shop', detail: 'S' },
+                ],
+                priority: 'MEDIUM' as const,
+            },
+        };
+
+        const leadDraft = {
+            kind: 'lead' as const,
+            status: 'ready' as const,
+            missing: [],
+            warnings: ['The company name is in the note. No company record was created.'],
+            fields: {
+                name: 'Rahim',
+                mobile: '01711111111',
+                remarks: 'Company: Karim Traders\nAsked about rice',
+            },
+        };
+
+        function replyWith(draft: typeof taskDraft | typeof leadDraft, name: string) {
+            api.aiChat.mockResolvedValue({
+                conversation_id: 'conv-1',
+                credits_used: 2,
+                truncated: false,
+                message: {
+                    id: 'm-draft',
+                    role: 'assistant',
+                    content: 'Review the card and press Save.',
+                    created_at: '2026-11-14T10:00:00Z',
+                    tool_calls: [{ name, args: {}, draft }],
+                },
+            });
+        }
+
+        it('shows a task card with Save disabled until a project is chosen, then saves through the task endpoint', async () => {
+            replyWith(taskDraft, 'propose_create_task');
+            await openPanel();
+            ask('Create a task to call the supplier tomorrow');
+
+            expect(await screen.findByText('New task')).toBeInTheDocument();
+            expect(screen.getByLabelText(/Title/)).toHaveValue('Call the supplier');
+            expect(screen.getByLabelText(/Description/)).toHaveValue('About the rice order');
+            expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+            expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+
+            fireEvent.change(screen.getByLabelText(/Project/), { target: { value: 'p-show' } });
+            expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+            await waitFor(() => expect(api.createProjectTask).toHaveBeenCalledWith({
+                projectId: 'p-show',
+                title: 'Call the supplier',
+                description: 'About the rice order',
+                priority: 'MEDIUM',
+            }));
+            expect(api.createLead).not.toHaveBeenCalled();
+            expect(await screen.findByRole('link', { name: 'Open task' })).toHaveAttribute('href', '/projects/tasks/task-1');
+        });
+
+        it('saves a lead with the company in the note and does not set an owner', async () => {
+            replyWith(leadDraft, 'propose_create_lead');
+            await openPanel();
+            ask('Create a lead Rahim at Karim Traders');
+
+            expect(await screen.findByText('New lead')).toBeInTheDocument();
+            expect(screen.getByLabelText(/^Name/)).toHaveValue('Rahim');
+            expect(screen.getByLabelText(/^Note/)).toHaveValue('Company: Karim Traders\nAsked about rice');
+            expect(screen.getByText('You')).toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+            await waitFor(() => expect(api.createLead).toHaveBeenCalledWith({
+                name: 'Rahim',
+                mobile: '01711111111',
+                remarks: 'Company: Karim Traders\nAsked about rice',
+            }));
+            expect(api.createProjectTask).not.toHaveBeenCalled();
+            const payload = api.createLead.mock.calls[0][0] as Record<string, unknown>;
+            expect(payload).not.toHaveProperty('assigned_to');
+        });
+
+        it('discards the card on Cancel without saving', async () => {
+            replyWith(taskDraft, 'propose_create_task');
+            await openPanel();
+            ask('Create a task');
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+            expect(screen.queryByText('New task')).not.toBeInTheDocument();
+            expect(api.createProjectTask).not.toHaveBeenCalled();
         });
     });
 });

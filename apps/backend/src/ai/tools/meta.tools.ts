@@ -13,6 +13,7 @@ const ENTITY_TYPES = [
     'account',
     'lead',
     'contact',
+    'project',
 ] as const;
 
 const DOCUMENT_TYPES = [
@@ -39,9 +40,10 @@ export const META_TOOLS: ChatTool[] = [
         permission: StorePermission.VIEW_PRODUCT_CATALOG,
         description:
             'Turn a name the user typed into the id other tools need. Search products, customers, suppliers, branches, ' +
-            'warehouses, categories, brands, employees, ledger accounts, leads or contacts. ' +
+            'warehouses, categories, brands, employees, ledger accounts, leads, contacts or projects. ' +
+            'Projects are limited to the ones this person can see. ' +
             'Call this FIRST whenever a question names something specific and you need to filter by it — ' +
-            'never guess or invent an id.',
+            'never guess or invent an id. More than one match means ask, do not pick.',
         parameters: {
             type: 'object',
             properties: {
@@ -51,7 +53,14 @@ export const META_TOOLS: ChatTool[] = [
             required: ['type', 'query'],
         },
         handler: async (ctx, args, deps) => {
-            const matches = await deps.data.resolveEntity(ctx.tenantId, args.type, String(args.query ?? ''), 10);
+            const matches = await deps.data.resolveEntity(ctx.tenantId, args.type, String(args.query ?? ''), 10, {
+                tenantId: ctx.tenantId,
+                userId: ctx.userId,
+                userRole: ctx.userRole,
+                storeId: ctx.storeId,
+                timezone: ctx.timezone,
+                recordScope: ctx.recordScope,
+            });
             if (matches.length === 0) {
                 return {
                     matchCount: 0,

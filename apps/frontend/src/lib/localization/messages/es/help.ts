@@ -242,7 +242,7 @@ export const helpMessages = {
             faqs: [
                 {
                     q: "¿Qué es el asistente de negocio de IA y cómo lo abro?",
-                    a: "Es un panel de chat —el icono de robot «Preguntar al asistente de negocio»— que responde preguntas sobre sus propios datos: ventas, existencias, clientes, cobros pendientes y más. Es estrictamente de solo lectura: puede consultar y explicar, pero no puede cambiar nada. El asistente es una función del plan Premium, así que el icono solo aparece si su plan lo incluye.",
+                    a: "Es un panel de chat —el icono de robot «Preguntar al asistente de negocio»— que responde preguntas sobre sus propios datos: ventas, existencias, clientes, cobros pendientes y más. También puede preparar una tarea o un lead a partir de lo que usted diga; no se guarda nada hasta que revise la tarjeta y pulse Guardar. No puede cambiar nada más. El asistente es una función del plan Premium, así que el icono solo aparece si su plan lo incluye.",
                 },
                 {
                     q: "¿Qué puede ver realmente y puedo fiarme de sus respuestas?",

@@ -31,6 +31,7 @@ import { ApprovalsModule } from '../approvals/approvals.module';
 import { HrReportsModule } from '../hr-reports/hr-reports.module';
 import { PayrollModule } from '../payroll/payroll.module';
 import { RecruitmentModule } from '../recruitment/recruitment.module';
+import { ProjectsModule } from '../projects/projects.module';
 
 @Module({
     imports: [
@@ -66,6 +67,9 @@ import { RecruitmentModule } from '../recruitment/recruitment.module';
         HrReportsModule,
         PayrollModule,
         RecruitmentModule,
+        // Project visibility for the assistant's project lookup and task drafts.
+        // ProjectsModule does not import AiModule, so this is not a cycle.
+        ProjectsModule,
     ],
     controllers: [AiController],
     // ChatDataService is provided here rather than imported: it is the chatbot's

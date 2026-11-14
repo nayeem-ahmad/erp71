@@ -1,4 +1,4 @@
-import { StorePermission } from '@erp71/shared-types';
+import { StorePermission, type TenantRecordScope } from '@erp71/shared-types';
 import type { AccountingService } from '../../accounting/accounting.service';
 import type { CashierSessionsService } from '../../cashier-sessions/cashier-sessions.service';
 import type { CrmCampaignsService } from '../../crm-campaigns/crm-campaigns.service';
@@ -82,6 +82,8 @@ export interface ChatToolContext {
     storeId?: string;
     /** The workspace's IANA zone. Any tool that filters on calendar days must pass it on. */
     timezone: string;
+    /** Widest record scope across the caller's roles. Absent means unrestricted. */
+    recordScope?: TenantRecordScope;
     /**
      * The branches the caller may use — every store in the tenant for an owner,
      * the member's own branches otherwise. The allow-list for a model-supplied
@@ -109,8 +111,24 @@ export interface ChatTool {
     name: string;
     /** Written for the model: say what it returns *and* when to reach for it. */
     description: string;
-    /** Withheld from the tool list entirely when the caller lacks this. */
+    /**
+     * Withheld from the tool list entirely when the caller lacks this.
+     * Ignored for the allow-check when `anyPermissions` is set — that list is
+     * what the matching HTTP route accepts.
+     */
     permission: StorePermission;
+    /**
+     * Any one of these is enough, matching `@RequireAnyStorePermission` on the
+     * route the card will call. The single `permission` above stays set so
+     * every tool still names a permission.
+     */
+    anyPermissions?: StorePermission[];
+    /**
+     * `draft` prepares a confirmation card and must not write. The runner
+     * re-checks permission for every tool when it runs, not only when the
+     * menu is built — a model can name a tool that was not offered to it.
+     */
+    effect?: 'draft';
     /**
      * Modules this tool is meaningless without. A tenant that sells nothing has
      * no use for a sales tool, and offering one invites the model to answer a

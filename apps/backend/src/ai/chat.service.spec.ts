@@ -95,6 +95,8 @@ function makeService(overrides: {
     const chatData: any = {
         getDataCoverage: jest.fn().mockResolvedValue({}),
         resolveEntity: jest.fn().mockResolvedValue([]),
+        listVisibleProjects: jest.fn().mockResolvedValue([]),
+        resolveAssignees: jest.fn().mockResolvedValue([]),
     };
 
     const webSearch: any = {
@@ -221,6 +223,32 @@ describe('ChatService.resolveTools', () => {
         expect(names).not.toContain('receivables_aging');
         expect(names).not.toContain('financial_statement');
         expect(names).not.toContain('customer_lookup');
+        expect(names).not.toContain('propose_create_task');
+        expect(names).not.toContain('propose_create_lead');
+    });
+
+    it('offers a task draft only to someone who can manage tasks', async () => {
+        const without = makeService({ grantedPermissions: [StorePermission.VIEW_PROJECTS] });
+        const withTask = makeService({ grantedPermissions: [StorePermission.MANAGE_PROJECT_TASKS] });
+
+        expect((await without.service.resolveTools(STAFF_CTX)).tools.map((t) => t.name)).not.toContain('propose_create_task');
+        expect((await withTask.service.resolveTools(STAFF_CTX)).tools.map((t) => t.name)).toContain('propose_create_task');
+    });
+
+    it('offers a lead draft only with CRM write and the CRM plan', async () => {
+        const planOnly = makeService({
+            grantedPermissions: [StorePermission.VIEW_LEADS],
+            planFeatures: { premiumCrm: true },
+        });
+        const writeNoPlan = makeService({ grantedPermissions: [StorePermission.MANAGE_LEADS] });
+        const both = makeService({
+            grantedPermissions: [StorePermission.CREATE_CRM_INTERACTIONS],
+            planFeatures: { premiumCrm: true },
+        });
+
+        expect((await planOnly.service.resolveTools(STAFF_CTX)).tools.map((t) => t.name)).not.toContain('propose_create_lead');
+        expect((await writeNoPlan.service.resolveTools(STAFF_CTX)).tools.map((t) => t.name)).not.toContain('propose_create_lead');
+        expect((await both.service.resolveTools(STAFF_CTX)).tools.map((t) => t.name)).toContain('propose_create_lead');
     });
 
     it('gives a staff user with no grants no tools at all', async () => {
@@ -423,6 +451,82 @@ describe('ChatService.chat', () => {
 
         expect(result.content).toBe('Sorry, I could not read that report.');
         expect(result.toolCalls[0].error).toBe('db exploded');
+    });
+
+    it('refuses a tool at execution when the caller lacks permission, even if the model names it', async () => {
+        const { service, salesReports } = makeService({
+            grantedPermissions: [StorePermission.VIEW_PRODUCT_CATALOG],
+            replies: [
+                {
+                    content: '',
+                    tool_calls: [
+                        { id: 'c1', type: 'function', function: { name: 'sales_summary', arguments: '{}' } },
+                    ],
+                },
+                { content: 'I cannot look that up.' },
+            ],
+        });
+
+        const result = await service.chat(STAFF_CTX, 'sales?');
+
+        expect(salesReports.getSalesSummary).not.toHaveBeenCalled();
+        expect(result.toolCalls[0].error).toBe('permission');
+        expect(result.toolCalls[0].draft).toBeUndefined();
+    });
+
+    it('does not build a task draft for someone who cannot manage tasks', async () => {
+        const { service, chatData } = makeService({
+            grantedPermissions: [],
+            replies: [
+                {
+                    content: '',
+                    tool_calls: [
+                        { id: 'c1', type: 'function', function: { name: 'propose_create_task', arguments: '{"title":"Call"}' } },
+                    ],
+                },
+                { content: 'I cannot create that.' },
+            ],
+        });
+
+        const result = await service.chat(STAFF_CTX, 'create a task');
+
+        expect(chatData.resolveEntity).not.toHaveBeenCalled();
+        expect(chatData.listVisibleProjects).not.toHaveBeenCalled();
+        expect(result.toolCalls[0].error).toBe('permission');
+        expect(result.toolCalls[0].draft).toBeUndefined();
+    });
+
+    it('stores a task draft from a permitted caller and leaves the assignee empty', async () => {
+        const { service, chatData } = makeService({
+            replies: [
+                {
+                    content: '',
+                    tool_calls: [
+                        {
+                            id: 'c1',
+                            type: 'function',
+                            function: {
+                                name: 'propose_create_task',
+                                arguments: '{"title":"Call supplier","project":"Showroom","dueDate":"2026-11-15"}',
+                            },
+                        },
+                    ],
+                },
+                { content: 'Review the card and press Save.' },
+            ],
+        });
+        chatData.resolveEntity.mockResolvedValue([{ id: 'p1', label: 'Showroom', detail: 'SH' }]);
+
+        const result = await service.chat(OWNER_CTX, 'create a task');
+
+        expect(result.toolCalls[0].error).toBeUndefined();
+        expect(result.toolCalls[0].draft).toMatchObject({
+            kind: 'task',
+            status: 'ready',
+            fields: { title: 'Call supplier', projectId: 'p1', dueDate: '2026-11-15' },
+        });
+        expect(result.toolCalls[0].draft?.fields.assigneeId).toBeUndefined();
+        expect(JSON.stringify(result.toolCalls[0].draft)).not.toMatch(/saved":true/);
     });
 
     it('records an unknown tool name without throwing', async () => {

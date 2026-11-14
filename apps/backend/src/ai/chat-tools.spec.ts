@@ -162,6 +162,15 @@ describe('chat tool registry', () => {
      * flag. If an internal report tool ever picks one up, it would silently vanish
      * from deployments that never enabled it.
      */
+    it('marks only the create drafts as drafts, and they do not take an id from the model', () => {
+        const drafts = CHAT_TOOLS.filter((tool) => tool.effect === 'draft').map((tool) => tool.name);
+        expect(drafts).toEqual(['propose_create_task', 'propose_create_lead']);
+        for (const name of drafts) {
+            const props = Object.keys((CHAT_TOOLS_BY_NAME[name].parameters as any).properties ?? {});
+            expect(props.join(' ').toLowerCase()).not.toMatch(/id/);
+        }
+    });
+
     it('flags exactly the tools that leave the tenant database', () => {
         const flagged = CHAT_TOOLS.filter((tool) => tool.featureFlag).map((tool) => tool.name);
         expect(flagged.sort()).toEqual(['fetch_web_page', 'web_search']);
@@ -791,11 +800,19 @@ describe('resolve_entity', () => {
 
         await run('resolve_entity', { type: 'customer', query: 'Karim', tenantId: 'other' }, deps);
 
-        expect(resolveEntity).toHaveBeenCalledWith('tenant-1', 'customer', 'Karim', 10);
+        expect(resolveEntity).toHaveBeenCalledWith(
+            'tenant-1',
+            'customer',
+            'Karim',
+            10,
+            expect.objectContaining({ tenantId: 'tenant-1', userId: 'user-1' }),
+        );
     });
 
-    it('accepts type contact', () => {
-        expect((CHAT_TOOLS_BY_NAME.resolve_entity.parameters as any).properties.type.enum).toContain('contact');
+    it('accepts type contact and project', () => {
+        const types = (CHAT_TOOLS_BY_NAME.resolve_entity.parameters as any).properties.type.enum;
+        expect(types).toContain('contact');
+        expect(types).toContain('project');
     });
 });
 

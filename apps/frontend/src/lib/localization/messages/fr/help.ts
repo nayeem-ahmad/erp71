@@ -242,7 +242,7 @@ export const helpMessages = {
             faqs: [
                 {
                     q: "Qu'est-ce que l'assistant métier IA et comment l'ouvrir ?",
-                    a: "C'est un panneau de discussion — l'icône robot « Interroger l'assistant métier » — qui répond aux questions sur vos propres données : ventes, stock, clients, créances et plus encore. Il est strictement en lecture seule : il peut consulter et expliquer, mais ne peut rien modifier. L'assistant relève de l'offre Premium, l'icône n'apparaît donc que si votre offre l'inclut.",
+                    a: "C'est un panneau de discussion — l'icône robot « Interroger l'assistant métier » — qui répond aux questions sur vos propres données : ventes, stock, clients, créances et plus encore. Il peut aussi préparer une tâche ou une piste à partir de ce que vous dites ; rien n'est enregistré tant que vous ne vérifiez pas la carte et n'appuyez pas sur Enregistrer. Il ne peut rien modifier d'autre. L'assistant relève de l'offre Premium, l'icône n'apparaît donc que si votre offre l'inclut.",
                 },
                 {
                     q: "Que voit-il réellement, et puis-je me fier à ses réponses ?",
