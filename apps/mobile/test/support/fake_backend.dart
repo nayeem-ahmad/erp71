@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:erp71_mobile/core/auth/google_auth.dart';
 import 'package:erp71_mobile/core/push/push_channel.dart';
 import 'package:erp71_mobile/core/security/app_lock.dart';
+import 'package:erp71_mobile/core/network/online_status.dart';
 import 'package:erp71_mobile/core/voice/speech_input.dart';
+import 'package:erp71_mobile/core/voice/voice_recorder.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -218,4 +220,54 @@ class FakeSpeechInput implements SpeechInput {
 
   @override
   Future<void> stop() async => finish();
+}
+
+/// The microphone's recorder, for Better Bangla. [clip] is what [stop] returns.
+class FakeVoiceRecorder implements VoiceRecorder {
+  FakeVoiceRecorder({this.available = true, this.clip});
+
+  bool available;
+  RecordedAudio? clip;
+  int starts = 0;
+  bool recording = false;
+  void Function()? onLimit;
+
+  @override
+  Future<bool> start({void Function()? onLimit}) async {
+    if (!available) return false;
+    starts++;
+    recording = true;
+    this.onLimit = onLimit;
+    return true;
+  }
+
+  @override
+  Future<RecordedAudio?> stop() async {
+    recording = false;
+    return clip;
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
+/// The phone's network, flipped by the test. Save reads this and does not queue.
+class FakeOnlineStatus implements OnlineStatus {
+  FakeOnlineStatus({this.online = true});
+
+  @override
+  bool online;
+
+  final _changes = StreamController<bool>.broadcast();
+
+  void setOnline(bool value) {
+    online = value;
+    if (!_changes.isClosed) _changes.add(value);
+  }
+
+  @override
+  Stream<bool> watch() async* {
+    yield online;
+    yield* _changes.stream;
+  }
 }

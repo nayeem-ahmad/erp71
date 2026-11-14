@@ -19,6 +19,7 @@ export const OPEN_ROUTES: Record<string, string> = {
     'AiController.draftMessage': "self-scoped conversations; per-tool permission is checked in the chat service", // POST /ai/draft-message
     'AiController.parseVoiceEntry': "self-scoped conversations; per-tool permission is checked in the chat service", // POST /ai/parse-voice-entry
     'AiController.parseVoiceSale': "self-scoped conversations; per-tool permission is checked in the chat service", // POST /ai/parse-voice-sale
+    'AiController.transcribe': "self-scoped: the signed-in member's own Ask recording; the assistant switch and AI credits are checked in the service", // POST /ai/transcribe
     'AiController.chat': "self-scoped conversations; per-tool permission is checked in the chat service", // POST /ai/chat
     'AiController.chatTools': "self-scoped conversations; per-tool permission is checked in the chat service", // GET /ai/chat/tools
     'AiController.listConversations': "self-scoped conversations; per-tool permission is checked in the chat service", // GET /ai/chat/conversations

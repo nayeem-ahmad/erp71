@@ -4,10 +4,15 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/access.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/network/online_status.dart';
 import '../../core/voice/speech_input.dart';
+import '../../core/voice/voice_recorder.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
+import 'ask_copy.dart';
 import 'ask_data.dart';
+import 'ask_draft.dart';
+import 'ask_draft_card.dart';
 
 /// Questions to start from, for someone who does not know what to ask yet.
 const _suggestions = {
@@ -45,6 +50,9 @@ class AskButton extends ConsumerWidget {
 
 /// Ask about the business in plain English or Bangla, typed or spoken.
 /// Spoken words land in the box to be checked and sent by hand.
+///
+/// The phone's speech recognizer is the default. Better Bangla, off until it
+/// is turned on, records a clip and asks Whisper to write it down.
 class AskScreen extends ConsumerStatefulWidget {
   const AskScreen({super.key});
 
@@ -56,10 +64,14 @@ class _AskScreenState extends ConsumerState<AskScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   bool _listening = false;
+  bool _recording = false;
+  bool _transcribing = false;
+  bool _whisperBusy = false;
 
   @override
   void dispose() {
     if (_listening) ref.read(speechInputProvider).stop();
+    if (_recording) ref.read(voiceRecorderProvider).stop();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
@@ -67,8 +79,14 @@ class _AskScreenState extends ConsumerState<AskScreen> {
 
   Future<void> _send([String? text]) async {
     final question = (text ?? _input.text).trim();
-    if (question.isEmpty) return;
+    if (question.isEmpty || _transcribing) return;
     if (_listening) await _toggleListening();
+    if (_recording) {
+      // Send means "send what is typed". A clip still recording is discarded,
+      // not uploaded and not sent on its own.
+      await ref.read(voiceRecorderProvider).stop();
+      if (mounted) setState(() => _recording = false);
+    }
     _input.clear();
     try {
       await ref.read(askProvider.notifier).send(question);
@@ -78,6 +96,19 @@ class _AskScreenState extends ConsumerState<AskScreen> {
       showToast(describeError(error), tone: Tone.danger);
     }
     _toEnd();
+  }
+
+  bool get _useWhisper {
+    final ask = ref.read(askProvider);
+    return ask.bangla && ref.read(betterBanglaProvider);
+  }
+
+  Future<void> _toggleMic() async {
+    if (_useWhisper) {
+      await _toggleWhisper();
+      return;
+    }
+    await _toggleListening();
   }
 
   Future<void> _toggleListening() async {
@@ -102,13 +133,85 @@ class _AskScreenState extends ConsumerState<AskScreen> {
     );
     if (!mounted) return;
     if (!started) {
-      showToast(
-        'This phone cannot listen right now. Check the microphone '
-        'permission, or type the question.',
-      );
+      showToast(AskCopy(ref.read(askProvider).bangla).micUnavailable);
       return;
     }
     setState(() => _listening = true);
+  }
+
+  Future<void> _toggleWhisper() async {
+    final recorder = ref.read(voiceRecorderProvider);
+    if (_recording) {
+      await _finishWhisper(recorder);
+      return;
+    }
+    if (_transcribing) return;
+    final copy = AskCopy(ref.read(askProvider).bangla);
+    if (!ref.read(onlineProvider)) {
+      showToast(copy.whisperNeedsNet);
+      return;
+    }
+    final started = await recorder.start(
+      onLimit: () {
+        if (mounted) _finishWhisper(recorder);
+      },
+    );
+    if (!mounted) {
+      if (started) await recorder.stop();
+      return;
+    }
+    if (!started) {
+      showToast(copy.micUnavailable);
+      return;
+    }
+    setState(() => _recording = true);
+  }
+
+  Future<void> _finishWhisper(VoiceRecorder recorder) async {
+    if (_whisperBusy) return;
+    _whisperBusy = true;
+    setState(() {
+      _recording = false;
+      _transcribing = true;
+    });
+    final copy = AskCopy(ref.read(askProvider).bangla);
+    try {
+      final clip = await recorder.stop();
+      if (!mounted) return;
+      if (clip == null) {
+        showToast(copy.whisperTooShort);
+        return;
+      }
+      if (!ref.read(onlineProvider)) {
+        showToast(copy.whisperNeedsNet);
+        return;
+      }
+      final heard = await ref.read(askProvider.notifier).transcribe(clip);
+      if (!mounted) return;
+      if (heard.transcript.isEmpty) {
+        showToast(copy.whisperFailed);
+        return;
+      }
+      _input.value = TextEditingValue(
+        text: heard.transcript,
+        selection: TextSelection.collapsed(offset: heard.transcript.length),
+      );
+      showToast(copy.heard(heard.credits));
+    } catch (error) {
+      if (mounted) showToast(describeError(error), tone: Tone.danger);
+    } finally {
+      _whisperBusy = false;
+      if (mounted) setState(() => _transcribing = false);
+    }
+  }
+
+  Future<void> _setBangla(bool value) async {
+    if (_recording) {
+      await ref.read(voiceRecorderProvider).stop();
+      if (mounted) setState(() => _recording = false);
+    }
+    if (_listening) await _toggleListening();
+    ref.read(askProvider.notifier).setBangla(value);
   }
 
   void _toEnd() {
@@ -127,17 +230,27 @@ class _AskScreenState extends ConsumerState<AskScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(askProvider);
     final controller = ref.read(askProvider.notifier);
+    final copy = AskCopy(state.bangla);
+    final online = ref.watch(onlineProvider);
+    final betterBangla = ref.watch(betterBanglaProvider);
+    final workspace = ref.watch(activeWorkspaceProvider);
+    final canOpenLead = workspace != null && MobileAccess.of(workspace).crm;
+    final micTip = _recording
+        ? copy.stopRecording
+        : _listening
+        ? copy.stopListening
+        : copy.speak;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ask ERP71'),
         actions: [
           TextButton(
-            onPressed: () => controller.setBangla(!state.bangla),
+            onPressed: () => _setBangla(!state.bangla),
             child: Text(state.bangla ? 'English' : 'বাংলা'),
           ),
           if (state.messages.isNotEmpty)
             IconButton(
-              tooltip: 'New conversation',
+              tooltip: copy.newConversation,
               icon: const Icon(Icons.add_comment_outlined),
               onPressed: state.sending ? null : controller.reset,
             ),
@@ -152,57 +265,125 @@ class _AskScreenState extends ConsumerState<AskScreen> {
                     controller: _scroll,
                     padding: const EdgeInsets.all(12),
                     children: [
-                      for (final message in state.messages)
-                        _Bubble(message: message),
-                      if (state.sending) const _Thinking(),
+                      for (final message in state.messages) ...[
+                        _Bubble(message: message, bangla: state.bangla),
+                        for (var i = 0; i < message.drafts.length; i++)
+                          if (draftIsOffered(
+                            state.toolsReady,
+                            state.tools,
+                            message.drafts[i],
+                          ))
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: AskDraftCard(
+                                key: ValueKey('${message.id ?? 'draft'}-$i'),
+                                draft: message.drafts[i],
+                                bangla: state.bangla,
+                                online: online,
+                                onSave:
+                                    message.drafts[i].kind == AskDraftKind.task
+                                    ? controller.saveTask
+                                    : controller.saveLead,
+                                onOpen:
+                                    message.drafts[i].kind ==
+                                            AskDraftKind.lead &&
+                                        canOpenLead
+                                    ? (id) => context.go('/leads/$id')
+                                    : null,
+                              ),
+                            ),
+                      ],
+                      if (state.sending) _Thinking(bangla: state.bangla),
                     ],
                   ),
           ),
           SafeArea(
             top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 8, 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _input,
-                      minLines: 1,
-                      maxLines: 4,
-                      maxLength: 2000,
-                      buildCounter:
-                          (
-                            _, {
-                            required currentLength,
-                            required isFocused,
-                            maxLength,
-                          }) => null,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _send(),
-                      decoration: InputDecoration(
-                        hintText: _listening
-                            ? 'Listening…'
-                            : state.bangla
-                            ? 'আপনার প্রশ্ন লিখুন'
-                            : 'Ask about sales, stock, dues…',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (state.bangla)
+                  SwitchListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    title: Text(
+                      copy.betterBangla,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
+                    subtitle: Text(
+                      copy.betterBanglaHint,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    value: betterBangla,
+                    onChanged: state.sending || _transcribing || _recording
+                        ? null
+                        : (value) => ref
+                              .read(betterBanglaProvider.notifier)
+                              .setEnabled(value),
                   ),
-                  IconButton(
-                    tooltip: _listening ? 'Stop listening' : 'Speak',
-                    color: _listening ? AppColors.danger : AppColors.primary,
-                    icon: Icon(_listening ? Icons.stop_circle : Icons.mic_none),
-                    onPressed: state.sending ? null : _toggleListening,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 8, 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _input,
+                          minLines: 1,
+                          maxLines: 4,
+                          maxLength: 2000,
+                          enabled: !_transcribing,
+                          buildCounter:
+                              (
+                                _, {
+                                required currentLength,
+                                required isFocused,
+                                maxLength,
+                              }) => null,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => _send(),
+                          decoration: InputDecoration(
+                            hintText: _transcribing
+                                ? copy.transcribing
+                                : _recording
+                                ? copy.recording
+                                : _listening
+                                ? copy.listening
+                                : copy.askPlaceholder,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: micTip,
+                        color: _listening || _recording
+                            ? AppColors.danger
+                            : AppColors.primary,
+                        icon: Icon(
+                          _listening || _recording
+                              ? Icons.stop_circle
+                              : Icons.mic_none,
+                        ),
+                        onPressed: state.sending || _transcribing
+                            ? null
+                            : _toggleMic,
+                      ),
+                      IconButton(
+                        tooltip: copy.send,
+                        color: AppColors.primary,
+                        icon: const Icon(Icons.send),
+                        onPressed: state.sending || _transcribing || _recording
+                            ? null
+                            : () => _send(),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    tooltip: 'Send',
-                    color: AppColors.primary,
-                    icon: const Icon(Icons.send),
-                    onPressed: state.sending ? null : () => _send(),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
@@ -219,6 +400,7 @@ class _Suggestions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final copy = AskCopy(bangla);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -232,11 +414,10 @@ class _Suggestions extends StatelessWidget {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 4),
-        const Text(
-          'Answers come from your own records, and only what your role can '
-          'see. Each answer uses AI credits.',
+        Text(
+          copy.emptyBody,
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 16),
         for (final question in _suggestions[bangla]!)
@@ -257,13 +438,15 @@ class _Suggestions extends StatelessWidget {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.message});
+  const _Bubble({required this.message, required this.bangla});
 
   final AskMessage message;
+  final bool bangla;
 
   @override
   Widget build(BuildContext context) {
     final mine = message.fromMe;
+    final copy = AskCopy(bangla);
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
@@ -289,9 +472,9 @@ class _Bubble extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   [
-                    if (message.truncated) 'Answer cut short',
+                    if (message.truncated) copy.truncated,
                     if (message.credits != null)
-                      '${message.credits} ${message.credits == 1 ? 'credit' : 'credits'}',
+                      copy.creditsLine(message.credits!),
                   ].join(' · '),
                   style: const TextStyle(
                     fontSize: 11,
@@ -308,24 +491,29 @@ class _Bubble extends StatelessWidget {
 }
 
 class _Thinking extends StatelessWidget {
-  const _Thinking();
+  const _Thinking({required this.bangla});
+
+  final bool bangla;
 
   @override
-  Widget build(BuildContext context) => const Align(
+  Widget build(BuildContext context) => Align(
     alignment: Alignment.centerLeft,
     child: Padding(
-      padding: EdgeInsets.all(12),
+      padding: const EdgeInsets.all(12),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox.square(
+          const SizedBox.square(
             dimension: 16,
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
           Text(
-            'Looking through your records…',
-            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            AskCopy(bangla).thinking,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+            ),
           ),
         ],
       ),

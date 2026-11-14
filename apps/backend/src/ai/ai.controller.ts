@@ -8,7 +8,7 @@ import { AiService } from './ai.service';
 import { ChatService } from './chat.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
-import { ChatDto, NarrateReportDto, DraftMessageDto, ParseVoiceEntryDto, ParseVoiceSaleDto } from './ai.dto';
+import { ChatDto, NarrateReportDto, DraftMessageDto, ParseVoiceEntryDto, ParseVoiceSaleDto, TranscribeAudioDto } from './ai.dto';
 
 @ApiTags('ai')
 @ApiBearerAuth()
@@ -62,6 +62,20 @@ export class AiController {
     async parseVoiceEntry(@Tenant() tenant: TenantContext, @Body() dto: ParseVoiceEntryDto) {
         await this.assertVoiceEnabled(tenant.tenantId);
         return this.aiService.parseVoiceEntry(tenant.tenantId, dto);
+    }
+
+    /**
+     * Whisper for Ask's Better Bangla option. The assistant switch and the
+     * Premium AI credit check happen in the service. This does not parse a
+     * sale and does not save a task or a lead.
+     */
+    @Post('transcribe')
+    @Throttle({ default: { limit: 20, ttl: 60_000 } })
+    @UseGuards(JwtAuthGuard)
+    @UseInterceptors(TenantInterceptor)
+    async transcribe(@Tenant() tenant: TenantContext, @Body() dto: TranscribeAudioDto) {
+        await this.chatService.assertEnabled(tenant.tenantId);
+        return this.aiService.transcribe(tenant.tenantId, dto);
     }
 
     @Post('parse-voice-sale')

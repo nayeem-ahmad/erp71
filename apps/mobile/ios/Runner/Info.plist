@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>ERP71 listens when you tap the microphone to ask a question by voice.</string>
+	<string>ERP71 listens when you tap the microphone to ask a question. If you turn on Better Bangla, that recording is sent to transcribe it.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>ERP71 turns your spoken question into text so you can check it before sending.</string>
 	<key>NSFaceIDUsageDescription</key>

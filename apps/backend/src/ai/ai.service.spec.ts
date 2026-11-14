@@ -1,3 +1,4 @@
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { AiService } from './ai.service';
 
 /**
@@ -109,5 +110,103 @@ describe('AiService.completeUnbilled JSON extract options', () => {
         const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
         expect(payload.response_format).toBeUndefined();
         expect(payload.reasoning).toBeUndefined();
+    });
+});
+
+/**
+ * Ask's Better Bangla option. Same Whisper call the sale mic uses, without the
+ * sale parser, billed on the tenant's existing AI credits.
+ */
+describe('AiService.transcribe', () => {
+    const originalFetch = global.fetch;
+
+    afterEach(() => {
+        global.fetch = originalFetch;
+    });
+
+    function setup() {
+        const db = { aiUsageLog: { create: jest.fn().mockResolvedValue({}) } };
+        const service = new AiService(db as any, { getRawValue: jest.fn() } as any, {} as any);
+        const credits = jest.spyOn(service, 'enforceCredits').mockResolvedValue(undefined);
+        (service as any).getApiKey = jest.fn().mockResolvedValue('test-key');
+        return { service, db, credits };
+    }
+
+    it('sends Bangla audio to Whisper and bills the existing credit pool', async () => {
+        const { service, db, credits } = setup();
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({
+                text: 'আজকের বিক্রি',
+                usage: { total_tokens: 250, input_tokens: 200, output_tokens: 50, cost: 0.001 },
+            }),
+        }) as unknown as typeof fetch;
+
+        const result = await service.transcribe('tenant-1', {
+            audioBase64: 'aaa',
+            audioFormat: 'm4a',
+            locale: 'bn',
+        });
+
+        expect(credits).toHaveBeenCalledWith('tenant-1');
+        expect(result).toEqual({ transcript: 'আজকের বিক্রি', credits_used: 0.25 });
+        const body = JSON.parse((global.fetch as unknown as jest.Mock).mock.calls[0][1].body);
+        expect(body.model).toBe('openai/whisper-large-v3');
+        expect(body.language).toBe('bn');
+        expect(body.input_audio).toEqual({ data: 'aaa', format: 'm4a' });
+        expect(db.aiUsageLog.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                tenant_id: 'tenant-1',
+                feature: 'ask_transcription',
+                model: 'openai/whisper-large-v3',
+                credits_used: 0.25,
+            }),
+        });
+    });
+
+    it('bills by clip length when Whisper returns no token count, with a 0.05 floor', async () => {
+        const { service, db } = setup();
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ text: 'hello', usage: { seconds: 3 } }),
+        }) as unknown as typeof fetch;
+
+        const result = await service.transcribe('tenant-1', { audioBase64: 'aaa', locale: 'en' });
+
+        // 3 seconds is under the floor, so the charge is 0.05 of a credit.
+        expect(result.credits_used).toBe(0.05);
+        expect(db.aiUsageLog.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({ credits_used: 0.05, feature: 'ask_transcription' }),
+        });
+    });
+
+    it('bills a minute of audio as one credit when no tokens come back', async () => {
+        const { service } = setup();
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ text: 'hello', usage: { seconds: 60 } }),
+        }) as unknown as typeof fetch;
+
+        const result = await service.transcribe('tenant-1', { audioBase64: 'aaa' });
+
+        expect(result.credits_used).toBe(1);
+    });
+
+    it('refuses an empty recording before calling Whisper or charging credits', async () => {
+        const { service, credits } = setup();
+        global.fetch = jest.fn() as unknown as typeof fetch;
+
+        await expect(service.transcribe('tenant-1', { audioBase64: '   ' })).rejects.toBeInstanceOf(BadRequestException);
+        expect(credits).not.toHaveBeenCalled();
+        expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('does not call Whisper when the credit pool is used up', async () => {
+        const { service } = setup();
+        jest.spyOn(service, 'enforceCredits').mockRejectedValue(new ForbiddenException('AI credit limit reached'));
+        global.fetch = jest.fn() as unknown as typeof fetch;
+
+        await expect(service.transcribe('tenant-1', { audioBase64: 'aaa' })).rejects.toBeInstanceOf(ForbiddenException);
+        expect(global.fetch).not.toHaveBeenCalled();
     });
 });
