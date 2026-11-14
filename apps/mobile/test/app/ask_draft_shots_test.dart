@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:erp71_mobile/features/ask/ask_draft.dart';
@@ -266,6 +265,9 @@ Future<void> _shot(
     final container = OffsetLayer();
     final context = PaintingContext(container, Offset.zero & size);
     boundary.paint(context, Offset.zero);
+    // The picture is only attached once recording stops, and that method is
+    // protected because it is meant for the framework's own paint pass.
+    // ignore: invalid_use_of_protected_member
     context.stopRecordingIfNeeded();
     final picture = _flatten(container, size);
     final image = picture.toImageSync(size.width.ceil(), size.height.ceil());
