@@ -42,6 +42,7 @@ export type VoiceNavTargetId =
     | 'meeting-actions'
     | 'hr'
     | 'employees'
+    | 'hr-skills'
     | 'attendance'
     | 'leaves'
     | 'salary-payments';
@@ -364,6 +365,11 @@ export const VOICE_NAV_ROUTES: VoiceNavRoute[] = [
         id: 'employees',
         path: '/hr/employees',
         aliases: ['employees', 'employee', 'employee list', 'staff', 'কর্মচারী', 'pekerja'],
+    },
+    {
+        id: 'hr-skills',
+        path: '/hr/employees/skills',
+        aliases: ['skills', 'skill catalogue', 'employee skills', 'দক্ষতা', 'kemahiran'],
     },
     {
         id: 'attendance',

@@ -589,6 +589,7 @@ export const coreMessages = {
             departments: "Abteilungen",
             designations: "Positionen",
             designationLevels: "Positionsebenen",
+            skills: "Fähigkeiten",
             attendance: "Anwesenheit",
             attendanceRecords: "Anwesenheitsdatensätze",
             attendancePunches: "Ein-/Ausstempelungen",

@@ -229,6 +229,29 @@ enum EmployeeStatus {
   INACTIVE
 }
 
+/// Tenant-owned skill catalogue. Assigned to people (employee and/or user)
+/// and to projects as staffing requirements.
+enum SkillCategory {
+  TECHNICAL
+  LANGUAGE
+  SOFT
+  TOOL
+  CERTIFICATION
+  OTHER
+}
+
+enum SkillProficiency {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+enum ProjectSkillRequirement {
+  REQUIRED
+  NICE_TO_HAVE
+}
+
 /// Where a vacancy is in its own life, independent of the candidates on it.
 enum JobPostStatus {
   /// Being written. Never counted as a live opening.
@@ -524,6 +547,7 @@ model User {
   meetingAttendances                MeetingAttendee[]           @relation("MeetingAttendeeUser")
   assignedMeetingActions            MeetingActionItem[]         @relation("MeetingActionAssignee")
   meetingActionPeople               MeetingActionPerson[]       @relation("MeetingActionPersonUser")
+  personSkills                      PersonSkill[]
 }
 
 /// Why the token was issued. A password reset and a partner invite are the same
@@ -1072,6 +1096,9 @@ model Tenant {
   departments                Department[]
   designations               Designation[]
   designationLevels          DesignationLevel[]
+  skills                     Skill[]
+  personSkills               PersonSkill[]
+  projectSkills              ProjectSkill[]
   employees                  Employee[]
   leaveTypes                 LeaveType[]
   attendanceRecords          AttendanceRecord[]
@@ -5945,6 +5972,78 @@ model Designation {
   @@index([tenant_id, level_id])
 }
 
+/// A capability the tenant names once and then hangs on people and projects.
+/// Inactive skills stay on existing assignments but are not offered for new ones.
+model Skill {
+  id          String        @id @default(uuid())
+  tenant_id   String
+  name        String
+  description String?
+  category    SkillCategory @default(OTHER)
+  is_active   Boolean       @default(true)
+  sort_order  Int           @default(0)
+  created_at  DateTime      @default(now())
+  updated_at  DateTime      @updatedAt
+  deleted_at  DateTime?
+
+  tenant       Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  personSkills PersonSkill[]
+  projectSkills ProjectSkill[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id, deleted_at])
+  @@index([tenant_id, is_active])
+  @@map("skills")
+}
+
+/// A skill held by a person. EXACTLY ONE of employee_id / user_id may be the
+/// only identity, but when an employee is linked to a login both are stored
+/// so a project member keyed as a user still resolves. Prisma cannot express
+/// "at least one", so SkillsService enforces it.
+model PersonSkill {
+  id          String           @id @default(uuid())
+  tenant_id   String
+  skill_id    String
+  employee_id String?
+  user_id     String?
+  proficiency SkillProficiency @default(INTERMEDIATE)
+  notes       String?
+  created_at  DateTime         @default(now())
+  updated_at  DateTime         @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  skill    Skill     @relation(fields: [skill_id], references: [id], onDelete: Cascade)
+  employee Employee? @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([skill_id, employee_id])
+  @@unique([skill_id, user_id])
+  @@index([tenant_id, employee_id])
+  @@index([tenant_id, user_id])
+  @@map("person_skills")
+}
+
+/// A skill this project needs. Distinct from who actually has it — matching
+/// people to a project is a later read, not a write on this row.
+model ProjectSkill {
+  id              String                   @id @default(uuid())
+  tenant_id       String
+  project_id      String
+  skill_id        String
+  requirement     ProjectSkillRequirement  @default(REQUIRED)
+  min_proficiency SkillProficiency?
+  created_at      DateTime                 @default(now())
+  updated_at      DateTime                 @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  skill   Skill   @relation(fields: [skill_id], references: [id], onDelete: Cascade)
+
+  @@unique([project_id, skill_id])
+  @@index([tenant_id, project_id])
+  @@map("project_skills")
+}
+
 model Employee {
   id               String         @id @default(uuid())
   tenant_id        String
@@ -6009,6 +6108,7 @@ model Employee {
   EmployeeChecklistItem   EmployeeChecklistItem[]
   jobPostsManaged         JobPost[]                 @relation("JobPostHiringManager")
   hiredFromApplication    JobApplication?           @relation("JobApplicationHire")
+  skills                  PersonSkill[]
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])
@@ -8221,6 +8321,7 @@ model Project {
   remainingLogs  ProjectTaskRemainingLog[]
   taskActivities ProjectTaskActivity[]
   taskStatuses   ProjectTaskStatus[]
+  skills         ProjectSkill[]
 
   codeHistory ProjectCodeHistory[]
 

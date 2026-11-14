@@ -19,6 +19,8 @@ import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import type { UserStory } from '@/components/projects/StoryFormModal';
 import type { Epic } from '@/components/projects/EpicFormModal';
 import ProjectTeamCard from '@/components/projects/ProjectTeamCard';
+import ProjectSkillsCard from '@/components/projects/ProjectSkillsCard';
+import type { ProjectSkillAssignment } from '@/lib/api';
 import BacklogSummary from '@/components/projects/backlog/BacklogSummary';
 import BurndownChart, { type BurndownPoint } from '@/components/projects/BurndownChart';
 import { api } from '@/lib/api';
@@ -63,6 +65,7 @@ interface Project {
         user?: { id: string; name?: string | null; email: string } | null;
         employee?: { id: string; name: string; employee_code: string } | null;
     }[];
+    skills?: ProjectSkillAssignment[];
     milestones: { id: string; name: string; target_date?: string | null; completed_at?: string | null }[];
     progress: Progress;
 }
@@ -439,6 +442,12 @@ export default function ProjectDetailPage() {
                         projectId={projectId}
                         members={project.members}
                         isPrivate={project.visibility === 'PRIVATE'}
+                        onChanged={load}
+                    />
+
+                    <ProjectSkillsCard
+                        projectId={projectId}
+                        assignments={project.skills ?? []}
                         onChanged={load}
                     />
                 </div>

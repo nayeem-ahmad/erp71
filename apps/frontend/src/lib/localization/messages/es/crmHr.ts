@@ -751,6 +751,7 @@ export const crmHrMessages = {
                 departments: { title: "Departamentos", description: "Departamentos de la empresa para organizar al personal." },
                 designations: { title: "Cargos", description: "Denominaciones de puesto y clasificaciones de funciones." },
                 designationLevels: { title: "Niveles de cargo", description: "Niveles jerárquicos en los que se ubican los cargos." },
+                skills: { title: "Habilidades", description: "Capacidades asignadas a personas y proyectos." },
                 attendance: { title: "Asistencia", description: "Registra las entradas y salidas diarias." },
                 attendancePunches: { title: "Fichajes", description: "Cada entrada y salida detrás de la asistencia diaria." },
                 leaves: { title: "Ausencias", description: "Solicitudes de ausencia, aprobaciones y saldos." },
@@ -775,6 +776,7 @@ export const crmHrMessages = {
             departmentsStats: "Resumen de departamentos",
             designationsStats: "Resumen de cargos",
             levelsStats: "Resumen de niveles",
+            skillsStats: "Resumen de habilidades",
             jobPostsStats: "Resumen de vacantes",
             applicantsStats: "Resumen de candidatos",
             applicationsStats: "Resumen de solicitudes",
@@ -1543,6 +1545,50 @@ export const crmHrMessages = {
             "name": "p. ej. Jefe de departamento",
         },
     },
+    "skills": {
+        "title": "Habilidades",
+        "subtitle": "Capacidades asignadas a personas y proyectos",
+        "newSkill": "Nueva habilidad",
+        "emptyMessage": "Aún no hay habilidades",
+        "searchPlaceholder": "Buscar habilidades...",
+        "nameRequired": "El nombre de la habilidad es obligatorio",
+        "saveFailed": "No se pudo guardar la habilidad",
+        "deleteTitle": "Eliminar habilidad",
+        "deleteDescription": "¿Eliminar esta habilidad? Solo se puede eliminar una habilidad que nadie use.",
+        "deleteFailed": "No se pudo eliminar la habilidad",
+        "saving": "Guardando...",
+        "editSkill": "Editar habilidad",
+        "inUse": "En uso",
+        "description": "Descripción",
+        "sortOrder": "Orden",
+        "columns": {
+            "name": "Habilidad",
+            "category": "Categoría",
+            "people": "Personas",
+            "projects": "Proyectos"
+        },
+        "placeholders": {
+            "name": "p. ej. Soldadura"
+        },
+        "category": {
+            "TECHNICAL": "Técnica",
+            "LANGUAGE": "Idioma",
+            "SOFT": "Habilidad blanda",
+            "TOOL": "Herramienta",
+            "CERTIFICATION": "Certificación",
+            "OTHER": "Otra"
+        },
+        "proficiency": {
+            "BEGINNER": "Principiante",
+            "INTERMEDIATE": "Intermedio",
+            "ADVANCED": "Avanzado",
+            "EXPERT": "Experto"
+        },
+        "requirement": {
+            "REQUIRED": "Obligatoria",
+            "NICE_TO_HAVE": "Deseable"
+        }
+    },
     "employees": {
         "title": "Empleados",
         "subtitle": "Gestiona las fichas del personal, los departamentos y el acceso al sistema",
@@ -1609,7 +1655,22 @@ export const crmHrMessages = {
             "unlink": "Desvincular",
             "link": "Vincular",
             "linkDescription": "Vincula a este empleado con una cuenta de usuario del sistema para que pueda iniciar sesión.",
-            "linkTip": "Consejo: busca el ID de usuario en Ajustes > Usuarios y pégalo aquí."
+            "linkTip": "Consejo: busca el ID de usuario en Ajustes > Usuarios y pégalo aquí.",
+            "skills": {
+                "title": "Habilidades",
+                "add": "Añadir habilidad",
+                "empty": "Aún no hay habilidades asignadas.",
+                "skill": "Habilidad",
+                "proficiency": "Nivel",
+                "notes": "Notas",
+                "added": "Habilidad añadida",
+                "addFailed": "No se pudo añadir esa habilidad",
+                "updated": "Habilidad actualizada",
+                "updateFailed": "No se pudo actualizar esa habilidad",
+                "removed": "Habilidad eliminada",
+                "removeFailed": "No se pudo eliminar esa habilidad",
+                "remove": "Quitar habilidad"
+            }
         },
         "editEmployee": "Editar empleado",
         "statuses": {

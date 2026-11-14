@@ -163,6 +163,23 @@ export const projectsMessages = {
         noLoginHint: "Los empleados sin cuenta del espacio de trabajo pueden formar parte del equipo y tener tareas, pero no pueden iniciar sesión para verlas.",
     },
 
+    skills: {
+        title: "Habilidades necesarias",
+        add: "Añadir habilidad",
+        empty: "Aún no hay habilidades en este proyecto.",
+        skill: "Habilidad",
+        requirement: "Requisito",
+        minProficiency: "Nivel mínimo",
+        added: "Habilidad añadida",
+        addFailed: "No se pudo añadir esa habilidad",
+        updated: "Habilidad actualizada",
+        updateFailed: "No se pudo actualizar esa habilidad",
+        removed: "Habilidad eliminada",
+        removeFailed: "No se pudo eliminar esa habilidad",
+        remove: "Quitar habilidad",
+        none: "Cualquier nivel",
+    },
+
     milestones: {
         add: "Añadir hito",
         name: "Nombre del hito",

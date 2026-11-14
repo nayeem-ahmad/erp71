@@ -170,6 +170,8 @@ export const EXPENSE_WRITE: P[] = [P.CREATE_VOUCHER];
 // People ------------------------------------------------------------------------
 export const HR_READ: P[] = [P.VIEW_HR, P.MANAGE_HR];
 export const HR_WRITE: P[] = [P.MANAGE_HR];
+/** Skill catalogue is picked on both HR people and project staffing. */
+export const SKILL_READ: P[] = [P.VIEW_HR, P.MANAGE_HR, P.VIEW_PROJECTS];
 export const PAYROLL_READ: P[] = [P.VIEW_PAYROLL, P.MANAGE_HR];
 export const PAYROLL_WRITE: P[] = [P.MANAGE_HR];
 /** Accruing salaries posts vouchers, so the accountant who runs it may too. */

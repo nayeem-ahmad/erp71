@@ -8,6 +8,39 @@ export const UserRole = {
 } as const;
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
+/** Tenant skill catalogue. Same strings as the Prisma `SkillCategory` enum. */
+export const SkillCategory = {
+  TECHNICAL: "TECHNICAL",
+  LANGUAGE: "LANGUAGE",
+  SOFT: "SOFT",
+  TOOL: "TOOL",
+  CERTIFICATION: "CERTIFICATION",
+  OTHER: "OTHER",
+} as const;
+export type SkillCategory = (typeof SkillCategory)[keyof typeof SkillCategory];
+export const SKILL_CATEGORY_VALUES = Object.values(SkillCategory) as SkillCategory[];
+
+/** How well a person holds a skill. Same strings as Prisma `SkillProficiency`. */
+export const SkillProficiency = {
+  BEGINNER: "BEGINNER",
+  INTERMEDIATE: "INTERMEDIATE",
+  ADVANCED: "ADVANCED",
+  EXPERT: "EXPERT",
+} as const;
+export type SkillProficiency = (typeof SkillProficiency)[keyof typeof SkillProficiency];
+export const SKILL_PROFICIENCY_VALUES = Object.values(SkillProficiency) as SkillProficiency[];
+
+/** Whether a project needs the skill or merely prefers it. */
+export const ProjectSkillRequirement = {
+  REQUIRED: "REQUIRED",
+  NICE_TO_HAVE: "NICE_TO_HAVE",
+} as const;
+export type ProjectSkillRequirement =
+  (typeof ProjectSkillRequirement)[keyof typeof ProjectSkillRequirement];
+export const PROJECT_SKILL_REQUIREMENT_VALUES = Object.values(
+  ProjectSkillRequirement,
+) as ProjectSkillRequirement[];
+
 /**
  * Payment method types — the single source of truth for both the backend DTO
  * validator and the settings form. These exact strings are what get stored in
@@ -101,6 +134,7 @@ export const StorePermission = {
   VIEW_HR: "VIEW_HR",
   VIEW_PAYROLL: "VIEW_PAYROLL",
   MANAGE_HR: "MANAGE_HR",
+
 
   // Loans
   VIEW_LOANS: "VIEW_LOANS",
@@ -1022,7 +1056,7 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.MANAGE_CRM_SETTINGS]: "Manage CRM custom fields & settings",
   [StorePermission.VIEW_HR]: "View employees & attendance",
   [StorePermission.VIEW_PAYROLL]: "View salary & payroll figures",
-  [StorePermission.MANAGE_HR]: "Create & edit employees, departments & designations",
+  [StorePermission.MANAGE_HR]: "Create & edit employees, departments, designations & skills",
   [StorePermission.VIEW_LOANS]: "View loans",
   [StorePermission.MANAGE_LOANS]: "Manage loans",
   [StorePermission.VIEW_INVESTORS]: "View investors & profit shares",

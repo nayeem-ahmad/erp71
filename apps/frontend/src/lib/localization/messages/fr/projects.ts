@@ -163,6 +163,23 @@ export const projectsMessages = {
         noLoginHint: "Les salariés sans compte peuvent faire partie de l'équipe et porter des tâches, mais ne peuvent pas se connecter pour les consulter.",
     },
 
+    skills: {
+        title: "Compétences requises",
+        add: "Ajouter une compétence",
+        empty: "Aucune compétence n'est encore listée pour ce projet.",
+        skill: "Compétence",
+        requirement: "Exigence",
+        minProficiency: "Niveau minimum",
+        added: "Compétence ajoutée",
+        addFailed: "Impossible d'ajouter cette compétence",
+        updated: "Compétence mise à jour",
+        updateFailed: "Impossible de mettre à jour cette compétence",
+        removed: "Compétence retirée",
+        removeFailed: "Impossible de retirer cette compétence",
+        remove: "Retirer la compétence",
+        none: "Tout niveau",
+    },
+
     milestones: {
         add: "Ajouter un jalon",
         name: "Nom du jalon",

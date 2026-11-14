@@ -41,6 +41,10 @@ const EMPLOYEE_INCLUDE = {
     department: true,
     designation: { include: DESIGNATION_RELATIONS },
     user: { select: EMPLOYEE_USER_SELECT },
+    skills: {
+        include: { skill: { select: { id: true, name: true, category: true, is_active: true } } },
+        orderBy: { created_at: 'asc' as const },
+    },
 } as const;
 
 /** `?status=active|inactive` on a master list; anything else lists both. */
