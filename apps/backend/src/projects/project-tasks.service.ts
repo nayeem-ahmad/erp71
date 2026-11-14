@@ -4,7 +4,7 @@ import { DatabaseService } from '../database/database.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { composeTaskKey, parseTaskKey } from './url-keys/task-key';
 import { paginate } from '../common/pagination.dto';
-import { createdAtRange } from '../common/created-range.util';
+import { zonedDateString } from '../common/tenant-time.util';
 import { runImport, type ImportResult } from '../common/import.util';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import {
@@ -39,6 +39,17 @@ import {
     nameIndex,
     requiredText,
 } from './project-import.util';
+import {
+    DUE_PRESETS,
+    TIME_FLAGS,
+    UPDATED_PRESETS,
+    buildTaskListWhere,
+    duePresetClause,
+    hoursOf,
+    timeFlagsOf,
+    updatedPresetClause,
+    type TaskListOmit,
+} from './task-list-filters';
 
 /** What a bulk change reports: how many tasks took it, and why each of the rest did not. */
 export interface BulkTaskOutcome {
@@ -77,32 +88,6 @@ const TASK_SORTABLE: SortableMap = {
     created_at: (dir) => ({ created_at: dir }),
     sort_order: (dir) => ({ sort_order: dir }),
 };
-
-/**
- * The tasks a sprint's list shows: those in it now, plus those whose stay in it
- * ended other than by removal — done there, carried on, or returned to the
- * backlog when it completed. So a completed sprint still lists the work it was
- * committed to, and a task taken out mid-sprint drops out as it always did.
- *
- * Current members are matched on `sprint_id`, not on an open history row, so
- * the list is right even for tasks that joined before history was recorded.
- */
-function inSprint(sprintId: string) {
-    return {
-        OR: [
-            { sprint_id: sprintId },
-            {
-                sprintMemberships: {
-                    some: {
-                        sprint_id: sprintId,
-                        removed_at: { not: null },
-                        outcome: { in: ['DONE', 'CARRIED_OVER', 'RETURNED_TO_BACKLOG'] },
-                    },
-                },
-            },
-        ],
-    };
-}
 
 /** A task's latest stay in one sprint — a task re-added after removal has two. */
 function membershipIn(sprintId: string) {
@@ -221,39 +206,12 @@ export class ProjectTasksService {
         const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
         const page = Math.max(query.page ?? 1, 1);
 
-        const created = createdAtRange(query.createdFrom, query.createdTo, viewer.timezone);
+        // Logged hours are a sum, not a column. Resolve the matching task ids
+        // once; the where builder (and the counts that ignore this dimension)
+        // only consume the list.
+        const timeIds = await this.timeMatchIds(tenantId, query);
 
-        const where: Record<string, unknown> = {
-            tenant_id: tenantId,
-            deleted_at: null,
-            ...(query.projectId ? { project_id: query.projectId } : {}),
-            ...(query.assigneeId ? { assignee_id: query.assigneeId } : {}),
-            ...(query.assigneeEmployeeId ? { assignee_employee_id: query.assigneeEmployeeId } : {}),
-            // Both columns at once, because a task is held if either one names
-            // somebody. Spread after the two above so that when a caller sends an
-            // assignee *and* this flag, the flag wins rather than the pair
-            // silently combining into a query that can never match.
-            ...(query.unassigned === 'true'
-                ? { assignee_id: null, assignee_employee_id: null }
-                : {}),
-            ...(query.priority ? { priority: query.priority } : {}),
-            ...(created ? { created_at: created } : {}),
-            ...(query.statusId ? { status_id: query.statusId } : {}),
-            ...(query.statusCategory
-                ? { status: { category: query.statusCategory.toUpperCase() } }
-                : {}),
-            ...(query.milestoneId ? { milestone_id: query.milestoneId } : {}),
-            ...(query.userStoryId ? { user_story_id: query.userStoryId } : {}),
-            // Spread after the id for the reason `unassigned` is spread after
-            // the assignee columns: a caller sending both meant the flag.
-            ...(query.noUserStory === 'true' ? { user_story_id: null } : {}),
-            ...(query.labelId ? { labels: { some: { label_id: query.labelId } } } : {}),
-        };
-        if (query.backlogOnly === 'true') where.sprint_id = null;
-        else if (query.sprintId) where.AND = [inSprint(query.sprintId)];
-
-        const search = query.search?.trim();
-        if (search) where.title = { contains: search, mode: 'insensitive' };
+        const where = buildTaskListWhere(tenantId, query, viewer.timezone, timeIds);
 
         // The cross-project Tasks page reads every task in the tenant, so this
         // is where a private project's work would otherwise leak in full —
@@ -289,7 +247,189 @@ export class ProjectTasksService {
         const decorated = query.sprintId
             ? await this.attachCarriedIn(tenantId, query.sprintId, withTrend)
             : withTrend;
-        return paginate(decorated, total, page, limit);
+        const pageResult = paginate(decorated, total, page, limit);
+        if (query.counts !== 'true') return pageResult;
+        const counts = await this.taskCounts(viewer, query, timeIds);
+        return { ...pageResult, counts };
+    }
+
+    /**
+     * Tasks whose logged hours match the time flags and the hours range.
+     * Null when neither filter is set. The sum lives on time entries, so this
+     * is one grouped read rather than a column the where can name.
+     */
+    private async timeMatchIds(tenantId: string, query: ListTasksDto): Promise<string[] | null> {
+        const flags = timeFlagsOf(query);
+        const hours = hoursOf(query);
+        if (flags.length === 0 && !hours) return null;
+        const parts: Prisma.Sql[] = [];
+        if (flags.length) {
+            const ors = flags.map((flag) => {
+                if (flag === 'none') return Prisma.sql`COALESCE(e.logged, 0) = 0`;
+                if (flag === 'no-estimate') return Prisma.sql`t.estimate_hours IS NULL`;
+                return Prisma.sql`(t.estimate_hours IS NOT NULL AND COALESCE(e.logged, 0) > t.estimate_hours)`;
+            });
+            parts.push(Prisma.sql`(${Prisma.join(ors, ' OR ')})`);
+        }
+        if (hours) {
+            const logged = Prisma.sql`COALESCE(e.logged, 0)`;
+            if (hours.op === 'gt') parts.push(Prisma.sql`${logged} > ${hours.value}`);
+            else if (hours.op === 'lt') parts.push(Prisma.sql`${logged} < ${hours.value}`);
+            else if (hours.op === 'eq') parts.push(Prisma.sql`${logged} = ${hours.value}`);
+            else {
+                const upper = hours.to ?? hours.value;
+                const low = Math.min(hours.value, upper);
+                const high = Math.max(hours.value, upper);
+                parts.push(Prisma.sql`${logged} >= ${low} AND ${logged} <= ${high}`);
+            }
+        }
+        const condition = Prisma.join(parts, ' AND ');
+        const rows = await this.db.$queryRaw<{ id: string }[]>(Prisma.sql`
+            SELECT t.id
+            FROM project_tasks t
+            LEFT JOIN (
+                SELECT task_id, SUM(hours) AS logged
+                FROM project_time_entries
+                WHERE tenant_id = ${tenantId}
+                GROUP BY task_id
+            ) e ON e.task_id = t.id
+            WHERE t.tenant_id = ${tenantId}
+              AND t.deleted_at IS NULL
+              AND ${condition}
+        `);
+        return rows.map((row) => row.id);
+    }
+
+    /**
+     * How many tasks each option would add, with every other filter still
+     * applied. Only when the list asks — the sprint page uses this endpoint
+     * and does not.
+     */
+    private async taskCounts(viewer: ProjectViewer, query: ListTasksDto, timeIds: string[] | null) {
+        const access = await this.access.taskFilter(viewer);
+        const zone = viewer.timezone;
+        const today = zonedDateString(new Date(), zone);
+        const scoped = (omit?: TaskListOmit) =>
+            ProjectAccessService.merge(
+                buildTaskListWhere(viewer.tenantId, query, zone, omit === 'time' ? null : timeIds, omit),
+                access,
+            );
+        const countWhere = (omit: TaskListOmit, extra: Record<string, unknown>) => ({
+            AND: [scoped(omit), extra],
+        });
+
+        const [
+            priorities,
+            statusIds,
+            projects,
+            sprints,
+            stories,
+            users,
+            employees,
+            unassigned,
+            labels,
+            statuses,
+            dueCounts,
+            updatedCounts,
+            timeCounts,
+        ] = await Promise.all([
+            this.db.projectTask.groupBy({ by: ['priority'], where: scoped('priority'), _count: { _all: true } }),
+            this.db.projectTask.groupBy({ by: ['status_id'], where: scoped('status'), _count: { _all: true } }),
+            this.db.projectTask.groupBy({ by: ['project_id'], where: scoped('project'), _count: { _all: true } }),
+            this.db.projectTask.groupBy({ by: ['sprint_id'], where: scoped('sprint'), _count: { _all: true } }),
+            this.db.projectTask.groupBy({ by: ['user_story_id'], where: scoped('story'), _count: { _all: true } }),
+            this.db.projectTask.groupBy({ by: ['assignee_id'], where: scoped('assignee'), _count: { _all: true } }),
+            this.db.projectTask.groupBy({
+                by: ['assignee_employee_id'],
+                where: scoped('assignee'),
+                _count: { _all: true },
+            }),
+            this.db.projectTask.count({
+                where: countWhere('assignee', { assignee_id: null, assignee_employee_id: null }),
+            }),
+            this.db.projectTaskLabel.groupBy({
+                by: ['label_id'],
+                where: { task: scoped('label') },
+                _count: { _all: true },
+            }),
+            this.db.projectTaskStatus.findMany({
+                where: { tenant_id: viewer.tenantId },
+                select: { id: true, category: true },
+            }),
+            Promise.all(
+                DUE_PRESETS.map(async (preset) => {
+                    const clause = duePresetClause(preset, today);
+                    const n = clause ? await this.db.projectTask.count({ where: countWhere('due', clause) }) : 0;
+                    return [preset, n] as const;
+                }),
+            ),
+            Promise.all(
+                UPDATED_PRESETS.map(async (preset) => {
+                    const clause = updatedPresetClause(preset, today, zone);
+                    const n = clause ? await this.db.projectTask.count({ where: countWhere('updated', clause) }) : 0;
+                    return [preset, n] as const;
+                }),
+            ),
+            Promise.all(
+                TIME_FLAGS.map(async (flag) => {
+                    const ids = await this.timeMatchIds(viewer.tenantId, { time: flag } as ListTasksDto);
+                    const n = ids
+                        ? await this.db.projectTask.count({ where: countWhere('time', { id: { in: ids.length ? ids : ['00000000-0000-0000-0000-000000000000'] } }) })
+                        : 0;
+                    return [flag, n] as const;
+                }),
+            ),
+        ]);
+
+        const tally = (rows: { _count: { _all: number } }[], key: (row: any) => string | null) => {
+            const out: Record<string, number> = {};
+            for (const row of rows) {
+                const id = key(row);
+                if (id) out[id] = (out[id] ?? 0) + row._count._all;
+                else out.none = (out.none ?? 0) + row._count._all;
+            }
+            return out;
+        };
+        const categoryOf = new Map(statuses.map((status: { id: string; category: string }) => [status.id, status.category]));
+        const status: Record<string, number> = {};
+        for (const row of statusIds) {
+            const category = categoryOf.get(row.status_id) ?? 'TODO';
+            status[category] = (status[category] ?? 0) + row._count._all;
+        }
+        const storyIds = stories.map((row: { user_story_id: string | null }) => row.user_story_id).filter(Boolean);
+        const storyEpics = storyIds.length
+            ? await this.db.projectUserStory.findMany({
+                  where: { tenant_id: viewer.tenantId, id: { in: storyIds } },
+                  select: { id: true, epic_id: true },
+              })
+            : [];
+        const epicOf = new Map(storyEpics.map((story: { id: string; epic_id: string | null }) => [story.id, story.epic_id]));
+        const epic: Record<string, number> = {};
+        for (const row of stories) {
+            const epicId = row.user_story_id ? epicOf.get(row.user_story_id) : null;
+            if (epicId) epic[epicId] = (epic[epicId] ?? 0) + row._count._all;
+            else epic.none = (epic.none ?? 0) + row._count._all;
+        }
+        const assignee: Record<string, number> = { unassigned };
+        for (const row of users) {
+            if (row.assignee_id) assignee[`user:${row.assignee_id}`] = row._count._all;
+        }
+        for (const row of employees) {
+            if (row.assignee_employee_id) assignee[`employee:${row.assignee_employee_id}`] = row._count._all;
+        }
+        return {
+            priority: tally(priorities, (row) => row.priority),
+            status,
+            project: tally(projects, (row) => row.project_id),
+            sprint: tally(sprints, (row) => row.sprint_id),
+            story: tally(stories, (row) => row.user_story_id),
+            epic,
+            assignee,
+            label: tally(labels, (row) => row.label_id),
+            due: Object.fromEntries(dueCounts),
+            updated: Object.fromEntries(updatedCounts),
+            time: Object.fromEntries(timeCounts),
+        };
     }
 
     /**

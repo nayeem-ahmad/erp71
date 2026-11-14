@@ -12,8 +12,20 @@ jest.mock('next/link', () => {
     return MockLink;
 });
 
+jest.mock('next/navigation', () => ({
+    useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
+    usePathname: () => '/projects/boards',
+    useSearchParams: () => new URLSearchParams(),
+}));
+
 jest.mock('@/lib/api', () => ({
-    api: { getBoards: jest.fn(), createBoard: jest.fn(), deleteBoard: jest.fn() },
+    api: {
+        getBoards: jest.fn(),
+        createBoard: jest.fn(),
+        deleteBoard: jest.fn(),
+        getProjects: jest.fn().mockResolvedValue({ items: [] }),
+        getMe: jest.fn().mockResolvedValue({ id: 'user-me' }),
+    },
 }));
 
 // The global matchMedia mock always reports non-matching, so without this the
@@ -25,6 +37,7 @@ jest.mock('@/hooks/useMediaQuery', () => ({
 
 describe('BoardsPage', () => {
     beforeEach(() => {
+        sessionStorage.clear();
         // The mocked `api` module is shared across every test in this file, so its
         // call counts must be reset here — otherwise `toHaveBeenCalledTimes`
         // assertions accumulate calls from earlier tests in the suite.

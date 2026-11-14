@@ -8,6 +8,7 @@ import {
     Patch,
     Post,
     Put,
+    Query,
     UseGuards,
     UseInterceptors,
 } from '@nestjs/common';
@@ -24,6 +25,7 @@ import {
     CreateBoardCardDto,
     CreateBoardColumnDto,
     CreateBoardDto,
+    ListBoardsDto,
     MoveBoardCardDto,
     MoveBoardCardsDto,
     OrderBoardColumnCardsDto,
@@ -61,8 +63,8 @@ export class BoardsController {
 
     @Get()
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
-    list(@Tenant() tenant: TenantContext) {
-        return this.boards.list(tenant);
+    list(@Tenant() tenant: TenantContext, @Query() query: ListBoardsDto) {
+        return this.boards.list(tenant, query);
     }
 
     @Post()

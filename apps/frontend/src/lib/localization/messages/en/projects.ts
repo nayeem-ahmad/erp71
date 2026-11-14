@@ -24,6 +24,15 @@ export const projectsMessages = {
         },
     },
 
+    workList: {
+        owner: 'Owner',
+        noOwner: 'No owner',
+        createdBetween: 'Created between',
+        startBetween: 'Starts between',
+        targetBetween: 'Target between',
+        storyPoints: 'Story points',
+    },
+
     fields: {
         code: 'Code',
         codeHint: "Task keys are built from it — {code}-14. Suggested from the name; change it if you like.",

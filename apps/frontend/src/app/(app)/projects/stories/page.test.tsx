@@ -2,7 +2,11 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import ProjectStoriesPage from './page';
 import { api } from '@/lib/api';
 
-jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));
+jest.mock('next/navigation', () => ({
+    useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
+    usePathname: () => '/projects/stories',
+    useSearchParams: () => new URLSearchParams(),
+}));
 
 jest.mock('next/link', () => {
     const MockLink = ({ children, href }: any) => <a href={href}>{children}</a>;
@@ -16,6 +20,7 @@ jest.mock('@/lib/api', () => ({
         getProjectStories: jest.fn(),
         getProjectEpics: jest.fn().mockResolvedValue([]),
         getProjects: jest.fn(),
+        getMe: jest.fn().mockResolvedValue({ id: 'user-me' }),
         createProjectStory: jest.fn(),
         importProjectStories: jest.fn(),
         reorderBacklogScope: jest.fn(),
@@ -87,6 +92,7 @@ const storyList = () => [
 beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+    sessionStorage.clear();
     (api.getAllProjectsBacklog as jest.Mock).mockResolvedValue(backlog());
     (api.getProjectStories as jest.Mock).mockResolvedValue(storyList());
     (api.getProjectEpics as jest.Mock).mockResolvedValue([

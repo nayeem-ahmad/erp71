@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
     BookOpen,
     CheckCircle2,
@@ -28,6 +29,18 @@ import {
 } from '@/components/projects/StoryFormModal';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
+import { fetchMe } from '@/hooks/use-me';
+import { useFilterUrl } from '@/components/projects/use-filter-url';
+import {
+    EMPTY_STORY_FILTERS,
+    filterStories,
+    parseStoryFilters,
+    storyFiltersToQuery,
+    storyRange,
+    type StoryFilterDimension,
+    type StoryFilterState,
+} from '@/components/projects/work-list-filters';
+import type { NumberCondition } from '@/lib/number-condition';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { useRememberedFilters } from '@/lib/use-remembered-filters';
@@ -119,10 +132,16 @@ function useRememberedView(): [StoryView, (view: StoryView) => void] {
  * Every project's user stories on one screen. The default is the standard list
  * UI (filter row, stats strip, View options); Hierarchy keeps the backlog tree.
  */
-export default function ProjectStoriesPage() {
+function ProjectStoriesList() {
     const { t, fmt, locale } = useI18n();
     const m = t.projects;
     const listUi = m.storyList.listUi;
+    const copy = t.projects.sprint.filters;
+    const work = t.projects.workList;
+    const searchParams = useSearchParams();
+    // Read once, at mount: from here on the controls own these.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const initial = useMemo(() => parseStoryFilters(searchParams), []);
 
     const [view, setView] = useRememberedView();
     const [stories, setStories] = useState<StoryRow[]>([]);
@@ -132,34 +151,28 @@ export default function ProjectStoriesPage() {
     const [creating, setCreating] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
 
-    const [filters, setFilter, filtersReady] = useRememberedFilters('project-stories', {
-        search: '',
-        projectId: '',
-        status: '',
-        priority: '',
-        /** `''` any, `'none'` stories under no epic, otherwise an epic id. */
-        epic: '',
-    });
-    const { search, projectId, status, priority, epic } = filters;
+    const [filters, setFilter, filtersReady] = useRememberedFilters<StoryFilterState>(
+        'project-stories',
+        { ...EMPTY_STORY_FILTERS, ...initial.filters },
+        initial.owned,
+    );
+    const [userId, setUserId] = useState<string | null>(null);
+    useFilterUrl(filtersReady, filters, storyFiltersToQuery);
 
     const load = useCallback(async () => {
-        if (!filtersReady || view !== 'list') return;
+        if (view !== 'list') return;
         setLoading(true);
         try {
-            const list = await api.getProjectStories({
-                projectId: projectId || undefined,
-                status: status || undefined,
-                priority: priority || undefined,
-                epicId: epic && epic !== 'none' ? epic : undefined,
-                noEpic: epic === 'none' || undefined,
-            });
+            // The list is the whole backlog the caller can see. Filters run here
+            // so each option can show how many stories it would add.
+            const list = await api.getProjectStories();
             setStories(Array.isArray(list) ? (list as StoryRow[]) : []);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.stories.loadFailed);
         } finally {
             setLoading(false);
         }
-    }, [epic, filtersReady, m.stories.loadFailed, priority, projectId, status, view]);
+    }, [m.stories.loadFailed, view]);
 
     useEffect(() => {
         void load();
@@ -169,86 +182,152 @@ export default function ProjectStoriesPage() {
         api.getProjects({ limit: 100 })
             .then((res) => setProjects((res?.items ?? []) as StoryProjectOption[]))
             .catch(() => setProjects([]));
+        void Promise.resolve()
+            .then(() => fetchMe())
+            .then((me) => setUserId(me?.id ?? null))
+            .catch(() => setUserId(null));
     }, []);
 
-    // The epic filter's options follow the project filter: an epic belongs to
-    // one project, and offering every epic across projects is noise.
     useEffect(() => {
         if (view !== 'list') return;
-        api.getProjectEpics(projectId ? { projectId } : {})
+        api.getProjectEpics()
             .then((rows: unknown) => setEpics(Array.isArray(rows) ? (rows as typeof epics) : []))
             .catch(() => setEpics([]));
-    }, [projectId, view]);
+    }, [view]);
 
-    const filtered = useMemo(() => {
-        const term = search.trim().toLowerCase();
-        if (!term) return stories;
-        return stories.filter(
-            (story) =>
-                story.code.toLowerCase().includes(term)
-                || story.title.toLowerCase().includes(term)
-                || (story.i_want ?? '').toLowerCase().includes(term),
-        );
-    }, [stories, search]);
+    const filtered = useMemo(
+        () => filterStories(stories, filters, userId),
+        [stories, filters, userId],
+    );
+    const countStories = (omit: StoryFilterDimension, pick: (story: StoryRow) => boolean) =>
+        filterStories(stories, filters, userId, omit).filter(pick).length;
 
-    const listFilters = useMemo<ListFilter[]>(
-        () => [
-            {
-                id: 'project',
-                type: 'select',
-                label: m.fields.project,
-                value: projectId || null,
-                onChange: (next) => {
-                    setFilter('projectId', next ?? '');
-                    // A picked epic may not be in the newly chosen project.
-                    if (epic && epic !== 'none') setFilter('epic', '');
-                },
-                options: projects.map((project) => ({
-                    value: project.id,
-                    label: `${project.code} · ${project.name}`,
-                })),
-            },
+    const epicOptions = filters.projectIds.length
+        ? epics.filter((epic) => {
+            const projectId = (epic.project as { id?: string } | null | undefined)?.id;
+            return !projectId || filters.projectIds.includes(projectId);
+        })
+        : epics;
+    const owners = new Map<string, string>();
+    for (const story of stories) {
+        const creator = (story as StoryRow & { creator?: { id: string; name?: string | null; email?: string } }).creator;
+        if (creator?.id && !owners.has(creator.id)) owners.set(creator.id, creator.name || creator.email || creator.id);
+    }
+
+    const listFilters = useMemo<ListFilter[]>(() => {
+        const created = storyRange(filters, 'created');
+        const updated = storyRange(filters, 'updated');
+        return [
             {
                 id: 'status',
-                type: 'select',
+                type: 'multi-select',
                 label: m.fields.status,
-                value: status || null,
-                onChange: (next) => setFilter('status', next ?? ''),
+                value: filters.statuses,
+                onChange: (statuses) => setFilter('statuses', statuses),
                 options: STATUSES.map((value) => ({
                     value,
                     label: m.stories.statuses[value],
+                    count: countStories('status', (story) => story.status === value),
                 })),
             },
             {
                 id: 'priority',
-                type: 'select',
+                type: 'multi-select',
                 label: m.fields.priority,
-                value: priority || null,
-                onChange: (next) => setFilter('priority', next ?? ''),
+                value: filters.priorities,
+                onChange: (priorities) => setFilter('priorities', priorities),
                 options: PRIORITIES.map((value) => ({
                     value,
                     label: m.priority[value],
+                    count: countStories('priority', (story) => story.priority === value),
+                })),
+            },
+            {
+                id: 'project',
+                type: 'multi-select',
+                label: m.fields.project,
+                value: filters.projectIds,
+                onChange: (projectIds) => setFilter('projectIds', projectIds),
+                options: projects.map((project) => ({
+                    value: project.id,
+                    label: `${project.code} · ${project.name}`,
+                    count: countStories('project', (story) => story.project?.id === project.id),
                 })),
             },
             {
                 id: 'epic',
-                type: 'select',
+                type: 'multi-select',
                 label: m.epics.field,
-                value: epic || null,
-                onChange: (next) => setFilter('epic', next ?? ''),
+                value: filters.epicIds,
+                onChange: (epicIds) => setFilter('epicIds', epicIds),
                 options: [
-                    { value: 'none', label: m.storyList.noEpic },
-                    ...epics.map((option) => ({
+                    {
+                        value: 'none',
+                        label: m.storyList.noEpic,
+                        count: countStories('epic', (story) => !story.epic?.id),
+                    },
+                    ...epicOptions.map((option) => ({
                         value: option.id,
                         label: option.project?.code
                             ? `${option.code} · ${option.project.code}`
                             : `${option.code} · ${option.title}`,
+                        count: countStories('epic', (story) => story.epic?.id === option.id),
                     })),
                 ],
             },
-        ],
-        [m, projectId, projects, status, priority, epic, epics, setFilter],
-    );
+            {
+                id: 'owner',
+                type: 'multi-select',
+                label: work.owner,
+                more: true,
+                value: filters.ownerIds,
+                onChange: (ownerIds) => setFilter('ownerIds', ownerIds),
+                options: [
+                    { value: 'me', label: copy.me, count: countStories('owner', (story) => ((story as { creator?: { id?: string }; created_by?: string }).creator?.id ?? (story as { created_by?: string }).created_by) === userId) },
+                    { value: 'none', label: work.noOwner, count: countStories('owner', (story) => !((story as { creator?: { id?: string }; created_by?: string }).creator?.id ?? (story as { created_by?: string }).created_by)) },
+                    ...[...owners.entries()].map(([value, label]) => ({
+                        value,
+                        label,
+                        count: countStories('owner', (story) => ((story as { creator?: { id?: string }; created_by?: string }).creator?.id ?? (story as { created_by?: string }).created_by) === value),
+                    })),
+                ],
+            },
+            {
+                id: 'points',
+                type: 'number',
+                label: work.storyPoints,
+                more: true,
+                value: filters.points,
+                onChange: (points: NumberCondition | null) => setFilter('points', points),
+            },
+            {
+                id: 'created',
+                type: 'date-range',
+                label: work.createdBetween,
+                more: true,
+                value: created,
+                presets: [],
+                onChange: (next) => {
+                    setFilter('createdFrom', next?.from ?? '');
+                    setFilter('createdTo', next?.to ?? '');
+                },
+            },
+            {
+                id: 'updated',
+                type: 'date-range',
+                label: copy.updatedBetween,
+                more: true,
+                value: updated,
+                presets: [],
+                onChange: (next) => {
+                    setFilter('updatedFrom', next?.from ?? '');
+                    setFilter('updatedTo', next?.to ?? '');
+                },
+            },
+        ];
+        // countStories closes over the latest rows. Rebuilding when they change is the point.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [m, work, copy, filters, projects, epicOptions, owners, stories, userId, setFilter]);
 
     const stats = useMemo(() => {
         const n = (value: number) => value.toLocaleString(locale);
@@ -427,7 +506,7 @@ export default function ProjectStoriesPage() {
         [fmt, m],
     );
 
-    const anyFilter = Boolean(search.trim() || projectId || status || priority || epic);
+    const anyFilter = filtered.length !== stories.length || Boolean(filters.search.trim());
 
     const headerActions = (onNew: () => void, onReload?: () => void) => (
         <>
@@ -513,10 +592,11 @@ export default function ProjectStoriesPage() {
                 emptyMessage={anyFilter ? m.storyList.emptyFiltered : m.storyList.empty}
                 emptyIcon={<BookOpen className="h-16 w-16 text-gray-200" />}
                 searchPlaceholder={m.storyList.searchPlaceholder}
-                searchValue={search}
+                searchValue={filters.search}
                 onSearchChange={(value) => setFilter('search', value)}
                 filters={listFilters}
                 filterLayout="row"
+                scrollFilterRow
                 stats={stats}
                 enableColumnFilters={false}
                 viewOptions
@@ -527,7 +607,7 @@ export default function ProjectStoriesPage() {
                 <StoryFormModal
                     projects={projects}
                     story={null}
-                    initialProjectId={projectId || undefined}
+                    initialProjectId={filters.projectIds.length === 1 ? filters.projectIds[0] : undefined}
                     onClose={() => setCreating(false)}
                     onSaved={async () => {
                         setCreating(false);
@@ -536,5 +616,13 @@ export default function ProjectStoriesPage() {
                 />
             )}
         </PageShell>
+    );
+}
+
+export default function ProjectStoriesPage() {
+    return (
+        <Suspense fallback={null}>
+            <ProjectStoriesList />
+        </Suspense>
     );
 }

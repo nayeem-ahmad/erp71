@@ -3,6 +3,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronUp, ListFilter as ListFilterIcon, X } from 'lucide-react';
 import ModalShell from '@/components/ModalShell';
+import AnchoredDropdown from '@/components/document-entry/AnchoredDropdown';
 import { Button } from '@/components/ui';
 import { formatBDT } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
@@ -507,7 +508,10 @@ function useChipPopover(onOpenChange?: (open: boolean) => void) {
     useEffect(() => {
         if (!open) return;
         const onPointer = (event: MouseEvent) => {
-            if (!rootRef.current?.contains(event.target as Node)) latestSetOpen.current(false);
+            const target = event.target as Node;
+            // The panel is portaled to document.body, so it is not inside the chip.
+            if (rootRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+            latestSetOpen.current(false);
         };
         const onKey = (event: KeyboardEvent) => {
             if (event.key === 'Escape') latestSetOpen.current(false);
@@ -574,16 +578,18 @@ function PopoverChip({ filter }: { filter: PanelFilter }) {
                 ) : null}
             </div>
             {popover.open ? (
-                <div
-                    ref={popover.panelRef}
+                <AnchoredDropdown
+                    anchorRef={popover.rootRef}
+                    panelRef={popover.panelRef}
+                    matchAnchorWidth={false}
+                    align={popover.alignEnd ? 'end' : 'start'}
                     role="dialog"
                     aria-label={label}
-                    className={`absolute top-full z-50 mt-1 max-w-[calc(100vw-1rem)] rounded-lg border border-gray-200 bg-white shadow-lg ${
-                        popover.alignEnd ? 'end-0' : 'start-0'
-                    }`}
+                    maxHeight={360}
+                    className="rounded-lg border-gray-200"
                 >
                     <FilterPanel filter={filter} onDone={() => popover.setOpen(false)} />
-                </div>
+                </AnchoredDropdown>
             ) : null}
         </div>
     );
@@ -672,16 +678,21 @@ function MoreFilters({ filters, onOpenChange }: { filters: ResolvedListFilter[];
                 <ChevronDown aria-hidden className="h-3.5 w-3.5 opacity-60" />
             </button>
             {popover.open ? (
-                <div
-                    ref={popover.panelRef}
+                // Portaled and fixed, with its own max-height and scroll. The
+                // toolbar row scrolls (and used to be overflow-hidden), which
+                // clipped this menu to its first rows.
+                <AnchoredDropdown
+                    anchorRef={popover.rootRef}
+                    panelRef={popover.panelRef}
+                    matchAnchorWidth={false}
+                    align={popover.alignEnd ? 'end' : 'start'}
                     role="dialog"
                     aria-label={copy.more}
-                    className={`absolute top-full z-50 mt-1 w-80 max-w-[calc(100vw-1rem)] rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg ${
-                        popover.alignEnd ? 'end-0' : 'start-0'
-                    }`}
+                    maxHeight={420}
+                    className="w-80 rounded-lg border-gray-200 p-1.5"
                 >
                     <FilterAccordion filters={filters} />
-                </div>
+                </AnchoredDropdown>
             ) : null}
         </div>
     );

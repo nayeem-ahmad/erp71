@@ -23,6 +23,14 @@ export const projectsMessages = {
         },
     },
 
+    workList: {
+        owner: 'মালিক',
+        noOwner: 'কোনো মালিক নেই',
+        createdBetween: 'তৈরির সময়',
+        startBetween: 'শুরুর সময়',
+        targetBetween: 'লক্ষ্যের সময়',
+        storyPoints: 'স্টোরি পয়েন্ট',
+    },
 
     fields: {
         code: 'কোড',

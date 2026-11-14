@@ -23,10 +23,10 @@ export class TransformInterceptor<T> implements NestInterceptor<T, Transformed<T
             if (data instanceof StreamableFile) return data;
 
             if (isPaginatedResult(data)) {
-                const { items, total, page, limit, pages } = data;
+                const { items, total, page, limit, pages, ...extra } = data;
                 return {
                     data: items as T,
-                    meta: { total, page, limit, pages },
+                    meta: { total, page, limit, pages, ...extra },
                 };
             }
 
