@@ -19,6 +19,7 @@ import { PageShell, PageHeader, Button, ConfirmDialog, buttonClassName } from '@
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useCrmMineOnly } from '@/lib/crm-scope';
 import { useServerColumnFilters } from '@/lib/column-filters';
+import { useRememberedFilters } from '@/lib/use-remembered-filters';
 import MineOnlyToggle from '@/components/crm/MineOnlyToggle';
 import Avatar from '@/components/Avatar';
 import BusinessCardScanner, { type ScannedCard, type ScannedCardImage } from './BusinessCardScanner';
@@ -66,10 +67,29 @@ export default function ContactsPage() {
 
     const [contacts, setContacts] = useState<Contact[]>([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
+    /**
+     * Remembered for the tab, as on Leads and Activities: opening a contact and
+     * coming back finds the same slice instead of the whole list.
+     */
+    const [filters, setFilter, filtersReady] = useRememberedFilters('crm-contacts', {
+        search: '',
+        captureSource: '',
+        assignedTo: '',
+        createdRange: null as CreatedRange | null,
+    });
+    const {
+        search,
+        captureSource: captureSourceFilter,
+        assignedTo: assignedFilter,
+        createdRange,
+    } = filters;
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    const [captureSourceFilter, setCaptureSourceFilter] = useState('');
-    const [assignedFilter, setAssignedFilter] = useState('');
+    // A search restored from the last visit is not typing: it is already the
+    // term to query, so it applies with the first request rather than 300ms
+    // later — which would otherwise fetch the unsearched list first and flash
+    // it. Only once somebody types here does the debounce take over.
+    const [typing, setTyping] = useState(false);
+    const effectiveSearch = typing ? debouncedSearch : search;
     /**
      * "Only my contacts" — the CRM-wide scope, shared with the Overview and the
      * other CRM lists and remembered across visits. `scopeReady` holds the first
@@ -77,7 +97,6 @@ export default function ContactsPage() {
      * team's contacts and then replace them.
      */
     const { mineOnly, setMineOnly, ready: scopeReady } = useCrmMineOnly();
-    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [importOpen, setImportOpen] = useState(false);
     const [scannerOpen, setScannerOpen] = useState(false);
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
@@ -101,16 +120,20 @@ export default function ContactsPage() {
     }, []);
 
     useEffect(() => {
+        if (!typing) {
+            setDebouncedSearch(search);
+            return;
+        }
         const timer = setTimeout(() => setDebouncedSearch(search), 300);
         return () => clearTimeout(timer);
-    }, [search]);
+    }, [search, typing]);
 
     const fetchAllRows = useCallback(
         (onProgress?: (loaded: number, total: number) => void) =>
             fetchAllPages(
                 ({ page: p, limit, sortBy, sortDir }) =>
                     api.getContacts({
-                        search: debouncedSearch || undefined,
+                        search: effectiveSearch || undefined,
                         captureSource: captureSourceFilter || undefined,
                         assignedTo: assignedFilter || undefined,
                         mine: mineOnly || undefined,
@@ -123,16 +146,18 @@ export default function ContactsPage() {
                     }),
                 { sort, onProgress },
             ),
-        [debouncedSearch, captureSourceFilter, assignedFilter, mineOnly, createdRange, columnFilterParam, sort],
+        [effectiveSearch, captureSourceFilter, assignedFilter, mineOnly, createdRange, columnFilterParam, sort],
     );
 
     const loadContacts = useCallback(async () => {
-        if (!scopeReady) return;
+        // Held until the remembered filters and the scope are in, so a return
+        // visit does not fetch the unfiltered list first and flash it.
+        if (!scopeReady || !filtersReady) return;
         const seq = ++loadSeq.current;
         setLoading(true);
         try {
             const data = await api.getContacts({
-                search: debouncedSearch || undefined,
+                search: effectiveSearch || undefined,
                 captureSource: captureSourceFilter || undefined,
                 assignedTo: assignedFilter || undefined,
                 mine: mineOnly || undefined,
@@ -153,13 +178,13 @@ export default function ContactsPage() {
         } finally {
             if (seq === loadSeq.current) setLoading(false);
         }
-    }, [debouncedSearch, captureSourceFilter, assignedFilter, mineOnly, scopeReady, createdRange, columnFilterParam, page, pageSize, sort]);
+    }, [effectiveSearch, captureSourceFilter, assignedFilter, mineOnly, scopeReady, filtersReady, createdRange, columnFilterParam, page, pageSize, sort]);
 
     useEffect(() => { void loadContacts(); }, [loadContacts]);
 
     useEffect(() => {
         setPage(1);
-    }, [debouncedSearch, captureSourceFilter, assignedFilter, createdRange, columnFilterParam, sort]);
+    }, [effectiveSearch, captureSourceFilter, assignedFilter, createdRange, columnFilterParam, sort]);
 
     const clearSelection = useCallback(() => {
         setSelected([]);
@@ -308,7 +333,7 @@ export default function ContactsPage() {
             type: 'select',
             label: m.fields.captureSource,
             value: captureSourceFilter || null,
-            onChange: (next) => setCaptureSourceFilter(next ?? ''),
+            onChange: (next) => setFilter('captureSource', next ?? ''),
             options: CONTACT_CAPTURE_SOURCES.map((source) => ({ value: source, label: captureSourceLabel(source) })),
         },
         {
@@ -316,7 +341,7 @@ export default function ContactsPage() {
             type: 'select',
             label: m.fields.assignedTo,
             value: mineOnly ? null : (assignedFilter || null),
-            onChange: (next) => setAssignedFilter(next ?? ''),
+            onChange: (next) => setFilter('assignedTo', next ?? ''),
             disabled: mineOnly,
             title: mineOnly ? scopeCopy.ownerLockedHint : undefined,
             options: ownerOptions,
@@ -325,9 +350,9 @@ export default function ContactsPage() {
             id: 'created',
             type: 'date-range',
             value: createdRange,
-            onChange: setCreatedRange,
+            onChange: (next) => setFilter('createdRange', next),
         },
-    ], [m.fields.captureSource, m.fields.assignedTo, captureSourceFilter, captureSourceLabel, mineOnly, assignedFilter, scopeCopy.ownerLockedHint, ownerOptions, createdRange]);
+    ], [m.fields.captureSource, m.fields.assignedTo, captureSourceFilter, captureSourceLabel, mineOnly, assignedFilter, scopeCopy.ownerLockedHint, ownerOptions, createdRange, setFilter]);
 
     const bulkActions: BulkAction<Contact>[] = useMemo(
         () => [
@@ -385,8 +410,9 @@ export default function ContactsPage() {
                 isLoading={loading}
                 searchPlaceholder={m.searchPlaceholder}
                 searchValue={search}
-                onSearchChange={setSearch}
+                onSearchChange={(value) => { setTyping(true); setFilter('search', value); }}
                 filters={listFilters}
+                filterLayout="row"
                 viewOptions
                 serverPagination={{
                     total,

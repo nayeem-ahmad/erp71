@@ -69,6 +69,7 @@ describe('ContactsPage — only mine', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         localStorage.clear();
+        sessionStorage.clear();
         api.getContacts.mockResolvedValue({ items: contacts, total: 1 });
         api.getCrmAssignees.mockResolvedValue([
             { userId: 'user-1', name: 'Nayeem' },
@@ -140,6 +141,50 @@ describe('ContactsPage — only mine', () => {
         // scope lands — that flash is what `scopeReady` exists to prevent.
         for (const call of api.getContacts.mock.calls) {
             expect(call[0].mine).toBe(true);
+        }
+    });
+});
+
+/**
+ * The toolbar filters outlive leaving the page, as on Leads and Activities:
+ * opening a contact and coming back finds the same slice.
+ */
+describe('ContactsPage — remembered filters', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        localStorage.clear();
+        sessionStorage.clear();
+        api.getContacts.mockResolvedValue({ items: contacts, total: 1 });
+        api.getCrmAssignees.mockResolvedValue([{ userId: 'user-2', name: 'Rifat' }]);
+    });
+
+    const lastCall = () => api.getContacts.mock.calls.at(-1)[0];
+
+    it('comes back to the source and search the last visit left set', async () => {
+        const first = render(<ContactsPage />);
+        await screen.findByText('Karim Rahman');
+
+        fireEvent.change(selectByName('Added via'), { target: { value: 'BUSINESS_CARD' } });
+        fireEvent.change(screen.getByPlaceholderText(/search/i), { target: { value: 'karim' } });
+        await waitFor(() => expect(lastCall()).toEqual(
+            expect.objectContaining({ captureSource: 'BUSINESS_CARD', search: 'karim' }),
+        ));
+        first.unmount();
+
+        jest.clearAllMocks();
+        api.getContacts.mockResolvedValue({ items: contacts, total: 1 });
+        api.getCrmAssignees.mockResolvedValue([]);
+
+        render(<ContactsPage />);
+        await screen.findByText('Karim Rahman');
+
+        expect(selectByName('Added via').value).toBe('BUSINESS_CARD');
+        expect(screen.getByPlaceholderText(/search/i)).toHaveValue('karim');
+        // Never the whole list on the way — a restored search is not typing, so
+        // it goes with the first request instead of 300ms later.
+        expect(api.getContacts).toHaveBeenCalled();
+        for (const call of api.getContacts.mock.calls) {
+            expect(call[0]).toEqual(expect.objectContaining({ captureSource: 'BUSINESS_CARD', search: 'karim' }));
         }
     });
 });

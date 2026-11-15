@@ -773,6 +773,11 @@ function LeadsPage() {
             value: categoryFilter || null,
             onChange: (next) => setFilter('category', next ?? ''),
             options: categoryOptions.map((category) => ({ value: category.id, label: category.name })),
+            // Rarely reached for. The rest stay on the row: the CRM dashboard
+            // links at status, owner, email and no-activity, and a linked slice
+            // must show the filter that narrowed it. Chips the row has no room
+            // for still move into More, idle ones first.
+            more: true,
         },
         {
             id: 'source',
@@ -953,6 +958,7 @@ function LeadsPage() {
                     searchValue={search}
                     onSearchChange={(value) => { setTyping(true); setFilter('search', value); }}
                     filters={listFilters}
+                    filterLayout="row"
                     viewOptions
                     serverPagination={{
                         total,
