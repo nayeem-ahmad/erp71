@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { UserPlus } from 'lucide-react';
 import { api } from '@/lib/api';
 import { fetchMe } from '@/hooks/use-me';
@@ -14,6 +14,7 @@ import {
     LeadFormFields,
     emptyLeadForm,
     leadFormToPayload,
+    prefillLeadFromContact,
     setLeadOwner,
     validateLeadFormErrors,
     type LeadFormErrors,
@@ -21,10 +22,24 @@ import {
 import { defaultTaxonomyId, useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 
 export default function NewLeadPage() {
+    // useSearchParams needs a Suspense boundary to keep the route statically
+    // renderable.
+    return (
+        <Suspense fallback={null}>
+            <NewLeadForm />
+        </Suspense>
+    );
+}
+
+function NewLeadForm() {
     const { t } = useI18n();
     const m = t.crm.leads;
     const c = t.common;
+    const convert = t.crm.contacts.convert;
     const router = useRouter();
+    // Set by "Convert to lead" on a contact: the form starts from that contact
+    // and the lead is filed against it.
+    const contactId = useSearchParams()?.get('contactId') ?? '';
 
     const [form, setForm] = useState(emptyLeadForm());
     const [errors, setErrors] = useState<LeadFormErrors>({});
@@ -32,6 +47,8 @@ export default function NewLeadPage() {
     const [saveError, setSaveError] = useState<string | null>(null);
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
     const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
+    const [fromContact, setFromContact] = useState<{ id: string; name: string } | null>(null);
+    const [contactLoadFailed, setContactLoadFailed] = useState(false);
     const { options: sourceOptions } = useLeadTaxonomy('sources');
     const { options: categoryOptions } = useLeadTaxonomy('categories');
     const { options: statusOptions } = useLeadTaxonomy('statuses');
@@ -61,6 +78,21 @@ export default function NewLeadPage() {
     }, []);
 
     useEffect(() => {
+        if (!contactId) return;
+        let cancelled = false;
+        api.getContact(contactId)
+            .then((contact: any) => {
+                if (cancelled || !contact?.id) return;
+                setFromContact({ id: contact.id, name: String(contact.name ?? '') });
+                setForm((prev) => prefillLeadFromContact(prev, contact));
+            })
+            .catch(() => {
+                if (!cancelled) setContactLoadFailed(true);
+            });
+        return () => { cancelled = true; };
+    }, [contactId]);
+
+    useEffect(() => {
         api.getCustomFields('LEAD')
             .then((d: any[]) => setCustomFieldDefs(Array.isArray(d) ? d : []))
             .catch(() => setCustomFieldDefs([]));
@@ -73,7 +105,8 @@ export default function NewLeadPage() {
         setSaveError(null);
         setSaving(true);
         try {
-            const created = await api.createLead(leadFormToPayload(form));
+            const payload = leadFormToPayload(form);
+            const created = await api.createLead(fromContact ? { ...payload, contact_id: fromContact.id } : payload);
             if (created?.id) {
                 router.push(routes.crm.leadDetail(created.id));
             } else {
@@ -106,6 +139,19 @@ export default function NewLeadPage() {
                 )}
             />
 
+            {fromContact && (
+                <p className="text-xs text-gray-500">
+                    {convert.linkedTo.split('{name}')[0]}
+                    <Link href={routes.crm.contactDetail(fromContact.id)} className="text-blue-600 hover:underline">
+                        {fromContact.name}
+                    </Link>
+                    {convert.linkedTo.split('{name}')[1] ?? ''}
+                </p>
+            )}
+            {contactLoadFailed && (
+                <p role="alert" className="text-xs text-amber-700">{convert.loadFailed}</p>
+            )}
+
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
                 <LeadFormFields
                     form={form}
@@ -121,7 +167,10 @@ export default function NewLeadPage() {
                 {saveError && <p role="alert" className="text-xs text-danger mt-3">{saveError}</p>}
 
                 <FormFooter className="pt-6 mt-6">
-                    <Link href={routes.crm.leads} className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50">
+                    <Link
+                        href={fromContact ? routes.crm.contactDetail(fromContact.id) : routes.crm.leads}
+                        className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50"
+                    >
                         {c.cancel}
                     </Link>
                     <Button onClick={createLead} loading={saving}>

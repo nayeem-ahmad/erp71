@@ -929,5 +929,24 @@ describe('CrmContactsService', () => {
                 }),
             });
         });
+
+        it('includes the contact\'s leads, newest first, with their stage', async () => {
+            db.crmContact.findFirst.mockResolvedValue({ id: 'contact-1' });
+
+            await service.findOne(TENANT, 'contact-1');
+
+            const include = db.crmContact.findFirst.mock.calls[0][0].include;
+            expect(include.leads).toEqual(expect.objectContaining({
+                where: { tenant_id: TENANT },
+                orderBy: { created_at: 'desc' },
+                select: expect.objectContaining({
+                    id: true,
+                    name: true,
+                    status: true,
+                    created_at: true,
+                    statusOption: expect.anything(),
+                }),
+            }));
+        });
     });
 });

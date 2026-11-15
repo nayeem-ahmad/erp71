@@ -370,6 +370,13 @@ export const crmHrMessages = {
             },
         },
         contacts: {
+            convert: {
+                cta: "In Lead umwandeln",
+                linkedTo: "Dieser Lead wird mit dem Kontakt {name} verknüpft.",
+                loadFailed: "Der Kontakt konnte nicht geladen werden. Sie können den Lead trotzdem von Hand ausfüllen.",
+                leadsSection: "Leads",
+                leadsEmpty: "Für diesen Kontakt gibt es noch keine Leads.",
+            },
             photo: {
                 label: 'Foto',
                 add: 'Foto hinzufügen',

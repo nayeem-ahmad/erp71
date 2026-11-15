@@ -287,7 +287,23 @@ export class CrmContactsService {
     async findOne(tenantId: string, id: string) {
         const contact = await this.db.crmContact.findFirst({
             where: { id, tenant_id: tenantId },
-            include: contactIncludes,
+            include: {
+                ...contactIncludes,
+                // Detail page only: the deals this person is behind, so a second
+                // "Convert to lead" is a choice rather than an accident.
+                leads: {
+                    where: { tenant_id: tenantId },
+                    orderBy: { created_at: 'desc' },
+                    take: 50,
+                    select: {
+                        id: true,
+                        name: true,
+                        status: true,
+                        created_at: true,
+                        statusOption: { select: { id: true, code: true, name: true, lifecycle: true, is_system: true } },
+                    },
+                },
+            },
         });
         if (!contact) throw new NotFoundException('Contact not found');
         return contact;

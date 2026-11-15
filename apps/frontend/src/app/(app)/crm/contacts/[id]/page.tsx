@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Mail, Phone, Trash2 } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Trash2, UserPlus } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
-import { PageShell, PageHeader, Button, FormFooter, ConfirmDialog, StatusBadge } from '@/components/ui';
+import { PageShell, PageHeader, Button, FormFooter, ConfirmDialog, StatusBadge, buttonClassName } from '@/components/ui';
+import { leadStatusLabel, leadStatusTone, type LeadStage } from '@/lib/lead-status';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import {
     ContactFormFields,
@@ -29,6 +30,15 @@ interface ContactAttachment {
     created_at: string;
 }
 
+/** A lead filed for this contact, as the detail read returns it. */
+interface ContactLead {
+    id: string;
+    name: string;
+    status: string;
+    created_at: string;
+    statusOption: LeadStage | null;
+}
+
 interface ContactRecord {
     id: string;
     name: string;
@@ -41,6 +51,8 @@ interface ContactRecord {
     creator: { id: string; name: string } | null;
     organization?: { id: string; name: string } | null;
     attachments?: ContactAttachment[];
+    /** Only on the detail read; create/update responses leave it out. */
+    leads?: ContactLead[];
 }
 
 export default function ContactDetailPage() {
@@ -88,7 +100,9 @@ export default function ContactDetailPage() {
         setSaving(true);
         try {
             const updated = await api.updateContact(id, contactFormToPayload(form));
-            setContact(updated);
+            // The update response has no leads, and saving the contact does not
+            // change them, so keep the ones the detail read brought.
+            setContact((prev) => ({ ...updated, leads: prev?.leads }));
             setForm(contactToFormState(updated));
             toast.success(m.saved);
         } catch (err: unknown) {
@@ -143,6 +157,7 @@ export default function ContactDetailPage() {
     const captureSourceLabel =
         (m.captureSources as Record<string, string>)[contact.capture_source] ?? contact.capture_source;
     const cards = contact.attachments ?? [];
+    const leads = contact.leads ?? [];
 
     return (
         <PageShell maxWidth="narrow">
@@ -160,6 +175,12 @@ export default function ContactDetailPage() {
                     <>
                         <Link href={routes.crm.contacts} className="px-3 py-2 text-sm border rounded-md hover:bg-gray-50 inline-flex items-center gap-1.5">
                             <ArrowLeft className="w-4 h-4" /> {m.back}
+                        </Link>
+                        <Link
+                            href={`${routes.crm.leadNew}?contactId=${encodeURIComponent(contact.id)}`}
+                            className={buttonClassName({ variant: 'primary', size: 'md' })}
+                        >
+                            <UserPlus className="w-4 h-4" /> {m.convert.cta}
                         </Link>
                         <Button
                             variant="danger"
@@ -205,6 +226,32 @@ export default function ContactDetailPage() {
                         {c.saveChanges}
                     </Button>
                 </FormFooter>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 space-y-3">
+                <h2 className="text-sm font-semibold text-gray-700">{m.convert.leadsSection}</h2>
+                {leads.length === 0 ? (
+                    <p className="text-xs text-gray-500">{m.convert.leadsEmpty}</p>
+                ) : (
+                    <ul className="divide-y divide-gray-100">
+                        {leads.map((lead) => (
+                            <li key={lead.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                                <Link
+                                    href={routes.crm.leadDetail(lead.id)}
+                                    className="text-blue-600 hover:underline min-h-touch inline-flex items-center"
+                                >
+                                    {lead.name}
+                                </Link>
+                                <span className="inline-flex items-center gap-2 text-xs text-gray-500">
+                                    <StatusBadge tone={leadStatusTone(lead.status)}>
+                                        {leadStatusLabel(lead, t.crm.leads.statuses)}
+                                    </StatusBadge>
+                                    {formatDate(lead.created_at)}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </div>
 
             {cards.length > 0 && (

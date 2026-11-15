@@ -1,4 +1,4 @@
-import { emptyLeadForm, leadFormToPayload, leadToFormState, selectLeadStage, setLeadOwner, validateLeadForm } from './lead-form-fields';
+import { emptyLeadForm, leadFormToPayload, leadToFormState, prefillLeadFromContact, selectLeadStage, setLeadOwner, validateLeadForm } from './lead-form-fields';
 
 describe('lead photo fields', () => {
     it('starts empty', () => {
@@ -173,5 +173,51 @@ describe('lead stage', () => {
         expect(form).toEqual(expect.objectContaining({ status_id: 'st-lost', status: 'LOST' }));
         expect(validateLeadForm(form)).toBe('LOST_REASON_REQUIRED');
         expect(leadFormToPayload({ ...form, lost_reason: 'Price' }).lost_reason).toBe('Price');
+    });
+});
+
+describe('prefillLeadFromContact', () => {
+    it('starts the lead from the contact and hands it to the contact owner', () => {
+        const form = prefillLeadFromContact(setLeadOwner(emptyLeadForm(), 'me'), {
+            name: 'Karim Uddin',
+            mobile: '01712-345678',
+            email: 'karim@shop.com',
+            address: 'Mirpur, Dhaka',
+            linkedin_url: 'https://www.linkedin.com/in/karim',
+            website_url: 'https://karim.example',
+            assigned_to: 'user-2',
+        });
+
+        expect(form).toEqual(expect.objectContaining({
+            name: 'Karim Uddin',
+            mobile: '01712-345678',
+            email: 'karim@shop.com',
+            address: 'Mirpur, Dhaka',
+            linkedin_url: 'https://www.linkedin.com/in/karim',
+            website_url: 'https://karim.example',
+            assigned_to: 'user-2',
+        }));
+    });
+
+    it('falls back to the office phone and keeps the current owner when the contact has none', () => {
+        const form = prefillLeadFromContact(setLeadOwner(emptyLeadForm(), 'me'), {
+            name: 'Karim Uddin',
+            mobile: null,
+            phone: '02-9876543',
+            assigned_to: null,
+        });
+
+        expect(form.mobile).toBe('02-9876543');
+        expect(form.assigned_to).toBe('me');
+    });
+
+    it('never overwrites what was already typed', () => {
+        const typed = { ...emptyLeadForm(), name: 'Karim Traders deal', email: 'sales@karim.example' };
+
+        const form = prefillLeadFromContact(typed, { name: 'Karim Uddin', email: 'karim@shop.com', mobile: '01712-345678' });
+
+        expect(form.name).toBe('Karim Traders deal');
+        expect(form.email).toBe('sales@karim.example');
+        expect(form.mobile).toBe('01712-345678');
     });
 });

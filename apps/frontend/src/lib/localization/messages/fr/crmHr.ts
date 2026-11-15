@@ -370,6 +370,13 @@ export const crmHrMessages = {
             },
         },
         contacts: {
+            convert: {
+                cta: "Convertir en piste",
+                linkedTo: "Cette piste sera liée au contact {name}.",
+                loadFailed: "Impossible de charger ce contact. Vous pouvez tout de même remplir la piste à la main.",
+                leadsSection: "Pistes",
+                leadsEmpty: "Aucune piste pour ce contact pour le moment.",
+            },
             photo: {
                 label: 'Photo',
                 add: 'Ajouter une photo',
