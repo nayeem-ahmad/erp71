@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CrmDashboardQueryDto } from '../crm-dashboard/crm-dashboard.dto';
-import { resolveDateWindow, percent, money } from '../common/dashboard-window';
+import { resolveDateWindow, percent, money, calendarDaysBetween } from '../common/dashboard-window';
 import { LeadStatus, OPEN_LEAD_STATUSES } from '../crm-leads/crm-leads.dto';
 import { revenueByConvertedLead, ConvertedLeadRef } from './converted-revenue.util';
 
@@ -27,11 +27,7 @@ export type LeadSourceReport = {
     totals: Omit<LeadSourceRow, 'source_id' | 'name'>;
 };
 
-const DAY_MS = 86_400_000;
 
-function calendarDaysBetween(from: string, to: string): number {
-    return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
-}
 
 function computeMedian(values: number[]): number | null {
     if (values.length === 0) return null;

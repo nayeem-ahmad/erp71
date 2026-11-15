@@ -38,6 +38,12 @@ describe('CrmReportsController', () => {
         ]);
     });
 
+    it('gates follow-up compliance on VIEW_CRM_INTERACTIONS', () => {
+        expect(Reflect.getMetadata(STORE_PERMISSIONS_KEY, CrmReportsController.prototype.followUpCompliance)).toEqual([
+            StorePermission.VIEW_CRM_INTERACTIONS,
+        ]);
+    });
+
     it('resolves mine from the session', async () => {
         await controller.leadSources(tenant, { mine: true } as any);
         expect(leadSourceService.report).toHaveBeenCalledWith('tenant-1', { mine: true }, 'UTC', 'user-1');
