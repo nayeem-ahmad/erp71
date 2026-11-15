@@ -13,6 +13,7 @@ import {
     GetConsolidatedReportDto,
     GetCostCoverageDto,
     GetCustomerRetentionDto,
+    GetColdCustomersDto,
     GetGrossProfitBySalespersonDto,
     GetMarginBridgeDto,
     GetMarginExceptionsDto,
@@ -29,6 +30,7 @@ import {
 } from './sales-reports.dto';
 import { SalesReportsService } from './sales-reports.service';
 import { SalesLineItemsService } from './sales-line-items.service';
+import { ColdCustomersService } from './cold-customers.service';
 
 import { SALES_READ } from '../auth/permission-sets';
 
@@ -43,6 +45,7 @@ export class SalesReportsController {
         private readonly service: SalesReportsService,
         private readonly lineItems: SalesLineItemsService,
         private readonly branchScope: BranchScopeService,
+        private readonly coldCustomersService: ColdCustomersService,
     ) {}
 
     /** The branch a report covers, checked against the caller's access. */
@@ -143,6 +146,13 @@ export class SalesReportsController {
     async getCustomerRetention(@Tenant() tenant: TenantContext, @Query() query: GetCustomerRetentionDto) {
         const scoped = await this.scoped(tenant, query, [StorePermission.VIEW_CRM_INTERACTIONS]);
         return this.service.getCustomerRetention(tenant.tenantId, scoped);
+    }
+
+    @Get('cold-customers')
+    @RequireStorePermission(StorePermission.VIEW_CRM_INTERACTIONS)
+    async getColdCustomers(@Tenant() tenant: TenantContext, @Query() query: GetColdCustomersDto) {
+        const scoped = await this.scoped(tenant, query, [StorePermission.VIEW_CRM_INTERACTIONS]);
+        return this.coldCustomersService.report(tenant.tenantId, scoped, tenant.timezone);
     }
 
     // ── Gross profit ─────────────────────────────────────────────────────────
