@@ -71,6 +71,24 @@ const withMembersLoaded = (label: string) =>
         return select;
     });
 
+/** A chip on the one-row toolbar that opens an editor — the Due date, More. */
+const filterChip = (name: RegExp) =>
+    screen.getAllByRole('button', { name }).find((button) => button.getAttribute('aria-haspopup') === 'dialog')!;
+
+/**
+ * The rarely used filters — approval, purpose, channel, lead owner, created —
+ * live behind the toolbar's More button. Opens it, and the named filter in it,
+ * so a select there can be found by its name like the ones on the row.
+ */
+function openInMore(label: string): HTMLElement {
+    if (!screen.queryByRole('dialog', { name: 'More' })) {
+        fireEvent.click(filterChip(/^More/));
+    }
+    const more = screen.getByRole('dialog', { name: 'More' });
+    fireEvent.click(within(more).getByRole('button', { name: new RegExp(`^${label}`) }));
+    return more;
+}
+
 const lastCall = () => api.getAllCrmActivities.mock.calls.at(-1)[0];
 
 describe('CrmActivitiesPage — owner and due-date filters', () => {
@@ -98,6 +116,7 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
     it('filters by the owner of the related lead', async () => {
         renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
+        openInMore('Lead Owner');
         const owners = await withMembersLoaded('Lead Owner');
 
         fireEvent.change(owners, { target: { value: 'user-2' } });
@@ -111,6 +130,7 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
         renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
+        openInMore('Lead Owner');
         fireEvent.change(selectByName('Lead Owner'), { target: { value: 'unassigned' } });
 
         await waitFor(() => expect(lastCall()).toEqual(
@@ -139,6 +159,7 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
         renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
+        openInMore('Lead Owner');
         const owners = await withMembersLoaded('Lead Owner');
         const values = optionValues(owners);
 
@@ -174,7 +195,7 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
         fireEvent.click(overdue);
         await waitFor(() => expect(lastCall().overdue).toBe(true));
 
-        fireEvent.click(screen.getByRole('button', { name: /due · any time/i }));
+        fireEvent.click(filterChip(/^due/i));
         fireEvent.click(screen.getByRole('button', { name: 'Yesterday' }));
 
         await waitFor(() => {
@@ -188,8 +209,10 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
         renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
-        expect(screen.getByRole('button', { name: /created · any time/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /^due · /i })).toBeInTheDocument();
+        // Due is on the row, holding the day's agenda; Created waits behind More, holding nothing.
+        expect(filterChip(/^due/i)).toHaveTextContent(/^Due:/);
+        fireEvent.click(filterChip(/^More/));
+        expect(within(screen.getByRole('dialog', { name: 'More' })).getByRole('button', { name: /^Created/ })).toHaveTextContent(/Any/);
     });
 });
 
@@ -297,7 +320,7 @@ describe('CrmActivitiesPage — remembered filters', () => {
         const first = renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
-        fireEvent.click(screen.getByRole('button', { name: /^due · /i }));
+        fireEvent.click(filterChip(/^due/i));
         fireEvent.click(screen.getByRole('button', { name: 'Yesterday' }));
         await waitFor(() => expect(lastCall().dueFrom).toBeTruthy());
         const chosen = lastCall().dueFrom;
@@ -425,6 +448,7 @@ describe('CrmActivitiesPage — activity approval', () => {
         renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
+        openInMore('Approved');
         fireEvent.change(selectByName('Approved'), { target: { value: 'pending' } });
 
         await waitFor(() => expect(lastCall().approval).toBe('pending'));
@@ -684,14 +708,19 @@ describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => 
 
     afterEach(resetView);
 
-    it('opens on the standard table, with stripes and every filter in the row', async () => {
+    it('opens on the standard table, with stripes and the filters in the toolbar', async () => {
         renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         expect(screen.getByText('Everything planned and everything logged, across leads and customers.')).toBeInTheDocument();
         expect(screen.getByRole('columnheader', { name: 'Purpose / channel' })).toBeInTheDocument();
         expect(screen.getByRole('columnheader', { name: 'Created' })).toBeInTheDocument();
-        expect(screen.getByRole('combobox', { name: 'Lead Owner' })).toBeInTheDocument();
+        // One row of chips: the everyday filters on it, the rest behind More.
+        expect(selectByName('Assigned To')).toBeInTheDocument();
+        expect(screen.queryByRole('combobox', { name: 'Lead Owner' })).not.toBeInTheDocument();
+        openInMore('Lead Owner');
+        expect(selectByName('Lead Owner')).toBeInTheDocument();
+        fireEvent.click(filterChip(/^More/));
 
         const row = screen.getByText('Call about pricing').closest('tr');
         expect(row?.className).toContain('even:bg-[color:var(--dt-stripe)]');
@@ -722,7 +751,8 @@ describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => 
         expect(screen.queryByRole('columnheader', { name: 'Purpose / channel' })).not.toBeInTheDocument();
         expect(screen.queryByRole('columnheader', { name: 'Created' })).not.toBeInTheDocument();
         expect(screen.getByText(/Call about pricing/)).toHaveTextContent('Call about pricing · Collection');
-        expect(screen.getByRole('combobox', { name: 'Lead Owner' })).toBeInTheDocument();
+        expect(selectByName('Assigned To')).toBeInTheDocument();
+        expect(filterChip(/^More/)).toBeInTheDocument();
 
         const view = screen.getByRole('button', { name: 'View activities' });
         expect(view.className).toContain('h-7');
@@ -734,10 +764,13 @@ describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => 
         await screen.findByText('Call about pricing');
         chooseView('Compact');
 
+        openInMore('Approved');
         fireEvent.change(selectByName('Approved'), { target: { value: 'pending' } });
 
         await waitFor(() => expect(lastCall().approval).toBe('pending'));
         expect(selectByName('Approved').value).toBe('pending');
+        // The More button counts the filter it is hiding.
+        expect(filterChip(/^More/)).toHaveTextContent('1');
     });
 
     it('groups the agenda by when the work is due, and searches within it', async () => {
@@ -781,7 +814,11 @@ describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => 
         chooseView('Agenda');
 
         expect(screen.queryByRole('table')).not.toBeInTheDocument();
+        expect(selectByName('Assigned To')).toBeInTheDocument();
+        openInMore('Lead Owner');
         expect(selectByName('Lead Owner')).toBeInTheDocument();
+        // Shut More again so the View options menu below is the one open.
+        fireEvent.click(filterChip(/^More/));
 
         // Row spacing and text size draw nothing on the agenda's cards.
         const menu = openViewOptions();

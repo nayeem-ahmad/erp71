@@ -392,6 +392,7 @@ export default function CrmActivitiesPage() {
                 { value: 'approved', label: m.filters.approvalApproved },
                 { value: 'pending', label: m.filters.approvalPending },
             ],
+            more: true,
         },
         {
             id: 'target',
@@ -411,6 +412,7 @@ export default function CrmActivitiesPage() {
             value: purposeFilter || null,
             onChange: (next) => setFilter('purposeId', next ?? ''),
             options: purposes.map((purpose) => ({ value: purpose.id, label: purpose.name })),
+            more: true,
         },
         {
             id: 'channel',
@@ -419,6 +421,7 @@ export default function CrmActivitiesPage() {
             value: channelFilter || null,
             onChange: (next) => setFilter('channelId', next ?? ''),
             options: channels.map((channel) => ({ value: channel.id, label: channel.name })),
+            more: true,
         },
         {
             id: 'leadOwner',
@@ -430,6 +433,7 @@ export default function CrmActivitiesPage() {
                 { value: 'unassigned', label: m.filters.unassigned },
                 ...memberOptions.map((member) => ({ value: member.id, label: member.label })),
             ],
+            more: true,
         },
         {
             id: 'assignee',
@@ -461,6 +465,7 @@ export default function CrmActivitiesPage() {
             type: 'date-range',
             value: createdRange,
             onChange: (next) => setFilter('createdRange', next),
+            more: true,
         },
     ], [
         m, t.crm.setup.tabs.purposes, t.crm.setup.tabs.channels, t.crm.leads.fields.owner, t.crm.leads.fields.nextStepAssignedTo,
@@ -543,7 +548,7 @@ export default function CrmActivitiesPage() {
 
             {layout === 'agenda' ? (
                 <>
-                    <ListToolbar tableId={ACTIVITIES_TABLE_ID} filters={activityFilters} layout={viewLayout} />
+                    <ListToolbar tableId={ACTIVITIES_TABLE_ID} filters={activityFilters} filterLayout="row" layout={viewLayout} />
                     {isLoading ? (
                         <div className="rounded-lg border border-gray-100 bg-white p-8 text-sm text-gray-500">{t.common.loading}</div>
                     ) : (
@@ -564,6 +569,7 @@ export default function CrmActivitiesPage() {
                     viewOptions
                     viewLayout={viewLayout}
                     filters={activityFilters}
+                    filterLayout="row"
                     isLoading={isLoading}
                     // One id for both column sets: the row spacing that picks
                     // the set is read under this id, so switching ids with it
