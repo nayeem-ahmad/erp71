@@ -115,6 +115,7 @@ import { CrmCampaignsModule } from './crm-campaigns/crm-campaigns.module';
 import { CrmContactsModule } from './crm-contacts/crm-contacts.module';
 import { CrmPhotosModule } from './crm-photos/crm-photos.module';
 import { CrmDashboardModule } from './crm-dashboard/crm-dashboard.module';
+import { CrmReportsModule } from './crm-reports/crm-reports.module';
 import { InventoryDashboardModule } from './inventory-dashboard/inventory-dashboard.module';
 import { PurchaseDashboardModule } from './purchase-dashboard/purchase-dashboard.module';
 import { SalesDashboardModule } from './sales-dashboard/sales-dashboard.module';
@@ -267,6 +268,7 @@ import { Meet71Module } from './meet71/meet71.module';
         CrmContactsModule,
         CrmPhotosModule,
         CrmDashboardModule,
+        CrmReportsModule,
         InventoryDashboardModule,
         PurchaseDashboardModule,
         SalesDashboardModule,
