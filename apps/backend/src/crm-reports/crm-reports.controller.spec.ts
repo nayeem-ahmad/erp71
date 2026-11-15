@@ -44,6 +44,12 @@ describe('CrmReportsController', () => {
         ]);
     });
 
+    it('gates the scorecard on VIEW_LEADS', () => {
+        expect(Reflect.getMetadata(STORE_PERMISSIONS_KEY, CrmReportsController.prototype.scorecard)).toEqual([
+            StorePermission.VIEW_LEADS,
+        ]);
+    });
+
     it('resolves mine from the session', async () => {
         await controller.leadSources(tenant, { mine: true } as any);
         expect(leadSourceService.report).toHaveBeenCalledWith('tenant-1', { mine: true }, 'UTC', 'user-1');
