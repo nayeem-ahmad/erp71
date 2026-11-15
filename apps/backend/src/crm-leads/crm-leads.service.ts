@@ -512,6 +512,24 @@ export class CrmLeadsService {
         };
     }
 
+    /**
+     * The link for a lead filed from a contact ("Convert to lead"). The caller
+     * named the person, so it is honoured as-is rather than re-derived from the
+     * mobile/LinkedIn — a contact with neither would otherwise get a duplicate.
+     */
+    private async namedContactLink(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        contactId: string,
+    ): Promise<{ contact_id: string; organization_id: string | null }> {
+        const contact = await tx.crmContact.findFirst({
+            where: { id: contactId, tenant_id: tenantId },
+            select: { id: true, organization_id: true },
+        });
+        if (!contact) throw new NotFoundException('Contact not found');
+        return { contact_id: contact.id, organization_id: contact.organization_id || null };
+    }
+
     private contactIdentityChanged(
         existing: {
             mobile?: string | null;
@@ -604,19 +622,21 @@ export class CrmLeadsService {
         const photo = this.resolvePhoto(tenantId, dto);
 
         const lead = await this.db.$transaction(async (tx) => {
-            const link = await this.linkContact(
-                tx,
-                tenantId,
-                {
-                    name: dto.name,
-                    mobile: dto.mobile,
-                    email: dto.email,
-                    address: dto.address,
-                    linkedin_url: dto.linkedin_url,
-                    identity,
-                },
-                null,
-            );
+            const link = dto.contact_id
+                ? await this.namedContactLink(tx, tenantId, dto.contact_id)
+                : await this.linkContact(
+                    tx,
+                    tenantId,
+                    {
+                        name: dto.name,
+                        mobile: dto.mobile,
+                        email: dto.email,
+                        address: dto.address,
+                        linkedin_url: dto.linkedin_url,
+                        identity,
+                    },
+                    null,
+                );
             return tx.lead.create({
                 data: {
                     tenant_id: tenantId,

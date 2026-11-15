@@ -9,8 +9,10 @@ jest.mock('next/link', () => {
 });
 
 const push = jest.fn();
+let searchParams = new URLSearchParams();
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: (...args: unknown[]) => push(...args) }),
+    useSearchParams: () => searchParams,
 }));
 
 jest.mock('@/lib/api', () => ({
@@ -23,6 +25,7 @@ jest.mock('@/lib/api', () => ({
         getCustomFields: jest.fn().mockResolvedValue([]),
         getLeadTaxonomy: jest.fn().mockResolvedValue([]),
         createLead: jest.fn(),
+        getContact: jest.fn(),
     },
 }));
 
@@ -133,5 +136,68 @@ describe('NewLeadPage — lead owner', () => {
         expect(api.createLead).toHaveBeenCalledWith(
             expect.objectContaining({ address: '12 Gulshan Ave, Dhaka' }),
         );
+    });
+});
+
+describe('NewLeadPage — converting a contact', () => {
+    const contact = {
+        id: 'contact-7',
+        name: 'Karim Uddin',
+        company: 'Karim Traders',
+        mobile: '01712-345678',
+        phone: null,
+        email: 'karim@shop.com',
+        address: 'Mirpur, Dhaka',
+        linkedin_url: null,
+        website_url: null,
+        assigned_to: 'user-2',
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        searchParams = new URLSearchParams('contactId=contact-7');
+        api.createLead.mockResolvedValue({ id: 'lead-1' });
+    });
+
+    afterEach(() => {
+        searchParams = new URLSearchParams();
+    });
+
+    it('starts from the contact and links the new lead to it', async () => {
+        api.getContact.mockResolvedValue(contact);
+        render(<NewLeadPage />);
+
+        await waitFor(() => expect((fieldControl('Name') as HTMLInputElement).value).toBe('Karim Uddin'));
+        expect(api.getContact).toHaveBeenCalledWith('contact-7');
+        expect((fieldControl('Mobile') as HTMLInputElement).value).toBe('01712-345678');
+        expect((fieldControl('Email') as HTMLInputElement).value).toBe('karim@shop.com');
+        expect((fieldControl('Lead Owner') as HTMLSelectElement).value).toBe('user-2');
+        expect(screen.getByText(/will be linked to contact/i)).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Karim Uddin' })).toHaveAttribute('href', '/crm/contacts/contact-7');
+
+        fireEvent.click(screen.getByRole('button', { name: /new lead/i }));
+
+        await waitFor(() => expect(api.createLead).toHaveBeenCalled());
+        expect(api.createLead).toHaveBeenCalledWith(expect.objectContaining({
+            name: 'Karim Uddin',
+            mobile: '01712-345678',
+            email: 'karim@shop.com',
+            address: 'Mirpur, Dhaka',
+            assigned_to: 'user-2',
+            contact_id: 'contact-7',
+        }));
+    });
+
+    it('falls back to a blank form, unlinked, when the contact cannot be loaded', async () => {
+        api.getContact.mockRejectedValue(new Error('Contact not found'));
+        render(<NewLeadPage />);
+
+        expect(await screen.findByText(/could not load that contact/i)).toBeInTheDocument();
+
+        fireEvent.change(fieldControl('Name'), { target: { value: 'Karim Traders' } });
+        fireEvent.click(screen.getByRole('button', { name: /new lead/i }));
+
+        await waitFor(() => expect(api.createLead).toHaveBeenCalled());
+        expect(api.createLead.mock.calls[0][0]).not.toHaveProperty('contact_id');
     });
 });

@@ -218,6 +218,16 @@ export class CreateLeadDto {
     @IsOptional()
     @IsObject()
     custom_fields?: Record<string, string>;
+
+    /**
+     * The contact this lead is filed from ("Convert to lead"). When present the
+     * lead is linked to exactly that contact instead of one matched by mobile or
+     * LinkedIn. Create-only: an existing lead's contact follows its identity.
+     */
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsUUID()
+    contact_id?: string;
 }
 
 export class UpdateLeadDto {

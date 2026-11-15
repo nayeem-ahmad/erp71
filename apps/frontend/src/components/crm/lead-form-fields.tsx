@@ -152,6 +152,36 @@ export function setLeadOwner(form: LeadFormState, ownerId: string): LeadFormStat
     };
 }
 
+/** The parts of a contact a lead filed from it ("Convert to lead") starts with. */
+export type LeadContactSeed = {
+    name?: string | null;
+    mobile?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    address?: string | null;
+    linkedin_url?: string | null;
+    website_url?: string | null;
+    assigned_to?: string | null;
+};
+
+/**
+ * Fill the blank fields from the contact, and hand the lead to the contact's
+ * owner when it has one — they are the person who knows this customer. Blank
+ * fields only, so anything already typed is never overwritten.
+ */
+export function prefillLeadFromContact(form: LeadFormState, contact: LeadContactSeed): LeadFormState {
+    const next: LeadFormState = {
+        ...form,
+        name: form.name || (contact.name ?? ''),
+        mobile: form.mobile || contact.mobile || contact.phone || '',
+        email: form.email || (contact.email ?? ''),
+        address: form.address || (contact.address ?? ''),
+        linkedin_url: form.linkedin_url || (contact.linkedin_url ?? ''),
+        website_url: form.website_url || (contact.website_url ?? ''),
+    };
+    return contact.assigned_to ? setLeadOwner(next, contact.assigned_to) : next;
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function validateLeadForm(form: LeadFormState): string | null {

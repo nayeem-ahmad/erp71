@@ -370,6 +370,13 @@ export const crmHrMessages = {
             },
         },
         contacts: {
+            convert: {
+                cta: "Convertir en oportunidad",
+                linkedTo: "Esta oportunidad quedará vinculada al contacto {name}.",
+                loadFailed: "No se pudo cargar el contacto. Aún puede completar la oportunidad a mano.",
+                leadsSection: "Oportunidades",
+                leadsEmpty: "Este contacto aún no tiene oportunidades.",
+            },
             photo: {
                 label: 'Foto',
                 add: 'Añadir foto',

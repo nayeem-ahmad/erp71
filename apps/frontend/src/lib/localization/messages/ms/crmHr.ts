@@ -370,6 +370,13 @@ export const crmHrMessages = {
             },
         },
         contacts: {
+            convert: {
+                cta: "Tukar kepada prospek",
+                linkedTo: "Prospek ini akan dipautkan kepada kenalan {name}.",
+                loadFailed: "Kenalan tidak dapat dimuatkan. Anda masih boleh mengisi prospek secara manual.",
+                leadsSection: "Prospek",
+                leadsEmpty: "Belum ada prospek untuk kenalan ini.",
+            },
             photo: {
                 label: 'Foto',
                 add: 'Tambah foto',

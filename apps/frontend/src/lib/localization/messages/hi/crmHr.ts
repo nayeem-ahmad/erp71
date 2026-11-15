@@ -370,6 +370,13 @@ export const crmHrMessages = {
             },
         },
         contacts: {
+            convert: {
+                cta: "लीड में बदलें",
+                linkedTo: "यह लीड संपर्क {name} से जुड़ी होगी।",
+                loadFailed: "संपर्क लोड नहीं हो सका। आप फिर भी लीड को हाथ से भर सकते हैं।",
+                leadsSection: "लीड",
+                leadsEmpty: "इस संपर्क के लिए अभी कोई लीड नहीं है।",
+            },
             photo: {
                 label: 'फ़ोटो',
                 add: 'फ़ोटो जोड़ें',

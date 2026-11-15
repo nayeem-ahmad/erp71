@@ -370,6 +370,13 @@ export const crmHrMessages = {
             },
         },
         contacts: {
+            convert: {
+                cta: "لیڈ میں تبدیل کریں",
+                linkedTo: "یہ لیڈ رابطے {name} سے منسلک ہو گی۔",
+                loadFailed: "رابطہ لوڈ نہیں ہو سکا۔ آپ پھر بھی لیڈ خود بھر سکتے ہیں۔",
+                leadsSection: "لیڈز",
+                leadsEmpty: "اس رابطے کے لیے ابھی کوئی لیڈ نہیں۔",
+            },
             photo: {
                 label: 'تصویر',
                 add: 'تصویر شامل کریں',

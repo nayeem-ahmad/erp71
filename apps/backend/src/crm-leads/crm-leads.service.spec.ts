@@ -574,6 +574,47 @@ describe('CrmLeadsService', () => {
             expect(db.lead.create.mock.calls[0][0].data.contact_id).toBe('contact-new');
         });
 
+        it('links to the named contact when contact_id is given, without matching or creating one', async () => {
+            // "Convert to lead" on a contact: the lead belongs to that person even
+            // when they have no mobile or LinkedIn to match on.
+            db.crmContact.findFirst.mockResolvedValueOnce({ id: 'contact-7', organization_id: 'org-7' });
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-9' });
+
+            await service.create(
+                'tenant-1',
+                'user-1',
+                { name: 'Karim', email: 'karim@shop.com', contact_id: 'contact-7' } as any,
+                'Asia/Dhaka',
+            );
+
+            expect(db.crmContact.findFirst).toHaveBeenCalledWith({
+                where: { id: 'contact-7', tenant_id: 'tenant-1' },
+                select: { id: true, organization_id: true },
+            });
+            expect(db.crmContact.findMany).not.toHaveBeenCalled();
+            expect(db.crmContact.create).not.toHaveBeenCalled();
+            expect(db.crmContact.update).not.toHaveBeenCalled();
+            const created = db.lead.create.mock.calls[0][0].data;
+            expect(created.contact_id).toBe('contact-7');
+            expect(created.organization_id).toBe('org-7');
+        });
+
+        it('refuses a contact_id that is not one of this tenant\'s contacts', async () => {
+            db.crmContact.findFirst.mockResolvedValueOnce(null);
+
+            await expect(
+                service.create(
+                    'tenant-1',
+                    'user-1',
+                    { name: 'Karim', contact_id: 'contact-elsewhere' } as any,
+                    'Asia/Dhaka',
+                ),
+            ).rejects.toThrow(NotFoundException);
+
+            expect(db.lead.create).not.toHaveBeenCalled();
+            expect(db.crmContact.create).not.toHaveBeenCalled();
+        });
+
         it('links a lead mobile to a contact whose raw mobile normalizes and whose norm is null', async () => {
             db.crmContact.findMany.mockResolvedValueOnce([
                 contactRow({
