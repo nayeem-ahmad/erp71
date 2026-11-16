@@ -3,7 +3,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, CalendarPlus, ClipboardList, Eye, PhoneCall, RefreshCw } from 'lucide-react';
+import {
+    AlertTriangle,
+    CalendarPlus,
+    CheckCircle2,
+    ClipboardList,
+    Eye,
+    PhoneCall,
+    RefreshCw,
+    Trash2,
+    UserRound,
+    XCircle,
+} from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
@@ -25,7 +36,8 @@ import {
     type ActivityTarget,
     type CrmActivityListRow as CrmActivityRow,
 } from '@/components/crm/crm-activity-layout';
-import { DataTable, ListToolbar, createdAtColumn, type ResolvedListFilter } from '@/components/data-table';
+import { DataTable, ListToolbar, createdAtColumn, type BulkAction, type ResolvedListFilter } from '@/components/data-table';
+import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import { RowActions, RowActionButton, useTableViewSettings, type TableViewLayout } from '@/components/table';
 import {
     applyCreatedRangeQuery,
@@ -38,6 +50,9 @@ import {
     PageShell,
     PageHeader,
     Button,
+    ConfirmDialog,
+    Field,
+    Select,
     StatusBadge,
     type StatusBadgeTone,
 } from '@/components/ui';
@@ -260,6 +275,120 @@ export default function CrmActivitiesPage() {
 
     useEffect(() => { loadSummary(); }, [loadSummary]);
 
+    // Bulk work: the rows ticked in the table, and what an action over them is
+    // waiting on — a confirmation, or the person a reassignment hands them to.
+    const [selectedRows, setSelectedRows] = useState<CrmActivityRow[]>([]);
+    const [selectionEpoch, setSelectionEpoch] = useState(0);
+    const [bulkBusy, setBulkBusy] = useState(false);
+    const [bulkConfirm, setBulkConfirm] = useState<'cancel' | 'delete' | null>(null);
+    const [reassignOpen, setReassignOpen] = useState(false);
+    const [reassignTo, setReassignTo] = useState('');
+
+    const clearSelection = useCallback(() => {
+        setSelectedRows([]);
+        setSelectionEpoch((epoch) => epoch + 1);
+    }, []);
+
+    /**
+     * One request per row, all at once, then the list and the tiles reloaded
+     * whichever way it ends: a bulk write lands row by row, so a failure
+     * part-way leaves some changed, and the list has to show what actually
+     * happened rather than an all-or-nothing guess.
+     */
+    const runBulk = useCallback(async (
+        rows: CrmActivityRow[],
+        send: (row: CrmActivityRow) => Promise<unknown>,
+    ) => {
+        if (!rows.length) return { ok: 0, failed: 0 };
+        setBulkBusy(true);
+        const results = await Promise.allSettled(rows.map(send));
+        const ok = results.filter((result) => result.status === 'fulfilled').length;
+        setBulkBusy(false);
+        clearSelection();
+        void reload();
+        loadSummary();
+        return { ok, failed: results.length - ok };
+    }, [clearSelection, reload, loadSummary]);
+
+    const reportBulk = useCallback((ok: number, failed: number, done: string) => {
+        if (ok > 0) toast.success(formatMessage(done, { count: ok }));
+        if (failed > 0) toast.error(formatMessage(m.bulk.partialFailed, { count: failed }));
+    }, [m.bulk.partialFailed]);
+
+    const bulkApprove = useCallback(async (rows: CrmActivityRow[], approved: boolean) => {
+        // Only a plan carries an approval; a done or cancelled row has nothing
+        // for the reviewer to decide.
+        const targets = rows.filter((row) => row.status === 'PLANNED');
+        const { ok, failed } = await runBulk(targets, (row) => api.setCrmActivityApproval(row.id, approved));
+        reportBulk(ok, failed, approved ? m.bulk.approvedMany : m.bulk.withdrawnMany);
+    }, [runBulk, reportBulk, m.bulk.approvedMany, m.bulk.withdrawnMany]);
+
+    const bulkCancel = useCallback(async () => {
+        const targets = selectedRows.filter((row) => row.status === 'PLANNED');
+        const { ok, failed } = await runBulk(targets, (row) => api.cancelCrmActivity(row.id));
+        setBulkConfirm(null);
+        reportBulk(ok, failed, m.bulk.cancelledMany);
+    }, [selectedRows, runBulk, reportBulk, m.bulk.cancelledMany]);
+
+    const bulkDelete = useCallback(async () => {
+        const { ok, failed } = await runBulk(selectedRows, (row) => api.deleteCrmActivity(row.id));
+        setBulkConfirm(null);
+        reportBulk(ok, failed, m.bulk.deletedMany);
+    }, [selectedRows, runBulk, reportBulk, m.bulk.deletedMany]);
+
+    const bulkReassign = useCallback(async () => {
+        const { ok, failed } = await runBulk(
+            selectedRows,
+            // '' is the DTO's way of spelling "nobody" — it stores an explicit null.
+            (row) => api.updateCrmActivity(row.id, { assigned_to: reassignTo }),
+        );
+        setReassignOpen(false);
+        setReassignTo('');
+        reportBulk(ok, failed, m.bulk.reassignedMany);
+    }, [selectedRows, reassignTo, runBulk, reportBulk, m.bulk.reassignedMany]);
+
+    /** The selected plans that a cancel or an approval can actually act on. */
+    const plannedSelectedCount = useMemo(
+        () => selectedRows.filter((row) => row.status === 'PLANNED').length,
+        [selectedRows],
+    );
+
+    /**
+     * What the bulk bar offers for the current selection. Approve and cancel
+     * only appear when a selected row can actually take them, so a tick on a
+     * done row never offers a decision that changes nothing.
+     */
+    const bulkActions = useMemo<BulkAction<CrmActivityRow>[]>(() => {
+        const planned = selectedRows.filter((row) => row.status === 'PLANNED');
+        const allApproved = planned.length > 0 && planned.every((row) => row.is_approved);
+        const actions: BulkAction<CrmActivityRow>[] = [];
+        if (canApprove && planned.length > 0) {
+            actions.push({
+                label: allApproved ? m.bulk.withdrawApproval : m.bulk.approve,
+                icon: allApproved ? <XCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />,
+                onClick: (rows) => { void bulkApprove(rows, !allApproved); },
+            });
+        }
+        if (planned.length > 0) {
+            actions.push({
+                label: m.bulk.cancel,
+                icon: <XCircle className="h-4 w-4" />,
+                onClick: () => setBulkConfirm('cancel'),
+            });
+        }
+        actions.push({
+            label: m.bulk.reassign,
+            icon: <UserRound className="h-4 w-4" />,
+            onClick: () => { setReassignTo(''); setReassignOpen(true); },
+        });
+        actions.push({
+            label: m.bulk.delete,
+            tone: 'danger',
+            icon: <Trash2 className="h-4 w-4" />,
+            onClick: () => setBulkConfirm('delete'),
+        });
+        return actions;
+    }, [selectedRows, canApprove, m.bulk, bulkApprove]);
 
     const { standardColumns, compactColumns } = useMemo(() => {
         const targetColumn = columnHelper.accessor((row) => row.lead?.name ?? row.customer?.name ?? '', {
@@ -637,6 +766,12 @@ export default function CrmActivitiesPage() {
                     searchValue={search}
                     onSearchChange={setSearch}
                     serverPagination={serverPagination}
+                    enableRowSelection
+                    getRowId={(row) => row.id}
+                    onRowSelectionChange={setSelectedRows}
+                    clearSelectionSignal={selectionEpoch}
+                    bulkActions={bulkActions}
+                    bulkActionsDisabled={bulkBusy}
                 />
             )}
 
@@ -660,6 +795,63 @@ export default function CrmActivitiesPage() {
                     // behind the drawer for "Loading…".
                     onChanged={() => { void reload(); loadSummary(); }}
                 />
+            )}
+
+            <ConfirmDialog
+                open={bulkConfirm === 'cancel'}
+                title={m.bulk.cancelTitle}
+                prompt={formatMessage(m.bulk.cancelPrompt, { count: plannedSelectedCount })}
+                confirmLabel={m.bulk.cancel}
+                cancelLabel={t.common.cancel}
+                loading={bulkBusy}
+                onConfirm={() => { void bulkCancel(); }}
+                onCancel={() => { if (!bulkBusy) setBulkConfirm(null); }}
+            />
+
+            <ConfirmDialog
+                open={bulkConfirm === 'delete'}
+                title={m.bulk.deleteTitle}
+                prompt={formatMessage(m.bulk.deletePrompt, { count: selectedRows.length })}
+                confirmLabel={m.bulk.delete}
+                cancelLabel={t.common.cancel}
+                loading={bulkBusy}
+                danger
+                onConfirm={() => { void bulkDelete(); }}
+                onCancel={() => { if (!bulkBusy) setBulkConfirm(null); }}
+            />
+
+            {reassignOpen && (
+                <ModalShell size="sm" onBackdropClick={() => { if (!bulkBusy) setReassignOpen(false); }}>
+                    <ModalHeader
+                        title={m.bulk.reassignTitle}
+                        onClose={() => { if (!bulkBusy) setReassignOpen(false); }}
+                    />
+                    <div className="space-y-3 p-4">
+                        <p className="text-sm text-gray-600">
+                            {formatMessage(m.bulk.reassignPrompt, { count: selectedRows.length })}
+                        </p>
+                        <Field label={m.bulk.reassignTo}>
+                            <Select value={reassignTo} onChange={(e) => setReassignTo(e.target.value)}>
+                                <option value="">{m.filters.unassigned}</option>
+                                {memberOptions.map((member) => (
+                                    <option key={member.id} value={member.id}>{member.label}</option>
+                                ))}
+                            </Select>
+                        </Field>
+                    </div>
+                    <ModalFooter>
+                        <Button
+                            variant="secondary"
+                            disabled={bulkBusy}
+                            onClick={() => setReassignOpen(false)}
+                        >
+                            {t.common.cancel}
+                        </Button>
+                        <Button loading={bulkBusy} onClick={() => { void bulkReassign(); }}>
+                            {m.bulk.reassign}
+                        </Button>
+                    </ModalFooter>
+                </ModalShell>
             )}
         </PageShell>
     );
