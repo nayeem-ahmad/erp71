@@ -228,4 +228,22 @@ describe('ColdCustomersService', () => {
             }),
         );
     });
+
+    /**
+     * `Sale` has no `is_exchange` column — exchanges are `SalesExchange` rows
+     * against the original sale. The filter used to carry `is_exchange: false`,
+     * which Prisma rejects, so the endpoint 500'd on every request while these
+     * mocks happily ignored the extra key.
+     */
+    it('filters only on columns Sale actually has', async () => {
+        await service.report('tenant-1', {}, 'Asia/Dhaka');
+
+        const where = db.sale.groupBy.mock.calls[0][0].where;
+        expect(where).toEqual({
+            tenant_id: 'tenant-1',
+            status: 'COMPLETED',
+            customer_id: { not: null },
+        });
+        expect(where).not.toHaveProperty('is_exchange');
+    });
 });

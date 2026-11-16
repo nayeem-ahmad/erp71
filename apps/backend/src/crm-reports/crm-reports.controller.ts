@@ -11,6 +11,7 @@ import { CrmDashboardQueryDto } from '../crm-dashboard/crm-dashboard.dto';
 import { LeadSourceReportService } from './lead-source-report.service';
 import { FollowUpComplianceService } from './follow-up-compliance.service';
 import { SalespersonScorecardService } from './salesperson-scorecard.service';
+import { LeadAgingService } from './lead-aging.service';
 
 @Controller('crm/reports')
 @UseGuards(JwtAuthGuard, StorePermissionGuard, SubscriptionAccessGuard)
@@ -21,6 +22,7 @@ export class CrmReportsController {
         private readonly leadSourceReportService: LeadSourceReportService,
         private readonly followUpComplianceService: FollowUpComplianceService,
         private readonly scorecardService: SalespersonScorecardService,
+        private readonly leadAgingService: LeadAgingService,
     ) {}
 
     private ownerScope(tenant: TenantContext, query: CrmDashboardQueryDto): string | undefined {
@@ -57,6 +59,21 @@ export class CrmReportsController {
             query,
             tenant.timezone,
             this.ownerScope(tenant, query),
+        );
+    }
+
+    /**
+     * Aging is a snapshot of the open pipeline, so it takes no window — only
+     * `mine`. A `from`/`to` on a stock figure would answer "leads created in
+     * this period that are still open", which is a different question.
+     */
+    @Get('lead-aging')
+    @RequireStorePermission(StorePermission.VIEW_LEADS)
+    leadAging(@Tenant() tenant: TenantContext, @Query() query: CrmDashboardQueryDto) {
+        return this.leadAgingService.report(
+            tenant.tenantId,
+            this.ownerScope(tenant, query),
+            tenant.timezone,
         );
     }
 }

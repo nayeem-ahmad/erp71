@@ -465,6 +465,8 @@ export const coreMessages = {
 
             crmColdCustomers: 'العملاء الذين يفقدون النشاط',
 
+            crmLeadAging: "عمر العملاء المحتملين",
+
             crmSetup: 'الإعداد',
             crmCustomers: 'الزبائن',
             salesSettings: 'إعدادات المبيعات',

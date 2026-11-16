@@ -33,6 +33,7 @@ export const crmHrMessages = {
                 followUpCompliance: { title: 'الامتثال للمتابعة', description: 'إنجاز المهام في الوقت المحدد مقابل المتأخرة حسب المندوب والغرض.' },
 
                 coldCustomers: { title: 'العملاء الذين يفقدون النشاط', description: 'العملاء المتكررون الذين توقفوا عن الشراء بناءً على وتيرتهم المعتادة.' },
+                leadAging: { title: "عمر العملاء المحتملين", description: "منذ متى يرقد خط الأنابيب المفتوح — حسب فئة العمر وحسب المرحلة." },
 
                 crmSetup: { title: 'إعداد إدارة العلاقات', description: 'قنوات المحادثة ومصادر العملاء المحتملين وتصنيفاتهم والحقول المخصصة.' },
             },
@@ -650,7 +651,7 @@ export const crmHrMessages = {
                 view: "العرض",
                 listView: "قائمة",
                 boardView: "لوحة",
-                groupBy: "التجميع حسب",
+                groupBy: "تجميع حسب",
                 groups: {
                     status: "الحالة",
                     priority: "الأولوية",
@@ -754,7 +755,8 @@ export const crmHrMessages = {
             common: {
                 unassigned: 'غير مخصص',
                 unspecifiedSource: 'غير محدد',
-                statsLabel: 'الملخص'
+                statsLabel: 'الملخص',
+                groupBy: "تجميع حسب",
             },
             leadSources: {
                 title: 'أداء مصادر العملاء المحتملين',
@@ -798,7 +800,7 @@ export const crmHrMessages = {
             followUps: {
                 title: 'الامتثال للمتابعة',
                 subtitle: 'تقييم إنجاز المتابعات المجدولة والالتزام بالوقت بناءً على يوم تقويم المنشأة.',
-                groupBy: 'تجميع حسب',
+                groupBy: "تجميع حسب",
                 byPerson: 'حسب المندوب',
                 byPurpose: 'حسب الغرض',
                 undatedNote: '{count} متابعات مخططة ليس لها تاريخ استحقاق ولم يتم احتسابها.',
@@ -837,6 +839,39 @@ export const crmHrMessages = {
                     lastContacted: 'آخر تواصل',
                     followUp: 'الخطوة التالية'
                 }
+            },
+            leadAging: {
+                title: "عمر العملاء المحتملين",
+                subtitle: "منذ متى خط الأنابيب المفتوح مفتوح — حسب فئة العمر وحسب المرحلة، حتى تاريخ اليوم.",
+                ageNote: "يُحسب العمر من تاريخ إنشاء العميل المحتمل، وفق تقويم مساحة العمل.",
+                staleNote: "العميل المحتمل الذي لا نشاط له منذ {days} يومًا أو أكثر يُعدّ مهملًا.",
+                asOf: "حتى {date}",
+                empty: "لا يوجد عملاء محتملون مفتوحون الآن.",
+                columns: {
+                    bucket: "العمر",
+                    leads: "العملاء المحتملون المفتوحون",
+                    share: "الحصة",
+                    stale: "مهمل",
+                    oldest: "الأقدم (أيام)",
+                    stage: "المرحلة",
+                    average: "متوسط العمر",
+                },
+                buckets: {
+                    '0-7': "0–7 أيام", 
+                    '8-14': "8–14 يومًا", 
+                    '15-30': "15–30 يومًا", 
+                    '31-60': "31–60 يومًا", 
+                    '61-90': "61–90 يومًا", 
+                    '90+': "أكثر من 90 يومًا", 
+                },
+                stages: {
+                    NEW: "جديد",
+                    CONTACTED: "تم التواصل",
+                    QUALIFIED: "مؤهل",
+                    CONVERTED: "محوّل",
+                    LOST: "مفقود",
+                },
+                statsLabel: "خط الأنابيب في لمحة",
             }
         },
     },
@@ -950,7 +985,7 @@ export const crmHrMessages = {
                 preset12: 'آخر 12 شهرًا',
                 presetYtd: 'هذه السنة',
                 presetCustom: 'نطاق مخصص',
-                groupBy: 'التجميع حسب',
+                groupBy: "تجميع حسب",
                 group: {
                     employee: 'الموظف',
                     department: 'القسم',

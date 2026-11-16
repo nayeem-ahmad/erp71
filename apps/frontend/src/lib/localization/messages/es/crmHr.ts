@@ -33,6 +33,7 @@ export const crmHrMessages = {
                 followUpCompliance: { title: 'Cumplimiento de seguimientos', description: 'Finalización de tareas a tiempo versus atrasadas por vendedor y propósito.' },
 
                 coldCustomers: { title: 'Clientes que se enfrían', description: 'Clientes recurrentes que han dejado de comprar según su ritmo habitual.' },
+                leadAging: { title: "Antigüedad de clientes potenciales", description: "Cuánto tiempo lleva parado el embudo abierto — por rango de antigüedad y por etapa." },
 
                 crmSetup: { title: "Configuración de CRM", description: "Canales de conversación, orígenes y categorías de oportunidades, campos personalizados." },
             },
@@ -754,7 +755,8 @@ export const crmHrMessages = {
             common: {
                 unassigned: 'Sin asignar',
                 unspecifiedSource: 'No especificado',
-                statsLabel: 'Resumen'
+                statsLabel: 'Resumen',
+                groupBy: "Agrupar por",
             },
             leadSources: {
                 title: 'Rendimiento de fuentes de prospectos',
@@ -798,7 +800,7 @@ export const crmHrMessages = {
             followUps: {
                 title: 'Cumplimiento de seguimientos',
                 subtitle: 'Evaluación de finalización puntual de seguimientos programados según el día del calendario del negocio.',
-                groupBy: 'Agrupar por',
+                groupBy: "Agrupar por",
                 byPerson: 'Por vendedor',
                 byPurpose: 'Por propósito',
                 undatedNote: '{count} seguimientos planificados no tienen fecha límite y no se contabilizan.',
@@ -837,6 +839,39 @@ export const crmHrMessages = {
                     lastContacted: 'Último contacto',
                     followUp: 'Siguiente paso'
                 }
+            },
+            leadAging: {
+                title: "Antigüedad de clientes potenciales",
+                subtitle: "Cuánto tiempo lleva abierto el embudo — por rango de antigüedad y por etapa, a día de hoy.",
+                ageNote: "La antigüedad se cuenta desde que se creó el cliente potencial, según el calendario del espacio de trabajo.",
+                staleNote: "Un cliente potencial sin actividad durante {days} días o más se considera desatendido.",
+                asOf: "A fecha de {date}",
+                empty: "Ahora mismo no hay clientes potenciales abiertos.",
+                columns: {
+                    bucket: "Antigüedad",
+                    leads: "Clientes potenciales abiertos",
+                    share: "Proporción",
+                    stale: "Desatendidos",
+                    oldest: "Más antiguo (días)",
+                    stage: "Etapa",
+                    average: "Antigüedad media",
+                },
+                buckets: {
+                    '0-7': "0–7 días", 
+                    '8-14': "8–14 días", 
+                    '15-30': "15–30 días", 
+                    '31-60': "31–60 días", 
+                    '61-90': "61–90 días", 
+                    '90+': "Más de 90 días", 
+                },
+                stages: {
+                    NEW: "Nuevo",
+                    CONTACTED: "Contactado",
+                    QUALIFIED: "Cualificado",
+                    CONVERTED: "Convertido",
+                    LOST: "Perdido",
+                },
+                statsLabel: "El embudo de un vistazo",
             }
         },
     },

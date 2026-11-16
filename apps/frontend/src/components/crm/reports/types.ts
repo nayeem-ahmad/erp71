@@ -42,6 +42,39 @@ export type ScorecardReport = {
     totals: Omit<ScorecardRow, 'user_id' | 'name'>;
 };
 
+export type AgingBucketKey = '0-7' | '8-14' | '15-30' | '31-60' | '61-90' | '90+';
+
+export type AgingBucket = {
+    key: AgingBucketKey;
+    leads: number;
+    share_pct: number | null;
+    stale: number;
+    oldest_days: number | null;
+};
+
+export type AgingStage = {
+    status: string;
+    leads: number;
+    avg_age_days: number | null;
+    oldest_days: number | null;
+    stale: number;
+};
+
+/** A snapshot of the open pipeline — no date window, only `as_of`. */
+export type LeadAgingReport = {
+    as_of: string;
+    stale_after_days: number;
+    buckets: AgingBucket[];
+    by_stage: AgingStage[];
+    totals: {
+        open: number;
+        stale: number;
+        stale_pct: number | null;
+        avg_age_days: number | null;
+        oldest_days: number | null;
+    };
+};
+
 export type FollowUpOutcome = 'on_time' | 'late' | 'overdue' | 'pending' | 'cancelled';
 
 export type ComplianceCounts = {

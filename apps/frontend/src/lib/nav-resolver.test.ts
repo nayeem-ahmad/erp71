@@ -232,6 +232,7 @@ describe('nav-resolver', () => {
         expect(group && 'children' in group ? group.children.map((link) => link.href) : []).toEqual([
             '/crm/reports/lead-sources',
             '/crm/reports/scorecard',
+            '/crm/reports/lead-aging',
             '/crm/reports/follow-up-compliance',
             '/crm/reports/cold-customers',
         ]);

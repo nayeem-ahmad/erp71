@@ -465,6 +465,8 @@ export const coreMessages = {
 
             crmColdCustomers: 'غیر فعال ہوتے ہوئے گاہک',
 
+            crmLeadAging: "لیڈ کی عمر",
+
             crmSetup: 'سیٹ اپ',
             crmCustomers: 'گاہک',
             salesSettings: 'سیلز ترتیبات',

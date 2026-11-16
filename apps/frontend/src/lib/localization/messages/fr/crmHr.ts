@@ -33,6 +33,7 @@ export const crmHrMessages = {
                 followUpCompliance: { title: 'Conformité des suivis', description: 'Achèvement des tâches dans les délais ou en retard par commercial et par objectif.' },
 
                 coldCustomers: { title: 'Clients en perte de vitesse', description: "Clients réguliers qui ont cessé d'acheter selon leur rythme habituel." },
+                leadAging: { title: "Ancienneté des pistes", description: "Depuis combien de temps le pipeline ouvert stagne — par tranche d'âge et par étape." },
 
                 crmSetup: { title: "Configuration CRM", description: "Canaux d'échange, sources et catégories de pistes, champs personnalisés." },
             },
@@ -754,7 +755,8 @@ export const crmHrMessages = {
             common: {
                 unassigned: 'Non assigné',
                 unspecifiedSource: 'Non spécifié',
-                statsLabel: 'Résumé'
+                statsLabel: 'Résumé',
+                groupBy: "Grouper par",
             },
             leadSources: {
                 title: 'Performance des sources de leads',
@@ -798,7 +800,7 @@ export const crmHrMessages = {
             followUps: {
                 title: 'Conformité des suivis',
                 subtitle: 'Respect des échéances et finalisation des suivis planifiés selon le jour calendaire du locataire.',
-                groupBy: 'Grouper par',
+                groupBy: "Grouper par",
                 byPerson: 'Par commercial',
                 byPurpose: 'Par objectif',
                 undatedNote: "{count} suivis planifiés n'ont pas de date d'échéance et ne sont pas comptabilisés.",
@@ -837,6 +839,39 @@ export const crmHrMessages = {
                     lastContacted: 'Dernier contact',
                     followUp: 'Prochaine étape'
                 }
+            },
+            leadAging: {
+                title: "Ancienneté des pistes",
+                subtitle: "Depuis combien de temps le pipeline ouvert est ouvert — par tranche d'âge et par étape, à ce jour.",
+                ageNote: "L'âge se compte depuis la création de la piste, selon le calendrier de l'espace de travail.",
+                staleNote: "Une piste sans activité depuis {days} jours ou plus est considérée comme négligée.",
+                asOf: "Au {date}",
+                empty: "Aucune piste ouverte pour l'instant.",
+                columns: {
+                    bucket: "Âge",
+                    leads: "Pistes ouvertes",
+                    share: "Part",
+                    stale: "Négligées",
+                    oldest: "La plus ancienne (jours)",
+                    stage: "Étape",
+                    average: "Âge moyen",
+                },
+                buckets: {
+                    '0-7': "0–7 jours", 
+                    '8-14': "8–14 jours", 
+                    '15-30': "15–30 jours", 
+                    '31-60': "31–60 jours", 
+                    '61-90': "61–90 jours", 
+                    '90+': "Plus de 90 jours", 
+                },
+                stages: {
+                    NEW: "Nouvelle",
+                    CONTACTED: "Contactée",
+                    QUALIFIED: "Qualifiée",
+                    CONVERTED: "Convertie",
+                    LOST: "Perdue",
+                },
+                statsLabel: "Le pipeline en un coup d'œil",
             }
         },
     },
@@ -950,7 +985,7 @@ export const crmHrMessages = {
                 preset12: "12 derniers mois",
                 presetYtd: "Cette année",
                 presetCustom: "Période personnalisée",
-                groupBy: "Regrouper par",
+                groupBy: "Grouper par",
                 group: {
                     employee: "Employé",
                     department: "Service",

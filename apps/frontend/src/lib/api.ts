@@ -40,6 +40,7 @@ import type {
     ScorecardReport,
     FollowUpComplianceReport,
     ColdCustomersReport,
+    LeadAgingReport,
 } from '@/components/crm/reports/types';
 import type { DailyReport } from '@/lib/daily-report';
 import type { Department, Designation, DesignationLevel, OrgImportResult } from '@/lib/org-structure';
@@ -3322,6 +3323,11 @@ export const api = {
     getCrmDashboardActivityHeatmap: dashboardWindowFetcher('/crm/dashboard/activity-heatmap'),
     getCrmLeadSourceReport: dashboardWindowFetcher<LeadSourceReport>('/crm/reports/lead-sources'),
     getCrmScorecard: dashboardWindowFetcher<ScorecardReport>('/crm/reports/scorecard'),
+    // No window: aging is a snapshot of the open pipeline, so it sends only `mine`.
+    getCrmLeadAging: (p?: { mine?: boolean }): Promise<LeadAgingReport> => {
+        const query = p?.mine ? '?mine=true' : '';
+        return fetchWithAuth(`/crm/reports/lead-aging${query}`);
+    },
     getCrmFollowUpCompliance: dashboardWindowFetcher<FollowUpComplianceReport>('/crm/reports/follow-up-compliance'),
     getColdCustomers: (p: { storeId?: string; factor?: number; minGapDays?: number }): Promise<ColdCustomersReport> => {
         const query = buildReportQuery(p);

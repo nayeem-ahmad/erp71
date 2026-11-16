@@ -33,6 +33,7 @@ export const crmHrMessages = {
                 followUpCompliance: { title: 'فالو اپ تعمیل', description: 'سیلز پرسن اور مقصد کے لحاظ سے وقت پر بمقابلہ واجب الادا کاموں کی تکمیل۔' },
 
                 coldCustomers: { title: 'غیر فعال ہوتے ہوئے گاہک', description: 'دوبارہ خریداری کرنے والے گاہک جنہوں نے اپنی معمول کی ترتیب کے مطابق خریداری بند کر دی ہے۔' },
+                leadAging: { title: "لیڈ کی عمر", description: "کھلی پائپ لائن کتنی دیر سے پڑی ہے — عمر کے بینڈ اور مرحلے کے حساب سے۔" },
 
                 crmSetup: { title: 'سی آر ایم سیٹ اپ', description: 'گفتگو کے چینل، لیڈ کے ذرائع اور زمرے، خصوصی خانے۔' },
             },
@@ -650,7 +651,7 @@ export const crmHrMessages = {
                 view: "منظر",
                 listView: "فہرست",
                 boardView: "بورڈ",
-                groupBy: "گروپ کریں",
+                groupBy: "اس کے مطابق گروپ کریں",
                 groups: {
                     status: "حیثیت",
                     priority: "ترجیح",
@@ -754,7 +755,8 @@ export const crmHrMessages = {
             common: {
                 unassigned: 'غیر تفویض شدہ',
                 unspecifiedSource: 'غیر متعین',
-                statsLabel: 'خلاصہ'
+                statsLabel: 'خلاصہ',
+                groupBy: "اس کے مطابق گروپ کریں",
             },
             leadSources: {
                 title: 'لیڈ سورس کی کارکردگی',
@@ -798,7 +800,7 @@ export const crmHrMessages = {
             followUps: {
                 title: 'فالو اپ تعمیل',
                 subtitle: 'کیلنڈر دن کے حساب سے طے شدہ فالو اپ کی تکمیل اور بروقت کارکردگی کا جائزہ۔',
-                groupBy: 'گروپ بلحاظ',
+                groupBy: "اس کے مطابق گروپ کریں",
                 byPerson: 'بلحاظ سیلز پرسن',
                 byPurpose: 'بلحاظ مقصد',
                 undatedNote: '{count} طے شدہ فالو اپس کی کوئی آخری تاریخ نہیں ہے اور انہیں شمار نہیں کیا گیا ہے۔',
@@ -837,6 +839,39 @@ export const crmHrMessages = {
                     lastContacted: 'آخری رابطہ',
                     followUp: 'اگلا قدم'
                 }
+            },
+            leadAging: {
+                title: "لیڈ کی عمر",
+                subtitle: "کھلی پائپ لائن کتنی دیر سے کھلی ہے — عمر کے بینڈ اور مرحلے کے حساب سے، آج کی تاریخ تک۔",
+                ageNote: "عمر لیڈ بننے کی تاریخ سے شمار ہوتی ہے، ورک اسپیس کے کیلنڈر کے مطابق۔",
+                staleNote: "{days} دن یا اس سے زیادہ کوئی سرگرمی نہ ہو تو لیڈ نظرانداز شدہ سمجھی جاتی ہے۔",
+                asOf: "{date} تک",
+                empty: "اس وقت کوئی کھلی لیڈ نہیں ہے۔",
+                columns: {
+                    bucket: "عمر",
+                    leads: "کھلی لیڈز",
+                    share: "حصہ",
+                    stale: "نظرانداز شدہ",
+                    oldest: "سب سے پرانی (دن)",
+                    stage: "مرحلہ",
+                    average: "اوسط عمر",
+                },
+                buckets: {
+                    '0-7': "۰–۷ دن", 
+                    '8-14': "۸–۱۴ دن", 
+                    '15-30': "۱۵–۳۰ دن", 
+                    '31-60': "۳۱–۶۰ دن", 
+                    '61-90': "۶۱–۹۰ دن", 
+                    '90+': "۹۰ دن سے زیادہ", 
+                },
+                stages: {
+                    NEW: "نئی",
+                    CONTACTED: "رابطہ ہوا",
+                    QUALIFIED: "اہل",
+                    CONVERTED: "تبدیل شدہ",
+                    LOST: "کھوئی",
+                },
+                statsLabel: "پائپ لائن ایک نظر میں",
             }
         },
     },
@@ -950,7 +985,7 @@ export const crmHrMessages = {
                 preset12: 'پچھلے 12 مہینے',
                 presetYtd: 'اس سال',
                 presetCustom: 'مخصوص مدت',
-                groupBy: 'گروپ بنائیں بلحاظ',
+                groupBy: "اس کے مطابق گروپ کریں",
                 group: {
                     employee: 'ملازم',
                     department: 'شعبہ',
