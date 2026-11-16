@@ -390,6 +390,20 @@ Second external-ERP provider alongside Express Retail Pro, built on a new multi-
 - [x] Add load tests for POS endpoint (peak: multiple cashiers × multiple tenants) — `load-tests/pos-sale.js` (k6); run manually with env vars — done 2026-06-12
 - [x] Verify GitHub Actions CI actually runs tests on every push — CI now triggers on push/PR to main and dev
 
+### CRM reports — COMPLETED 2026-11-16
+
+- [x] **Build the first four CRM reports** — Lead source performance, Salesperson scorecard, Follow-up compliance, Customers going cold, under a new CRM › Reports nav section. Plan: `docs/superpowers/plans/2026-11-15-crm-reports.md` (11 tasks, no schema change). The other eight reports proposed the same day (lead funnel by arrival month, lost leads, lead aging, activity register, RFM, contact coverage, upcoming birthdays, campaign performance) are listed in the plan's final task as follow-ups. Added 2026-11-15, completed 2026-11-16.
+
+### CRM reports — follow-ups (2026-11-16)
+
+- [ ] **Run `sync:nav-layout --nodes=crm.reports,crm.reports.lead-sources,crm.reports.scorecard,crm.reports.follow-up-compliance,crm.reports.cold-customers` against production** after deploy, dry run first. Saved custom sidebars keep the old tree verbatim, so a tenant who rearranged CRM before this release will not see the Reports subgroup.
+- [ ] **The eight proposed reports not yet built:** lead funnel by arrival month, lost leads, lead aging, activity register, RFM, contact coverage, upcoming birthdays, campaign performance.
+- [ ] **`lost_reason` is free text.** Make it a pick-list before building the lost-leads report.
+- [ ] **There is no lead deal value,** so no pipeline-value or forecast report is possible.
+- [ ] **Status changes are not recorded,** so there is no time-in-stage report.
+- [ ] **Lead and activity reports cannot filter by branch** until CRM `store_id` is enforced (Phase 5). Customers going cold does filter, because it is sales data.
+- [ ] **Scorecard revenue follows the current owner,** not the owner at the time of conversion — owner history is not recorded.
+
 ### CRM AI lead generation — follow-ups (2026-11-04)
 
 - [ ] **Run `sync:nav-layout --nodes=crm.lead-generation` against production** after this ships. Saved custom sidebars keep the old tree verbatim, so tenants who rearranged CRM before this release will not see Lead generation until that script adds the node (same trap as `crm.setup`). Dry-run first.
