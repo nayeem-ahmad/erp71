@@ -5,12 +5,13 @@ import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, CalendarPlus, ClipboardList, Eye, PhoneCall, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, formatMessage } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 import { useCanApproveCrmActivity } from '@/lib/use-can-approve-crm-activity';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import { useTeamMemberOptions } from '@/lib/use-team-member-options';
 import { useRememberedFilters } from '@/lib/use-remembered-filters';
+import { useServerList } from '@/hooks/useServerList';
 import { useCrmMineOnly } from '@/lib/crm-scope';
 import MineOnlyToggle from '@/components/crm/MineOnlyToggle';
 import CrmActivityAgenda, { CrmActivityApproval } from '@/components/crm/CrmActivityAgenda';
@@ -76,10 +77,16 @@ export default function CrmActivitiesPage() {
     const { options: purposes } = useLeadTaxonomy('purposes');
     const { options: channels } = useLeadTaxonomy('channels');
 
-    const [rows, setRows] = useState<CrmActivityRow[]>([]);
     const [summary, setSummary] = useState<ActivitySummary | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+
+    // Free text goes to the server with the other filters, so the count beside it
+    // is the real total. Debounced, or every keystroke would be a list request.
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
 
     // Remembered for the tab, so coming back from an activity's lead lands on
     // the same slice it was opened from. On a first visit these are the
@@ -172,35 +179,27 @@ export default function CrmActivitiesPage() {
         if (next) setFilter('dueRange', null);
     }, [setFilter]);
 
-    const load = useCallback(async () => {
-        // Nothing is fetched until the remembered filters and the scope are in:
-        // otherwise a return visit would fire one request for the defaults and a
-        // second for the remembered slice, and briefly render the wrong list.
-        if (!filtersReady || !scopeReady) return;
-        setIsLoading(true);
-        setError(null);
-        try {
-            const data = await api.getAllCrmActivities({
-                status: statusFilter || undefined,
-                target: targetFilter || undefined,
-                purposeId: purposeFilter || undefined,
-                channelId: channelFilter || undefined,
-                overdue: overdueOnly || undefined,
-                leadOwner: leadOwnerFilter || undefined,
-                assignedTo: assigneeFilter || undefined,
-                approval: approvalFilter || undefined,
-                mine: mineOnly || undefined,
-                ...applyDueRangeQuery(dueRange),
-                ...applyCreatedRangeQuery(createdRange),
-            });
-            setRows(Array.isArray(data) ? data : []);
-        } catch {
-            setError(m.loadFailed);
-            setRows([]);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [
+    /**
+     * The list is paged by the server, like the leads list next door: a tenant
+     * with thousands of activities used to have every one of them downloaded —
+     * thirty-odd requests in a burst — and the rate limiter answered the tail
+     * with a 429. Page/page size/sort live in `useServerList`; the filters below
+     * are its `deps`, so changing one returns to the first page.
+     */
+    const listFilters = useMemo(() => ({
+        status: statusFilter || undefined,
+        target: targetFilter || undefined,
+        purposeId: purposeFilter || undefined,
+        channelId: channelFilter || undefined,
+        overdue: overdueOnly || undefined,
+        leadOwner: leadOwnerFilter || undefined,
+        assignedTo: assigneeFilter || undefined,
+        approval: approvalFilter || undefined,
+        mine: mineOnly || undefined,
+        search: debouncedSearch || undefined,
+        ...applyDueRangeQuery(dueRange),
+        ...applyCreatedRangeQuery(createdRange),
+    }), [
         statusFilter,
         targetFilter,
         purposeFilter,
@@ -210,12 +209,31 @@ export default function CrmActivitiesPage() {
         assigneeFilter,
         approvalFilter,
         mineOnly,
+        debouncedSearch,
         dueRange,
         createdRange,
-        filtersReady,
-        scopeReady,
-        m.loadFailed,
     ]);
+
+    const {
+        items: rows,
+        loading: isLoading,
+        error: listError,
+        serverPagination,
+        reload,
+        setItems,
+    } = useServerList<CrmActivityRow>({
+        tableId: ACTIVITIES_TABLE_ID,
+        deps: [listFilters],
+        enabled: filtersReady && scopeReady,
+        fetch: (params) => api.getCrmActivities({
+            ...listFilters,
+            page: params.page,
+            limit: params.limit,
+            sortBy: params.sortBy,
+            sortDir: params.sortDir,
+        }),
+    });
+    const error = listError ? m.loadFailed : null;
 
     // The tiles take the same scope as the list — three counts for the whole team
     // sitting above one person's rows is the disagreement this avoids.
@@ -231,16 +249,15 @@ export default function CrmActivitiesPage() {
      * refused.
      */
     const toggleApproval = useCallback(async (id: string, approved: boolean) => {
-        setRows((current) => current.map((row) => (row.id === id ? { ...row, is_approved: approved } : row)));
+        setItems((current) => current.map((row) => (row.id === id ? { ...row, is_approved: approved } : row)));
         try {
             await api.setCrmActivityApproval(id, approved);
         } catch {
-            setRows((current) => current.map((row) => (row.id === id ? { ...row, is_approved: !approved } : row)));
+            setItems((current) => current.map((row) => (row.id === id ? { ...row, is_approved: !approved } : row)));
             toast.error(m.approvalFailed);
         }
-    }, [m.approvalFailed]);
+    }, [m.approvalFailed, setItems]);
 
-    useEffect(() => { void load(); }, [load]);
     useEffect(() => { loadSummary(); }, [loadSummary]);
 
 
@@ -496,7 +513,7 @@ export default function CrmActivitiesPage() {
                         />
                         <Button
                             variant="secondary"
-                            onClick={() => { void load(); loadSummary(); }}
+                            onClick={() => { void reload(); loadSummary(); }}
                             leftIcon={<RefreshCw className="h-4 w-4" />}
                             aria-label={t.common.refresh}
                         />
@@ -552,16 +569,53 @@ export default function CrmActivitiesPage() {
                     {isLoading ? (
                         <div className="rounded-lg border border-gray-100 bg-white p-8 text-sm text-gray-500">{t.common.loading}</div>
                     ) : (
-                        <CrmActivityAgenda
-                            rows={rows}
-                            canApprove={canApprove}
-                            onToggleApproval={(id, approved) => { void toggleApproval(id, approved); }}
-                            onView={(row) => {
-                                const target = activityTarget(row);
-                                if (target) setViewing(target);
-                            }}
-                            emptyMessage={m.emptyMessage}
-                        />
+                        <>
+                            <CrmActivityAgenda
+                                rows={rows}
+                                canApprove={canApprove}
+                                onToggleApproval={(id, approved) => { void toggleApproval(id, approved); }}
+                                onView={(row) => {
+                                    const target = activityTarget(row);
+                                    if (target) setViewing(target);
+                                }}
+                                emptyMessage={m.emptyMessage}
+                            />
+                            {/* The agenda has no table footer, so it carries the
+                                pager itself — one server page of rows is not the
+                                whole day, and it must not look like it is. */}
+                            {serverPagination.total > serverPagination.pageSize ? (
+                                <div className="flex items-center justify-between rounded-lg border border-gray-100 bg-white px-4 py-2 text-sm text-gray-600">
+                                    <span>
+                                        {formatMessage(t.common.showingRange, {
+                                            start: (serverPagination.page - 1) * serverPagination.pageSize + 1,
+                                            end: Math.min(
+                                                serverPagination.page * serverPagination.pageSize,
+                                                serverPagination.total,
+                                            ),
+                                            total: serverPagination.total,
+                                        })}
+                                    </span>
+                                    <div className="flex gap-2">
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            disabled={serverPagination.page <= 1}
+                                            onClick={() => serverPagination.onPageChange(serverPagination.page - 1)}
+                                        >
+                                            {t.common.prevPage}
+                                        </Button>
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            disabled={serverPagination.page * serverPagination.pageSize >= serverPagination.total}
+                                            onClick={() => serverPagination.onPageChange(serverPagination.page + 1)}
+                                        >
+                                            {t.common.nextPage}
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : null}
+                        </>
                     )}
                 </>
             ) : (
@@ -580,6 +634,9 @@ export default function CrmActivitiesPage() {
                     title={m.title}
                     emptyMessage={m.emptyMessage}
                     searchPlaceholder={m.searchPlaceholder}
+                    searchValue={search}
+                    onSearchChange={setSearch}
+                    serverPagination={serverPagination}
                 />
             )}
 
@@ -587,7 +644,7 @@ export default function CrmActivitiesPage() {
                 <CrmActivityComposer
                     mode={composing}
                     onClose={() => setComposing(null)}
-                    onSaved={() => { void load(); loadSummary(); }}
+                    onSaved={() => { void reload(); loadSummary(); }}
                 />
             )}
 
@@ -601,7 +658,7 @@ export default function CrmActivitiesPage() {
                     onClose={() => setViewing(null)}
                     // Only on a write, so merely looking never swaps the table
                     // behind the drawer for "Loading…".
-                    onChanged={() => { void load(); loadSummary(); }}
+                    onChanged={() => { void reload(); loadSummary(); }}
                 />
             )}
         </PageShell>

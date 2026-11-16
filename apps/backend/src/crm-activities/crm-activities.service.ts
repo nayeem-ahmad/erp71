@@ -149,6 +149,8 @@ export type ListActivityOpts = {
     customerId?: string;
     target?: 'lead' | 'customer';
     status?: string;
+    /** Free text over the subject, the summary, and the target's name and number. */
+    search?: string;
     assignedTo?: string;
     /** A user id, or UNASSIGNED_OWNER_FILTER — the owner of the *lead*, not the activity's assignee. */
     leadOwner?: string;
@@ -386,6 +388,20 @@ export class CrmActivitiesService {
         // right: they have no lead, so they have no lead owner either.
         if (opts.leadOwner === UNASSIGNED_OWNER_FILTER) where.lead = { assigned_to: null };
         else if (opts.leadOwner) where.lead = { assigned_to: opts.leadOwner };
+
+        // Free text, in the query rather than over one page, so the total and the
+        // pages describe the matches. Written over the relation with `is` so it
+        // composes with the lead owner above instead of replacing it.
+        if (opts.search) {
+            where.OR = [
+                { subject: { contains: opts.search, mode: 'insensitive' } },
+                { summary: { contains: opts.search, mode: 'insensitive' } },
+                { lead: { is: { name: { contains: opts.search, mode: 'insensitive' } } } },
+                { lead: { is: { mobile: { contains: opts.search, mode: 'insensitive' } } } },
+                { customer: { is: { name: { contains: opts.search, mode: 'insensitive' } } } },
+                { customer: { is: { phone: { contains: opts.search, mode: 'insensitive' } } } },
+            ];
+        }
 
         let due = zonedDayRange(opts.dueFrom, opts.dueTo, opts.timezone) as DueWindow | undefined;
         if (opts.dueToday) {

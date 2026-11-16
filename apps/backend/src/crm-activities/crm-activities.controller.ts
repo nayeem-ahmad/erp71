@@ -77,6 +77,7 @@ export class CrmActivitiesController {
         @Query('customerId') customerId?: string,
         @Query('target') target?: 'lead' | 'customer',
         @Query('status') status?: string,
+        @Query('search') search?: string,
         @Query('assignedTo') assignedTo?: string,
         @Query('mine') mine?: string,
         @Query('leadOwner') leadOwner?: string,
@@ -99,6 +100,7 @@ export class CrmActivitiesController {
             customerId,
             target,
             status,
+            search,
             // "Only mine" is the last word on the assignee, deliberately: it is a
             // preference that outlives any one page, so a stale assignee filter
             // remembered from an earlier visit must not widen it back out.
