@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@erp71/database';
 import { DatabaseService } from '../database/database.service';
 import { GetColdCustomersDto } from './sales-reports.dto';
 import { calendarDaysBetween, money } from '../common/dashboard-window';
@@ -49,10 +50,12 @@ export class ColdCustomersService {
         const todayStart = startOfZonedToday(timezone);
         const asOfDate = zonedDateString(todayStart, timezone);
 
-        const where: any = {
+        // Exchanges are `SalesExchange` rows against the original sale, never
+        // `Sale` rows of their own, so a completed sale is the whole population
+        // — the same filter `getCustomerRetention` uses.
+        const where: Prisma.SaleWhereInput = {
             tenant_id: tenantId,
             status: 'COMPLETED',
-            is_exchange: false,
             customer_id: { not: null },
         };
         if (query.storeId) {
