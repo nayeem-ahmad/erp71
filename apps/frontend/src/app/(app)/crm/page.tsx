@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { UserPlus, Users, Megaphone, ListChecks, MessageSquare, SlidersHorizontal, Contact, Sparkles, Inbox, TrendingUp, Clock, Hourglass } from 'lucide-react';
+import { UserPlus, Users, Megaphone, ListChecks, MessageSquare, SlidersHorizontal, Contact, Sparkles, Inbox, TrendingUp, Clock, Hourglass, Activity } from 'lucide-react';
 import ModuleHub, { type HubSectionConfig } from '@/components/ModuleHub';
 import CrmDashboard from '@/components/dashboard/CrmDashboard';
 import { useI18n } from '@/lib/i18n';
@@ -56,6 +56,7 @@ export default function CrmHubPage() {
                     { href: routes.crm.reports.leadSources, key: 'leadSourceReport', icon: TrendingUp, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
                     { href: routes.crm.reports.scorecard, key: 'scorecard', icon: Users, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
                     { href: routes.crm.reports.leadAging, key: 'leadAging', icon: Hourglass, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
+                    { href: routes.crm.reports.activitySummary, key: 'activitySummary', icon: Activity, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
                     { href: routes.crm.reports.followUpCompliance, key: 'followUpCompliance', icon: ListChecks, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
                 ]
                 : []),

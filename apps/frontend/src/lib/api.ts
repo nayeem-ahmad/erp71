@@ -41,6 +41,7 @@ import type {
     FollowUpComplianceReport,
     ColdCustomersReport,
     LeadAgingReport,
+    CrmActivitySummaryReport,
 } from '@/components/crm/reports/types';
 import type { DailyReport } from '@/lib/daily-report';
 import type { Department, Designation, DesignationLevel, OrgImportResult } from '@/lib/org-structure';
@@ -3329,6 +3330,7 @@ export const api = {
         return fetchWithAuth(`/crm/reports/lead-aging${query}`);
     },
     getCrmFollowUpCompliance: dashboardWindowFetcher<FollowUpComplianceReport>('/crm/reports/follow-up-compliance'),
+    getCrmActivitySummaryReport: dashboardWindowFetcher<CrmActivitySummaryReport>('/crm/reports/activity-summary'),
     getColdCustomers: (p: { storeId?: string; factor?: number; minGapDays?: number }): Promise<ColdCustomersReport> => {
         const query = buildReportQuery(p);
         return fetchWithAuth(`/sales-reports/cold-customers${query ? `?${query}` : ''}`);

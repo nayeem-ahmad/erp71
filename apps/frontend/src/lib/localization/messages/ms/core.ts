@@ -467,6 +467,8 @@ export const coreMessages = {
 
             crmLeadAging: "Umur petunjuk",
 
+            crmActivitySummary: "Ringkasan aktiviti",
+
             crmSetup: "Persediaan",
             crmCustomers: "Pelanggan",
                 salesSettings: "Tetapan Jualan",

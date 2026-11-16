@@ -467,6 +467,8 @@ export const coreMessages = {
 
             crmLeadAging: "Ancienneté des pistes",
 
+            crmActivitySummary: "Résumé des activités",
+
             crmSetup: "Configuration",
             crmCustomers: "Clients",
             salesSettings: "Paramètres des ventes",

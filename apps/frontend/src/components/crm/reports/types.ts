@@ -120,3 +120,25 @@ export type ColdCustomersReport = {
     total: number;
     truncated: boolean;
 };
+
+export type ActivitySummaryChannel = {
+    code: string;
+    name: string;
+    total: number;
+};
+
+export type ActivitySummaryRow = {
+    user_id: string | null;
+    name: string | null;
+    /** Keyed by channel code. A channel the person did not use is absent. */
+    counts: Record<string, number>;
+    total: number;
+    share_pct: number | null;
+};
+
+export type CrmActivitySummaryReport = {
+    filters: { from: string; to: string; mine: boolean };
+    channels: ActivitySummaryChannel[];
+    rows: ActivitySummaryRow[];
+    totals: { total: number; unspecified: number; counts: Record<string, number> };
+};

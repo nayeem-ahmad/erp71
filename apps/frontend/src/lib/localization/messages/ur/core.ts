@@ -467,6 +467,8 @@ export const coreMessages = {
 
             crmLeadAging: "لیڈ کی عمر",
 
+            crmActivitySummary: "سرگرمیوں کا خلاصہ",
+
             crmSetup: 'سیٹ اپ',
             crmCustomers: 'گاہک',
             salesSettings: 'سیلز ترتیبات',

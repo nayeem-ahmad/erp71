@@ -9,6 +9,7 @@ describe('CrmReportsController', () => {
     let followUpService: { report: jest.Mock };
     let scorecardService: { report: jest.Mock };
     let leadAgingService: { report: jest.Mock };
+    let activitySummaryService: { report: jest.Mock };
 
     const tenant = { tenantId: 'tenant-1', userId: 'user-1', timezone: 'UTC' } as any;
 
@@ -25,11 +26,15 @@ describe('CrmReportsController', () => {
         leadAgingService = {
             report: jest.fn().mockResolvedValue({ buckets: [], by_stage: [], totals: {} }),
         };
+        activitySummaryService = {
+            report: jest.fn().mockResolvedValue({ channels: [], rows: [], totals: {} }),
+        };
         controller = new CrmReportsController(
             leadSourceService as any,
             followUpService as any,
             scorecardService as any,
             leadAgingService as any,
+            activitySummaryService as any,
         );
     });
 
@@ -59,6 +64,25 @@ describe('CrmReportsController', () => {
         expect(Reflect.getMetadata(STORE_PERMISSIONS_KEY, CrmReportsController.prototype.leadAging)).toEqual([
             StorePermission.VIEW_LEADS,
         ]);
+    });
+
+    it('gates the activity summary on VIEW_CRM_INTERACTIONS', () => {
+        expect(Reflect.getMetadata(STORE_PERMISSIONS_KEY, CrmReportsController.prototype.activitySummary)).toEqual([
+            StorePermission.VIEW_CRM_INTERACTIONS,
+        ]);
+    });
+
+    it('passes the window and resolves mine for the activity summary', async () => {
+        await controller.activitySummary(tenant, { mine: true, from: '2026-11-01', to: '2026-11-15' } as any);
+        expect(activitySummaryService.report).toHaveBeenCalledWith(
+            'tenant-1',
+            { mine: true, from: '2026-11-01', to: '2026-11-15' },
+            'UTC',
+            'user-1',
+        );
+
+        await controller.activitySummary(tenant, {} as any);
+        expect(activitySummaryService.report).toHaveBeenCalledWith('tenant-1', {}, 'UTC', undefined);
     });
 
     it('resolves mine from the session for lead aging, and passes no window', async () => {
