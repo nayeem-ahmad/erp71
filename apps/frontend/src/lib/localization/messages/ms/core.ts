@@ -465,6 +465,8 @@ export const coreMessages = {
 
             crmColdCustomers: 'Pelanggan menjadi dingin',
 
+            crmLeadAging: "Umur petunjuk",
+
             crmSetup: "Persediaan",
             crmCustomers: "Pelanggan",
                 salesSettings: "Tetapan Jualan",

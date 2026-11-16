@@ -33,6 +33,7 @@ export const crmHrMessages = {
                 followUpCompliance: { title: 'Follow-up-Einhaltung', description: 'Pünktliche vs. überfällige Aufgabenerledigung nach Mitarbeiter und Zweck.' },
 
                 coldCustomers: { title: 'Kalt werdende Kunden', description: 'Wiederkehrende Kunden, die ihren gewohnten Einkaufsrhythmus unterbrochen haben.' },
+                leadAging: { title: "Lead-Alter", description: "Wie lange die offene Pipeline schon liegt — nach Altersband und Phase." },
 
                 crmSetup: { title: "CRM-Einrichtung", description: "Gesprächskanäle, Lead-Quellen und -Kategorien, benutzerdefinierte Felder." },
             },
@@ -754,7 +755,8 @@ export const crmHrMessages = {
             common: {
                 unassigned: 'Nicht zugewiesen',
                 unspecifiedSource: 'Nicht angegeben',
-                statsLabel: 'Übersicht'
+                statsLabel: 'Übersicht',
+                groupBy: "Gruppieren nach",
             },
             leadSources: {
                 title: 'Lead-Quellen-Leistung',
@@ -798,7 +800,7 @@ export const crmHrMessages = {
             followUps: {
                 title: 'Follow-up-Einhaltung',
                 subtitle: 'Termingerechte Erledigung geplanter Follow-ups basierend auf dem Kalendertag des Mandanten.',
-                groupBy: 'Gruppieren nach',
+                groupBy: "Gruppieren nach",
                 byPerson: 'Nach Mitarbeiter',
                 byPurpose: 'Nach Zweck',
                 undatedNote: '{count} geplante Follow-ups haben kein Fälligkeitsdatum und werden nicht gezählt.',
@@ -837,6 +839,39 @@ export const crmHrMessages = {
                     lastContacted: 'Zuletzt kontaktiert',
                     followUp: 'Nächster Schritt'
                 }
+            },
+            leadAging: {
+                title: "Lead-Alter",
+                subtitle: "Wie lange die offene Pipeline offen ist — nach Altersband und Phase, Stand heute.",
+                ageNote: "Das Alter zählt ab Anlage des Leads, nach dem Kalender des Arbeitsbereichs.",
+                staleNote: "Ein Lead ohne Aktivität seit {days} Tagen oder mehr gilt als vernachlässigt.",
+                asOf: "Stand {date}",
+                empty: "Derzeit gibt es keine offenen Leads.",
+                columns: {
+                    bucket: "Alter",
+                    leads: "Offene Leads",
+                    share: "Anteil",
+                    stale: "Vernachlässigt",
+                    oldest: "Ältester (Tage)",
+                    stage: "Phase",
+                    average: "Durchschnittsalter",
+                },
+                buckets: {
+                    '0-7': "0–7 Tage", 
+                    '8-14': "8–14 Tage", 
+                    '15-30': "15–30 Tage", 
+                    '31-60': "31–60 Tage", 
+                    '61-90': "61–90 Tage", 
+                    '90+': "Über 90 Tage", 
+                },
+                stages: {
+                    NEW: "Neu",
+                    CONTACTED: "Kontaktiert",
+                    QUALIFIED: "Qualifiziert",
+                    CONVERTED: "Gewonnen",
+                    LOST: "Verloren",
+                },
+                statsLabel: "Pipeline auf einen Blick",
             }
         },
     },

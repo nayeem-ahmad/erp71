@@ -5,6 +5,7 @@ import { CrmReportsController } from './crm-reports.controller';
 import { LeadSourceReportService } from './lead-source-report.service';
 import { FollowUpComplianceService } from './follow-up-compliance.service';
 import { SalespersonScorecardService } from './salesperson-scorecard.service';
+import { LeadAgingService } from './lead-aging.service';
 
 @Module({
     controllers: [CrmReportsController],
@@ -12,6 +13,7 @@ import { SalespersonScorecardService } from './salesperson-scorecard.service';
         LeadSourceReportService,
         FollowUpComplianceService,
         SalespersonScorecardService,
+        LeadAgingService,
         StorePermissionGuard,
         SubscriptionAccessGuard,
     ],
@@ -19,6 +21,7 @@ import { SalespersonScorecardService } from './salesperson-scorecard.service';
         LeadSourceReportService,
         FollowUpComplianceService,
         SalespersonScorecardService,
+        LeadAgingService,
     ],
 })
 export class CrmReportsModule {}

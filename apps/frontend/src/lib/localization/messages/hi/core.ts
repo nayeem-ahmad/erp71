@@ -465,6 +465,8 @@ export const coreMessages = {
 
             crmColdCustomers: 'निष्क्रिय हो रहे ग्राहक',
 
+            crmLeadAging: "लीड की आयु",
+
             crmSetup: "सेटअप",
             crmCustomers: "ग्राहक",
             salesSettings: "बिक्री सेटिंग्स",

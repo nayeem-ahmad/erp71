@@ -465,6 +465,8 @@ export const coreMessages = {
 
             crmColdCustomers: 'Clients en perte de vitesse',
 
+            crmLeadAging: "Ancienneté des pistes",
+
             crmSetup: "Configuration",
             crmCustomers: "Clients",
             salesSettings: "Paramètres des ventes",

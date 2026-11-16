@@ -33,6 +33,7 @@ export const crmHrMessages = {
                 followUpCompliance: { title: 'ফলো-আপ কমপ্লায়েন্স', description: 'বিক্রয়কর্মী ও উদ্দেশ্য অনুযায়ী সময়মতো ও বকেয়া কাজের সমাপ্তি।' },
 
                 coldCustomers: { title: 'নিষ্ক্রিয় হয়ে যাওয়া গ্রাহক', description: 'পুনরাবৃত্ত গ্রাহক যারা তাদের স্বাভাবিক ব্যবধান অনুযায়ী কেনাকাটা বন্ধ করেছেন।' },
+                leadAging: { title: "লিডের বয়স", description: "খোলা পাইপলাইন কতদিন ধরে পড়ে আছে — বয়সের ব্যান্ড ও ধাপ অনুযায়ী।" },
 
                 crmSetup: { title: "CRM সেটআপ", description: "কথোপকথনের চ্যানেল, লিড উৎস ও ক্যাটাগরি, কাস্টম ফিল্ড।" },
             },
@@ -754,7 +755,8 @@ export const crmHrMessages = {
             common: {
                 unassigned: 'অনির্ধারিত',
                 unspecifiedSource: 'অনির্দিষ্ট',
-                statsLabel: 'সংক্ষেপ'
+                statsLabel: 'সংক্ষেপ',
+                groupBy: "গ্রুপ করুন",
             },
             leadSources: {
                 title: 'লিড সোর্সের কার্যকারিতা',
@@ -798,7 +800,7 @@ export const crmHrMessages = {
             followUps: {
                 title: 'ফলো-আপ কমপ্লায়েন্স',
                 subtitle: 'প্রতিষ্ঠানের ক্যালেন্ডার দিন অনুসারে নির্ধারিত ফলো-আপ সমাপ্তি ও সময়ানুবর্তিতা মূল্যায়ন।',
-                groupBy: 'গ্রুপ করুন',
+                groupBy: "গ্রুপ করুন",
                 byPerson: 'বিক্রয়কর্মী অনুযায়ী',
                 byPurpose: 'উদ্দেশ্য অনুযায়ী',
                 undatedNote: '{count}টি পরিকল্পিত ফলো-আপের কোনো নির্দিষ্ট তারিখ নেই এবং সেগুলো গণনা করা হয়নি।',
@@ -837,6 +839,39 @@ export const crmHrMessages = {
                     lastContacted: 'সর্বশেষ যোগাযোগ',
                     followUp: 'পরবর্তী পদক্ষেপ'
                 }
+            },
+            leadAging: {
+                title: "লিডের বয়স",
+                subtitle: "খোলা পাইপলাইন কত দিন খোলা আছে — বয়সের ব্যান্ড ও ধাপ অনুযায়ী, আজকের হিসাবে।",
+                ageNote: "লিড তৈরির দিন থেকে বয়স গণনা করা হয়, কর্মক্ষেত্রের ক্যালেন্ডার অনুযায়ী।",
+                staleNote: "{days} দিন বা তার বেশি কোনো কার্যক্রম না থাকলে লিডটি অবহেলিত হিসেবে গণ্য হয়।",
+                asOf: "{date} অনুযায়ী",
+                empty: "এই মুহূর্তে কোনো খোলা লিড নেই।",
+                columns: {
+                    bucket: "বয়স",
+                    leads: "খোলা লিড",
+                    share: "অংশ",
+                    stale: "অবহেলিত",
+                    oldest: "সর্বোচ্চ (দিন)",
+                    stage: "ধাপ",
+                    average: "গড় বয়স",
+                },
+                buckets: {
+                    '0-7': "০–৭ দিন", 
+                    '8-14': "৮–১৪ দিন", 
+                    '15-30': "১৫–৩০ দিন", 
+                    '31-60': "৩১–৬০ দিন", 
+                    '61-90': "৬১–৯০ দিন", 
+                    '90+': "৯০ দিনের বেশি", 
+                },
+                stages: {
+                    NEW: "নতুন",
+                    CONTACTED: "যোগাযোগ হয়েছে",
+                    QUALIFIED: "যোগ্য",
+                    CONVERTED: "রূপান্তরিত",
+                    LOST: "ব্যর্থ",
+                },
+                statsLabel: "পাইপলাইনের সারসংক্ষেপ",
             }
         },
     },
@@ -950,7 +985,7 @@ export const crmHrMessages = {
                 preset12: "শেষ ১২ মাস",
                 presetYtd: "এই বছর",
                 presetCustom: "নিজস্ব পরিসর",
-                groupBy: "গ্রুপ",
+                groupBy: "গ্রুপ করুন",
                 group: {
                     employee: "কর্মী",
                     department: "বিভাগ",

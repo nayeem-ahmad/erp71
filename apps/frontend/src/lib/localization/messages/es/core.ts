@@ -465,6 +465,8 @@ export const coreMessages = {
 
             crmColdCustomers: 'Clientes que se enfrían',
 
+            crmLeadAging: "Antigüedad de clientes potenciales",
+
             crmSetup: "Configuración",
             crmCustomers: "Clientes",
             salesSettings: "Ajustes de ventas",

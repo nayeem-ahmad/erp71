@@ -396,8 +396,8 @@ Second external-ERP provider alongside Express Retail Pro, built on a new multi-
 
 ### CRM reports — follow-ups (2026-11-16)
 
-- [ ] **Run `sync:nav-layout --nodes=crm.reports,crm.reports.lead-sources,crm.reports.scorecard,crm.reports.follow-up-compliance,crm.reports.cold-customers` against production** after deploy, dry run first. Saved custom sidebars keep the old tree verbatim, so a tenant who rearranged CRM before this release will not see the Reports subgroup.
-- [ ] **The eight proposed reports not yet built:** lead funnel by arrival month, lost leads, lead aging, activity register, RFM, contact coverage, upcoming birthdays, campaign performance.
+- [ ] **Run `sync:nav-layout --nodes=crm.reports,crm.reports.lead-sources,crm.reports.scorecard,crm.reports.lead-aging,crm.reports.follow-up-compliance,crm.reports.cold-customers` against production** after deploy, dry run first. Saved custom sidebars keep the old tree verbatim, so a tenant who rearranged CRM before this release will not see the Reports subgroup.
+- [ ] **The seven proposed reports not yet built:** lead funnel by arrival month, lost leads, activity register, RFM, contact coverage, upcoming birthdays, campaign performance. (Lead aging shipped 2026-11-16.)
 - [ ] **`lost_reason` is free text.** Make it a pick-list before building the lost-leads report.
 - [ ] **There is no lead deal value,** so no pipeline-value or forecast report is possible.
 - [ ] **Status changes are not recorded,** so there is no time-in-stage report.

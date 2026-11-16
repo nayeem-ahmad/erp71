@@ -33,6 +33,7 @@ export const crmHrMessages = {
                 followUpCompliance: { title: 'Pematuhan susulan', description: 'Penyelesaian tugasan tepat pada masa berbanding tertunggak mengikut jurujual dan tujuan.' },
 
                 coldCustomers: { title: 'Pelanggan menjadi dingin', description: 'Pelanggan berulang yang telah berhenti membeli berdasarkan rentak biasa mereka.' },
+                leadAging: { title: "Umur petunjuk", description: "Berapa lama saluran terbuka telah terbiar — mengikut jalur umur dan peringkat." },
 
                 crmSetup: { title: 'Persediaan CRM', description: 'Saluran perbualan, sumber & kategori prospek, medan tersuai.' },
             },
@@ -754,7 +755,8 @@ export const crmHrMessages = {
             common: {
                 unassigned: 'Tidak ditugaskan',
                 unspecifiedSource: 'Tidak ditentukan',
-                statsLabel: 'Ringkasan'
+                statsLabel: 'Ringkasan',
+                groupBy: "Kumpul mengikut",
             },
             leadSources: {
                 title: 'Prestasi sumber prospek',
@@ -798,7 +800,7 @@ export const crmHrMessages = {
             followUps: {
                 title: 'Pematuhan susulan',
                 subtitle: 'Penyelesaian susulan berjadual dan ketepatan masa dinilai pada hari kalendar penyewa.',
-                groupBy: 'Kumpulan mengikut',
+                groupBy: "Kumpulkan mengikut",
                 byPerson: 'Mengikut jurujual',
                 byPurpose: 'Mengikut tujuan',
                 undatedNote: '{count} susulan yang dirancang tidak mempunyai tarikh tamat tempoh dan tidak dikira.',
@@ -837,6 +839,39 @@ export const crmHrMessages = {
                     lastContacted: 'Terakhir Dihubungi',
                     followUp: 'Langkah Seterusnya'
                 }
+            },
+            leadAging: {
+                title: "Umur petunjuk",
+                subtitle: "Berapa lama saluran terbuka telah dibuka — mengikut jalur umur dan peringkat, setakat hari ini.",
+                ageNote: "Umur dikira dari tarikh petunjuk dicipta, mengikut kalendar ruang kerja.",
+                staleNote: "Petunjuk tanpa aktiviti selama {days} hari atau lebih dikira terbiar.",
+                asOf: "Setakat {date}",
+                empty: "Tiada petunjuk terbuka sekarang.",
+                columns: {
+                    bucket: "Umur",
+                    leads: "Petunjuk terbuka",
+                    share: "Bahagian",
+                    stale: "Terbiar",
+                    oldest: "Tertua (hari)",
+                    stage: "Peringkat",
+                    average: "Umur purata",
+                },
+                buckets: {
+                    '0-7': "0–7 hari", 
+                    '8-14': "8–14 hari", 
+                    '15-30': "15–30 hari", 
+                    '31-60': "31–60 hari", 
+                    '61-90': "61–90 hari", 
+                    '90+': "Lebih 90 hari", 
+                },
+                stages: {
+                    NEW: "Baharu",
+                    CONTACTED: "Dihubungi",
+                    QUALIFIED: "Layak",
+                    CONVERTED: "Ditukar",
+                    LOST: "Hilang",
+                },
+                statsLabel: "Gambaran saluran",
             }
         },
     },
@@ -950,7 +985,7 @@ export const crmHrMessages = {
                 preset12: "12 bulan lepas",
                 presetYtd: "Tahun ini",
                 presetCustom: "Julat tersuai",
-                groupBy: "Kumpulkan ikut",
+                groupBy: "Kumpul mengikut",
                 group: {
                     employee: "Pekerja",
                     department: "Jabatan",

@@ -33,6 +33,7 @@ export const crmHrMessages = {
                 followUpCompliance: { title: 'फ़ॉलो-अप अनुपालन', description: 'विक्रेता और उद्देश्य के अनुसार समय पर बनाम अतिदेय कार्य पूर्णता।' },
 
                 coldCustomers: { title: 'निष्क्रिय हो रहे ग्राहक', description: 'दोहराने वाले ग्राहक जिन्होंने अपनी सामान्य गति के आधार पर खरीदारी बंद कर दी है।' },
+                leadAging: { title: "लीड की आयु", description: "खुली पाइपलाइन कितने समय से पड़ी है — आयु बैंड और चरण के अनुसार।" },
 
                 crmSetup: { title: "CRM सेटअप", description: "बातचीत चैनल, लीड स्रोत व श्रेणियाँ, कस्टम फ़ील्ड।" },
             },
@@ -650,7 +651,7 @@ export const crmHrMessages = {
                 view: "व्यू",
                 listView: "सूची",
                 boardView: "बोर्ड",
-                groupBy: "समूह बनाएं",
+                groupBy: "इसके अनुसार समूहित करें",
                 groups: {
                     status: "स्थिति",
                     priority: "प्राथमिकता",
@@ -754,7 +755,8 @@ export const crmHrMessages = {
             common: {
                 unassigned: 'असाइन नहीं किया गया',
                 unspecifiedSource: 'अनिर्दिष्ट',
-                statsLabel: 'सारांश'
+                statsLabel: 'सारांश',
+                groupBy: "इसके अनुसार समूहित करें",
             },
             leadSources: {
                 title: 'लीड स्रोत प्रदर्शन',
@@ -798,7 +800,7 @@ export const crmHrMessages = {
             followUps: {
                 title: 'फ़ॉलो-अप अनुपालन',
                 subtitle: 'कैलेंडर दिन पर मूल्यांकित निर्धारित फ़ॉलो-अप पूर्णता और समयबद्धता।',
-                groupBy: 'समूहीकृत करें',
+                groupBy: "समूहीकृत करें",
                 byPerson: 'विक्रेता द्वारा',
                 byPurpose: 'उद्देश्य द्वारा',
                 undatedNote: '{count} नियोजित फ़ॉलो-अप की कोई नियत तारीख नहीं है और उन्हें नहीं गिना गया है।',
@@ -837,6 +839,39 @@ export const crmHrMessages = {
                     lastContacted: 'अंतिम संपर्क',
                     followUp: 'अगला कदम'
                 }
+            },
+            leadAging: {
+                title: "लीड की आयु",
+                subtitle: "खुली पाइपलाइन कितने समय से खुली है — आयु बैंड और चरण के अनुसार, आज की स्थिति में।",
+                ageNote: "आयु लीड बनने की तारीख से गिनी जाती है, कार्यस्थल के कैलेंडर के अनुसार।",
+                staleNote: "{days} दिन या अधिक तक कोई गतिविधि न होने पर लीड उपेक्षित मानी जाती है।",
+                asOf: "{date} तक",
+                empty: "इस समय कोई खुली लीड नहीं है।",
+                columns: {
+                    bucket: "आयु",
+                    leads: "खुली लीड",
+                    share: "हिस्सा",
+                    stale: "उपेक्षित",
+                    oldest: "सबसे पुरानी (दिन)",
+                    stage: "चरण",
+                    average: "औसत आयु",
+                },
+                buckets: {
+                    '0-7': "0–7 दिन", 
+                    '8-14': "8–14 दिन", 
+                    '15-30': "15–30 दिन", 
+                    '31-60': "31–60 दिन", 
+                    '61-90': "61–90 दिन", 
+                    '90+': "90 दिन से अधिक", 
+                },
+                stages: {
+                    NEW: "नई",
+                    CONTACTED: "संपर्क हुआ",
+                    QUALIFIED: "योग्य",
+                    CONVERTED: "परिवर्तित",
+                    LOST: "खोई",
+                },
+                statsLabel: "पाइपलाइन एक नज़र में",
             }
         },
     },
@@ -950,7 +985,7 @@ export const crmHrMessages = {
                 preset12: "पिछले 12 महीने",
                 presetYtd: "इस वर्ष",
                 presetCustom: "कस्टम सीमा",
-                groupBy: "समूहीकरण",
+                groupBy: "इसके अनुसार समूहित करें",
                 group: {
                     employee: "कर्मचारी",
                     department: "विभाग",
