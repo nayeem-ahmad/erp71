@@ -25,7 +25,7 @@ export const crmHrMessages = {
                 leads: { title: 'Leads', description: 'Track prospects, log conversations, and plan next steps.' },
                 leadGeneration: { title: 'Lead generation', description: 'AI finds B2B companies you can add as leads.' },
                 contacts: { title: 'Contacts', description: 'Your address book — scan a business card to add someone in seconds.' },
-                customers: { title: 'Customers', description: 'Browse customers and open their relationship profile.' },
+                customers: { title: 'Customers', description: 'Open the customer list — profiles, credit and purchase history.' },
                 crmConversations: { title: 'Conversations', description: 'Every call, visit, and message logged across all leads.' },
                 crmFollowUps: { title: 'Follow-ups', description: 'Follow-ups linked to customers or leads.' },
                 approvalsInbox: { title: 'Approvals Inbox', description: 'Review overdue LinkedIn follow-up drafts. Nothing here is sent to LinkedIn.' },
@@ -711,11 +711,6 @@ export const crmHrMessages = {
                 summaryPlaceholder: 'Summary',
                 outcomePlaceholder: 'Outcome (optional)',
                 updateNextStep: 'Update next step on lead',
-            },
-            customers: {
-                title: 'Customers',
-                subtitle: 'Relationship view — manage credit and sales in the Sales module',
-                openInSales: 'Open in Sales',
             },
         },
         conversations: {

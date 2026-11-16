@@ -14,12 +14,12 @@ import {
  * has to hold for it to be safe to run against a live layout.
  */
 describe('addNavNodesToLayout', () => {
-    /** A customised layout: CRM keeps only overview/leads/customers. */
+    /** A customised layout: CRM keeps only overview/leads/contacts. */
     const customised: NavLayoutNode[] = [
         { id: 'crm', parentId: null, sortOrder: 6, visible: true },
         { id: 'crm.overview', parentId: 'crm', sortOrder: 0, visible: true },
         { id: 'crm.leads', parentId: 'crm', sortOrder: 1, visible: true },
-        { id: 'crm.customers', parentId: 'crm', sortOrder: 2, visible: true },
+        { id: 'crm.contacts', parentId: 'crm', sortOrder: 2, visible: true },
     ];
 
     it('adds a newly-registered node and leaves the result valid', () => {

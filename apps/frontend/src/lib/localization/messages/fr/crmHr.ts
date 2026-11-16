@@ -21,7 +21,7 @@ export const crmHrMessages = {
                 leads: { title: "Pistes", description: "Suivez les prospects, consignez les échanges et planifiez les prochaines étapes." },
                 leadGeneration: { title: "Génération de pistes", description: "L'IA trouve des entreprises B2B que vous pouvez ajouter comme pistes." },
                 contacts: { title: "Contacts", description: "Votre carnet d'adresses — scannez une carte de visite pour ajouter quelqu'un en quelques secondes." },
-                customers: { title: "Clients", description: "Parcourez les clients et ouvrez leur profil relationnel." },
+                customers: { title: "Clients", description: "Ouvrez la liste des clients — profils, crédit et historique d'achats." },
                 crmConversations: { title: "Échanges", description: "Chaque appel, visite et message consigné pour toutes les pistes." },
                 crmFollowUps: { title: "Relances", description: "Relances liées aux clients ou aux pistes." },
                 approvalsInbox: { title: 'Approvals Inbox', description: 'Review overdue LinkedIn follow-up drafts. Nothing here is sent to LinkedIn.' },
@@ -711,11 +711,6 @@ export const crmHrMessages = {
                 summaryPlaceholder: "Résumé",
                 outcomePlaceholder: "Résultat (facultatif)",
                 updateNextStep: "Mettre à jour la prochaine étape sur la piste",
-            },
-            customers: {
-                title: "Clients",
-                subtitle: "Vue relationnelle — gérez le crédit et les ventes dans le module Ventes",
-                openInSales: "Ouvrir dans Ventes",
             },
         },
         conversations: {

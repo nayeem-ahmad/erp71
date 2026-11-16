@@ -50,6 +50,7 @@ const CUSTOMER_SORTABLE: SortableMap = {
     customerGroup: (dir) => ({ customerGroup: { name: dir } }),
     territory: (dir) => ({ territory: { name: dir } }),
     segment_category: (dir) => ({ segment_category: dir }),
+    last_contacted_at: (dir) => ({ last_contacted_at: dir }),
     customer_type: (dir) => ({ customer_type: dir }),
     loyalty_points: (dir) => ({ loyalty_points: dir }),
     due_balance: (dir) => ({ due_balance: dir }),

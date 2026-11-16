@@ -470,7 +470,6 @@ export const coreMessages = {
             crmActivitySummary: "Resumen de actividades",
 
             crmSetup: "Configuración",
-            crmCustomers: "Clientes",
             salesSettings: "Ajustes de ventas",
             printTemplates: "Encabezado de impresión",
             smsCredits: "Créditos de mensajería",

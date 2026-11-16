@@ -24,7 +24,6 @@ export const NAV_ROUTES: { path: string; label: string }[] = [
     { path: '/sales/customer-ledger', label: 'Customer Ledger' },
     { path: '/sales/customers/reports/due-aging', label: 'Due Aging' },
     { path: '/crm', label: 'CRM Overview' },
-    { path: '/crm/customers', label: 'CRM Customers' },
     { path: '/crm/leads', label: 'CRM Leads' },
     { path: '/crm/approvals-inbox', label: 'Approvals Inbox' },
     { path: '/crm/lead-generation', label: 'CRM Lead generation' },

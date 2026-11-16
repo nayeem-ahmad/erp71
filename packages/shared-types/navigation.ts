@@ -265,7 +265,8 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   // have to rebuild this queue from the activities filters.
   'crm.approvals-inbox': { id: 'crm.approvals-inbox', kind: 'link', icon: 'Inbox', labelKey: 'sidebar.items.crmApprovalsInbox', href: '/crm/approvals-inbox', premiumOnly: true },
   'crm.campaigns': { id: 'crm.campaigns', kind: 'link', icon: 'Megaphone', labelKey: 'sidebar.items.crmCampaigns', href: '/crm/campaigns', premiumOnly: true },
-  'crm.customers': { id: 'crm.customers', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.crmCustomers', href: '/crm/customers' },
+  // No `crm.customers` node: it was a read-only slice of /sales/customers. The
+  // CRM hub still links there, but the sidebar keeps one Customers entry.
   'crm.reports': { id: 'crm.reports', kind: 'subgroup', icon: 'BarChart3', labelKey: 'crm.hub.reports' },
   'crm.reports.lead-sources': { id: 'crm.reports.lead-sources', kind: 'link', icon: 'TrendingUp', labelKey: 'sidebar.items.crmLeadSourceReport', href: '/crm/reports/lead-sources', premiumOnly: true },
   'crm.reports.scorecard': { id: 'crm.reports.scorecard', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.crmScorecard', href: '/crm/reports/scorecard', premiumOnly: true },
@@ -751,7 +752,6 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.follow-ups', 'crm', 4),
   layoutNode('crm.approvals-inbox', 'crm', 4),
   layoutNode('crm.campaigns', 'crm', 5),
-  layoutNode('crm.customers', 'crm', 6),
   layoutNode('crm.reports', 'crm', 7),
   layoutNode('crm.reports.lead-sources', 'crm.reports', 0),
   layoutNode('crm.reports.scorecard', 'crm.reports', 1),

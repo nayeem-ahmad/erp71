@@ -21,7 +21,7 @@ export const crmHrMessages = {
                 leads: { title: 'لیڈز', description: 'ممکنہ گاہکوں کی نگرانی کریں، گفتگو درج کریں اور اگلے اقدامات طے کریں۔' },
                 leadGeneration: { title: 'لیڈ جنریشن', description: 'AI B2B کمپنیاں تلاش کرتا ہے جنہیں آپ لیڈ کے طور پر شامل کر سکتے ہیں۔' },
                 contacts: { title: 'رابطے', description: 'آپ کی ایڈریس بک — وزیٹنگ کارڈ اسکین کر کے سیکنڈوں میں کسی کو شامل کریں۔' },
-                customers: { title: 'گاہک', description: 'گاہک دیکھیں اور ان کا تعلقاتی پروفائل کھولیں۔' },
+                customers: { title: 'گاہک', description: 'گاہک فہرست کھولیں — پروفائل، کریڈٹ اور خریداری کی تاریخ۔' },
                 crmConversations: { title: 'گفتگو', description: 'تمام لیڈز پر درج ہر کال، ملاقات اور پیغام۔' },
                 crmFollowUps: { title: 'فالو اپس', description: 'گاہکوں یا لیڈز سے منسلک فالو اپ۔' },
                 approvalsInbox: { title: 'Approvals Inbox', description: 'Review overdue LinkedIn follow-up drafts. Nothing here is sent to LinkedIn.' },
@@ -711,11 +711,6 @@ export const crmHrMessages = {
                 summaryPlaceholder: 'خلاصہ',
                 outcomePlaceholder: 'نتیجہ (اختیاری)',
                 updateNextStep: 'لیڈ پر اگلا قدم اپ ڈیٹ کریں',
-            },
-            customers: {
-                title: 'گاہک',
-                subtitle: 'تعلقاتی منظر — کریڈٹ اور فروخت سیلز ماڈیول میں سنبھالیں',
-                openInSales: 'سیلز میں کھولیں',
             },
         },
         conversations: {

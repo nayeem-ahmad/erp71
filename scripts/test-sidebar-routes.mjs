@@ -102,7 +102,6 @@ const ROUTES = [
     { path: '/crm', label: 'CRM Overview' },
     { path: '/crm/leads', label: 'CRM Leads' },
     { path: '/crm/approvals-inbox', label: 'Approvals Inbox' },
-    { path: '/crm/customers', label: 'CRM Customers' },
 
     // HR
     { path: '/hr', label: 'HR Overview' },

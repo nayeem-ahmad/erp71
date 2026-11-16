@@ -186,6 +186,8 @@ export const routes = {
 
     crm: {
         root: '/crm',
+        // Superseded by `sales.customers`, which this path now redirects to; the
+        // route stays so old bookmarks and saved sidebar layouts keep resolving.
         customers: '/crm/customers',
         leads: '/crm/leads',
         leadNew: '/crm/leads/new' as const,

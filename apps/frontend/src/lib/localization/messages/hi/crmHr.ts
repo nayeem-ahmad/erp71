@@ -21,7 +21,7 @@ export const crmHrMessages = {
                 leads: { title: "लीड", description: "संभावित ग्राहकों पर नज़र रखें, बातचीत दर्ज करें और अगले कदम तय करें।" },
                 leadGeneration: { title: "लीड जनरेशन", description: "AI B2B कंपनियाँ खोजता है जिन्हें आप लीड के रूप में जोड़ सकते हैं।" },
                 contacts: { title: "संपर्क", description: "आपकी पता-पुस्तिका — विज़िटिंग कार्ड स्कैन कर सेकंडों में किसी को जोड़ें।" },
-                customers: { title: "ग्राहक", description: "ग्राहक देखें और उनकी संबंध प्रोफ़ाइल खोलें।" },
+                customers: { title: "ग्राहक", description: "ग्राहक सूची खोलें — प्रोफ़ाइल, क्रेडिट और खरीद इतिहास।" },
                 crmConversations: { title: "बातचीत", description: "सभी लीड पर दर्ज हर कॉल, मुलाक़ात और संदेश।" },
                 crmFollowUps: { title: "फ़ॉलो-अप", description: "ग्राहकों या लीड से जुड़े फ़ॉलो-अप।" },
                 approvalsInbox: { title: 'Approvals Inbox', description: 'Review overdue LinkedIn follow-up drafts. Nothing here is sent to LinkedIn.' },
@@ -711,11 +711,6 @@ export const crmHrMessages = {
                 summaryPlaceholder: "सारांश",
                 outcomePlaceholder: "परिणाम (वैकल्पिक)",
                 updateNextStep: "लीड पर अगला कदम अपडेट करें",
-            },
-            customers: {
-                title: "ग्राहक",
-                subtitle: "संबंध दृश्य — क्रेडिट और बिक्री बिक्री मॉड्यूल में प्रबंधित करें",
-                openInSales: "बिक्री में खोलें",
             },
         },
         conversations: {

@@ -56,6 +56,8 @@ interface Customer {
     segment_category?: string | null;
     loyalty_points?: number | null;
     due_balance?: string | number | null;
+    /** Stamped by CRM activities and interactions; null for a customer never contacted. */
+    last_contacted_at?: string | null;
     created_at: string;
     customerGroup?: { name: string } | null;
     territory?: { name: string } | null;
@@ -371,6 +373,16 @@ export default function CustomersPage() {
                         </StatusBadge>
                     );
                 },
+                size: 130,
+                meta: { hideOnMobile: true },
+            }),
+            columnHelper.accessor('last_contacted_at', {
+                header: t.customers.columns.lastContacted,
+                cell: (info) => {
+                    const value = info.getValue();
+                    return value ? formatDate(value, locale) : <span className="text-gray-400">—</span>;
+                },
+                sortingFn: 'datetime',
                 size: 130,
                 meta: { hideOnMobile: true },
             }),
