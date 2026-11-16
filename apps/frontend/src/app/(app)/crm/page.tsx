@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { UserPlus, Users, Megaphone, ListChecks, MessageSquare, SlidersHorizontal, Contact, Sparkles, Inbox } from 'lucide-react';
+import { UserPlus, Users, Megaphone, ListChecks, MessageSquare, SlidersHorizontal, Contact, Sparkles, Inbox, TrendingUp, Clock } from 'lucide-react';
 import ModuleHub, { type HubSectionConfig } from '@/components/ModuleHub';
 import CrmDashboard from '@/components/dashboard/CrmDashboard';
 import { useI18n } from '@/lib/i18n';
@@ -43,13 +43,26 @@ export default function CrmHubPage() {
             ],
         });
         if (canAccessPremiumCrm) {
+            result.push({
+                sectionKey: 'engagement',
+                links: [
+                    { href: routes.crm.campaigns, key: 'crmCampaigns', icon: Megaphone, accent: 'bg-danger-light text-danger-text border-red-200' },
+                ],
+            });
+        }
+        const reportLinks = [
+            ...(canAccessPremiumCrm
+                ? [
+                    { href: routes.crm.reports.leadSources, key: 'leadSourceReport', icon: TrendingUp, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
+                    { href: routes.crm.reports.scorecard, key: 'scorecard', icon: Users, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
+                    { href: routes.crm.reports.followUpCompliance, key: 'followUpCompliance', icon: ListChecks, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
+                ]
+                : []),
+            { href: routes.crm.reports.coldCustomers, key: 'coldCustomers', icon: Clock, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
+        ];
+        result.push({ sectionKey: 'reports', links: reportLinks });
+        if (canAccessPremiumCrm) {
             result.push(
-                {
-                    sectionKey: 'engagement',
-                    links: [
-                        { href: routes.crm.campaigns, key: 'crmCampaigns', icon: Megaphone, accent: 'bg-danger-light text-danger-text border-red-200' },
-                    ],
-                },
                 // One entry now: the three lookup lists and the custom fields are all
                 // tabs of CRM Setup, and two of them were previously reachable only
                 // by typing the URL.
@@ -68,6 +81,7 @@ export default function CrmHubPage() {
         pipeline: hub.pipeline,
         relationships: hub.relationships,
         engagement: hub.engagement,
+        reports: hub.reports,
         settings: hub.settings,
     }), [hub]);
 

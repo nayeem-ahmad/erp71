@@ -25,6 +25,14 @@ export const crmHrMessages = {
                 crmFollowUps: { title: "Relances", description: "Relances liées aux clients ou aux pistes." },
                 approvalsInbox: { title: 'Approvals Inbox', description: 'Review overdue LinkedIn follow-up drafts. Nothing here is sent to LinkedIn.' },
                 crmCampaigns: { title: "Campagnes", description: "Planifiez et envoyez des campagnes commerciales sortantes." },
+                leadSourceReport: { title: 'Performance des sources de leads', description: 'Pistes, taux de conversion et chiffre d'affaires par canal d'acquisition.' },
+
+                scorecard: { title: 'Tableau de bord des commerciaux', description: 'Activité des commerciaux, volume du pipeline, conformité et revenus des ventes.' },
+
+                followUpCompliance: { title: 'Conformité des suivis', description: 'Achèvement des tâches dans les délais ou en retard par commercial et par objectif.' },
+
+                coldCustomers: { title: 'Clients en perte de vitesse', description: 'Clients réguliers qui ont cessé d'acheter selon leur rythme habituel.' },
+
                 crmSetup: { title: "Configuration CRM", description: "Canaux d'échange, sources et catégories de pistes, champs personnalisés." },
             },
             dashboard: {
@@ -742,6 +750,96 @@ export const crmHrMessages = {
             },
         },
     },
+        reports: {
+          common: {
+                    unassigned: 'Non assigné',
+                    unspecifiedSource: 'Non spécifié',
+                    statsLabel: 'Résumé'
+          },
+          leadSources: {
+                    title: 'Performance des sources de leads',
+                    subtitle: 'Leads créés sur la période, taux de conversion et chiffre d'affaires cumulé généré par les clients convertis.',
+                    revenueNote: 'Le chiffre d'affaires reflète les ventes conclues avec les clients convertis à compter de la date de conversion.',
+                    empty: 'Aucun lead trouvé pour la période sélectionnée.',
+                    columns: {
+                              source: 'Source',
+                              leads: 'Leads',
+                              contacted: 'Contactés',
+                              open: 'En cours',
+                              converted: 'Convertis',
+                              lost: 'Perdus',
+                              conversion: 'Conversion %',
+                              winRate: 'Taux de réussite %',
+                              medianDays: 'Délai médian de conversion (jours)',
+                              revenue: 'Chiffre d'affaires',
+                              revenuePerLead: 'CA / Lead'
+                    }
+          },
+          scorecard: {
+                    title: 'Tableau de bord des commerciaux',
+                    subtitle: 'Activité, avancement du pipeline, respect des tâches et chiffre d'affaires attribué aux propriétaires actuels des leads.',
+                    revenueNote: 'Le chiffre d'affaires reflète les ventes de la période issues des clients convertis attribués au commercial.',
+                    empty: 'Aucune activité commerciale enregistrée pour la période sélectionnée.',
+                    columns: {
+                              person: 'Commercial',
+                              openLeads: 'Leads en cours',
+                              newLeads: 'Nouveaux leads',
+                              activities: 'Activités enregistrées',
+                              leadsTouched: 'Leads contactés',
+                              followUpsDue: 'Suivis à faire',
+                              onTime: 'À temps %',
+                              overdueNow: 'En retard actuel',
+                              converted: 'Convertis',
+                              lost: 'Perdus',
+                              winRate: 'Taux de réussite %',
+                              revenue: 'Chiffre d'affaires'
+                    }
+          },
+          followUps: {
+                    title: 'Conformité des suivis',
+                    subtitle: 'Respect des échéances et finalisation des suivis planifiés selon le jour calendaire du locataire.',
+                    groupBy: 'Grouper par',
+                    byPerson: 'Par commercial',
+                    byPurpose: 'Par objectif',
+                    undatedNote: '{count} suivis planifiés n'ont pas de date d'échéance et ne sont pas comptabilisés.',
+                    empty: 'Aucune tâche de suivi échue sur la période sélectionnée.',
+                    columns: {
+                              person: 'Commercial',
+                              purpose: 'Objectif',
+                              due: 'Total dû',
+                              onTime: 'À temps',
+                              late: 'En retard',
+                              overdue: 'Échu',
+                              pending: 'En attente',
+                              cancelled: 'Annulé',
+                              compliance: 'Conformité %'
+                    }
+          },
+          coldCustomers: {
+                    title: 'Clients en perte de vitesse',
+                    subtitle: 'Clients réguliers dont l'intervalle depuis la dernière commande dépasse leur rythme habituel.',
+                    factor: 'Facteur de seuil',
+                    factorOption: '{factor}× leur intervalle habituel',
+                    oneTimeNote: 'Les acheteurs ponctuels sont exclus de cette analyse.',
+                    truncatedNote: 'Affichage des {shown} plus importants sur {total}.',
+                    never: 'Jamais',
+                    planned: 'Suivi planifié',
+                    empty: 'Aucun client n'est actuellement considéré en perte de vitesse.',
+                    columns: {
+                              customer: 'Client',
+                              phone: 'Téléphone',
+                              segment: 'Segment',
+                              orders: 'Commandes',
+                              lifetimeSpend: 'Dépenses totales',
+                              usualGap: 'Intervalle habituel',
+                              daysSince: 'Jours depuis le dernier',
+                              overdueBy: 'Retard de (jours)',
+                              lastContacted: 'Dernier contact',
+                              followUp: 'Prochaine étape'
+                    }
+          }
+},
+
     hr: {
         hub: {
             moduleLabel: "Module RH",

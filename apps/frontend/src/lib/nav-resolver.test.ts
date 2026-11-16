@@ -223,6 +223,24 @@ describe('nav-resolver', () => {
         expect(labels).toContain('Wages Register');
     });
 
+    it('puts CRM Reports above CRM Setup with every report reachable', () => {
+        const crm = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>)
+            .find((mod) => mod.key === 'crm');
+        const group = (crm?.children ?? [])
+            .find((child) => 'type' in child && child.type === 'subgroup' && child.label === 'Reports');
+
+        expect(group && 'children' in group ? group.children.map((link) => link.href) : []).toEqual([
+            '/crm/reports/lead-sources',
+            '/crm/reports/scorecard',
+            '/crm/reports/follow-up-compliance',
+            '/crm/reports/cold-customers',
+        ]);
+
+        const labels = group && 'children' in group ? group.children.map((link) => link.label) : [];
+        expect(labels.some((label) => label.includes('.'))).toBe(false);
+        expect(labels).toContain('Lead source performance');
+    });
+
     it('does not gate HR Reports behind the Advanced toggle', () => {
         const hr = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>)
             .find((mod) => mod.key === 'hr');

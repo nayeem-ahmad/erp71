@@ -456,6 +456,15 @@ export const coreMessages = {
             crmLeadGeneration: "Generación de leads",
             crmContacts: "Contactos",
             crmConversations: "Conversaciones",
+            
+            crmLeadSourceReport: 'Rendimiento de fuentes de prospectos',
+
+            crmScorecard: 'Tarjeta de puntuación de vendedores',
+
+            crmFollowUpCompliance: 'Cumplimiento de seguimientos',
+
+            crmColdCustomers: 'Clientes que se enfrían',
+
             crmSetup: "Configuración",
             crmCustomers: "Clientes",
             salesSettings: "Ajustes de ventas",

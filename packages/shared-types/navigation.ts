@@ -266,6 +266,11 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'crm.approvals-inbox': { id: 'crm.approvals-inbox', kind: 'link', icon: 'Inbox', labelKey: 'sidebar.items.crmApprovalsInbox', href: '/crm/approvals-inbox', premiumOnly: true },
   'crm.campaigns': { id: 'crm.campaigns', kind: 'link', icon: 'Megaphone', labelKey: 'sidebar.items.crmCampaigns', href: '/crm/campaigns', premiumOnly: true },
   'crm.customers': { id: 'crm.customers', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.crmCustomers', href: '/crm/customers' },
+  'crm.reports': { id: 'crm.reports', kind: 'subgroup', icon: 'BarChart3', labelKey: 'crm.hub.reports' },
+  'crm.reports.lead-sources': { id: 'crm.reports.lead-sources', kind: 'link', icon: 'TrendingUp', labelKey: 'sidebar.items.crmLeadSourceReport', href: '/crm/reports/lead-sources', premiumOnly: true },
+  'crm.reports.scorecard': { id: 'crm.reports.scorecard', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.crmScorecard', href: '/crm/reports/scorecard', premiumOnly: true },
+  'crm.reports.follow-up-compliance': { id: 'crm.reports.follow-up-compliance', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.crmFollowUpCompliance', href: '/crm/reports/follow-up-compliance', premiumOnly: true },
+  'crm.reports.cold-customers': { id: 'crm.reports.cold-customers', kind: 'link', icon: 'Clock', labelKey: 'sidebar.items.crmColdCustomers', href: '/crm/reports/cold-customers' },
   // Replaces the separate 'crm.lead-taxonomy' and 'crm.custom-fields' nodes — both
   // lists are now tabs of one page. Layouts a tenant customised before this still
   // name the old ids; buildNavModulesFromLayout drops ids missing from this
@@ -522,6 +527,10 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
   'meetings.actions-all': ['VIEW_ALL_MEETINGS'],
 
   crm: CRM_ANY,
+  'crm.reports.lead-sources': ['VIEW_LEADS'],
+  'crm.reports.scorecard': ['VIEW_LEADS'],
+  'crm.reports.follow-up-compliance': ['VIEW_CRM_INTERACTIONS'],
+  'crm.reports.cold-customers': ['VIEW_CRM_INTERACTIONS'],
 
   hr: HR_ANY,
   'hr.payroll': ['VIEW_PAYROLL', 'MANAGE_HR'],
@@ -739,7 +748,12 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.approvals-inbox', 'crm', 4),
   layoutNode('crm.campaigns', 'crm', 5),
   layoutNode('crm.customers', 'crm', 6),
-  layoutNode('crm.setup', 'crm', 7),
+  layoutNode('crm.reports', 'crm', 7),
+  layoutNode('crm.reports.lead-sources', 'crm.reports', 0),
+  layoutNode('crm.reports.scorecard', 'crm.reports', 1),
+  layoutNode('crm.reports.follow-up-compliance', 'crm.reports', 2),
+  layoutNode('crm.reports.cold-customers', 'crm.reports', 3),
+  layoutNode('crm.setup', 'crm', 8),
 
   layoutNode('projects', null, 9),
   layoutNode('projects.list', 'projects', 0),

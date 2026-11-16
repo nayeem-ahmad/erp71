@@ -456,6 +456,15 @@ export const coreMessages = {
             crmLeadGeneration: "Penjanaan prospek",
             crmContacts: "Kenalan",
             crmConversations: "Perbualan",
+            
+            crmLeadSourceReport: 'Prestasi sumber prospek',
+
+            crmScorecard: 'Kad skor jurujual',
+
+            crmFollowUpCompliance: 'Pematuhan susulan',
+
+            crmColdCustomers: 'Pelanggan menjadi dingin',
+
             crmSetup: "Persediaan",
             crmCustomers: "Pelanggan",
                 salesSettings: "Tetapan Jualan",

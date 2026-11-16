@@ -25,6 +25,14 @@ export const crmHrMessages = {
                 crmFollowUps: { title: 'المتابعات', description: 'متابعات مرتبطة بزبائن أو عملاء محتملين.' },
                 approvalsInbox: { title: 'Approvals Inbox', description: 'Review overdue LinkedIn follow-up drafts. Nothing here is sent to LinkedIn.' },
                 crmCampaigns: { title: 'الحملات', description: 'خطّط لحملات المبيعات الصادرة وأرسلها.' },
+                leadSourceReport: { title: 'أداء مصادر العملاء المحتملين', description: 'العملاء المحتملون ومعدل التحويل والإيرادات حسب قناة الاكتساب.' },
+
+                scorecard: { title: 'بطاقة أداء مندوب المبيعات', description: 'نشاط مندوبي المبيعات وحجم الصفقات والامتثال وإيرادات المبيعات.' },
+
+                followUpCompliance: { title: 'الامتثال للمتابعة', description: 'إنجاز المهام في الوقت المحدد مقابل المتأخرة حسب المندوب والغرض.' },
+
+                coldCustomers: { title: 'العملاء الذين يفقدون النشاط', description: 'العملاء المتكررون الذين توقفوا عن الشراء بناءً على وتيرتهم المعتادة.' },
+
                 crmSetup: { title: 'إعداد إدارة العلاقات', description: 'قنوات المحادثة ومصادر العملاء المحتملين وتصنيفاتهم والحقول المخصصة.' },
             },
             dashboard: {
@@ -742,6 +750,96 @@ export const crmHrMessages = {
             },
         },
     },
+        reports: {
+          common: {
+                    unassigned: 'غير مخصص',
+                    unspecifiedSource: 'غير محدد',
+                    statsLabel: 'الملخص'
+          },
+          leadSources: {
+                    title: 'أداء مصادر العملاء المحتملين',
+                    subtitle: 'العملاء المحتملون المنشأون في الفترة ومعدلات التحويل وإجمالي إيرادات المبيعات مدى الحياة من العملاء المحولين.',
+                    revenueNote: 'تعكس الإيرادات المبيعات المكتملة للعملاء المحولين بدءاً من تاريخ التحويل فصاعداً.',
+                    empty: 'لم يتم العثور على عملاء محتملين للفترة المحددة.',
+                    columns: {
+                              source: 'المصدر',
+                              leads: 'العملاء المحتملون',
+                              contacted: 'تم التواصل',
+                              open: 'قيد المتابعة',
+                              converted: 'تم التحويل',
+                              lost: 'مفقود',
+                              conversion: 'التحويل %',
+                              winRate: 'معدل النجاح %',
+                              medianDays: 'متوسط الأيام للتحويل',
+                              revenue: 'الإيرادات',
+                              revenuePerLead: 'الإيراد / عميل محتمل'
+                    }
+          },
+          scorecard: {
+                    title: 'بطاقة أداء مندوب المبيعات',
+                    subtitle: 'النشاط وتقدم الصفقات والامتثال للمهام وإيرادات مبيعات الفترة المنسوبة إلى مسؤولي العملاء الحاليين.',
+                    revenueNote: 'تعكس الإيرادات المبيعات المكتملة خلال الفترة للعملاء المحولين والمخصصين حالياً لمندوب المبيعات.',
+                    empty: 'لم يتم تسجيل أي نشاط مبيعات للفترة المحددة.',
+                    columns: {
+                              person: 'مندوب المبيعات',
+                              openLeads: 'الفرص المفتوحة',
+                              newLeads: 'فرص جديدة',
+                              activities: 'الأنشطة المسجلة',
+                              leadsTouched: 'فرص تم التواصل معها',
+                              followUpsDue: 'متابعات مستحقة',
+                              onTime: 'في الوقت المحدد %',
+                              overdueNow: 'متأخرة الآن',
+                              converted: 'تم التحويل',
+                              lost: 'مفقود',
+                              winRate: 'معدل النجاح %',
+                              revenue: 'الإيرادات'
+                    }
+          },
+          followUps: {
+                    title: 'الامتثال للمتابعة',
+                    subtitle: 'تقييم إنجاز المتابعات المجدولة والالتزام بالوقت بناءً على يوم تقويم المنشأة.',
+                    groupBy: 'تجميع حسب',
+                    byPerson: 'حسب المندوب',
+                    byPurpose: 'حسب الغرض',
+                    undatedNote: '{count} متابعات مخططة ليس لها تاريخ استحقاق ولم يتم احتسابها.',
+                    empty: 'لا توجد مهام متابعة مستحقة في الفترة المحددة.',
+                    columns: {
+                              person: 'مندوب المبيعات',
+                              purpose: 'الغرض',
+                              due: 'إجمالي المستحق',
+                              onTime: 'في الوقت المحدد',
+                              late: 'متأخر',
+                              overdue: 'متجاوز للموعد',
+                              pending: 'قيد الانتظار',
+                              cancelled: 'ملغى',
+                              compliance: 'الامتثال %'
+                    }
+          },
+          coldCustomers: {
+                    title: 'العملاء الذين يفقدون النشاط',
+                    subtitle: 'العملاء المتكررون الذين تجاوزت الفجوة الزمنية منذ طلبهم الأخير وتيرة شرائهم المعتادة.',
+                    factor: 'معامل الحد الأدنى',
+                    factorOption: '{factor}× فجوتهم المعتادة',
+                    oneTimeNote: 'يتم استبعاد المشترين لمرة واحدة من هذا التحليل.',
+                    truncatedNote: 'عرض {shown} الأكثر قيمة من أصل {total}.',
+                    never: 'أبداً',
+                    planned: 'متابعة مخططة',
+                    empty: 'لا يوجد عملاء يعتبرون فاقدين للنشاط حالياً.',
+                    columns: {
+                              customer: 'العميل',
+                              phone: 'الهاتف',
+                              segment: 'الفئة',
+                              orders: 'الطلبات',
+                              lifetimeSpend: 'الإنفاق مدى الحياة',
+                              usualGap: 'الفجوة المعتادة',
+                              daysSince: 'أيام منذ آخر طلب',
+                              overdueBy: 'متأخر بمقدار',
+                              lastContacted: 'آخر تواصل',
+                              followUp: 'الخطوة التالية'
+                    }
+          }
+},
+
     hr: {
         hub: {
             moduleLabel: 'وحدة الموارد البشرية',

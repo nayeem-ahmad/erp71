@@ -651,6 +651,9 @@ function AppShell({ children }: DashboardLayoutProps) {
             routes.crm.activities,
             routes.crm.approvalsInbox,
             routes.crm.followUps,
+            routes.crm.reports.leadSources,
+            routes.crm.reports.scorecard,
+            routes.crm.reports.followUpCompliance,
         ];
         if (!hasPremiumCrm && premiumCrmPaths.some((p) => pathname.startsWith(p))) {
             router.replace(routes.crm.root);

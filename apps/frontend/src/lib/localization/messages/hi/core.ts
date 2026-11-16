@@ -456,6 +456,15 @@ export const coreMessages = {
             crmLeadGeneration: "लीड जनरेशन",
             crmContacts: "संपर्क",
             crmConversations: "बातचीत",
+            
+            crmLeadSourceReport: 'लीड स्रोत प्रदर्शन',
+
+            crmScorecard: 'विक्रेता स्कोरकार्ड',
+
+            crmFollowUpCompliance: 'फ़ॉलो-अप अनुपालन',
+
+            crmColdCustomers: 'निष्क्रिय हो रहे ग्राहक',
+
             crmSetup: "सेटअप",
             crmCustomers: "ग्राहक",
             salesSettings: "बिक्री सेटिंग्स",

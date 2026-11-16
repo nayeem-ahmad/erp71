@@ -201,6 +201,12 @@ export const routes = {
         conversations: '/crm/conversations',
         followUps: '/crm/follow-ups',
         campaigns: '/crm/campaigns',
+        reports: {
+            leadSources: '/crm/reports/lead-sources',
+            scorecard: '/crm/reports/scorecard',
+            followUpCompliance: '/crm/reports/follow-up-compliance',
+            coldCustomers: '/crm/reports/cold-customers',
+        },
         setup: '/crm/setup',
         // The two old single-list settings pages. Both now redirect into the tabs
         // of /crm/setup; kept as constants so nothing has to hardcode a stale path.

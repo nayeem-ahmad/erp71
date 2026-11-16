@@ -25,6 +25,14 @@ export const crmHrMessages = {
                 crmFollowUps: { title: "फ़ॉलो-अप", description: "ग्राहकों या लीड से जुड़े फ़ॉलो-अप।" },
                 approvalsInbox: { title: 'Approvals Inbox', description: 'Review overdue LinkedIn follow-up drafts. Nothing here is sent to LinkedIn.' },
                 crmCampaigns: { title: "अभियान", description: "बाहर जाने वाले बिक्री अभियान बनाएँ और भेजें।" },
+                leadSourceReport: { title: 'लीड स्रोत प्रदर्शन', description: 'अधिग्रहण चैनल द्वारा लीड, रूपांतरण दर और राजस्व।' },
+
+                scorecard: { title: 'विक्रेता स्कोरकार्ड', description: 'बिक्री प्रतिनिधि गतिविधि, पाइपलाइन वॉल्यूम, अनुपालन और बिक्री राजस्व।' },
+
+                followUpCompliance: { title: 'फ़ॉलो-अप अनुपालन', description: 'विक्रेता और उद्देश्य के अनुसार समय पर बनाम अतिदेय कार्य पूर्णता।' },
+
+                coldCustomers: { title: 'निष्क्रिय हो रहे ग्राहक', description: 'दोहराने वाले ग्राहक जिन्होंने अपनी सामान्य गति के आधार पर खरीदारी बंद कर दी है।' },
+
                 crmSetup: { title: "CRM सेटअप", description: "बातचीत चैनल, लीड स्रोत व श्रेणियाँ, कस्टम फ़ील्ड।" },
             },
             dashboard: {
@@ -742,6 +750,96 @@ export const crmHrMessages = {
             },
         },
     },
+        reports: {
+          common: {
+                    unassigned: 'असाइन नहीं किया गया',
+                    unspecifiedSource: 'अनिर्दिष्ट',
+                    statsLabel: 'सारांश'
+          },
+          leadSources: {
+                    title: 'लीड स्रोत प्रदर्शन',
+                    subtitle: 'विंडो में बनाई गई लीड, रूपांतरण दरें और परिवर्तित ग्राहकों से प्राप्त आजीवन बिक्री राजस्व।',
+                    revenueNote: 'राजस्व रूपांतरण की तारीख से परिवर्तित ग्राहकों को पूर्ण बिक्री को दर्शाता है।',
+                    empty: 'चयनित अवधि के लिए कोई लीड नहीं मिली।',
+                    columns: {
+                              source: 'स्रोत',
+                              leads: 'लीड्स',
+                              contacted: 'संपर्क किया',
+                              open: 'सक्रिय',
+                              converted: 'रूपांतरित',
+                              lost: 'खोई हुई',
+                              conversion: 'रूपांतरण %',
+                              winRate: 'जीत दर %',
+                              medianDays: 'रूपांतरण के औसत दिन',
+                              revenue: 'राजस्व',
+                              revenuePerLead: 'राजस्व / लीड'
+                    }
+          },
+          scorecard: {
+                    title: 'विक्रेता स्कोरकार्ड',
+                    subtitle: 'गतिविधि, पाइपलाइन प्रगति, कार्य अनुपालन और वर्तमान लीड मालिकों को श्रेय दिया जाने वाला बिक्री राजस्व।',
+                    revenueNote: 'राजस्व वर्तमान में विक्रेता को सौंपी गई लीड से परिवर्तित ग्राहकों को उस विंडो में पूर्ण बिक्री को दर्शाता है।',
+                    empty: 'चयनित अवधि के लिए कोई बिक्री गतिविधि दर्ज नहीं की गई।',
+                    columns: {
+                              person: 'विक्रेता',
+                              openLeads: 'सक्रिय लीड्स',
+                              newLeads: 'नई लीड्स',
+                              activities: 'दर्ज गतिविधियां',
+                              leadsTouched: 'संपर्क की गई लीड्स',
+                              followUpsDue: 'देय फ़ॉलो-अप',
+                              onTime: 'समय पर %',
+                              overdueNow: 'वर्तमान में अतिदेय',
+                              converted: 'रूपांतरित',
+                              lost: 'खोई हुई',
+                              winRate: 'जीत दर %',
+                              revenue: 'राजस्व'
+                    }
+          },
+          followUps: {
+                    title: 'फ़ॉलो-अप अनुपालन',
+                    subtitle: 'कैलेंडर दिन पर मूल्यांकित निर्धारित फ़ॉलो-अप पूर्णता और समयबद्धता।',
+                    groupBy: 'समूहीकृत करें',
+                    byPerson: 'विक्रेता द्वारा',
+                    byPurpose: 'उद्देश्य द्वारा',
+                    undatedNote: '{count} नियोजित फ़ॉलो-अप की कोई नियत तारीख नहीं है और उन्हें नहीं गिना गया है।',
+                    empty: 'चयनित अवधि में कोई फ़ॉलो-अप कार्य देय नहीं है।',
+                    columns: {
+                              person: 'विक्रेता',
+                              purpose: 'उद्देश्य',
+                              due: 'कुल देय',
+                              onTime: 'समय पर',
+                              late: 'देर से',
+                              overdue: 'अतिदेय',
+                              pending: 'लंबित',
+                              cancelled: 'रद्द',
+                              compliance: 'अनुपालन %'
+                    }
+          },
+          coldCustomers: {
+                    title: 'निष्क्रिय हो रहे ग्राहक',
+                    subtitle: 'दोहराने वाले खरीदार जिनके अंतिम ऑर्डर के बाद का अंतर उनके सामान्य खरीद अंतराल से अधिक है।',
+                    factor: 'दहलीज कारक',
+                    factorOption: 'उनके सामान्य अंतर का {factor}× गुना',
+                    oneTimeNote: 'एक बार खरीदने वाले खरीदारों को इस विश्लेषण से बाहर रखा गया है।',
+                    truncatedNote: 'कुल {total} में से सबसे मूल्यवान {shown} दिखाए जा रहे हैं।',
+                    never: 'कभी नहीं',
+                    planned: 'फ़ॉलो-अप नियोजित',
+                    empty: 'वर्तमान में किसी भी ग्राहक को निष्क्रिय नहीं माना गया है।',
+                    columns: {
+                              customer: 'ग्राहक',
+                              phone: 'फ़ोन',
+                              segment: 'श्रेणी',
+                              orders: 'ऑर्डर',
+                              lifetimeSpend: 'आजीवन खर्च',
+                              usualGap: 'सामान्य अंतर',
+                              daysSince: 'अंतिम से दिन',
+                              overdueBy: 'विलंबित दिन',
+                              lastContacted: 'अंतिम संपर्क',
+                              followUp: 'अगला कदम'
+                    }
+          }
+},
+
     hr: {
         hub: {
             moduleLabel: "HR मॉड्यूल",
