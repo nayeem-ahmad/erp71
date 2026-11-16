@@ -13,6 +13,7 @@ export const crmHrMessages = {
             pipeline: "Embudo",
             relationships: "Relaciones",
             engagement: "Interacción",
+            reports: "Informes",
             settings: "Ajustes",
             premiumRequired: "La gestión de oportunidades estará disponible en el plan Premium cuando se lance.",
             upgradeCta: "Premium — próximamente",
@@ -25,6 +26,14 @@ export const crmHrMessages = {
                 crmFollowUps: { title: "Seguimientos", description: "Seguimientos vinculados a clientes u oportunidades." },
                 approvalsInbox: { title: 'Approvals Inbox', description: 'Review overdue LinkedIn follow-up drafts. Nothing here is sent to LinkedIn.' },
                 crmCampaigns: { title: "Campañas", description: "Planifica y envía campañas comerciales salientes." },
+                leadSourceReport: { title: 'Rendimiento de fuentes de prospectos', description: 'Prospectos, tasa de conversión e ingresos por canal de adquisición.' },
+
+                scorecard: { title: 'Tarjeta de puntuación de vendedores', description: 'Actividad de representantes, volumen de oportunidades, cumplimiento e ingresos por ventas.' },
+
+                followUpCompliance: { title: 'Cumplimiento de seguimientos', description: 'Finalización de tareas a tiempo versus atrasadas por vendedor y propósito.' },
+
+                coldCustomers: { title: 'Clientes que se enfrían', description: 'Clientes recurrentes que han dejado de comprar según su ritmo habitual.' },
+
                 crmSetup: { title: "Configuración de CRM", description: "Canales de conversación, orígenes y categorías de oportunidades, campos personalizados." },
             },
             dashboard: {
@@ -741,7 +750,97 @@ export const crmHrMessages = {
                 leadsTouched: "Oportunidades contactadas",
             },
         },
+        reports: {
+            common: {
+                unassigned: 'Sin asignar',
+                unspecifiedSource: 'No especificado',
+                statsLabel: 'Resumen'
+            },
+            leadSources: {
+                title: 'Rendimiento de fuentes de prospectos',
+                subtitle: 'Prospectos creados en el período, tasas de conversión e ingresos históricos totales de clientes convertidos.',
+                revenueNote: 'Los ingresos reflejan las ventas completadas a clientes convertidos a partir de la fecha de conversión.',
+                empty: 'No se encontraron prospectos para el período seleccionado.',
+                columns: {
+                    source: 'Fuente',
+                    leads: 'Prospectos',
+                    contacted: 'Contactados',
+                    open: 'Abiertos',
+                    converted: 'Convertidos',
+                    lost: 'Perdidos',
+                    conversion: 'Conversión %',
+                    winRate: 'Tasa de cierre %',
+                    medianDays: 'Días medianos para convertir',
+                    revenue: 'Ingresos',
+                    revenuePerLead: 'Ingresos / Prospecto'
+                }
+            },
+            scorecard: {
+                title: 'Tarjeta de puntuación de vendedores',
+                subtitle: 'Actividad, progreso de oportunidades, cumplimiento de tareas e ingresos de ventas del período acreditados al vendedor.',
+                revenueNote: 'Los ingresos corresponden a ventas del período de clientes convertidos asignados actualmente al vendedor.',
+                empty: 'No se registró actividad de ventas para el período seleccionado.',
+                columns: {
+                    person: 'Vendedor',
+                    openLeads: 'Prospectos abiertos',
+                    newLeads: 'Nuevos prospectos',
+                    activities: 'Actividades registradas',
+                    leadsTouched: 'Prospectos contactados',
+                    followUpsDue: 'Seguimientos vencidos',
+                    onTime: 'A tiempo %',
+                    overdueNow: 'Atrasados ahora',
+                    converted: 'Convertidos',
+                    lost: 'Perdidos',
+                    winRate: 'Tasa de cierre %',
+                    revenue: 'Ingresos'
+                }
+            },
+            followUps: {
+                title: 'Cumplimiento de seguimientos',
+                subtitle: 'Evaluación de finalización puntual de seguimientos programados según el día del calendario del negocio.',
+                groupBy: 'Agrupar por',
+                byPerson: 'Por vendedor',
+                byPurpose: 'Por propósito',
+                undatedNote: '{count} seguimientos planificados no tienen fecha límite y no se contabilizan.',
+                empty: 'No hay tareas de seguimiento pendientes para el período seleccionado.',
+                columns: {
+                    person: 'Vendedor',
+                    purpose: 'Propósito',
+                    due: 'Total a vencer',
+                    onTime: 'A tiempo',
+                    late: 'Tarde',
+                    overdue: 'Atrasado',
+                    pending: 'Pendiente',
+                    cancelled: 'Cancelado',
+                    compliance: 'Cumplimiento %'
+                }
+            },
+            coldCustomers: {
+                title: 'Clientes que se enfrían',
+                subtitle: 'Compradores recurrentes cuyo intervalo desde su último pedido supera su frecuencia habitual de compra.',
+                factor: 'Factor de umbral',
+                factorOption: '{factor}× su frecuencia habitual',
+                oneTimeNote: 'Los compradores de una sola vez están excluidos de este análisis.',
+                truncatedNote: 'Mostrando los {shown} más valiosos de un total de {total}.',
+                never: 'Nunca',
+                planned: 'Seguimiento programado',
+                empty: 'Actualmente ningún cliente se considera inactivo o frío.',
+                columns: {
+                    customer: 'Cliente',
+                    phone: 'Teléfono',
+                    segment: 'Segmento',
+                    orders: 'Pedidos',
+                    lifetimeSpend: 'Gasto total acumulado',
+                    usualGap: 'Frecuencia habitual',
+                    daysSince: 'Días desde último pedido',
+                    overdueBy: 'Retraso de',
+                    lastContacted: 'Último contacto',
+                    followUp: 'Siguiente paso'
+                }
+            }
+        },
     },
+
     hr: {
         hub: {
             moduleLabel: "Módulo de RR. HH.",

@@ -61,6 +61,10 @@ const APP_PAGES: AppPage[] = [
     { path: '/crm/leads', label: 'Leads', description: 'the lead pipeline: open leads, stages and next steps', modules: ['crm'] },
     { path: '/crm/campaigns', label: 'Campaigns', description: 'CRM campaigns and who they were sent to', modules: ['crm'] },
     { path: '/crm/follow-ups', label: 'Follow-ups', description: 'follow-ups due today and overdue', modules: ['crm'] },
+    { path: '/crm/reports/lead-sources', label: 'Lead Source Performance', description: 'leads, conversion rate and revenue by acquisition channel', modules: ['crm'] },
+    { path: '/crm/reports/scorecard', label: 'Salesperson Scorecard', description: 'sales rep performance, open leads, touches and revenue', modules: ['crm'] },
+    { path: '/crm/reports/follow-up-compliance', label: 'Follow-up Compliance', description: 'on-time, late and overdue follow-up tasks by rep and purpose', modules: ['crm'] },
+    { path: '/crm/reports/cold-customers', label: 'Customers Going Cold', description: 'repeat customers silent past their normal buying cycle', modules: ['crm'] },
     { path: '/crm/approvals-inbox', label: 'Approvals inbox', description: 'leave, expense claims and other items waiting on the caller to decide', modules: ['hr'] },
 
     // Inventory

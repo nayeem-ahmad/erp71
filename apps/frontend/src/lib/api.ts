@@ -35,6 +35,12 @@ import type {
     MessagingCreditPackage,
     MessagingCreditSummary,
 } from './messaging-credits';
+import type {
+    LeadSourceReport,
+    ScorecardReport,
+    FollowUpComplianceReport,
+    ColdCustomersReport,
+} from '@/components/crm/reports/types';
 import type { DailyReport } from '@/lib/daily-report';
 import type { Department, Designation, DesignationLevel, OrgImportResult } from '@/lib/org-structure';
 import { numberConditionParam, type NumberCondition } from '@/lib/number-condition';
@@ -1501,8 +1507,8 @@ function leadConversationQuery(
  * Every module dashboard endpoint takes the same optional window and answers in
  * one payload, so they share one caller rather than seven copies of this.
  */
-function dashboardWindowFetcher(path: string) {
-    return (params?: { from?: string; to?: string; mine?: boolean; storeId?: string }) => {
+function dashboardWindowFetcher<T = any>(path: string) {
+    return (params?: { from?: string; to?: string; mine?: boolean; storeId?: string }): Promise<T> => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
@@ -3314,6 +3320,13 @@ export const api = {
     // Its own window rather than the range switcher's: a calendar of "today" is
     // one square, so the heatmap always asks for its own trailing weeks.
     getCrmDashboardActivityHeatmap: dashboardWindowFetcher('/crm/dashboard/activity-heatmap'),
+    getCrmLeadSourceReport: dashboardWindowFetcher<LeadSourceReport>('/crm/reports/lead-sources'),
+    getCrmScorecard: dashboardWindowFetcher<ScorecardReport>('/crm/reports/scorecard'),
+    getCrmFollowUpCompliance: dashboardWindowFetcher<FollowUpComplianceReport>('/crm/reports/follow-up-compliance'),
+    getColdCustomers: (p: { storeId?: string; factor?: number; minGapDays?: number }): Promise<ColdCustomersReport> => {
+        const query = buildReportQuery(p);
+        return fetchWithAuth(`/sales-reports/cold-customers${query ? `?${query}` : ''}`);
+    },
     // Module Overview dashboards — same contract, one per module.
     getInventoryDashboardOverview: dashboardWindowFetcher('/inventory/dashboard/overview'),
     getInventoryDashboardTrends: dashboardWindowFetcher('/inventory/dashboard/trends'),

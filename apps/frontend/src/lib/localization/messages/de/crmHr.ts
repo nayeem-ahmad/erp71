@@ -13,6 +13,7 @@ export const crmHrMessages = {
             pipeline: "Pipeline",
             relationships: "Beziehungen",
             engagement: "Interaktion",
+            reports: "Berichte",
             settings: "Einstellungen",
             premiumRequired: "Die Lead-Verwaltung wird mit dem Premium-Tarif verfügbar sein, sobald dieser startet.",
             upgradeCta: "Premium — demnächst",
@@ -25,6 +26,14 @@ export const crmHrMessages = {
                 crmFollowUps: { title: "Wiedervorlagen", description: "Wiedervorlagen zu Kunden oder Leads." },
                 approvalsInbox: { title: 'Approvals Inbox', description: 'Review overdue LinkedIn follow-up drafts. Nothing here is sent to LinkedIn.' },
                 crmCampaigns: { title: "Kampagnen", description: "Ausgehende Verkaufskampagnen planen und versenden." },
+                leadSourceReport: { title: 'Lead-Quellen-Leistung', description: 'Leads, Konversionsrate und Umsatz nach Akquisitionskanal.' },
+
+                scorecard: { title: 'Vertriebsmitarbeiter-Scorecard', description: 'Aktivität, Pipeline-Volumen, Einhaltung und Umsatzerlöse der Vertriebsmitarbeiter.' },
+
+                followUpCompliance: { title: 'Follow-up-Einhaltung', description: 'Pünktliche vs. überfällige Aufgabenerledigung nach Mitarbeiter und Zweck.' },
+
+                coldCustomers: { title: 'Kalt werdende Kunden', description: 'Wiederkehrende Kunden, die ihren gewohnten Einkaufsrhythmus unterbrochen haben.' },
+
                 crmSetup: { title: "CRM-Einrichtung", description: "Gesprächskanäle, Lead-Quellen und -Kategorien, benutzerdefinierte Felder." },
             },
             dashboard: {
@@ -741,7 +750,97 @@ export const crmHrMessages = {
                 leadsTouched: "Kontaktierte Leads",
             },
         },
+        reports: {
+            common: {
+                unassigned: 'Nicht zugewiesen',
+                unspecifiedSource: 'Nicht angegeben',
+                statsLabel: 'Übersicht'
+            },
+            leadSources: {
+                title: 'Lead-Quellen-Leistung',
+                subtitle: 'Im Zeitraum erstellte Leads, Konversionsraten und bisheriger Lebenszeitumsatz von konvertierten Kunden.',
+                revenueNote: 'Der Umsatz spiegelt abgeschlossene Verkäufe an konvertierte Kunden ab dem Datum der Konvertierung wider.',
+                empty: 'Keine Leads für den ausgewählten Zeitraum gefunden.',
+                columns: {
+                    source: 'Quelle',
+                    leads: 'Leads',
+                    contacted: 'Kontaktiert',
+                    open: 'Offen',
+                    converted: 'Konvertiert',
+                    lost: 'Verloren',
+                    conversion: 'Konversion %',
+                    winRate: 'Abschlussquote %',
+                    medianDays: 'Mediantage bis Konvertierung',
+                    revenue: 'Umsatz',
+                    revenuePerLead: 'Umsatz / Lead'
+                }
+            },
+            scorecard: {
+                title: 'Vertriebsmitarbeiter-Scorecard',
+                subtitle: 'Aktivität, Pipeline-Fortschritt, Aufgabeneinhaltung und den aktuellen Lead-Besitzern gutgeschriebener Periodenumsatz.',
+                revenueNote: 'Der Umsatz umfasst im Zeitraum abgeschlossene Verkäufe an Kunden aus Leads, die dem Mitarbeiter aktuell zugewiesen sind.',
+                empty: 'Keine Vertriebsaktivität für den ausgewählten Zeitraum erfasst.',
+                columns: {
+                    person: 'Vertriebsmitarbeiter',
+                    openLeads: 'Offene Leads',
+                    newLeads: 'Neue Leads',
+                    activities: 'Protokollierte Aktivitäten',
+                    leadsTouched: 'Kontaktierte Leads',
+                    followUpsDue: 'Fällige Follow-ups',
+                    onTime: 'Pünktlich %',
+                    overdueNow: 'Aktuell überfällig',
+                    converted: 'Konvertiert',
+                    lost: 'Verloren',
+                    winRate: 'Abschlussquote %',
+                    revenue: 'Umsatz'
+                }
+            },
+            followUps: {
+                title: 'Follow-up-Einhaltung',
+                subtitle: 'Termingerechte Erledigung geplanter Follow-ups basierend auf dem Kalendertag des Mandanten.',
+                groupBy: 'Gruppieren nach',
+                byPerson: 'Nach Mitarbeiter',
+                byPurpose: 'Nach Zweck',
+                undatedNote: '{count} geplante Follow-ups haben kein Fälligkeitsdatum und werden nicht gezählt.',
+                empty: 'Keine fälligen Follow-up-Aufgaben im ausgewählten Zeitraum.',
+                columns: {
+                    person: 'Vertriebsmitarbeiter',
+                    purpose: 'Zweck',
+                    due: 'Gesamt fällig',
+                    onTime: 'Pünktlich',
+                    late: 'Verspätet',
+                    overdue: 'Überfällig',
+                    pending: 'Ausstehend',
+                    cancelled: 'Storniert',
+                    compliance: 'Einhaltung %'
+                }
+            },
+            coldCustomers: {
+                title: 'Kalt werdende Kunden',
+                subtitle: 'Wiederkehrende Kunden, deren Abstand seit der letzten Bestellung ihren üblichen Kaufzyklus überschreitet.',
+                factor: 'Schwellenwertfaktor',
+                factorOption: '{factor}× ihres üblichen Abstands',
+                oneTimeNote: 'Einmalkäufer sind von dieser Analyse ausgeschlossen.',
+                truncatedNote: 'Die {shown} wertvollsten von {total} werden angezeigt.',
+                never: 'Nie',
+                planned: 'Follow-up geplant',
+                empty: 'Derzeit gelten keine Kunden als inaktiv/kalt.',
+                columns: {
+                    customer: 'Kunde',
+                    phone: 'Telefon',
+                    segment: 'Segment',
+                    orders: 'Bestellungen',
+                    lifetimeSpend: 'Gesamtausgaben',
+                    usualGap: 'Üblicher Abstand',
+                    daysSince: 'Tage seit letztem Kauf',
+                    overdueBy: 'Überfällig um',
+                    lastContacted: 'Zuletzt kontaktiert',
+                    followUp: 'Nächster Schritt'
+                }
+            }
+        },
     },
+
     hr: {
         hub: {
             moduleLabel: "HR-Modul",

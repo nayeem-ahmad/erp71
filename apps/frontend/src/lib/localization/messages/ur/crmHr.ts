@@ -13,6 +13,7 @@ export const crmHrMessages = {
             pipeline: 'پائپ لائن',
             relationships: 'تعلقات',
             engagement: 'رابطہ کاری',
+            reports: "رپورٹس",
             settings: 'ترتیبات',
             premiumRequired: 'لیڈ کا انتظام پریمیم پلان کے اجرا کے وقت دستیاب ہو گا۔',
             upgradeCta: 'پریمیم — جلد آ رہا ہے',
@@ -25,6 +26,14 @@ export const crmHrMessages = {
                 crmFollowUps: { title: 'فالو اپس', description: 'گاہکوں یا لیڈز سے منسلک فالو اپ۔' },
                 approvalsInbox: { title: 'Approvals Inbox', description: 'Review overdue LinkedIn follow-up drafts. Nothing here is sent to LinkedIn.' },
                 crmCampaigns: { title: 'مہمات', description: 'بیرونی سیلز مہمات کی منصوبہ بندی کریں اور بھیجیں۔' },
+                leadSourceReport: { title: 'لیڈ سورس کی کارکردگی', description: 'حصول کے چینل کے لحاظ سے لیڈز، تبادلوں کی شرح اور آمدنی۔' },
+
+                scorecard: { title: 'سیلز پرسن اسکور کارڈ', description: 'نمائندے کی سرگرمی، پائپ لائن کا حجم، تعمیل اور فروخت سے حاصل ہونے والی آمدنی۔' },
+
+                followUpCompliance: { title: 'فالو اپ تعمیل', description: 'سیلز پرسن اور مقصد کے لحاظ سے وقت پر بمقابلہ واجب الادا کاموں کی تکمیل۔' },
+
+                coldCustomers: { title: 'غیر فعال ہوتے ہوئے گاہک', description: 'دوبارہ خریداری کرنے والے گاہک جنہوں نے اپنی معمول کی ترتیب کے مطابق خریداری بند کر دی ہے۔' },
+
                 crmSetup: { title: 'سی آر ایم سیٹ اپ', description: 'گفتگو کے چینل، لیڈ کے ذرائع اور زمرے، خصوصی خانے۔' },
             },
             dashboard: {
@@ -741,7 +750,97 @@ export const crmHrMessages = {
                 leadsTouched: 'رابطہ شدہ لیڈز',
             },
         },
+        reports: {
+            common: {
+                unassigned: 'غیر تفویض شدہ',
+                unspecifiedSource: 'غیر متعین',
+                statsLabel: 'خلاصہ'
+            },
+            leadSources: {
+                title: 'لیڈ سورس کی کارکردگی',
+                subtitle: 'منتخب مدت میں بنی لیڈز، تبادلوں کی شرح اور تبدیل شدہ صارفین سے حاصل ہونے والی کل فروخت۔',
+                revenueNote: 'آمدنی تبدیلی کی تاریخ کے بعد سے تبدیل شدہ صارفین کی مکمل فروخت کو ظاہر کرتی ہے۔',
+                empty: 'منتخب مدت کے لیے کوئی لیڈ نہیں ملی۔',
+                columns: {
+                    source: 'ماخذ',
+                    leads: 'لیڈز',
+                    contacted: 'رابطہ کیا گیا',
+                    open: 'کھلی',
+                    converted: 'تبدیل شدہ',
+                    lost: 'ضائع شدہ',
+                    conversion: 'تبدیلی %',
+                    winRate: 'کامیابی کی شرح %',
+                    medianDays: 'تبدیلی کے اوسط دن',
+                    revenue: 'آمدنی',
+                    revenuePerLead: 'آمدنی فی لیڈ'
+                }
+            },
+            scorecard: {
+                title: 'سیلز پرسن اسکور کارڈ',
+                subtitle: 'سرگرمی، پائپ لائن کی پیش رفت، کام کی تعمیل اور موجودہ لیڈ مالکان کو منسوب فروخت کی آمدنی۔',
+                revenueNote: 'آمدنی اس عرصے میں ان صارفین کی فروخت پر مشتمل ہے جو سیلز پرسن کی لیڈز سے تبدیل ہوئے۔',
+                empty: 'منتخب مدت کے لیے کوئی سیلز سرگرمی ریکارڈ نہیں کی گئی۔',
+                columns: {
+                    person: 'سیلز پرسن',
+                    openLeads: 'کھلی لیڈز',
+                    newLeads: 'نئی لیڈز',
+                    activities: 'ریکارڈ کردہ سرگرمیاں',
+                    leadsTouched: 'رابطہ شدہ لیڈز',
+                    followUpsDue: 'واجب الادا فالو اپ',
+                    onTime: 'بروقت %',
+                    overdueNow: 'اب واجب الادا',
+                    converted: 'تبدیل شدہ',
+                    lost: 'ضائع شدہ',
+                    winRate: 'کامیابی کی شرح %',
+                    revenue: 'آمدنی'
+                }
+            },
+            followUps: {
+                title: 'فالو اپ تعمیل',
+                subtitle: 'کیلنڈر دن کے حساب سے طے شدہ فالو اپ کی تکمیل اور بروقت کارکردگی کا جائزہ۔',
+                groupBy: 'گروپ بلحاظ',
+                byPerson: 'بلحاظ سیلز پرسن',
+                byPurpose: 'بلحاظ مقصد',
+                undatedNote: '{count} طے شدہ فالو اپس کی کوئی آخری تاریخ نہیں ہے اور انہیں شمار نہیں کیا گیا ہے۔',
+                empty: 'منتخب مدت میں کوئی فالو اپ واجب الادا نہیں ہے۔',
+                columns: {
+                    person: 'سیلز پرسن',
+                    purpose: 'مقصد',
+                    due: 'کل واجب الادا',
+                    onTime: 'بروقت',
+                    late: 'تاخیر سے',
+                    overdue: 'میعاد ختم',
+                    pending: 'زیر التواء',
+                    cancelled: 'منسوخ شدہ',
+                    compliance: 'تعمیل %'
+                }
+            },
+            coldCustomers: {
+                title: 'غیر فعال ہوتے ہوئے گاہک',
+                subtitle: 'دوبارہ خریداری کرنے والے وہ گاہک جن کا آخری آرڈر کے بعد کا وقفہ معمول سے زیادہ طویل ہو چکا ہے۔',
+                factor: 'حد کا فیکٹر',
+                factorOption: 'ان کے عام وقفے کا {factor}× گنا',
+                oneTimeNote: 'ایک بار خریدنے والے صارفین کو اس تجزیے سے خارج کر دیا گیا ہے۔',
+                truncatedNote: 'کل {total} میں سے سب سے قیمتی {shown} دکھائے جا رہے ہیں۔',
+                never: 'کبھی نہیں',
+                planned: 'فالو اپ طے شدہ',
+                empty: 'فی الوقت کسی گاہک کو غیر فعال نہیں سمجھا گیا ہے۔',
+                columns: {
+                    customer: 'گاہک',
+                    phone: 'فون',
+                    segment: 'طبقہ',
+                    orders: 'آرڈرز',
+                    lifetimeSpend: 'کل خرچ',
+                    usualGap: 'معمول کا وقفہ',
+                    daysSince: 'آخری آرڈر کے بعد دن',
+                    overdueBy: 'تاخیر کے دن',
+                    lastContacted: 'آخری رابطہ',
+                    followUp: 'اگلا قدم'
+                }
+            }
+        },
     },
+
     hr: {
         hub: {
             moduleLabel: 'ایچ آر ماڈیول',

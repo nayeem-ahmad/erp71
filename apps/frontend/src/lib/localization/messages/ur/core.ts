@@ -456,6 +456,15 @@ export const coreMessages = {
             crmLeadGeneration: 'لیڈ جنریشن',
             crmContacts: 'رابطے',
             crmConversations: 'گفتگو',
+            
+            crmLeadSourceReport: 'لیڈ سورس کی کارکردگی',
+
+            crmScorecard: 'سیلز پرسن اسکور کارڈ',
+
+            crmFollowUpCompliance: 'فالو اپ تعمیل',
+
+            crmColdCustomers: 'غیر فعال ہوتے ہوئے گاہک',
+
             crmSetup: 'سیٹ اپ',
             crmCustomers: 'گاہک',
             salesSettings: 'سیلز ترتیبات',
