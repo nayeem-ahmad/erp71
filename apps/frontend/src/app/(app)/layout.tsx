@@ -653,6 +653,8 @@ function AppShell({ children }: DashboardLayoutProps) {
             routes.crm.followUps,
             routes.crm.reports.leadSources,
             routes.crm.reports.scorecard,
+            routes.crm.reports.leadAging,
+            routes.crm.reports.activitySummary,
             routes.crm.reports.followUpCompliance,
         ];
         if (!hasPremiumCrm && premiumCrmPaths.some((p) => pathname.startsWith(p))) {

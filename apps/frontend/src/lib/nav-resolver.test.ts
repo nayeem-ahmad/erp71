@@ -233,6 +233,7 @@ describe('nav-resolver', () => {
             '/crm/reports/lead-sources',
             '/crm/reports/scorecard',
             '/crm/reports/lead-aging',
+            '/crm/reports/activity-summary',
             '/crm/reports/follow-up-compliance',
             '/crm/reports/cold-customers',
         ]);

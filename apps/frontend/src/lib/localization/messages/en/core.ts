@@ -462,6 +462,7 @@ export const coreMessages = {
             crmFollowUpCompliance: 'Follow-up compliance',
             crmColdCustomers: 'Customers going cold',
             crmLeadAging: 'Lead aging',
+            crmActivitySummary: "Activity summary",
             crmCustomers: 'Customers',
             salesSettings: 'Sales Settings',
             printTemplates: 'Print Header',

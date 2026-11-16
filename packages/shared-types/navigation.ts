@@ -272,6 +272,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'crm.reports.follow-up-compliance': { id: 'crm.reports.follow-up-compliance', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.crmFollowUpCompliance', href: '/crm/reports/follow-up-compliance', premiumOnly: true },
   'crm.reports.cold-customers': { id: 'crm.reports.cold-customers', kind: 'link', icon: 'Clock', labelKey: 'sidebar.items.crmColdCustomers', href: '/crm/reports/cold-customers' },
   'crm.reports.lead-aging': { id: 'crm.reports.lead-aging', kind: 'link', icon: 'Hourglass', labelKey: 'sidebar.items.crmLeadAging', href: '/crm/reports/lead-aging', premiumOnly: true },
+  'crm.reports.activity-summary': { id: 'crm.reports.activity-summary', kind: 'link', icon: 'Activity', labelKey: 'sidebar.items.crmActivitySummary', href: '/crm/reports/activity-summary', premiumOnly: true },
   // Replaces the separate 'crm.lead-taxonomy' and 'crm.custom-fields' nodes — both
   // lists are now tabs of one page. Layouts a tenant customised before this still
   // name the old ids; buildNavModulesFromLayout drops ids missing from this
@@ -531,6 +532,7 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
   'crm.reports.lead-sources': ['VIEW_LEADS'],
   'crm.reports.scorecard': ['VIEW_LEADS'],
   'crm.reports.lead-aging': ['VIEW_LEADS'],
+  'crm.reports.activity-summary': ['VIEW_CRM_INTERACTIONS'],
   'crm.reports.follow-up-compliance': ['VIEW_CRM_INTERACTIONS'],
   'crm.reports.cold-customers': ['VIEW_CRM_INTERACTIONS'],
 
@@ -754,8 +756,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.reports.lead-sources', 'crm.reports', 0),
   layoutNode('crm.reports.scorecard', 'crm.reports', 1),
   layoutNode('crm.reports.lead-aging', 'crm.reports', 2),
-  layoutNode('crm.reports.follow-up-compliance', 'crm.reports', 3),
-  layoutNode('crm.reports.cold-customers', 'crm.reports', 4),
+  layoutNode('crm.reports.activity-summary', 'crm.reports', 3),
+  layoutNode('crm.reports.follow-up-compliance', 'crm.reports', 4),
+  layoutNode('crm.reports.cold-customers', 'crm.reports', 5),
   layoutNode('crm.setup', 'crm', 8),
 
   layoutNode('projects', null, 9),

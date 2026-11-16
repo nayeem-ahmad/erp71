@@ -205,6 +205,7 @@ export const routes = {
             leadSources: '/crm/reports/lead-sources',
             scorecard: '/crm/reports/scorecard',
             leadAging: '/crm/reports/lead-aging',
+            activitySummary: '/crm/reports/activity-summary',
             followUpCompliance: '/crm/reports/follow-up-compliance',
             coldCustomers: '/crm/reports/cold-customers',
         },

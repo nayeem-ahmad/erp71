@@ -12,6 +12,7 @@ import { LeadSourceReportService } from './lead-source-report.service';
 import { FollowUpComplianceService } from './follow-up-compliance.service';
 import { SalespersonScorecardService } from './salesperson-scorecard.service';
 import { LeadAgingService } from './lead-aging.service';
+import { CrmActivitySummaryService } from './crm-activity-summary.service';
 
 @Controller('crm/reports')
 @UseGuards(JwtAuthGuard, StorePermissionGuard, SubscriptionAccessGuard)
@@ -23,6 +24,7 @@ export class CrmReportsController {
         private readonly followUpComplianceService: FollowUpComplianceService,
         private readonly scorecardService: SalespersonScorecardService,
         private readonly leadAgingService: LeadAgingService,
+        private readonly activitySummaryService: CrmActivitySummaryService,
     ) {}
 
     private ownerScope(tenant: TenantContext, query: CrmDashboardQueryDto): string | undefined {
@@ -74,6 +76,18 @@ export class CrmReportsController {
             tenant.tenantId,
             this.ownerScope(tenant, query),
             tenant.timezone,
+        );
+    }
+
+    /** What was done in the window, by type of touch and by person. */
+    @Get('activity-summary')
+    @RequireStorePermission(StorePermission.VIEW_CRM_INTERACTIONS)
+    activitySummary(@Tenant() tenant: TenantContext, @Query() query: CrmDashboardQueryDto) {
+        return this.activitySummaryService.report(
+            tenant.tenantId,
+            query,
+            tenant.timezone,
+            this.ownerScope(tenant, query),
         );
     }
 }
