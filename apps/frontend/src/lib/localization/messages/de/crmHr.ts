@@ -21,7 +21,7 @@ export const crmHrMessages = {
                 leads: { title: "Leads", description: "Interessenten verfolgen, Gespräche erfassen und nächste Schritte planen." },
                 leadGeneration: { title: "Lead-Generierung", description: "KI findet B2B-Unternehmen, die Sie als Leads anlegen können." },
                 contacts: { title: "Kontakte", description: "Ihr Adressbuch — scannen Sie eine Visitenkarte und legen Sie jemanden in Sekunden an." },
-                customers: { title: "Kunden", description: "Kunden durchsuchen und ihr Beziehungsprofil öffnen." },
+                customers: { title: "Kunden", description: "Kundenliste öffnen — Profile, Kredit und Kaufhistorie." },
                 crmConversations: { title: "Gespräche", description: "Jeder Anruf, Besuch und jede Nachricht zu allen Leads erfasst." },
                 crmFollowUps: { title: "Wiedervorlagen", description: "Wiedervorlagen zu Kunden oder Leads." },
                 approvalsInbox: { title: 'Approvals Inbox', description: 'Review overdue LinkedIn follow-up drafts. Nothing here is sent to LinkedIn.' },
@@ -711,11 +711,6 @@ export const crmHrMessages = {
                 summaryPlaceholder: "Zusammenfassung",
                 outcomePlaceholder: "Ergebnis (optional)",
                 updateNextStep: "Nächsten Schritt am Lead aktualisieren",
-            },
-            customers: {
-                title: "Kunden",
-                subtitle: "Beziehungsansicht — Kredit und Verkäufe im Verkaufsmodul verwalten",
-                openInSales: "Im Verkauf öffnen",
             },
         },
         conversations: {

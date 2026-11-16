@@ -42,6 +42,7 @@ export const customersMessages = {
             "points": "النقاط",
             "pointsSuffix": "نقطة",
             "segment": "الشريحة",
+            "lastContacted": "آخر تواصل",
             "registered": "تاريخ التسجيل",
             "lastSale": "آخر عملية بيع",
             "lastSaleDate": "تاريخ آخر عملية بيع",

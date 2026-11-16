@@ -21,7 +21,7 @@ export const crmHrMessages = {
                 leads: { title: 'العملاء المحتملون', description: 'تابع المهتمّين وسجّل المحادثات وخطّط للخطوة التالية.' },
                 leadGeneration: { title: 'توليد العملاء المحتملين', description: 'يجد الذكاء الاصطناعي شركات للأعمال يمكنك إضافتها كعملاء محتملين.' },
                 contacts: { title: 'جهات الاتصال', description: 'دفتر عناوينك — امسح بطاقة عمل لإضافة شخص في ثوانٍ.' },
-                customers: { title: 'الزبائن', description: 'تصفّح الزبائن وافتح ملف علاقتهم.' },
+                customers: { title: 'الزبائن', description: 'افتح قائمة الزبائن — الملفات والائتمان وسجل الشراء.' },
                 crmConversations: { title: 'المحادثات', description: 'كل مكالمة وزيارة ورسالة مسجّلة على كل العملاء المحتملين.' },
                 crmFollowUps: { title: 'المتابعات', description: 'متابعات مرتبطة بزبائن أو عملاء محتملين.' },
                 approvalsInbox: { title: 'Approvals Inbox', description: 'Review overdue LinkedIn follow-up drafts. Nothing here is sent to LinkedIn.' },
@@ -711,11 +711,6 @@ export const crmHrMessages = {
                 summaryPlaceholder: 'الخلاصة',
                 outcomePlaceholder: 'النتيجة (اختياري)',
                 updateNextStep: 'تحديث الخطوة التالية على العميل المحتمل',
-            },
-            customers: {
-                title: 'الزبائن',
-                subtitle: 'عرض العلاقة — أدر الائتمان والمبيعات في وحدة المبيعات',
-                openInSales: 'فتح في المبيعات',
             },
         },
         conversations: {

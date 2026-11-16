@@ -21,7 +21,7 @@ export const crmHrMessages = {
                 leads: { title: "Oportunidades", description: "Sigue a los posibles clientes, registra conversaciones y planifica los próximos pasos." },
                 leadGeneration: { title: "Generación de leads", description: "La IA encuentra empresas B2B que puedes añadir como oportunidades." },
                 contacts: { title: "Contactos", description: "Tu libreta de direcciones — escanea una tarjeta de visita y añade a alguien en segundos." },
-                customers: { title: "Clientes", description: "Consulta clientes y abre su perfil de relación." },
+                customers: { title: "Clientes", description: "Abre la lista de clientes: perfiles, crédito e historial de compras." },
                 crmConversations: { title: "Conversaciones", description: "Cada llamada, visita y mensaje registrado en todas las oportunidades." },
                 crmFollowUps: { title: "Seguimientos", description: "Seguimientos vinculados a clientes u oportunidades." },
                 approvalsInbox: { title: 'Approvals Inbox', description: 'Review overdue LinkedIn follow-up drafts. Nothing here is sent to LinkedIn.' },
@@ -711,11 +711,6 @@ export const crmHrMessages = {
                 summaryPlaceholder: "Resumen",
                 outcomePlaceholder: "Resultado (opcional)",
                 updateNextStep: "Actualizar el próximo paso en la oportunidad",
-            },
-            customers: {
-                title: "Clientes",
-                subtitle: "Vista de relación — gestiona el crédito y las ventas en el módulo de Ventas",
-                openInSales: "Abrir en Ventas",
             },
         },
         conversations: {

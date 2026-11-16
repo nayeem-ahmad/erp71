@@ -470,7 +470,6 @@ export const coreMessages = {
             crmActivitySummary: "गतिविधि सारांश",
 
             crmSetup: "सेटअप",
-            crmCustomers: "ग्राहक",
             salesSettings: "बिक्री सेटिंग्स",
             printTemplates: "प्रिंट हेडर",
             smsCredits: "मैसेजिंग क्रेडिट",

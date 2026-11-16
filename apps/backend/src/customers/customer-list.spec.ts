@@ -138,6 +138,11 @@ describe('customers list filters', () => {
             expect(db.customer.count).toHaveBeenCalledWith({ where });
         });
 
+        it('sorts by last contacted, the relationship view\'s one field of its own', async () => {
+            await service.findAll('t1', { timezone: TZ, sortBy: 'last_contacted_at', sortDir: 'asc' });
+            expect(db.customer.findMany.mock.calls[0][0].orderBy).toEqual({ last_contacted_at: 'asc' });
+        });
+
         it('counts, sums what is owed, and splits out VIP and at-risk over the list\'s where', async () => {
             db.customer.aggregate
                 .mockResolvedValueOnce({ _count: { _all: 40 }, _sum: { total_spent: '125000.456' } })

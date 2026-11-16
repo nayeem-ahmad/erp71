@@ -39,7 +39,7 @@ export default function CrmHubPage() {
         result.push({
             sectionKey: 'relationships',
             links: [
-                { href: routes.crm.customers, key: 'customers', icon: Users, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
+                { href: routes.sales.customers, key: 'customers', icon: Users, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
             ],
         });
         if (canAccessPremiumCrm) {

@@ -21,7 +21,7 @@ export const crmHrMessages = {
                 leads: { title: 'Prospek', description: 'Jejaki prospek, log perbualan, dan rancang langkah seterusnya.' },
                 leadGeneration: { title: 'Penjanaan prospek', description: 'AI mencari syarikat B2B yang boleh anda tambah sebagai prospek.' },
                 contacts: { title: 'Kenalan', description: 'Buku alamat anda — imbas kad perniagaan untuk menambah seseorang dalam beberapa saat.' },
-                customers: { title: 'Pelanggan', description: 'Semak pelanggan dan buka profil hubungan.' },
+                customers: { title: 'Pelanggan', description: 'Buka senarai pelanggan — profil, kredit dan sejarah pembelian.' },
                 crmConversations: { title: 'Perbualan', description: 'Setiap panggilan, lawatan dan mesej yang dilog merentas semua prospek.' },
                 crmFollowUps: { title: 'Susulan', description: 'Susulan untuk pelanggan atau prospek.' },
                 approvalsInbox: { title: 'Approvals Inbox', description: 'Review overdue LinkedIn follow-up drafts. Nothing here is sent to LinkedIn.' },
@@ -711,11 +711,6 @@ export const crmHrMessages = {
                 summaryPlaceholder: 'Ringkasan',
                 outcomePlaceholder: 'Hasil (pilihan)',
                 updateNextStep: 'Kemas kini langkah seterusnya pada prospek',
-            },
-            customers: {
-                title: 'Pelanggan',
-                subtitle: 'Paparan hubungan — urus kredit dan jualan dalam modul Sales',
-                openInSales: 'Buka dalam Sales',
             },
         },
         conversations: {

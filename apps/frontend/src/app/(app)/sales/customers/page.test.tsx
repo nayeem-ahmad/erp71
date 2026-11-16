@@ -65,6 +65,7 @@ const mockCustomers = [
         birthday: '1990-04-12T00:00:00.000Z',
         total_spent: '250.00',
         segment_category: 'VIP',
+        last_contacted_at: '2026-10-28T11:00:00.000Z',
         created_at: '2026-01-15T08:00:00.000Z',
         customerGroup: { name: 'Wholesale' },
         territory: { name: 'Dhaka North' },
@@ -310,6 +311,27 @@ describe('CustomersPage — Customer Management', () => {
         await waitFor(() =>
             expect(api.getCustomersPaged).toHaveBeenLastCalledWith(
                 expect.objectContaining({ sortBy: 'last_sale_date', sortDir: 'asc' }),
+            ),
+        );
+    });
+
+    it('shows when the customer was last contacted, and sorts on the server', async () => {
+        const { api } = require('@/lib/api');
+        render(<CustomersPage />);
+        await screen.findByText('Alice Smith');
+
+        expect(screen.getByRole('columnheader', { name: 'Last Contacted' })).toBeInTheDocument();
+        const row = screen.getByText('Alice Smith').closest('tr')!;
+        expect(within(row).getByText(formatDate('2026-10-28T11:00:00.000Z'))).toBeInTheDocument();
+        // A customer never contacted shows a dash rather than the epoch.
+        const never = screen.getByText('TechCorp Ltd').closest('tr')!;
+        expect(within(never).getAllByText('—').length).toBeGreaterThan(0);
+
+        fireEvent.click(screen.getByText('Last Contacted'));
+
+        await waitFor(() =>
+            expect(api.getCustomersPaged).toHaveBeenLastCalledWith(
+                expect.objectContaining({ sortBy: 'last_contacted_at', sortDir: 'asc' }),
             ),
         );
     });

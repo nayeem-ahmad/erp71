@@ -42,6 +42,7 @@ export const customersMessages = {
             "points": "पॉइंट",
             "pointsSuffix": "पॉ.",
             "segment": "वर्ग",
+            "lastContacted": "अंतिम संपर्क",
             "registered": "पंजीकृत",
             "lastSale": "अंतिम बिक्री",
             "lastSaleDate": "अंतिम बिक्री तिथि",

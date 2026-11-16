@@ -42,6 +42,7 @@ export const customersMessages = {
                 points: "Mata",
                 pointsSuffix: "mata",
                 segment: "Segmen",
+                lastContacted: "Hubungan Terakhir",
                 registered: "Didaftarkan",
                 lastSale: "Jualan Terakhir",
                 lastSaleDate: "Tarikh Jualan Terakhir",

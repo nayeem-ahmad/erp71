@@ -470,7 +470,6 @@ export const coreMessages = {
             crmActivitySummary: "Ringkasan aktiviti",
 
             crmSetup: "Persediaan",
-            crmCustomers: "Pelanggan",
                 salesSettings: "Tetapan Jualan",
                 printTemplates: "Pengepala Cetakan",
                 smsCredits: "Kredit Pemesejan",

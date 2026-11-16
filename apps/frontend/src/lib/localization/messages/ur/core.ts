@@ -470,7 +470,6 @@ export const coreMessages = {
             crmActivitySummary: "سرگرمیوں کا خلاصہ",
 
             crmSetup: 'سیٹ اپ',
-            crmCustomers: 'گاہک',
             salesSettings: 'سیلز ترتیبات',
             printTemplates: 'پرنٹ ہیڈر',
             smsCredits: 'میسجنگ کریڈٹ',

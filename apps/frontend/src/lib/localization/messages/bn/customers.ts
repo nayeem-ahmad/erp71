@@ -42,6 +42,7 @@ export const customersMessages = {
                 points: "পয়েন্ট",
                 pointsSuffix: "পয়েন্ট",
                 segment: "সেগমেন্ট",
+                lastContacted: "সর্বশেষ যোগাযোগ",
                 registered: "নিবন্ধিত",
                 lastSale: "সর্বশেষ বিক্রয়",
                 lastSaleDate: "সর্বশেষ বিক্রয়ের তারিখ",

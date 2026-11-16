@@ -21,7 +21,7 @@ export const crmHrMessages = {
                 leads: { title: "লিড", description: "সম্ভাব্য ক্রেতা ট্র্যাক করুন, কথোপকথন লগ করুন ও পরবর্তী পদক্ষেপ পরিকল্পনা করুন।" },
                 leadGeneration: { title: "লিড জেনারেশন", description: "AI আপনি যাদের কাছে বিক্রি করতে চান এমন কোম্পানি খুঁজে দেয়, যা আপনি লিড হিসেবে যোগ করতে পারেন।" },
                 contacts: { title: "কন্টাক্ট", description: "আপনার ঠিকানা বই — ভিজিটিং কার্ড স্ক্যান করে মুহূর্তেই কাউকে যোগ করুন।" },
-                customers: { title: "গ্রাহক", description: "গ্রাহক ব্রাউজ করুন ও প্রোফাইল খুলুন।" },
+                customers: { title: "গ্রাহক", description: "গ্রাহক তালিকা খুলুন — প্রোফাইল, ক্রেডিট ও ক্রয় ইতিহাস।" },
                 crmConversations: { title: "কথোপকথন", description: "সব লিডের কল, ভিজিট ও মেসেজের লগ।" },
                 crmFollowUps: { title: "ফলো-আপ", description: "গ্রাহক বা লিড-লিঙ্কড ফলো-আপ।" },
                 approvalsInbox: { title: 'Approvals Inbox', description: 'Review overdue LinkedIn follow-up drafts. Nothing here is sent to LinkedIn.' },
@@ -711,11 +711,6 @@ export const crmHrMessages = {
                 summaryPlaceholder: "সারাংশ",
                 outcomePlaceholder: "ফলাফল (ঐচ্ছিক)",
                 updateNextStep: "লিডের পরবর্তী পদক্ষেপ আপডেট করুন",
-            },
-            customers: {
-                title: "গ্রাহক",
-                subtitle: "সম্পর্ক ভিউ — ক্রেডিট ও বিক্রয় Sales মডিউলে",
-                openInSales: "Sales-এ খুলুন",
             },
         },
         conversations: {

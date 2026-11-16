@@ -42,6 +42,7 @@ export const customersMessages = {
             "points": "پوائنٹس",
             "pointsSuffix": "پوائنٹ",
             "segment": "درجہ",
+            "lastContacted": "آخری رابطہ",
             "registered": "رجسٹرڈ",
             "lastSale": "آخری فروخت",
             "lastSaleDate": "آخری فروخت کی تاریخ",

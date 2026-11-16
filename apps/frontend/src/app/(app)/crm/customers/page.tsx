@@ -1,121 +1,20 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { RefreshCw, ExternalLink } from 'lucide-react';
-import { api } from '@/lib/api';
-import { formatDate } from '@/lib/format';
-import { useI18n } from '@/lib/i18n';
-import Link from 'next/link';
-import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
-import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { routes } from '@/lib/routes';
-import { PageShell, PageHeader, Button } from '@/components/ui/compact';
-import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
-interface Customer {
-    id: string;
-    name: string;
-    phone: string;
-    customer_code?: string | null;
-    segment_category?: string | null;
-    last_contacted_at?: string | null;
-    created_at: string;
-}
-
-const columnHelper = createColumnHelper<Customer>();
-
-export default function CrmCustomersPage() {
-    const { t, locale } = useI18n();
-    const m = t.crm.leads.customers;
-    const [customers, setCustomers] = useState<Customer[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
-
-    const loadCustomers = async () => {
-        setLoading(true);
-        try {
-            setCustomers(await api.getCustomers(applyCreatedRangeQuery(createdRange)));
-        } catch (error) {
-            console.error('Failed to load customers', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
+/**
+ * A read-only slice of /sales/customers — same records, fewer columns, no
+ * writes. Merged into that page so there is one customer list, with the one
+ * field this view owned (`last_contacted_at`) now a column there. Kept as a
+ * redirect rather than deleted, for the bookmarks and saved sidebar layouts
+ * that still point here — the same treatment /crm/conversations got.
+ */
+export default function LegacyCrmCustomersRedirect() {
+    const router = useRouter();
     useEffect(() => {
-        void loadCustomers();
-    }, [createdRange]);
-
-    const columns: ColumnDef<Customer, any>[] = useMemo(
-        () => [
-            columnHelper.accessor('name', {
-                header: t.customers.columns.customer,
-                cell: (info) => (
-                    <Link
-                        href={routes.sales.customerDetail(info.row.original.id)}
-                        className="font-semibold text-gray-900 hover:text-blue-600"
-                    >
-                        {info.getValue()}
-                    </Link>
-                ),
-            }),
-            columnHelper.accessor('phone', { header: 'Phone' }),
-            columnHelper.accessor('segment_category', {
-                header: t.customers.columns.segment,
-                cell: (info) => info.getValue() ?? '—',
-            }),
-            columnHelper.accessor('last_contacted_at', {
-                header: t.crm.leads.columns.lastContact,
-                cell: (info) => info.getValue() ? formatDate(info.getValue() as string) : '—',
-            }),
-            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
-            columnHelper.display({
-                id: 'actions',
-                header: '',
-                cell: (info) => (
-                    <Link
-                        href={routes.sales.customerDetail(info.row.original.id)}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800"
-                    >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        {m.openInSales}
-                    </Link>
-                ),
-            }),
-        ],
-        [t, locale, m.openInSales],
-    );
-
-    return (
-        <PageShell>
-            <PageHeader
-                title={m.title}
-                subtitle={m.subtitle}
-                breadcrumbs={modulePageBreadcrumbs(
-                    t.dashboardHome.breadcrumbHome,
-                    t.sidebar.modules.crm,
-                    m.title,
-                    'crm',
-                )}
-                actions={
-                    <Button variant="secondary" onClick={loadCustomers} leftIcon={<RefreshCw className="w-4 h-4" />}>
-                        {t.common.refresh}
-                    </Button>
-                }
-            />
-
-            <div className="flex flex-wrap items-center gap-2">
-                <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
-            </div>
-            <DataTable<Customer>
-                tableId="crm-customers"
-                title={m.title}
-                data={customers}
-                columns={columns}
-                isLoading={loading}
-                emptyMessage={t.customers.emptyMessage}
-            />
-        </PageShell>
-    );
+        router.replace(routes.sales.customers);
+    }, [router]);
+    return null;
 }
