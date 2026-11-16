@@ -4,6 +4,8 @@ import {
     emptyDailyBuckets,
     percent,
     resolveDateWindow,
+    clampWindow,
+    calendarDaysBetween,
     type DateWindow,
 } from '../common/dashboard-window';
 import {
@@ -34,30 +36,7 @@ const RECENT_CAMPAIGNS = 5;
  */
 const HEATMAP_MAX_DAYS = 371;
 
-const DAY_MS = 86_400_000;
 
-/** Whole days from one `YYYY-MM-DD` to another. Both are plain calendar dates,
- *  so this is UTC arithmetic on the labels and no zone enters into it. */
-function calendarDaysBetween(from: string, to: string): number {
-    return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
-}
-
-/**
- * Pulls `from` forward so the window spans at most `maxDays` calendar days.
- *
- * `to` is the end the reader cares about — the grid runs up to today — so an
- * over-long window loses its oldest weeks rather than its most recent ones.
- *
- * Measured on the window's date labels rather than by dividing the gap between
- * its two instants: in a zone that observes DST a calendar day is 23 or 25 hours
- * long, and the instant arithmetic drifts a day across the transition.
- */
-function clampWindow(window: DateWindow, maxDays: number): DateWindow {
-    if (calendarDaysBetween(window.from, window.to) + 1 <= maxDays) return window;
-
-    const from = addCalendarDays(window.to, -(maxDays - 1));
-    return { ...window, from, fromDate: zonedDayStart(from, window.timezone) as Date };
-}
 
 /**
  * The "only my numbers" narrowing, as a Prisma fragment.

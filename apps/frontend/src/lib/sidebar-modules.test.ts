@@ -85,6 +85,18 @@ describe('resolveSidebarModules — tenant shell gated on app states', () => {
 
         expect(shown.sort()).toEqual(['account-settings', 'accounting', 'dashboard', 'expenses', 'help', 'support'].sort());
     });
+
+    it('shows only Customers going cold under CRM Reports without premium CRM', () => {
+        const modules = resolveSidebarModules(input({
+            planFeatures: { premiumCrm: false },
+        }));
+        const crm = modules.find((m) => m.key === 'crm');
+        const reports = (crm?.children ?? []).find(
+            (c) => 'type' in c && c.type === 'subgroup' && c.label === 'Reports',
+        );
+        const children = reports && 'children' in reports ? reports.children : [];
+        expect(children.map((c) => c.href)).toEqual(['/crm/reports/cold-customers']);
+    });
 });
 
 /**

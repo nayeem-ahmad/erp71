@@ -456,6 +456,15 @@ export const coreMessages = {
             crmLeadGeneration: "Lead-Generierung",
             crmContacts: "Kontakte",
             crmConversations: "Gespräche",
+            
+            crmLeadSourceReport: 'Lead-Quellen-Leistung',
+
+            crmScorecard: 'Vertriebsmitarbeiter-Scorecard',
+
+            crmFollowUpCompliance: 'Follow-up-Einhaltung',
+
+            crmColdCustomers: 'Kalt werdende Kunden',
+
             crmSetup: "Einrichtung",
             crmCustomers: "Kunden",
             salesSettings: "Verkaufseinstellungen",

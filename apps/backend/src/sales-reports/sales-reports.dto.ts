@@ -409,3 +409,23 @@ export class GetSalesLineItemsDto extends LineItemSearchDto {
     @IsIn(SALES_LINE_ITEM_SORTS)
     sortBy?: SalesLineItemSort;
 }
+
+export class GetColdCustomersDto {
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
+    @IsOptional()
+    @Type(() => Number)
+    @Min(1.5)
+    @Max(5)
+    factor?: number;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    @Max(90)
+    minGapDays?: number;
+}
+

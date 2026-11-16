@@ -390,6 +390,20 @@ Second external-ERP provider alongside Express Retail Pro, built on a new multi-
 - [x] Add load tests for POS endpoint (peak: multiple cashiers × multiple tenants) — `load-tests/pos-sale.js` (k6); run manually with env vars — done 2026-06-12
 - [x] Verify GitHub Actions CI actually runs tests on every push — CI now triggers on push/PR to main and dev
 
+### CRM reports — COMPLETED 2026-11-16
+
+- [x] **Build the first four CRM reports** — Lead source performance, Salesperson scorecard, Follow-up compliance, Customers going cold, under a new CRM › Reports nav section. Plan: `docs/superpowers/plans/2026-11-15-crm-reports.md` (11 tasks, no schema change). The other eight reports proposed the same day (lead funnel by arrival month, lost leads, lead aging, activity register, RFM, contact coverage, upcoming birthdays, campaign performance) are listed in the plan's final task as follow-ups. Added 2026-11-15, completed 2026-11-16.
+
+### CRM reports — follow-ups (2026-11-16)
+
+- [ ] **Run `sync:nav-layout --nodes=crm.reports,crm.reports.lead-sources,crm.reports.scorecard,crm.reports.follow-up-compliance,crm.reports.cold-customers` against production** after deploy, dry run first. Saved custom sidebars keep the old tree verbatim, so a tenant who rearranged CRM before this release will not see the Reports subgroup.
+- [ ] **The eight proposed reports not yet built:** lead funnel by arrival month, lost leads, lead aging, activity register, RFM, contact coverage, upcoming birthdays, campaign performance.
+- [ ] **`lost_reason` is free text.** Make it a pick-list before building the lost-leads report.
+- [ ] **There is no lead deal value,** so no pipeline-value or forecast report is possible.
+- [ ] **Status changes are not recorded,** so there is no time-in-stage report.
+- [ ] **Lead and activity reports cannot filter by branch** until CRM `store_id` is enforced (Phase 5). Customers going cold does filter, because it is sales data.
+- [ ] **Scorecard revenue follows the current owner,** not the owner at the time of conversion — owner history is not recorded.
+
 ### CRM AI lead generation — follow-ups (2026-11-04)
 
 - [ ] **Run `sync:nav-layout --nodes=crm.lead-generation` against production** after this ships. Saved custom sidebars keep the old tree verbatim, so tenants who rearranged CRM before this release will not see Lead generation until that script adds the node (same trap as `crm.setup`). Dry-run first.
@@ -2171,6 +2185,7 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Released `dev` → `main` (PR #1044) — CRM one-row filters on Leads, Activities, Contacts.** Merge commit `d2ef2953`, 2026-11-15, pinned to `a9a987ad`. Required checks green. Deploy to VPS run 43729882348; live health reports `d2ef2953` with `db: ok`, app HTTP 200.
 - [x] **CRM Leads, Activities and Contacts take the Tasks-style one-row filters** — done 2026-11-15. Asked for as "apply the filtering options like Tasks". `filterLayout="row"` on all three tables and on the Activities agenda's `ListToolbar`: filters as chips on one line, then More, with icon-only toolbar buttons; phones keep the Filters sheet. Behind More by `more: true`: Leads → Category only (status, owner, email and no-activity stay on the row because the CRM dashboard links to them and a linked slice must show the filter that narrowed it; the row still moves idle chips into More when out of room); Activities → Approval, Purpose, Channel, Lead owner, Created. Contacts (three filters) moved its filters and search from `useState` to `useRememberedFilters('crm-contacts')` with the Leads restored-search rule, and holds its first fetch until they land. Left as they were: advanced column filters on Leads/Contacts, the Leads board filter bar, the Activities stat cards; no stats strip added. Verified: frontend jest leads/activities/contacts 101 green (new Contacts remembered-filters test fails on the old page); `next lint --quiet` clean on changed files; `tsc` shows only errors already present in untouched files. Not checked in a browser.
 - [x] **CRM: convert a contact to a lead** — done 2026-11-15. Contact detail has a **Convert to lead** button that opens `/crm/leads/new?contactId=…` prefilled from the contact (name, mobile or office phone, email, address, LinkedIn, website; the contact's owner becomes the lead owner). Saving sends `contact_id`, and `POST /crm/leads` links that exact contact (tenant-checked, 404 otherwise) instead of matching on mobile/LinkedIn — a contact with neither used to get a duplicate. The contact page also lists the leads already filed for it. Strings in nine locales. Not clicked through in a browser: local login is broken. Shipped to production as release PR #1043 (merge `6365b068`, health green 2026-11-15).
 - [x] **HR Skills catalogue, assigned to people and projects** — done 2026-11-11. Asked as "In HR, add Skills (management)." Tenant skill master (`name`, `category`, `description`, `is_active`, `sort_order`, soft-delete) at `/hr/employees/skills`; `PersonSkill` on employee and/or user with proficiency; `ProjectSkill` as a requirement on a project. `GET /skills` is `VIEW_HR` or `VIEW_PROJECTS` so a project manager can pick without HR. Catalog/person writes need `MANAGE_HR`; project skill writes need `MANAGE_PROJECTS`. Nav `hr.setup.skills`. Copy in all 9 locales. After ship: `npx tsx prisma/sync-nav-layout.ts --nodes=hr.setup.skills`.

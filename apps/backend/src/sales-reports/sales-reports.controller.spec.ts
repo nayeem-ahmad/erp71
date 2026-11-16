@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { StorePermission } from '@erp71/shared-types';
+import { STORE_PERMISSIONS_KEY } from '../auth/store-permission.decorator';
 import { SALES_READ } from '../auth/permission-sets';
 import { SalesReportsController } from './sales-reports.controller';
 
@@ -25,7 +26,8 @@ describe('SalesReportsController — branch scope', () => {
     };
     const lineItems = { getSalesLineItems: jest.fn() };
     const branchScope = { resolveStoreId: jest.fn() };
-    const controller = new SalesReportsController(service as any, lineItems as any, branchScope as any);
+    const coldCustomers = { report: jest.fn() };
+    const controller = new SalesReportsController(service as any, lineItems as any, branchScope as any, coldCustomers as any);
 
     beforeEach(() => jest.clearAllMocks());
 
@@ -111,6 +113,25 @@ describe('SalesReportsController — branch scope', () => {
             branchScope.resolveStoreId.mockRejectedValue(new ForbiddenException());
             await expect(call({ storeId: 'foreign' })).rejects.toBeInstanceOf(ForbiddenException);
             expect(service[method]).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('cold customers', () => {
+        it('gates cold customers on VIEW_CRM_INTERACTIONS and resolves the branch with that permission', async () => {
+            expect(
+                Reflect.getMetadata(STORE_PERMISSIONS_KEY, SalesReportsController.prototype.getColdCustomers),
+            ).toEqual([StorePermission.VIEW_CRM_INTERACTIONS]);
+
+            branchScope.resolveStoreId.mockResolvedValue('s2');
+            await controller.getColdCustomers(tenant, { storeId: 's2', factor: 2 } as any);
+            expect(branchScope.resolveStoreId).toHaveBeenCalledWith(tenant, 's2', {
+                permissions: [StorePermission.VIEW_CRM_INTERACTIONS],
+            });
+            expect(coldCustomers.report).toHaveBeenCalledWith(
+                't1',
+                expect.objectContaining({ storeId: 's2', factor: 2 }),
+                'Asia/Dhaka',
+            );
         });
     });
 });

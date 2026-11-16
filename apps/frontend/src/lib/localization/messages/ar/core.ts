@@ -456,6 +456,15 @@ export const coreMessages = {
             crmLeadGeneration: 'توليد العملاء المحتملين',
             crmContacts: 'جهات الاتصال',
             crmConversations: 'المحادثات',
+            
+            crmLeadSourceReport: 'أداء مصادر العملاء المحتملين',
+
+            crmScorecard: 'بطاقة أداء مندوب المبيعات',
+
+            crmFollowUpCompliance: 'الامتثال للمتابعة',
+
+            crmColdCustomers: 'العملاء الذين يفقدون النشاط',
+
             crmSetup: 'الإعداد',
             crmCustomers: 'الزبائن',
             salesSettings: 'إعدادات المبيعات',

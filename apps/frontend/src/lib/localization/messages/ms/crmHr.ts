@@ -13,6 +13,7 @@ export const crmHrMessages = {
             pipeline: 'Saluran',
             relationships: 'Hubungan',
             engagement: 'Penglibatan',
+            reports: "Laporan",
             settings: 'Tetapan',
             premiumRequired: 'Pengurusan prospek akan tersedia pada pelan Premium apabila dilancarkan.',
             upgradeCta: 'Premium — akan datang',
@@ -25,6 +26,14 @@ export const crmHrMessages = {
                 crmFollowUps: { title: 'Susulan', description: 'Susulan untuk pelanggan atau prospek.' },
                 approvalsInbox: { title: 'Approvals Inbox', description: 'Review overdue LinkedIn follow-up drafts. Nothing here is sent to LinkedIn.' },
                 crmCampaigns: { title: 'Kempen', description: 'Rancang dan hantar kempen jualan.' },
+                leadSourceReport: { title: 'Prestasi sumber prospek', description: 'Prospek, kadar penukaran dan hasil mengikut saluran perolehan.' },
+
+                scorecard: { title: 'Kad skor jurujual', description: 'Aktiviti wakil jualan, volum saluran paip, pematuhan dan hasil jualan.' },
+
+                followUpCompliance: { title: 'Pematuhan susulan', description: 'Penyelesaian tugasan tepat pada masa berbanding tertunggak mengikut jurujual dan tujuan.' },
+
+                coldCustomers: { title: 'Pelanggan menjadi dingin', description: 'Pelanggan berulang yang telah berhenti membeli berdasarkan rentak biasa mereka.' },
+
                 crmSetup: { title: 'Persediaan CRM', description: 'Saluran perbualan, sumber & kategori prospek, medan tersuai.' },
             },
             dashboard: {
@@ -741,7 +750,97 @@ export const crmHrMessages = {
                 leadsTouched: 'Prospek dihubungi',
             },
         },
+        reports: {
+            common: {
+                unassigned: 'Tidak ditugaskan',
+                unspecifiedSource: 'Tidak ditentukan',
+                statsLabel: 'Ringkasan'
+            },
+            leadSources: {
+                title: 'Prestasi sumber prospek',
+                subtitle: 'Prospek yang dibuat dalam tempoh, kadar penukaran dan hasil jualan sepanjang hayat daripada pelanggan ditukar.',
+                revenueNote: 'Hasil mencerminkan jualan yang selesai kepada pelanggan ditukar dari tarikh penukaran dan seterusnya.',
+                empty: 'Tiada prospek ditemui untuk tempoh yang dipilih.',
+                columns: {
+                    source: 'Sumber',
+                    leads: 'Prospek',
+                    contacted: 'Dihubungi',
+                    open: 'Dibuka',
+                    converted: 'Ditukar',
+                    lost: 'Hilang',
+                    conversion: 'Penukaran %',
+                    winRate: 'Kadar Kemenangan %',
+                    medianDays: 'Hari Median untuk Ditukar',
+                    revenue: 'Hasil',
+                    revenuePerLead: 'Hasil / Prospek'
+                }
+            },
+            scorecard: {
+                title: 'Kad skor jurujual',
+                subtitle: 'Aktiviti, kemajuan saluran paip, pematuhan tugas dan hasil jualan tempoh dikreditkan kepada pemilik prospek semasa.',
+                revenueNote: 'Hasil mencerminkan jualan selesai dalam tempoh kepada pelanggan yang ditukar daripada prospek yang diberikan kepada jurujual.',
+                empty: 'Tiada aktiviti jualan direkodkan untuk tempoh yang dipilih.',
+                columns: {
+                    person: 'Jurujual',
+                    openLeads: 'Prospek Terbuka',
+                    newLeads: 'Prospek Baharu',
+                    activities: 'Aktiviti Dicatat',
+                    leadsTouched: 'Prospek Disentuh',
+                    followUpsDue: 'Susulan Perlu',
+                    onTime: 'Tepat Masa %',
+                    overdueNow: 'Tertunggak Sekarang',
+                    converted: 'Ditukar',
+                    lost: 'Hilang',
+                    winRate: 'Kadar Kemenangan %',
+                    revenue: 'Hasil'
+                }
+            },
+            followUps: {
+                title: 'Pematuhan susulan',
+                subtitle: 'Penyelesaian susulan berjadual dan ketepatan masa dinilai pada hari kalendar penyewa.',
+                groupBy: 'Kumpulan mengikut',
+                byPerson: 'Mengikut jurujual',
+                byPurpose: 'Mengikut tujuan',
+                undatedNote: '{count} susulan yang dirancang tidak mempunyai tarikh tamat tempoh dan tidak dikira.',
+                empty: 'Tiada tugas susulan yang perlu dalam tempoh yang dipilih.',
+                columns: {
+                    person: 'Jurujual',
+                    purpose: 'Tujuan',
+                    due: 'Jumlah Perlu',
+                    onTime: 'Tepat Masa',
+                    late: 'Lewat',
+                    overdue: 'Tertunggak',
+                    pending: 'Menunggu',
+                    cancelled: 'Dibatalkan',
+                    compliance: 'Pematuhan %'
+                }
+            },
+            coldCustomers: {
+                title: 'Pelanggan menjadi dingin',
+                subtitle: 'Pembeli berulang yang jarak masa sejak pesanan terakhir melebihi rentak pembelian biasa mereka.',
+                factor: 'Faktor ambang',
+                factorOption: '{factor}× jurang biasa mereka',
+                oneTimeNote: 'Pembeli sekali sahaja dikecualikan daripada analisis ini.',
+                truncatedNote: 'Menunjukkan {shown} yang paling bernilai daripada {total}.',
+                never: 'Tidak pernah',
+                planned: 'Susulan dirancang',
+                empty: 'Tiada pelanggan yang dianggap dingin pada masa ini.',
+                columns: {
+                    customer: 'Pelanggan',
+                    phone: 'Telefon',
+                    segment: 'Segmen',
+                    orders: 'Pesanan',
+                    lifetimeSpend: 'Perbelanjaan Hayat',
+                    usualGap: 'Jurang Biasa',
+                    daysSince: 'Hari Sejak Terakhir',
+                    overdueBy: 'Tertunggak Sebanyak',
+                    lastContacted: 'Terakhir Dihubungi',
+                    followUp: 'Langkah Seterusnya'
+                }
+            }
+        },
     },
+
     hr: {
         hub: {
             moduleLabel: 'Modul HR',
