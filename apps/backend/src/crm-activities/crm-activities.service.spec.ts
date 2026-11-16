@@ -432,6 +432,42 @@ describe('CrmActivitiesService', () => {
         });
     });
 
+    describe('findAll() — free-text search', () => {
+        beforeEach(() => {
+            db.crmActivity.findMany.mockResolvedValue([]);
+            db.crmActivity.count.mockResolvedValue(0);
+        });
+
+        it('matches the subject, the summary and the target relation', async () => {
+            await service.findAll('t1', { timezone: 'Asia/Dhaka', search: 'karim' });
+
+            expect(db.crmActivity.findMany.mock.calls[0][0].where.OR).toEqual(
+                expect.arrayContaining([
+                    { subject: { contains: 'karim', mode: 'insensitive' } },
+                    { summary: { contains: 'karim', mode: 'insensitive' } },
+                    { lead: { is: { name: { contains: 'karim', mode: 'insensitive' } } } },
+                    { lead: { is: { mobile: { contains: 'karim', mode: 'insensitive' } } } },
+                    { customer: { is: { name: { contains: 'karim', mode: 'insensitive' } } } },
+                    { customer: { is: { phone: { contains: 'karim', mode: 'insensitive' } } } },
+                ]),
+            );
+        });
+
+        it('rides beside the lead owner filter, not in place of it', async () => {
+            await service.findAll('t1', { timezone: 'Asia/Dhaka', search: 'karim', leadOwner: 'user-9' });
+
+            const where = db.crmActivity.findMany.mock.calls[0][0].where;
+            expect(where.lead).toEqual({ assigned_to: 'user-9' });
+            expect(where.OR).toHaveLength(6);
+        });
+
+        it('leaves the query unwidened when no text is given', async () => {
+            await service.findAll('t1', { timezone: 'Asia/Dhaka', search: '' });
+
+            expect(db.crmActivity.findMany.mock.calls[0][0].where).not.toHaveProperty('OR');
+        });
+    });
+
     describe('findAll() — lead owner filter', () => {
         beforeEach(() => {
             db.crmActivity.findMany.mockResolvedValue([]);

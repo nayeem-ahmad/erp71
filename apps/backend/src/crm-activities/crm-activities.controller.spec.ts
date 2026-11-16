@@ -90,6 +90,15 @@ describe('CrmActivitiesController — list query wiring', () => {
         );
     });
 
+    it('passes the free-text search through', async () => {
+        await request(app.getHttpServer()).get('/crm/activities?search=karim&page=2&limit=50').expect(200);
+
+        expect(service.findAll).toHaveBeenCalledWith(
+            'tenant-1',
+            expect.objectContaining({ search: 'karim', page: 2, limit: 50 }),
+        );
+    });
+
     it('passes the approval filter through', async () => {
         await request(app.getHttpServer()).get('/crm/activities?approval=pending').expect(200);
 

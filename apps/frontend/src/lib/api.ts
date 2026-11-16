@@ -1459,6 +1459,8 @@ export type CrmActivityFilters = {
     customerId?: string;
     target?: 'lead' | 'customer';
     status?: string;
+    /** Free text over the subject, summary, and the target's name and number. */
+    search?: string;
     /** Who has to do the activity. */
     assignedTo?: string;
     /** `true` narrows to the caller's own activities; the server resolves the id. */

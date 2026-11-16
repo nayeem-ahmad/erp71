@@ -18,6 +18,7 @@ jest.mock('@/hooks/useMediaQuery', () => ({
 
 jest.mock('@/lib/api', () => ({
     api: {
+        getCrmActivities: jest.fn(),
         getAllCrmActivities: jest.fn(),
         getCrmActivitySummary: jest.fn(),
         getLeadTaxonomy: jest.fn().mockResolvedValue([]),
@@ -89,12 +90,15 @@ function openInMore(label: string): HTMLElement {
     return more;
 }
 
-const lastCall = () => api.getAllCrmActivities.mock.calls.at(-1)[0];
+/** The list endpoint is server-paged: one page of rows in the usual envelope. */
+const pageOf = (items: unknown[]) => ({ items, total: items.length, page: 1, limit: 10, pages: 1 });
+
+const lastCall = () => api.getCrmActivities.mock.calls.at(-1)[0];
 
 describe('CrmActivitiesPage — owner and due-date filters', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        api.getAllCrmActivities.mockResolvedValue([activity]);
+        api.getCrmActivities.mockResolvedValue(pageOf([activity]));
         api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
         api.getCrmAssignees.mockResolvedValue([
             { userId: 'user-1', name: 'Nayeem' },
@@ -225,7 +229,7 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
 describe('CrmActivitiesPage — logging and scheduling without opening the lead', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        api.getAllCrmActivities.mockResolvedValue([activity]);
+        api.getCrmActivities.mockResolvedValue(pageOf([activity]));
         api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
         api.getCrmAssignees.mockResolvedValue([{ userId: 'user-1', name: 'Nayeem' }]);
         api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
@@ -255,7 +259,7 @@ describe('CrmActivitiesPage — logging and scheduling without opening the lead'
     it('reloads the list and the counters once something is filed', async () => {
         renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
-        const listCalls = api.getAllCrmActivities.mock.calls.length;
+        const listCalls = api.getCrmActivities.mock.calls.length;
 
         fireEvent.click(screen.getByRole('button', { name: /schedule activity/i }));
         fireEvent.change(await screen.findByPlaceholderText('Search by name or phone'), {
@@ -273,12 +277,38 @@ describe('CrmActivitiesPage — logging and scheduling without opening the lead'
         );
         // The row it just created has to appear without a manual refresh.
         await waitFor(() =>
-            expect(api.getAllCrmActivities.mock.calls.length).toBeGreaterThan(listCalls),
+            expect(api.getCrmActivities.mock.calls.length).toBeGreaterThan(listCalls),
         );
         expect(api.getCrmActivitySummary.mock.calls.length).toBeGreaterThan(1);
     });
 });
 
+
+/**
+ * Free text is a server filter now that the list is paged there — a client-side
+ * box would only search the page on screen.
+ */
+describe('CrmActivitiesPage — search', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        sessionStorage.clear();
+        api.getCrmActivities.mockResolvedValue(pageOf([activity]));
+        api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
+        api.getCrmAssignees.mockResolvedValue([]);
+        api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
+    });
+
+    it('sends the typed text to the server, debounced', async () => {
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.change(screen.getByPlaceholderText('Search activities'), {
+            target: { value: 'karim' },
+        });
+
+        await waitFor(() => expect(lastCall().search).toBe('karim'));
+    });
+});
 
 /**
  * The same slice, still there on the way back. Coming here from a lead's page
@@ -287,13 +317,13 @@ describe('CrmActivitiesPage — logging and scheduling without opening the lead'
 describe('CrmActivitiesPage — remembered filters', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        api.getAllCrmActivities.mockResolvedValue([activity]);
+        api.getCrmActivities.mockResolvedValue(pageOf([activity]));
         api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
         api.getCrmAssignees.mockResolvedValue([{ userId: 'user-2', name: 'Rifat' }]);
         api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
     });
 
-    const lastCall = () => api.getAllCrmActivities.mock.calls.at(-1)![0];
+    const lastCall = () => api.getCrmActivities.mock.calls.at(-1)![0];
 
     it('comes back to the status and assignee the last visit left set', async () => {
         const first = renderWithQueryClient(<ActivitiesPage />);
@@ -311,7 +341,7 @@ describe('CrmActivitiesPage — remembered filters', () => {
         const restored = selectByName('Status');
         expect(restored.value).toBe('DONE');
         // Never the PLANNED default on the way — no flash of the wrong list.
-        for (const call of api.getAllCrmActivities.mock.calls) {
+        for (const call of api.getCrmActivities.mock.calls) {
             expect(call[0].status).toBe('DONE');
         }
     });
@@ -379,7 +409,7 @@ describe('CrmActivitiesPage — activity approval', () => {
         jest.clearAllMocks();
         window.localStorage.clear();
         window.sessionStorage.clear();
-        api.getAllCrmActivities.mockResolvedValue([activity]);
+        api.getCrmActivities.mockResolvedValue(pageOf([activity]));
         api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
         api.getCrmAssignees.mockResolvedValue([{ userId: 'user-2', name: 'Rifat' }]);
         api.getMe.mockResolvedValue({ id: 'user-1', tenants: [] });
@@ -398,12 +428,12 @@ describe('CrmActivitiesPage — activity approval', () => {
         });
         expect(toggle).toHaveAttribute('aria-checked', 'false');
 
-        const listCallsBefore = api.getAllCrmActivities.mock.calls.length;
+        const listCallsBefore = api.getCrmActivities.mock.calls.length;
         fireEvent.click(toggle);
 
         await waitFor(() => expect(api.setCrmActivityApproval).toHaveBeenCalledWith('act-1', true));
         expect(toggle).toHaveAttribute('aria-checked', 'true');
-        expect(api.getAllCrmActivities.mock.calls.length).toBe(listCallsBefore);
+        expect(api.getCrmActivities.mock.calls.length).toBe(listCallsBefore);
     });
 
     // A switch that stays on after the server refused is the failure that matters:
@@ -435,9 +465,9 @@ describe('CrmActivitiesPage — activity approval', () => {
     // column shows a dash rather than a switch nobody should touch.
     it('offers no switch on an activity that is already done', async () => {
         asReviewer();
-        api.getAllCrmActivities.mockResolvedValue([
+        api.getCrmActivities.mockResolvedValue(pageOf([
             { ...activity, status: 'DONE', summary: 'Spoke to Karim', is_approved: true },
-        ]);
+        ]));
         renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
@@ -472,7 +502,7 @@ describe('CrmActivitiesPage — only mine', () => {
         jest.clearAllMocks();
         localStorage.clear();
         sessionStorage.clear();
-        api.getAllCrmActivities.mockResolvedValue([activity]);
+        api.getCrmActivities.mockResolvedValue(pageOf([activity]));
         api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
         api.getCrmAssignees.mockResolvedValue([
             { userId: 'user-1', name: 'Nayeem' },
@@ -530,7 +560,7 @@ describe('CrmActivitiesPage — only mine', () => {
         first.unmount();
 
         jest.clearAllMocks();
-        api.getAllCrmActivities.mockResolvedValue([activity]);
+        api.getCrmActivities.mockResolvedValue(pageOf([activity]));
         api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
         api.getCrmAssignees.mockResolvedValue([]);
         api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
@@ -541,7 +571,7 @@ describe('CrmActivitiesPage — only mine', () => {
         expect(toggle()).toHaveAttribute('aria-pressed', 'true');
         // And never a first request for everybody's rows before the remembered
         // scope lands — that flash is what `scopeReady` exists to prevent.
-        for (const call of api.getAllCrmActivities.mock.calls) {
+        for (const call of api.getCrmActivities.mock.calls) {
             expect(call[0].mine).toBe(true);
         }
     });
@@ -572,8 +602,7 @@ describe('CrmActivitiesPage — the lead timeline drawer', () => {
     };
 
     /** How many times the page — not the drawer's panel — asked for its list. */
-    const listCalls = () =>
-        api.getAllCrmActivities.mock.calls.filter((call: any[]) => !call[0]?.leadId).length;
+    const listCalls = () => api.getCrmActivities.mock.calls.length;
 
     const openDrawer = async () => {
         renderWithQueryClient(<ActivitiesPage />);
@@ -586,8 +615,10 @@ describe('CrmActivitiesPage — the lead timeline drawer', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        // Two different answers for the two questions, so a row found inside the
-        // drawer cannot have leaked in from the table behind it.
+        // The page asks the paged list endpoint; the drawer's panel asks the
+        // per-lead one. Two different answers, so a row found inside the drawer
+        // cannot have leaked in from the table behind it.
+        api.getCrmActivities.mockResolvedValue(pageOf([activity]));
         api.getAllCrmActivities.mockImplementation((params: any) =>
             Promise.resolve(params?.leadId === 'lead-1' ? [leadTimeline] : [activity]),
         );
@@ -697,7 +728,7 @@ describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => 
         jest.clearAllMocks();
         resetView();
         sessionStorage.clear();
-        api.getAllCrmActivities.mockResolvedValue([withPurpose]);
+        api.getCrmActivities.mockResolvedValue(pageOf([withPurpose]));
         api.getCrmActivitySummary.mockResolvedValue({ dueToday: 4, overdue: 2, total: 18 });
         api.getCrmAssignees.mockResolvedValue([
             { userId: 'user-1', name: 'Nayeem' },
@@ -777,13 +808,13 @@ describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => 
         const today = tenantDateOnly();
         const yesterday = shiftDay(today, -1);
         const tomorrow = shiftDay(today, 1);
-        api.getAllCrmActivities.mockResolvedValue([
+        api.getCrmActivities.mockResolvedValue(pageOf([
             { ...activity, id: 'later', subject: 'Call later', due_at: atDhakaNoon(tomorrow) },
             { ...activity, id: 'today', subject: 'Call today', due_at: atDhakaNoon(today) },
             { ...activity, id: 'overdue', subject: 'Call overdue', due_at: atDhakaNoon(yesterday) },
             { ...activity, id: 'earlier', subject: 'Call earlier', status: 'DONE', due_at: atDhakaNoon(yesterday) },
             { ...activity, id: 'undated', subject: 'Call undated', due_at: null },
-        ]);
+        ]));
 
         renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call today');
