@@ -32,6 +32,7 @@ jest.mock('@/lib/api', () => ({
         cancelCrmActivity: jest.fn(),
         completeCrmActivity: jest.fn(),
         updateCrmActivity: jest.fn(),
+        deleteCrmActivity: jest.fn(),
     },
 }));
 jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
@@ -888,5 +889,111 @@ describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => 
         renderWithQueryClient(<ActivitiesPage />);
         expect(await screen.findByRole('region', { name: 'Overdue' })).toBeInTheDocument();
         expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    });
+});
+
+/**
+ * Bulk work over the ticks in the table. Every action is one request per row —
+ * the list reloads afterwards, so a partial failure still shows what landed.
+ */
+describe('CrmActivitiesPage — multi-select and bulk actions', () => {
+    const second = { ...activity, id: 'act-2', subject: 'Call about delivery' };
+
+    const selectAll = () => screen.getByRole('checkbox', { name: 'Select all' });
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        localStorage.clear();
+        sessionStorage.clear();
+        api.getCrmActivities.mockResolvedValue(pageOf([activity, second]));
+        api.getCrmActivitySummary.mockResolvedValue({ dueToday: 2, overdue: 0, total: 2 });
+        api.getCrmAssignees.mockResolvedValue([
+            { userId: 'user-1', name: 'Nayeem' },
+            { userId: 'user-2', name: 'Rifat' },
+        ]);
+        api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
+        api.cancelCrmActivity.mockResolvedValue({});
+        api.deleteCrmActivity.mockResolvedValue({});
+        api.updateCrmActivity.mockResolvedValue({});
+        api.setCrmActivityApproval.mockResolvedValue({ id: 'act-1', is_approved: true });
+    });
+
+    it('offers the actions once a row is ticked, and none before', async () => {
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        expect(screen.queryByRole('button', { name: 'Cancel selected' })).not.toBeInTheDocument();
+
+        fireEvent.click(selectAll());
+
+        expect(await screen.findByRole('button', { name: 'Cancel selected' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Reassign' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Delete selected' })).toBeInTheDocument();
+    });
+
+    it('cancels every planned row it was asked to, after a confirmation', async () => {
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.click(selectAll());
+        fireEvent.click(await screen.findByRole('button', { name: 'Cancel selected' }));
+
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel selected' }));
+
+        await waitFor(() => {
+            expect(api.cancelCrmActivity).toHaveBeenCalledWith('act-1');
+            expect(api.cancelCrmActivity).toHaveBeenCalledWith('act-2');
+        });
+    });
+
+    it('moves the selection to the person picked for a reassignment', async () => {
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.click(selectAll());
+        fireEvent.click(await screen.findByRole('button', { name: 'Reassign' }));
+
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.change(within(dialog).getByRole('combobox'), { target: { value: 'user-2' } });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Reassign' }));
+
+        await waitFor(() => {
+            expect(api.updateCrmActivity).toHaveBeenCalledWith('act-1', { assigned_to: 'user-2' });
+            expect(api.updateCrmActivity).toHaveBeenCalledWith('act-2', { assigned_to: 'user-2' });
+        });
+    });
+
+    it('deletes the selection it was asked to, after a confirmation', async () => {
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.click(selectAll());
+        fireEvent.click(await screen.findByRole('button', { name: 'Delete selected' }));
+
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Delete selected' }));
+
+        await waitFor(() => {
+            expect(api.deleteCrmActivity).toHaveBeenCalledWith('act-1');
+            expect(api.deleteCrmActivity).toHaveBeenCalledWith('act-2');
+        });
+    });
+
+    it('offers approval only to a reviewer, and approves the planned rows', async () => {
+        api.getMe.mockResolvedValue({
+            id: 'user-1',
+            tenants: [{ id: 'tenant-1', role: 'MANAGER', permissions: ['APPROVE_CRM_ACTIVITY'] }],
+        });
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.click(selectAll());
+        fireEvent.click(await screen.findByRole('button', { name: 'Approve selected' }));
+
+        await waitFor(() => {
+            expect(api.setCrmActivityApproval).toHaveBeenCalledWith('act-1', true);
+            expect(api.setCrmActivityApproval).toHaveBeenCalledWith('act-2', true);
+        });
     });
 });
