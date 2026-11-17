@@ -1,4 +1,5 @@
 import { closedRange, precedingRange, reportPeriodFilter, reportPeriodQuery } from './report-period';
+import { isFilterActive } from '@/components/data-table/FilterBar';
 
 describe('report period', () => {
     it('compares a period with the span of the same length just before it', () => {
@@ -31,5 +32,22 @@ describe('report period', () => {
         expect(onChange).toHaveBeenLastCalledWith({ from: '2026-01-01', to: '2026-01-31' });
         filter.onChange({ from: '2026-02-01', to: '2026-02-10' });
         expect(onChange).toHaveBeenLastCalledWith({ from: '2026-02-01', to: '2026-02-10' });
+    });
+
+    it('is required at its fallback, so there is no dead Clear all to click', () => {
+        const fallback = () => ({ from: '2026-01-01', to: '2026-01-31' });
+        const atFallback = reportPeriodFilter({ label: 'Period', value: fallback(), onChange: jest.fn(), fallback });
+        const moved = reportPeriodFilter({
+            label: 'Period',
+            value: { from: '2026-02-01', to: '2026-02-10' },
+            onChange: jest.fn(),
+            fallback,
+        });
+        if (atFallback.type !== 'date-range' || moved.type !== 'date-range') throw new Error('expected date-range chips');
+
+        expect(atFallback.required).toBe(true);
+        expect(atFallback.defaultValue).toEqual(fallback());
+        expect(isFilterActive(atFallback)).toBe(false);
+        expect(isFilterActive(moved)).toBe(true);
     });
 });

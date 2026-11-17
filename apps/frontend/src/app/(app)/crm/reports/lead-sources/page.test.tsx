@@ -1,5 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CrmLeadSourceReportPage from './page';
+import { defaultReportPeriod, reportPeriodQuery } from '../report-period';
 
 const getCrmLeadSourceReport = jest.fn();
 
@@ -72,5 +73,34 @@ describe('CRM lead source performance report', () => {
 
         await screen.findByRole('cell', { name: 'Unspecified' });
         expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+    });
+
+    it('offers no Clear All or ✕ while the period is the window the page opened on', async () => {
+        render(<CrmLeadSourceReportPage />);
+        await waitFor(() => expect(getCrmLeadSourceReport).toHaveBeenCalled());
+
+        // The period stays in sight, so the report's scope is always readable.
+        expect(screen.getByRole('button', { name: /^Period:/ })).toBeInTheDocument();
+        // But there is nothing to clear, so the dead Clear All is gone.
+        expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Remove filter Period' })).not.toBeInTheDocument();
+    });
+
+    it('offers Clear All once the period moves, and puts the opening window back when it is clicked', async () => {
+        render(<CrmLeadSourceReportPage />);
+        await waitFor(() => expect(getCrmLeadSourceReport).toHaveBeenCalled());
+
+        fireEvent.click(screen.getByRole('button', { name: /^Period:/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'This month' }));
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Clear All' }));
+        await waitFor(() =>
+            expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument(),
+        );
+        await waitFor(() =>
+            expect(getCrmLeadSourceReport.mock.calls.at(-1)?.[0]).toEqual(
+                expect.objectContaining(reportPeriodQuery(defaultReportPeriod())),
+            ),
+        );
     });
 });
