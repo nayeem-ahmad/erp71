@@ -323,11 +323,12 @@ step sync:nav-meetings \
 step sync:nav-tools \
     npm run sync:nav-layout --workspace=@erp71/database -- --nodes=tools,tools.notes
 
-# The KPI scorecard added a root `scorecard` module beside the dashboard and
+# The KPI scorecard: `account-settings.scorecard` under the tenant Admin module
+# (it started as a root `scorecard` module and moved there 2026-11-17) and
 # `admin.kpis` under the admin console's Overview. Same reason as Tools: a
 # saved sidebar never shows them until these ids are merged in. Idempotent.
 step sync:nav-scorecard \
-    npm run sync:nav-layout --workspace=@erp71/database -- --nodes=scorecard,admin.kpis
+    npm run sync:nav-layout --workspace=@erp71/database -- --nodes=account-settings.scorecard,admin.kpis
 
 # ---- After db push: fill what the schema just gained -----------------------
 
