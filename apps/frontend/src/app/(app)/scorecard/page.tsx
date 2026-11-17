@@ -7,7 +7,7 @@ import { BranchFilter } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useBranchScope } from '@/lib/branch-scope';
 import { useI18n } from '@/lib/i18n';
-import { buildBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 /**
  * The shop's KPI scorecard. Opens on the whole business for anyone allowed to
@@ -29,7 +29,12 @@ export default function ScorecardPage() {
             audience={KpiAudience.TENANT}
             title={copy.title}
             subtitle={copy.subtitle}
-            breadcrumbs={buildBreadcrumbs(t.dashboardHome.breadcrumbHome, [{ label: copy.title }])}
+            breadcrumbs={modulePageBreadcrumbs(
+                t.dashboardHome.breadcrumbHome,
+                t.sidebar.modules.accountSettings,
+                copy.title,
+                'settings',
+            )}
             actions={<BranchFilter scope={branch} />}
             load={load}
             ready={branch.ready}

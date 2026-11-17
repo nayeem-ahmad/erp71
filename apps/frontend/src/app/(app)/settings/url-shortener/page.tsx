@@ -127,9 +127,9 @@ export default function SettingsUrlShortenerPage() {
                     subtitle={m.subtitle}
                     breadcrumbs={modulePageBreadcrumbs(
                         t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.accountSettings,
+                        t.sidebar.modules.tools,
                         m.title,
-                        'settings',
+                        'tools',
                     )}
                 />
 

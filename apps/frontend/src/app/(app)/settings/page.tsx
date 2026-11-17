@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import {
   Palette, Globe, Receipt, Monitor, ShoppingBag, CreditCard, Tag, Gift,
   Bell, Mail, HandCoins, Sparkles, FileSearch, Database, Store, Printer,
-  BarChart3, Link2, KeyRound, Hash, LayoutGrid,
+  BarChart3, KeyRound, Hash, LayoutGrid,
 } from 'lucide-react';
 import CompactLinkGrid from '@/components/ui/compact/CompactLinkGrid';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -60,8 +60,6 @@ const SECTIONS: Section[] = [
   { key: 'advanced', cards: [
     { href: routes.settings.passwordPolicy, key: 'passwordPolicy', icon: KeyRound, accent: 'bg-primary-light text-blue-700 border-primary-border' },
     { href: routes.settings.auditLogs, key: 'auditLogs', icon: FileSearch, accent: 'bg-gray-50 text-gray-700 border-gray-200' },
-    // A Business-plan tool; opened directly on another plan, the page explains why.
-    { href: routes.settings.urlShortener, key: 'urlShortener', icon: Link2, accent: 'bg-primary-light text-blue-700 border-primary-border', entitlement: 'urlShortener' },
     { href: routes.settings.data, key: 'data', icon: Database, accent: 'bg-slate-50 text-slate-700 border-slate-200' },
   ]},
 ];

@@ -234,12 +234,25 @@ export function resolveSidebarModules(input: SidebarModulesInput): ResolvedNavMo
                         }
                         // Plan entitlements from NAV_REGISTRY. This branch never ran the
                         // generic filter the retail modules use, so without this an
-                        // entitlement on an Admin link (the URL shortener's) was dead config.
+                        // entitlement on an Admin link was dead config.
                         if (child.entitlement && !isItemVisible(child, planFeatures)) return false;
                         if (child.href === routes.billing) return canManageBilling;
                         if (child.href === routes.team || child.href === routes.settings.auditLogs) {
                             return canManageTeam;
                         }
+                        return true;
+                    }),
+                };
+            }
+
+            // The shortener is a Business-plan tool under Tools; its permission
+            // gate follows it there rather than the Admin module's special case.
+            if (module.key === 'tools') {
+                return {
+                    ...module,
+                    children: module.children.filter((child) => {
+                        if (isNavSubgroup(child)) return true;
+                        if (child.entitlement && !isItemVisible(child, planFeatures)) return false;
                         if (child.href === routes.settings.urlShortener) return canManageShortLinks;
                         return true;
                     }),

@@ -71,19 +71,8 @@ describe('SettingsHubPage', () => {
         expect(screen.queryByRole('link', { name: 'POS Counters' })).not.toBeInTheDocument();
     });
 
-    it('offers the URL Shortener card on a plan that includes it', async () => {
+    it('leaves the URL Shortener out of the Admin hub, since it lives under Tools', async () => {
         useTenantPlanFeatures.mockReturnValue({ planCode: 'PREMIUM', features: { urlShortener: true }, ready: true });
-
-        render(<SettingsHubPage />);
-
-        expect(await screen.findByRole('link', { name: 'URL Shortener' })).toHaveAttribute(
-            'href',
-            '/settings/url-shortener',
-        );
-    });
-
-    it('leaves the URL Shortener card out below Business', async () => {
-        useTenantPlanFeatures.mockReturnValue({ planCode: 'STANDARD', features: { urlShortener: false }, ready: true });
 
         render(<SettingsHubPage />);
 

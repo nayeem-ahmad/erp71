@@ -472,7 +472,8 @@ export const coreMessages = {
 
             crmActivitySummary: "Résumé des activités",
 
-            crmSetup: "Configuration",
+            crmReports: "Rapports CRM",
+            crmSetup: "Configuration CRM",
             salesSettings: "Paramètres des ventes",
             printTemplates: "En-tête d'impression",
             smsCredits: "Crédits de messagerie",
@@ -866,7 +867,6 @@ export const coreMessages = {
                 documentNumbering: "Numérotation des documents",
                 paymentMethods: "Modes de paiement",
                 discountCodes: "Codes de réduction",
-                urlShortener: "Raccourcisseur d'URL",
                 loyalty: "Programme de fidélité",
                 sms: "Notifications SMS",
                 reportEmails: "E-mails de rapport",

@@ -97,15 +97,6 @@ export const APP_REGISTRY: Record<string, AppDefinition> = {
   },
   'whats-new': { id: 'whats-new', kind: 'utility', railGroup: 'help' },
   'account-settings': { id: 'account-settings', kind: 'utility', inAccountingOnly: true },
-  // The CEO KPI scorecard. Reads across every module rather than being one, so
-  // it is a utility an owner cannot hide. Gated like `GET /kpis`: every plan,
-  // VIEW_FINANCIAL_REPORTS. Left off accounting-only plans, whose workspaces
-  // have no sales, CRM or HR data for most of its KPIs.
-  scorecard: {
-    id: 'scorecard',
-    kind: 'utility',
-    permissionsAny: ['VIEW_FINANCIAL_REPORTS'],
-  },
   admin: { id: 'admin', kind: 'utility', platformAdminOnly: true },
 };
 

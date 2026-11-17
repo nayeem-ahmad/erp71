@@ -472,7 +472,8 @@ export const coreMessages = {
 
                 crmActivitySummary: "কার্যক্রমের সারসংক্ষেপ",
 
-                crmSetup: "সেটআপ",
+                crmReports: "CRM রিপোর্ট",
+                crmSetup: "CRM সেটআপ",
                 salesSettings: "বিক্রয় সেটিংস",
                 printTemplates: "প্রিন্ট হেডার",
                 smsCredits: "মেসেজিং ক্রেডিট",
@@ -866,7 +867,6 @@ export const coreMessages = {
                     documentNumbering: "ডকুমেন্ট নম্বরিং",
                     paymentMethods: "পেমেন্ট পদ্ধতি",
                     discountCodes: "ডিসকাউন্ট কোড",
-                    urlShortener: "ইউআরএল শর্টনার",
                     loyalty: "লয়্যালটি প্রোগ্রাম",
                     sms: "SMS বিজ্ঞপ্তি",
                     reportEmails: "রিপোর্ট ইমেইল",
