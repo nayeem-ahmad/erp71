@@ -1,7 +1,6 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import InventoryShrinkagePage from './page';
-import { pickSearchOption } from '@/test-utils/id-search-select';
 
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
@@ -10,19 +9,24 @@ jest.mock('@/lib/api', () => ({
         getInventoryShrinkage: jest.fn(),
         getInventoryWarehouses: jest.fn(),
         getInventoryReasons: jest.fn(),
+        getInventorySettings: jest.fn(),
         getProducts: jest.fn(),
+        searchProductsByQuantity: jest.fn(),
         createInventoryShrinkage: jest.fn(),
     },
 }));
 
 jest.mock('next/navigation', () => ({
-    useRouter: jest.fn(() => ({ push: jest.fn() })),
+    useRouter: jest.fn(() => ({ push: jest.fn(), replace: jest.fn() })),
     usePathname: jest.fn(() => '/inventory/shrinkage'),
     useSearchParams: jest.fn(() => ({ get: jest.fn().mockReturnValue(null) })),
     useParams: jest.fn(() => ({})),
 }));
 
-const mockWarehouses = [{ id: 'wh-1', name: 'Main Warehouse', code: 'WH-001', is_active: true, store_id: 'store-1' }];
+const mockWarehouses = [
+    { id: 'wh-1', name: 'Main Warehouse', code: 'WH-001', is_active: true, is_default: true, store_id: 'store-1' },
+    { id: 'wh-2', name: 'Godown', code: 'WH-002', is_active: true, is_default: false, store_id: 'store-1' },
+];
 
 // Both catalogues come back from one unfiltered call; the page narrows by type.
 const mockReasons = [
@@ -30,7 +34,14 @@ const mockReasons = [
     { id: 'rsn-found', type: 'FOUND', code: 'MISCOUNT', label: 'Miscount', is_active: true },
 ];
 
-const mockProducts = [{ id: 'prod-1', name: 'Rice 5kg' }];
+const mockProducts = [
+    {
+        id: 'prod-1',
+        name: 'Rice 5kg',
+        sku: 'R5',
+        stocks: [{ warehouse_id: 'wh-1', quantity: 40 }],
+    },
+];
 
 function getApi() {
     return require('@/lib/api').api;
@@ -50,10 +61,20 @@ async function renderOpenForm() {
     return api;
 }
 
+/**
+ * Pick a product out of the server-backed picker. The list arrives after a
+ * debounce, so this waits for the row rather than clicking at a fixed list.
+ */
+async function pickProduct(name = 'Rice 5kg') {
+    fireEvent.focus(screen.getByLabelText(/select product/i));
+    const row = await screen.findByText(name);
+    fireEvent.click(row.closest('.cursor-pointer') as HTMLElement);
+}
+
 async function fillEntry({ notes }: { notes: string }) {
     fireEvent.change(screen.getByLabelText(/warehouse/i), { target: { value: 'wh-1' } });
     fireEvent.change(screen.getByLabelText(/^reason/i), { target: { value: 'rsn-loss' } });
-    pickSearchOption(/select product/i, 'Rice 5kg');
+    await pickProduct();
     if (notes) fireEvent.change(screen.getByLabelText(/^notes/i), { target: { value: notes } });
 }
 
@@ -64,7 +85,9 @@ describe('InventoryShrinkagePage', () => {
         api.getInventoryShrinkage.mockResolvedValue([]);
         api.getInventoryWarehouses.mockResolvedValue(mockWarehouses);
         api.getInventoryReasons.mockResolvedValue(mockReasons);
+        api.getInventorySettings.mockResolvedValue({ default_shrinkage_warehouse_id: 'wh-1' });
         api.getProducts.mockResolvedValue(mockProducts);
+        api.searchProductsByQuantity.mockResolvedValue(mockProducts);
         api.createInventoryShrinkage.mockResolvedValue({ id: 'shr-1' });
     });
 
@@ -118,7 +141,7 @@ describe('InventoryShrinkagePage', () => {
         const api = await renderOpenForm();
 
         fireEvent.change(screen.getByLabelText(/warehouse/i), { target: { value: 'wh-1' } });
-        pickSearchOption(/select product/i, 'Rice 5kg');
+        await pickProduct();
         fireEvent.change(screen.getByLabelText(/^notes/i), { target: { value: 'Crushed in bay 3' } });
         fireEvent.click(screen.getByRole('button', { name: /post shrinkage/i }));
 
@@ -178,7 +201,7 @@ describe('InventoryShrinkagePage', () => {
         fireEvent.change(screen.getByLabelText(/^entry type/i), { target: { value: 'FOUND' } });
         fireEvent.change(screen.getByLabelText(/warehouse/i), { target: { value: 'wh-1' } });
         fireEvent.change(screen.getByLabelText(/^reason/i), { target: { value: 'rsn-found' } });
-        pickSearchOption(/select product/i, 'Rice 5kg');
+        await pickProduct();
         fireEvent.change(screen.getByLabelText(/^notes/i), { target: { value: 'Two cartons behind the rack' } });
         fireEvent.click(screen.getByRole('button', { name: /post found stock/i }));
 
@@ -211,5 +234,81 @@ describe('InventoryShrinkagePage', () => {
         fireEvent.change(screen.getByLabelText(/^entry type/i), { target: { value: 'FOUND' } });
 
         expect((screen.getByLabelText(/^reason/i) as HTMLSelectElement).value).toBe('');
+    });
+
+    // The screen used to walk every page of /products just to fill a dropdown;
+    // the picker now asks the server for a page of matches instead.
+    it('searches products on the server rather than loading the catalogue', async () => {
+        const api = await renderOpenForm();
+
+        fireEvent.focus(screen.getByLabelText(/select product/i));
+        await waitFor(() => expect(api.searchProductsByQuantity).toHaveBeenCalled());
+        expect(api.getProducts).not.toHaveBeenCalled();
+    });
+
+    // The write-off is bounded by what the warehouse holds, and the server
+    // refuses it outright — so the line says so before the post is attempted.
+    it('shows the stock on hand and refuses more than that', async () => {
+        const api = await renderOpenForm();
+
+        await pickProduct();
+        expect(await screen.findByText(/In stock here: 40/)).toBeInTheDocument();
+
+        fireEvent.change(screen.getByLabelText(/total qty/i), { target: { value: '41' } });
+        fireEvent.change(screen.getByLabelText(/^reason/i), { target: { value: 'rsn-loss' } });
+        fireEvent.change(screen.getByLabelText(/^notes/i), { target: { value: 'Over the shelf count' } });
+        fireEvent.click(screen.getByRole('button', { name: /post shrinkage/i }));
+
+        expect(await screen.findByText(/Only 40 on hand in this warehouse/)).toBeInTheDocument();
+        expect(api.createInventoryShrinkage).not.toHaveBeenCalled();
+    });
+
+    // Found stock is a surplus, so there is no ceiling to check.
+    it('does not cap a found-stock surplus', async () => {
+        const api = await renderOpenForm();
+
+        fireEvent.change(screen.getByLabelText(/^entry type/i), { target: { value: 'FOUND' } });
+        await pickProduct();
+        fireEvent.change(screen.getByLabelText(/total qty/i), { target: { value: '99' } });
+        fireEvent.change(screen.getByLabelText(/^reason/i), { target: { value: 'rsn-found' } });
+        fireEvent.change(screen.getByLabelText(/^notes/i), { target: { value: 'Behind the rack' } });
+        fireEvent.click(screen.getByRole('button', { name: /post found stock/i }));
+
+        await waitFor(() =>
+            expect(api.createInventoryShrinkage).toHaveBeenCalledWith(
+                expect.objectContaining({ direction: 'FOUND' }),
+            ),
+        );
+    });
+
+    // The server would reject a repeated product, so it is never offered again.
+    it('does not offer a product already on another line', async () => {
+        await renderOpenForm();
+
+        await pickProduct();
+        fireEvent.click(screen.getByRole('button', { name: /add line/i }));
+
+        const [, second] = screen.getAllByLabelText(/select product/i);
+        fireEvent.focus(second);
+
+        await waitFor(() => expect(getApi().searchProductsByQuantity).toHaveBeenCalled());
+        expect(screen.queryByText('Rice 5kg')).not.toBeInTheDocument();
+    });
+
+    // The tenant configures a default shrinkage warehouse; opening the form on
+    // a blank select made every entry re-answer a question already answered.
+    it('opens on the configured shrinkage warehouse', async () => {
+        await renderOpenForm();
+
+        await waitFor(() => expect(screen.getByLabelText(/warehouse/i)).toHaveValue('wh-1'));
+    });
+
+    // A branch with one warehouse has nothing to choose, so the control goes —
+    // as it already does on sale and purchase entry.
+    it('hides the warehouse control when the branch has only one', async () => {
+        getApi().getInventoryWarehouses.mockResolvedValue([mockWarehouses[0]]);
+        await renderOpenForm();
+
+        expect(screen.queryByLabelText(/warehouse/i)).not.toBeInTheDocument();
     });
 });

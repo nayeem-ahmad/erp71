@@ -29,6 +29,7 @@ export interface WarehouseOption {
 const SETTINGS_DEFAULT_FIELD = {
     sale: 'default_sales_warehouse_id',
     purchase: 'default_purchase_warehouse_id',
+    shrinkage: 'default_shrinkage_warehouse_id',
 } as const;
 
 export type WarehouseDefaultFor = keyof typeof SETTINGS_DEFAULT_FIELD;

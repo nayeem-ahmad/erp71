@@ -232,6 +232,13 @@ export const inventoryExtrasMessages = {
         "remove": "إزالة",
         "notes": "ملاحظات",
         "selectProduct": "اختر منتجًا",
+        "popularProducts": "المنتجات الأكثر رواجًا",
+        "typeToSearch": "اكتب الاسم أو رمز SKU للبحث",
+        "noProductsFound": "لا توجد منتجات مطابقة لهذا البحث",
+        "clearProduct": "إزالة المنتج",
+        "availableInWarehouse": "المتوفر هنا: {qty}",
+        "exceedsStock": "أكثر مما هو متوفر",
+        "quantityExceedsStock": "المتوفر في هذا المستودع {qty} فقط.",
     "listUi": {
         "statsLabel": "ملخص الفاقد",
         "total": "القيود",

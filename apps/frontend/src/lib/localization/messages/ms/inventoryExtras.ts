@@ -232,6 +232,13 @@ export const inventoryExtrasMessages = {
             remove: "Buang",
             notes: "Nota",
             selectProduct: "Pilih produk",
+            popularProducts: "Produk popular",
+            typeToSearch: "Taip nama atau SKU untuk mencari",
+            noProductsFound: "Tiada produk sepadan dengan carian itu",
+            clearProduct: "Buang produk",
+            availableInWarehouse: "Stok di sini: {qty}",
+            exceedsStock: "Lebih daripada stok",
+            quantityExceedsStock: "Hanya {qty} tersedia di gudang ini.",
         listUi: {
             statsLabel: "Ringkasan susut",
             total: "Entri",

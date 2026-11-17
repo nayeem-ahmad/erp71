@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { createdAtRange } from '../common/created-range.util';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant } from '../database/inventory.utils';
+import { resolveProductCosts } from '../database/product-cost.utils';
 import { CreateInventoryShrinkageDto, ShrinkageDirection } from './inventory-shrinkage.dto';
 import { autoPostFromRules } from '../accounting/posting.utils';
 
@@ -52,6 +53,9 @@ export class InventoryShrinkageService {
                 isTaken: numberTakenIn(tx.inventoryShrinkage, tenantId, 'reference_number'),
             });
 
+            // Existence and tenant ownership of every line's product. The rows
+            // themselves are no longer read for a price — the cost comes from
+            // the pool below.
             const products = await tx.product.findMany({
                 where: { tenant_id: tenantId, id: { in: dto.items.map((item) => item.productId) } },
             });
@@ -60,7 +64,16 @@ export class InventoryShrinkageService {
                 throw new BadRequestException('One or more products were not found for this tenant.');
             }
 
-            const productsById = new Map(products.map((product) => [product.id, product]));
+            // What the goods cost, not what they sell for. Resolved before the
+            // movements run, so it is the average the stock leaves at — an issue
+            // does not move the average, so reading it up front and decrementing
+            // afterwards agree. A product the pool has never seen is left
+            // uncosted rather than stored at zero.
+            const costs = await resolveProductCosts(tx, {
+                tenantId,
+                storeId: warehouse.store_id,
+                productIds: dto.items.map((item) => item.productId),
+            });
 
             for (const item of dto.items) {
                 await applyInventoryMovement(tx, {
@@ -92,7 +105,9 @@ export class InventoryShrinkageService {
                         create: dto.items.map((item) => ({
                             product_id: item.productId,
                             quantity: item.quantity,
-                            unit_cost: productsById.get(item.productId)?.price,
+                            // The cost the stock was held at, snapshotted so a
+                            // later price change cannot restate this write-off.
+                            unit_cost: costs.get(item.productId) ?? null,
                             note: item.note,
                         })),
                     },
