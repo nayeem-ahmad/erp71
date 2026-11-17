@@ -84,6 +84,9 @@ export const APP_REGISTRY: Record<string, AppDefinition> = {
   },
   hr: { id: 'hr', kind: 'business' },
   chat: { id: 'chat', kind: 'utility', entitlement: 'teamChat' },
+  // Notes and whatever helpers join it. Every plan, every member: each tool
+  // is self-scoped, so there is no module-level permission to hold.
+  tools: { id: 'tools', kind: 'utility' },
   help: { id: 'help', kind: 'utility', platformFeature: 'help', inAccountingOnly: true, railGroup: 'help' },
   support: {
     id: 'support',

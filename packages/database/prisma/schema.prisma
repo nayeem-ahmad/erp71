@@ -548,6 +548,7 @@ model User {
   assignedMeetingActions            MeetingActionItem[]         @relation("MeetingActionAssignee")
   meetingActionPeople               MeetingActionPerson[]       @relation("MeetingActionPersonUser")
   personSkills                      PersonSkill[]
+  notes                             Note[]
 }
 
 /// Why the token was issued. A password reset and a partner invite are the same
@@ -1235,6 +1236,7 @@ model Tenant {
   meetingDiscussions         MeetingDiscussion[]
   meetingActionItems         MeetingActionItem[]
   meetingActionPeople        MeetingActionPerson[]
+  notes                      Note[]
 
   @@index([deleted_at])
   @@index([billing_suspended_at])
@@ -10164,4 +10166,27 @@ model MeetingActionPerson {
   @@index([tenant_id, user_id])
   @@index([action_item_id, position])
   @@map("meeting_action_people")
+}
+
+/// A member's own note, under Tools → Notes. Private to its author: nobody
+/// else in the workspace — owner included — can list or open it.
+///
+/// `content` is markdown, the format `RichTextEditor` reads and writes, so a
+/// pasted picture is a `![name](https://res.cloudinary.com/…)` line in it,
+/// uploaded to the tenant's `notes` folder (UPLOAD_PURPOSES `note-image`).
+model Note {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  user_id    String
+  title      String   @default("")
+  content    String   @default("")
+  pinned     Boolean  @default(false)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, user_id, pinned, updated_at])
+  @@map("notes")
 }

@@ -1,6 +1,7 @@
 import { StorePermission } from '@erp71/shared-types';
 import { CRM_WRITE, PRODUCT_WRITE, SETTINGS_ADMIN } from '../auth/permission-sets';
 import { crmPhotoFolder } from '../crm-photos/crm-photos.service';
+import { noteImageFolder } from '../notes/notes.service';
 import { boardBackgroundFolder } from '../projects/boards.service';
 import { sprintBackgroundFolder } from '../projects/sprints.service';
 import { storefrontMediaFolder } from '../tenants/storefront-media.service';
@@ -55,6 +56,15 @@ export const UPLOAD_PURPOSES = {
     'sprint-background': {
         folder: ({ tenantId }) => sprintBackgroundFolder(tenantId),
         permissions: [StorePermission.MANAGE_SPRINTS],
+    },
+    /**
+     * Pictures in a Tools → Notes note. The note is the member's own and
+     * stores only the URL inside its markdown, so — like an avatar — every
+     * member may sign for it.
+     */
+    'note-image': {
+        folder: ({ tenantId }) => noteImageFolder(tenantId),
+        permissions: null,
     },
     /** `PATCH /auth/me/avatar` — the signed-in user's own picture. */
     avatar: {

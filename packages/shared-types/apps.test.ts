@@ -123,6 +123,12 @@ describe('resolveAppStates', () => {
         expect(shown).toEqual(['account-settings', 'accounting', 'expenses', 'help', 'support']);
     });
 
+    it('gives every member Tools, with no permission and on every plan', () => {
+        const clerk = resolveAppStates(input({ isOwner: false, permissions: [], planFeatures: {}, planCode: 'FREE' }));
+        expect(clerk.tools).toBe('available');
+        expect(APP_REGISTRY.tools.kind).toBe('utility');
+    });
+
     it('keeps the platform console out of the shop shell', () => {
         expect(resolveAppStates(input()).admin).toBe('unavailable');
         expect(resolveAppStates(input({ isPlatformAdmin: true })).admin).toBe('available');
