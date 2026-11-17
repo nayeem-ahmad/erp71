@@ -65,7 +65,7 @@ describe('buildRail', () => {
             'meetings',
         ]);
         // Settings last, the way a rail ends with its gear.
-        expect(rail.utility.map((entry) => entry.key)).toEqual(['chat', 'help', 'account-settings']);
+        expect(rail.utility.map((entry) => entry.key)).toEqual(['scorecard', 'chat', 'help', 'account-settings']);
 
         const help = rail.utility.find((entry) => entry.key === 'help')!;
         expect(help.label).toBe('Help');
@@ -86,7 +86,7 @@ describe('buildRail', () => {
         try {
             const inbox = { ...byKey('chat'), key: 'inbox', label: 'Inbox', href: '/inbox' };
             const rail = buildRail([...modules, inbox], 'Help');
-            expect(rail.utility.map((entry) => entry.key)).toEqual(['chat', 'help', 'inbox', 'account-settings']);
+            expect(rail.utility.map((entry) => entry.key)).toEqual(['scorecard', 'chat', 'help', 'inbox', 'account-settings']);
         } finally {
             delete APP_REGISTRY.inbox;
         }

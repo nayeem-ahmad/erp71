@@ -402,6 +402,7 @@ export const coreMessages = {
         collapseAll: "Tout réduire",
         modules: {
             dashboard: "Tableau de bord",
+            scorecard: "Indicateurs clés",
             sales: "Ventes",
             delivery: "Livraison",
             manufacturing: "Production",
@@ -551,6 +552,7 @@ export const coreMessages = {
             meet71: "Meet71",
             call: "Appeler",
             platformAccountingOverview: "Aperçu des livres",
+            platformKpis: "Tableau des KPI",
             platformAccountingExpenses: "Dépenses plateforme",
             platformAccountingLedger: "Grand livre",
             platformAccountingReports: "Rapports financiers",

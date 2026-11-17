@@ -15,6 +15,7 @@ import { helpMessages } from './help';
 import { projectsMessages } from './projects';
 import { chatMessages } from './chat';
 import { meetingsMessages } from './meetings';
+import { kpisMessages } from './kpis';
 import { accountingVouchersUiMessages } from './accountingListUi/vouchers';
 import { accountingMastersUiMessages } from './accountingListUi/masters';
 import { accountingFinanceUiMessages } from './accountingListUi/finance';
@@ -44,4 +45,5 @@ export const deMessages = {
     projects: projectsMessages,
     chat: chatMessages,
     meetings: meetingsMessages,
+    kpis: kpisMessages,
 } as const;

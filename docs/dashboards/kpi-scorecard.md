@@ -18,7 +18,7 @@ with nothing to divide by returns `no_data`, never 0.
 
 | | Shop (`GET /kpis`) | Platform (`GET /admin/kpis`) |
 |---|---|---|
-| Guard | `VIEW_FINANCIAL_REPORTS`, BASIC plan or above | `PlatformAdminGuard` |
+| Guard | `VIEW_FINANCIAL_REPORTS`, any plan (not on accounting-only plans) | `PlatformAdminGuard` |
 | Scope | Whole business for an owner or a `VIEW_CONSOLIDATED_REPORTS` holder; otherwise one branch (`storeId`) | All tenants; books from the platform workspace |
 | Sidebar | Root `scorecard` entry beside Dashboard | `admin.kpis` under Overview |
 

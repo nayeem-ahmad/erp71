@@ -289,7 +289,7 @@ export default function KpiScorecardView({
 
                 {failed ? (
                     <Alert tone="danger">
-                        <span className="mr-2">{copy.loadFailed}</span>
+                        <span className="me-2">{copy.loadFailed}</span>
                         <Button variant="secondary" onClick={() => void fetchCard()}>{copy.retry}</Button>
                     </Alert>
                 ) : null}

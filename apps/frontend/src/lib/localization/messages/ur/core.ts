@@ -402,6 +402,7 @@ export const coreMessages = {
         collapseAll: 'سب بند کریں',
         modules: {
             dashboard: 'ڈیش بورڈ',
+            scorecard: 'اسکور کارڈ',
             sales: 'فروخت',
             delivery: 'ترسیل',
             manufacturing: 'مینوفیکچرنگ',
@@ -551,6 +552,7 @@ export const coreMessages = {
             meet71: 'Meet71',
             call: 'کال',
             platformAccountingOverview: 'کھاتوں کا خلاصہ',
+            platformKpis: 'KPI اسکور کارڈ',
             platformAccountingExpenses: 'پلیٹ فارم اخراجات',
             platformAccountingLedger: 'پلیٹ فارم کھاتہ',
             platformAccountingReports: 'مالی رپورٹس',
