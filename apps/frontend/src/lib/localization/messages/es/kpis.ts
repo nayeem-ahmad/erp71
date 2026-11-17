@@ -30,6 +30,7 @@ export const kpisMessages = {
         noData: "No hay datos suficientes en este periodo",
         planned: "Llega en la fase {phase}",
         cashPositive: "Caja positiva",
+        notBurning: "Sin consumo de caja",
     },
     units: {
         months: "{value} meses",
@@ -59,6 +60,9 @@ export const kpisMessages = {
         trailing_three_months: "El consumo de caja se promedia en los tres meses que terminan con el periodo.",
         signup_to_activation: "Medido desde el registro del espacio de trabajo hasta la primera activación de pago.",
         platform_workspace_staff: "De los registros de RR. HH. del equipo de la plataforma.",
+        subscription_mrr: "Del MRR de suscripciones tras el descuento de cada cliente, cuotas anuales ÷ 12, complementos incluidos.",
+        mrr_history_short: "El historial de MRR todavía no llega al inicio de este periodo.",
+        not_burning: "La caja creció en el periodo, así que no se consumió caja.",
     },
     basis: {
         revenue: "Ingresos",
@@ -88,6 +92,16 @@ export const kpisMessages = {
         averageHeadcount: "Plantilla media",
         creditSales: "Ventas a crédito",
         periodDays: "Días del periodo",
+        startingMrr: "MRR al inicio",
+        endingMrr: "MRR al final",
+        newMrr: "MRR nuevo",
+        expansionMrr: "MRR de expansión",
+        contractionMrr: "MRR de contracción",
+        churnedMrr: "MRR perdido",
+        reactivationMrr: "MRR reactivado",
+        payingTenants: "Espacios de trabajo de pago",
+        netBurn: "Consumo neto de caja",
+        netNewArr: "ARR nuevo neto",
     },
     items: {
         revenue_growth: {

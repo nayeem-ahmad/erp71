@@ -30,6 +30,7 @@ export const kpisMessages = {
         noData: "Pas assez de données sur cette période",
         planned: "Prévu en phase {phase}",
         cashPositive: "Trésorerie positive",
+        notBurning: "Pas de consommation de trésorerie",
     },
     units: {
         months: "{value} mois",
@@ -59,6 +60,9 @@ export const kpisMessages = {
         trailing_three_months: "La consommation de trésorerie est la moyenne des trois mois se terminant avec la période.",
         signup_to_activation: "Mesuré de l’inscription de l’espace de travail à la première activation payante.",
         platform_workspace_staff: "D’après les dossiers RH de l’équipe de la plateforme.",
+        subscription_mrr: "D’après le MRR des abonnements après la remise de chaque client, frais annuels ÷ 12, modules compris.",
+        mrr_history_short: "L’historique du MRR ne remonte pas encore au début de cette période.",
+        not_burning: "La trésorerie a augmenté sur la période : aucune trésorerie n’a été consommée.",
     },
     basis: {
         revenue: "Chiffre d’affaires",
@@ -88,6 +92,16 @@ export const kpisMessages = {
         averageHeadcount: "Effectif moyen",
         creditSales: "Ventes à crédit",
         periodDays: "Jours de la période",
+        startingMrr: "MRR au début",
+        endingMrr: "MRR à la fin",
+        newMrr: "Nouveau MRR",
+        expansionMrr: "MRR d’expansion",
+        contractionMrr: "MRR de contraction",
+        churnedMrr: "MRR perdu",
+        reactivationMrr: "MRR réactivé",
+        payingTenants: "Espaces de travail payants",
+        netBurn: "Consommation nette de trésorerie",
+        netNewArr: "ARR net nouveau",
     },
     items: {
         revenue_growth: {

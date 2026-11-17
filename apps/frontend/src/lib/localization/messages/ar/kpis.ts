@@ -30,6 +30,7 @@ export const kpisMessages = {
         noData: 'لا توجد بيانات كافية في هذه الفترة',
         planned: 'قادم في المرحلة {phase}',
         cashPositive: 'تدفق نقدي إيجابي',
+        notBurning: 'لا يوجد حرق للنقد',
     },
     units: {
         months: '{value} شهر',
@@ -59,6 +60,9 @@ export const kpisMessages = {
         trailing_three_months: 'الحرق النقدي هو متوسط الأشهر الثلاثة المنتهية بنهاية الفترة.',
         signup_to_activation: 'يُقاس من تسجيل مساحة العمل حتى أول تفعيل مدفوع.',
         platform_workspace_staff: 'من سجلات الموارد البشرية لفريق المنصة.',
+        subscription_mrr: 'من الإيراد الشهري المتكرر للاشتراكات بعد خصم كل مستأجر، والرسوم السنوية ÷ 12، مع الوحدات الإضافية.',
+        mrr_history_short: 'سجل الإيراد الشهري المتكرر لا يمتد بعد إلى بداية هذه الفترة.',
+        not_burning: 'زاد النقد خلال الفترة، لذلك لم يُحرق أي نقد.',
     },
     basis: {
         revenue: 'الإيرادات',
@@ -88,6 +92,16 @@ export const kpisMessages = {
         averageHeadcount: 'متوسط عدد الموظفين',
         creditSales: 'المبيعات الآجلة',
         periodDays: 'أيام الفترة',
+        startingMrr: 'MRR في البداية',
+        endingMrr: 'MRR في النهاية',
+        newMrr: 'MRR جديد',
+        expansionMrr: 'MRR التوسع',
+        contractionMrr: 'MRR الانكماش',
+        churnedMrr: 'MRR المفقود',
+        reactivationMrr: 'MRR المُعاد تفعيله',
+        payingTenants: 'مساحات العمل المدفوعة',
+        netBurn: 'صافي حرق النقد',
+        netNewArr: 'صافي ARR الجديد',
     },
     items: {
         revenue_growth: {

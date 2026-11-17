@@ -1,12 +1,15 @@
 import { Test } from '@nestjs/testing';
 import { AdminDashboardService } from './admin-dashboard.service';
 import { DatabaseService } from '../database/database.service';
+import { MrrSnapshotService } from '../kpis/mrr/mrr-snapshot.service';
 
 describe('AdminDashboardService', () => {
     let service: AdminDashboardService;
     let db: any;
+    const mrr = { mrrOn: jest.fn() };
 
     beforeEach(async () => {
+        mrr.mrrOn.mockReset().mockResolvedValue({ covered: true, byTenant: new Map() });
         db = {
             tenant: {
                 count: jest.fn().mockResolvedValue(0),
@@ -28,7 +31,11 @@ describe('AdminDashboardService', () => {
         };
 
         const moduleRef = await Test.createTestingModule({
-            providers: [AdminDashboardService, { provide: DatabaseService, useValue: db }],
+            providers: [
+                AdminDashboardService,
+                { provide: DatabaseService, useValue: db },
+                { provide: MrrSnapshotService, useValue: mrr },
+            ],
         }).compile();
 
         service = moduleRef.get(AdminDashboardService);
@@ -66,17 +73,22 @@ describe('AdminDashboardService', () => {
         expect(spanDays).toBe(7);
     });
 
-    it('names the run rate a ceiling, because it ignores per-tenant discounts', async () => {
-        db.tenantSubscription.findMany.mockResolvedValue([
-            { plan: { monthly_price: 2_000 } },
-            { plan: { monthly_price: 5_000 } },
-        ]);
+    it("reports MRR on the window's last day from the MRR history, discounts and add-ons included", async () => {
+        mrr.mrrOn.mockResolvedValue({ covered: true, byTenant: new Map([['a', 1800], ['b', 4500], ['c', 0]]) });
 
-        const result = await service.getOverview({}, 'Asia/Dhaka');
+        const result = await service.getOverview({ from: '2026-10-01', to: '2026-10-31' }, 'Asia/Dhaka');
 
-        // The field is `mrr_ceiling`, not `mrr` — discounts are stored as a type
-        // and a value, and resolving them here would fork billing arithmetic.
-        expect(result.revenue.mrr_ceiling).toBe(7_000);
+        expect(mrr.mrrOn).toHaveBeenCalledWith('2026-10-31');
+        expect(result.revenue.mrr).toBe(6_300);
+        expect(result.revenue.paying_tenants).toBe(2);
+    });
+
+    it('has no MRR for a window that ends before the history starts', async () => {
+        mrr.mrrOn.mockResolvedValue({ covered: false, byTenant: new Map() });
+
+        const result = await service.getOverview({ from: '2024-01-01', to: '2024-01-31' }, 'Asia/Dhaka');
+
+        expect(result.revenue.mrr).toBeNull();
     });
 
     it('counts only successful billing events as revenue', async () => {

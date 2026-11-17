@@ -21,10 +21,10 @@ describe('KPI definitions', () => {
     });
 
     it('describes a planned KPI by the phase and data gap that unlock it', () => {
-        expect(unavailableKpiResult('churn_rate', KpiAudience.PLATFORM)).toMatchObject({
+        expect(unavailableKpiResult('ebitda', KpiAudience.PLATFORM)).toMatchObject({
             status: 'planned',
-            phase: 2,
-            needs: 'mrr_history',
+            phase: 3,
+            needs: 'expense_classification',
             value: null,
         });
         expect(unavailableKpiResult('burn_multiple', KpiAudience.TENANT).status).toBe('not_applicable');

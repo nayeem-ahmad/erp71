@@ -5232,6 +5232,43 @@ model TenantSubscription {
   @@index([status, past_due_since])
 }
 
+/// One tenant's monthly recurring revenue on one calendar day (Asia/Dhaka).
+///
+/// `TenantSubscription` is one mutable row per tenant, so it cannot say what a
+/// tenant paid last month, or whether a change was an upgrade or a cancellation.
+/// The platform KPIs (churn, revenue retention, ARPA, quick ratio, burn
+/// multiple) need exactly that, so a nightly job writes every tenant's MRR here
+/// and the KPIs compare two days. Movements (new, expansion, contraction,
+/// churn, reactivation) are derived from the difference, per tenant.
+///
+/// Every tenant with a subscription gets a row each snapshot day, zero
+/// included: a day's rows are a complete picture, and a tenant missing from it
+/// paid nothing. Deliberately no relation to Tenant, so a hard-deleted
+/// tenant's history (and the churn it represents) survives.
+model TenantMrrSnapshot {
+  id            String   @id @default(uuid())
+  tenant_id     String
+  day           DateTime @db.Date
+  /// `plan_mrr + addon_mrr`, in BDT.
+  mrr           Decimal  @db.Decimal(12, 2)
+  /// The subscription fee after the tenant's discount; a yearly fee ÷ 12.
+  plan_mrr      Decimal  @db.Decimal(12, 2)
+  /// Active add-on modules at their monthly price.
+  addon_mrr     Decimal  @db.Decimal(12, 2)
+  plan_code     String?
+  status        String?
+  billing_cycle String?
+  /// `daily` (the nightly job) or `backfill` (rebuilt from billing history,
+  /// month-ends only, add-ons not included).
+  source        String   @default("daily")
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@unique([tenant_id, day])
+  @@index([day])
+  @@map("tenant_mrr_snapshots")
+}
+
 /// A tenant's claim that they have paid for their first billing period, made
 /// outside any payment gateway.
 ///

@@ -7,6 +7,7 @@ import {
     type DateWindow,
 } from '../common/dashboard-window';
 import { AdminDashboardQueryDto } from './admin-dashboard.dto';
+import { MrrSnapshotService } from '../kpis/mrr/mrr-snapshot.service';
 
 /** Ranked panels show a handful of rows; the rest is noise on a dashboard. */
 const RANK_LIMIT = 6;
@@ -30,7 +31,10 @@ const LIVE_TENANT = { deleted_at: null, platform_workspace_key: null } as const;
  */
 @Injectable()
 export class AdminDashboardService {
-    constructor(private readonly db: DatabaseService) {}
+    constructor(
+        private readonly db: DatabaseService,
+        private readonly mrr: MrrSnapshotService,
+    ) {}
 
     async getOverview(query: AdminDashboardQueryDto, timezone: string) {
         const window = resolveDateWindow(query, timezone);
@@ -111,16 +115,17 @@ export class AdminDashboardService {
     }
 
     /**
-     * Billed in the window, and the run rate the active book implies.
+     * Billed in the window, and monthly recurring revenue on its last day.
      *
-     * `mrr` is the sum of list prices on active subscriptions. It deliberately
-     * ignores per-tenant discounts: those are stored as a type and a value on
-     * the subscription rather than a resolved amount, and applying them here
-     * would put a second, differently-rounded implementation of billing
-     * arithmetic on a dashboard. The figure is a ceiling, and named as one.
+     * `mrr` is each paying tenant's subscription fee after its discount (a
+     * yearly fee ÷ 12) plus its active add-ons, read from the MRR history for
+     * a past day and computed live for today — the same figures the platform
+     * KPI scorecard's churn and retention are built on (`kpis/mrr/`). The
+     * discount is applied by billing's own `applySubscriptionDiscount`, so the
+     * dashboard and the fee cron cannot round differently.
      */
     private async getRevenue(window: DateWindow) {
-        const [billed, activeSubs] = await Promise.all([
+        const [billed, mrrOn] = await Promise.all([
             this.db.billingEvent.aggregate({
                 where: {
                     status: 'SUCCESS',
@@ -129,18 +134,16 @@ export class AdminDashboardService {
                 _sum: { amount: true },
                 _count: { _all: true },
             }),
-            this.db.tenantSubscription.findMany({
-                where: { tenant: LIVE_TENANT, status: 'ACTIVE' },
-                select: { plan: { select: { monthly_price: true } } },
-            }),
+            this.mrr.mrrOn(window.to),
         ]);
 
-        const mrr = activeSubs.reduce((sum, row) => sum + Number(row.plan?.monthly_price ?? 0), 0);
-
+        const amounts = [...mrrOn.byTenant.values()];
         return {
             billed_in_period: money(Number(billed._sum.amount ?? 0)),
             payments: billed._count._all,
-            mrr_ceiling: money(mrr),
+            /** Null for a day before the MRR history starts. */
+            mrr: mrrOn.covered ? money(amounts.reduce((sum, value) => sum + value, 0)) : null,
+            paying_tenants: mrrOn.covered ? amounts.filter((value) => value > 0).length : null,
         };
     }
 
