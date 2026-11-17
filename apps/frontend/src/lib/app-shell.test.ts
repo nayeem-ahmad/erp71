@@ -34,6 +34,11 @@ describe('findActiveAppKey', () => {
         expect(findActiveAppKey(modules, '/chat')).toBe('chat');
         expect(findActiveAppKey(modules, '/help/getting-started')).toBe('help');
     });
+
+    it('gives the Notes page to Tools', () => {
+        expect(findActiveAppKey(modules, '/tools/notes')).toBe('tools');
+        expect(appHomeHref(byKey('tools'))).toBe('/tools/notes');
+    });
 });
 
 describe('appHomeHref', () => {
@@ -65,7 +70,7 @@ describe('buildRail', () => {
             'meetings',
         ]);
         // Settings last, the way a rail ends with its gear.
-        expect(rail.utility.map((entry) => entry.key)).toEqual(['scorecard', 'chat', 'help', 'account-settings']);
+        expect(rail.utility.map((entry) => entry.key)).toEqual(['scorecard', 'chat', 'tools', 'help', 'account-settings']);
 
         const help = rail.utility.find((entry) => entry.key === 'help')!;
         expect(help.label).toBe('Help');
@@ -86,7 +91,7 @@ describe('buildRail', () => {
         try {
             const inbox = { ...byKey('chat'), key: 'inbox', label: 'Inbox', href: '/inbox' };
             const rail = buildRail([...modules, inbox], 'Help');
-            expect(rail.utility.map((entry) => entry.key)).toEqual(['scorecard', 'chat', 'help', 'inbox', 'account-settings']);
+            expect(rail.utility.map((entry) => entry.key)).toEqual(['scorecard', 'chat', 'tools', 'help', 'inbox', 'account-settings']);
         } finally {
             delete APP_REGISTRY.inbox;
         }

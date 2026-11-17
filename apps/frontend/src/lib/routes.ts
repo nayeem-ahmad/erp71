@@ -220,6 +220,11 @@ export const routes = {
         leadTaxonomy: '/crm/settings/lead-taxonomy',
     },
 
+    tools: {
+        root: '/tools',
+        notes: '/tools/notes',
+    },
+
     meetings: {
         root: '/meetings',
         new: '/meetings/new',

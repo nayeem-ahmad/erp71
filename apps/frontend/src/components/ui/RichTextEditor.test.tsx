@@ -544,3 +544,20 @@ describe('RichTextEditor save and cancel buttons', () => {
         await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
     });
 });
+
+describe('RichTextEditor paste hint', () => {
+    it('lets a caller say what a pasted picture does there, in place of the attachments line', async () => {
+        render(
+            <RichTextEditor
+                value=""
+                onChange={() => undefined}
+                ariaLabel="Note"
+                hideHint
+                uploadImage={jest.fn()}
+                pasteHint="Paste a picture to add it to the note."
+            />,
+        );
+        expect(await screen.findByText('Paste a picture to add it to the note.')).toBeInTheDocument();
+        expect(screen.queryByText(/Attachments/)).not.toBeInTheDocument();
+    });
+});

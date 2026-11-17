@@ -343,6 +343,12 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'account-settings.sms-credits': { id: 'account-settings.sms-credits', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.smsCredits', href: '/sms-credits' },
   'account-settings.ai-credits': { id: 'account-settings.ai-credits', kind: 'link', icon: 'Sparkles', labelKey: 'sidebar.items.aiCredits', href: '/ai-credits' },
 
+  // Everyday helpers that belong to no one business app. A utility on the
+  // rail, so an owner cannot hide it; each tool is a link under it.
+  tools: { id: 'tools', kind: 'module', icon: 'Wrench', labelKey: 'sidebar.modules.tools', moduleKey: 'tools' },
+  // A member's own rich-text notes, pictures included. Private to the author.
+  'tools.notes': { id: 'tools.notes', kind: 'link', icon: 'StickyNote', labelKey: 'sidebar.items.toolsNotes', href: '/tools/notes' },
+
   'whats-new': { id: 'whats-new', kind: 'module', icon: 'Megaphone', labelKey: 'sidebar.items.whatsNew', href: '/whats-new' },
   // Entitlement-gated rather than plan-gated: `teamChat` is off on every plan
   // and granted by the Team Chat add-on, which is how a workspace turns it on.
@@ -834,8 +840,10 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('account-settings.url-shortener', 'account-settings', 4),
 
   layoutNode('chat', null, 15),
-  layoutNode('support', null, 16),
-  layoutNode('admin', null, 17),
+  layoutNode('tools', null, 16),
+  layoutNode('tools.notes', 'tools', 0),
+  layoutNode('support', null, 17),
+  layoutNode('admin', null, 18),
   layoutNode('admin.overview', 'admin', 0),
   layoutNode('admin.kpis', 'admin', 1),
   layoutNode('admin.tenant-management', 'admin', 2),
@@ -850,8 +858,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.url-shortener', 'admin', 6),
   layoutNode('admin.blog', 'admin', 7),
   layoutNode('admin.social-media', 'admin', 8),
-  layoutNode('whats-new', null, 18),
-  layoutNode('help', null, 19),
+  layoutNode('whats-new', null, 19),
+  layoutNode('help', null, 20),
 ];
 
 /**

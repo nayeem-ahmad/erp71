@@ -45,6 +45,7 @@ import type {
     CrmActivitySummaryReport,
 } from '@/components/crm/reports/types';
 import type { DailyReport } from '@/lib/daily-report';
+import type { Note, NoteInput, NoteSummary } from '@/components/notes/types';
 import type { Department, Designation, DesignationLevel, OrgImportResult } from '@/lib/org-structure';
 import { numberConditionParam, type NumberCondition } from '@/lib/number-condition';
 import { browserApiBase } from './api-base';
@@ -4206,6 +4207,35 @@ export const api = {
     shareQuotation: (id: string) => fetchWithAuth(`/sales-quotations/${id}/share`, { method: 'POST' }),
     /** Clears the share token, killing every link ever sent for this quotation. */
     revokeQuotationShare: (id: string) => fetchWithAuth(`/sales-quotations/${id}/share`, { method: 'DELETE' }),
+
+    /** Tools → Notes. Every route is the signed-in member's own notes only. */
+    getNotes: (params?: { search?: string }): Promise<NoteSummary[]> => {
+        const query = new URLSearchParams();
+        if (params?.search) query.set('search', params.search);
+        const qs = query.toString();
+        return fetchWithAuth(`/notes${qs ? `?${qs}` : ''}`);
+    },
+    getNote: (id: string): Promise<Note> => fetchWithAuth(`/notes/${id}`),
+    createNote: (body: NoteInput = {}): Promise<Note> =>
+        fetchWithAuth('/notes', {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateNote: (id: string, body: NoteInput): Promise<Note> =>
+        fetchWithAuth(`/notes/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteNote: (id: string): Promise<{ id: string }> => fetchWithAuth(`/notes/${id}`, { method: 'DELETE' }),
+    /** The server route for a note picture, used when the direct Cloudinary upload fails. */
+    uploadNoteImage: (body: { imageBase64: string; mimeType?: string; fileName?: string }): Promise<{ url: string; storageKey: string }> =>
+        fetchWithAuth('/notes/images', {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+        }),
 
     getMeetings: (params?: { status?: string; type?: string; search?: string; from?: string; to?: string }) => {
         const query = new URLSearchParams();

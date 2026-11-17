@@ -118,6 +118,9 @@ export const NAV_ROUTES: { path: string; label: string }[] = [
     { path: '/meetings/actions', label: 'My action points' },
     { path: '/meetings/actions/all', label: 'All action points' },
 
+    // Tools
+    { path: '/tools/notes', label: 'Notes' },
+
     // Account settings — sidebar + settings quick links
     { path: '/settings', label: 'Settings' },
     { path: '/billing', label: 'Billing' },
