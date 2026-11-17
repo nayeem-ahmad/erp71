@@ -2,9 +2,12 @@
 
 import Link from 'next/link';
 import { ChevronDown } from 'lucide-react';
-import type { ResolvedNavChild } from '@/lib/nav-resolver';
+import type { ResolvedNavChild, ResolvedNavLink } from '@/lib/nav-resolver';
 import { isNavSubgroup } from '@/lib/sidebar-modules';
 import NavCountBadge from './NavCountBadge';
+
+/** An absolute URL belongs to another site — Meet71 is served from its own origin. */
+const EXTERNAL_HREF = /^https?:\/\//i;
 
 export interface NavModuleChildrenProps {
     moduleKey: string;
@@ -63,6 +66,31 @@ export default function NavModuleChildren({
                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
         }`;
 
+    const renderLink = (link: ResolvedNavLink, nested = false) => {
+        const { href, icon: LinkIcon, label, exact } = link;
+        const active = isActive(href, exact);
+        const body = (
+            <>
+                <LinkIcon className={`flex-shrink-0 ${nested ? 'w-3.5 h-3.5' : 'w-4 h-4'} ${active ? 'text-blue-600' : ''}`} />
+                <span className={navLabelCls}>{label}</span>
+                <NavCountBadge count={badgeFor(href)} title={titleFor(href)} />
+            </>
+        );
+
+        if (EXTERNAL_HREF.test(href)) {
+            return (
+                <a key={href} href={href} target="_blank" rel="noopener noreferrer" className={childLinkCls(active, nested)}>
+                    {body}
+                </a>
+            );
+        }
+        return (
+            <Link key={href} href={href} className={childLinkCls(active, nested)}>
+                {body}
+            </Link>
+        );
+    };
+
     return (
         <div className="mt-0.5 space-y-0.5">
             {items.map((child) => {
@@ -91,23 +119,14 @@ export default function NavModuleChildren({
                             </button>
                             {subgroupOpen && (
                                 <div className="mt-0.5 space-y-0.5">
-                                    {child.children.map(({ href, icon: LinkIcon, label, exact }) => {
-                                        const active = isActive(href, exact);
-                                        return (
-                                            <Link key={href} href={href} className={childLinkCls(active, true)}>
-                                                <LinkIcon className={`flex-shrink-0 w-3.5 h-3.5 ${active ? 'text-blue-600' : ''}`} />
-                                                <span className={navLabelCls}>{label}</span>
-                                                <NavCountBadge count={badgeFor(href)} title={titleFor(href)} />
-                                            </Link>
-                                        );
-                                    })}
+                                    {child.children.map((link) => renderLink(link, true))}
                                 </div>
                             )}
                         </div>
                     );
                 }
 
-                const { href, icon: ChildIcon, label, section, exact } = child;
+                const { href, icon: ChildIcon, label, section } = child;
                 if (section) {
                     return (
                         <div key={href} className={`flex items-center ${indent} px-3 pt-3 pb-1`}>
@@ -116,14 +135,7 @@ export default function NavModuleChildren({
                         </div>
                     );
                 }
-                const active = isActive(href, exact);
-                return (
-                    <Link key={href} href={href} className={childLinkCls(active)}>
-                        <ChildIcon className={`flex-shrink-0 w-4 h-4 ${active ? 'text-blue-600' : ''}`} />
-                        <span className={navLabelCls}>{label}</span>
-                        <NavCountBadge count={badgeFor(href)} title={titleFor(href)} />
-                    </Link>
-                );
+                return renderLink(child);
             })}
         </div>
     );

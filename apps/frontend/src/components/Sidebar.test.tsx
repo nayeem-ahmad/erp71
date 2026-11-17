@@ -94,6 +94,7 @@ jest.mock('lucide-react', () => {
         Search: icon,
         X: icon,
         Link2: icon,
+        Video: icon,
     };
 });
 
@@ -596,6 +597,24 @@ describe('Sidebar — URL shortener under Tools', () => {
 
         expect(screen.getByText('Notes')).toBeInTheDocument();
         expect(screen.queryByText('URL Shortener')).not.toBeInTheDocument();
+    });
+});
+
+describe('Sidebar — Meet71 under Tools', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        setBranding();
+    });
+
+    it('opens the separate Meet71 app from Tools in a new tab', () => {
+        render(<Sidebar canAccessAccounting />);
+
+        fireEvent.click(screen.getByText('Tools'));
+
+        const meet71 = screen.getByRole('link', { name: 'Meet71' });
+        expect(meet71).toHaveAttribute('href', 'https://meet.erp71.com/');
+        expect(meet71).toHaveAttribute('target', '_blank');
+        expect(meet71).toHaveAttribute('rel', 'noopener noreferrer');
     });
 });
 

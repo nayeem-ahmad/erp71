@@ -349,6 +349,9 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'tools.notes': { id: 'tools.notes', kind: 'link', icon: 'StickyNote', labelKey: 'sidebar.items.toolsNotes', href: '/tools/notes' },
   // Business-plan tool. The Sidebar also hides it from users without MANAGE_SHORT_LINKS.
   'tools.url-shortener': { id: 'tools.url-shortener', kind: 'link', icon: 'Link2', labelKey: 'sidebar.items.urlShortener', href: '/settings/url-shortener', entitlement: 'urlShortener' },
+  // Meet71 is a separate product on its own origin, so this is the one nav
+  // link whose href is absolute — the sidebar opens it in a new tab.
+  'tools.meet71': { id: 'tools.meet71', kind: 'link', icon: 'Video', labelKey: 'sidebar.items.meet71', href: 'https://meet.erp71.com/' },
 
   'whats-new': { id: 'whats-new', kind: 'module', icon: 'Megaphone', labelKey: 'sidebar.items.whatsNew', href: '/whats-new' },
   // Entitlement-gated rather than plan-gated: `teamChat` is off on every plan
@@ -635,6 +638,10 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
  * replaced by this default at read time, so it needs nothing. The URL shortener
  * moved the same way, from `account-settings.url-shortener` to
  * `tools.url-shortener`. `admin.kpis` was not moved.
+ *
+ * The 2026-11-17 Meet71 link added `tools.meet71` under Tools, after the URL
+ * shortener. It is a new leaf, so a saved layout takes it with
+ * `npx tsx prisma/sync-nav-layout.ts --nodes=tools.meet71` and needs no reset.
  */
 export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('dashboard', null, 0),
@@ -846,6 +853,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('tools', null, 16),
   layoutNode('tools.notes', 'tools', 0),
   layoutNode('tools.url-shortener', 'tools', 1),
+  layoutNode('tools.meet71', 'tools', 2),
   layoutNode('support', null, 17),
   layoutNode('admin', null, 18),
   layoutNode('admin.overview', 'admin', 0),
