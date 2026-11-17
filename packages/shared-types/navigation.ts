@@ -55,9 +55,6 @@ export const navLayoutSchema = z.array(navLayoutNodeSchema);
 
 export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   dashboard: { id: 'dashboard', kind: 'module', icon: 'LayoutDashboard', labelKey: 'sidebar.modules.dashboard', href: '/dashboard' },
-  // The CEO KPI scorecard (`kpis.ts`): eighteen health figures on one page.
-  // Root-level beside the dashboard, because it reads across every module.
-  scorecard: { id: 'scorecard', kind: 'module', icon: 'Target', labelKey: 'sidebar.modules.scorecard', href: '/scorecard' },
   sales: { id: 'sales', kind: 'module', icon: 'ShoppingBag', labelKey: 'sidebar.modules.sales', moduleKey: 'sales' },
   'sales.overview': { id: 'sales.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/sales', exact: true },
   'sales.pos': { id: 'sales.pos', kind: 'link', icon: 'ShoppingCart', labelKey: 'sidebar.items.pos', href: '/sales/pos' },
@@ -270,7 +267,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'crm.campaigns': { id: 'crm.campaigns', kind: 'link', icon: 'Megaphone', labelKey: 'sidebar.items.crmCampaigns', href: '/crm/campaigns', premiumOnly: true },
   // No `crm.customers` node: it was a read-only slice of /sales/customers. The
   // CRM hub still links there, but the sidebar keeps one Customers entry.
-  'crm.reports': { id: 'crm.reports', kind: 'subgroup', icon: 'BarChart3', labelKey: 'crm.hub.reports' },
+  'crm.reports': { id: 'crm.reports', kind: 'subgroup', icon: 'BarChart3', labelKey: 'sidebar.items.crmReports' },
   'crm.reports.lead-sources': { id: 'crm.reports.lead-sources', kind: 'link', icon: 'TrendingUp', labelKey: 'sidebar.items.crmLeadSourceReport', href: '/crm/reports/lead-sources', premiumOnly: true },
   'crm.reports.scorecard': { id: 'crm.reports.scorecard', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.crmScorecard', href: '/crm/reports/scorecard', premiumOnly: true },
   'crm.reports.follow-up-compliance': { id: 'crm.reports.follow-up-compliance', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.crmFollowUpCompliance', href: '/crm/reports/follow-up-compliance', premiumOnly: true },
@@ -322,6 +319,10 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
 
   'account-settings': { id: 'account-settings', kind: 'module', icon: 'Cog', labelKey: 'sidebar.modules.accountSettings', moduleKey: 'account-settings' },
   'account-settings.overview': { id: 'account-settings.overview', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.settingsHub', href: '/settings', exact: true },
+  // The CEO KPI scorecard (`kpis.ts`). A link under Admin rather than a root
+  // module: it reads across every module, and owners reach it from the menu
+  // they already use for cross-cutting screens.
+  'account-settings.scorecard': { id: 'account-settings.scorecard', kind: 'link', icon: 'Target', labelKey: 'sidebar.modules.scorecard', href: '/scorecard' },
   'account-settings.profile': { id: 'account-settings.profile', kind: 'link', icon: 'CircleUser', labelKey: 'sidebar.items.myProfile', href: '/profile' },
   'account-settings.team': { id: 'account-settings.team', kind: 'link', icon: 'ShieldCheck', labelKey: 'sidebar.items.teamPermissions', href: '/team', teamGated: true },
   'account-settings.audit-logs': { id: 'account-settings.audit-logs', kind: 'link', icon: 'ScrollText', labelKey: 'sidebar.items.auditLogs', href: '/settings/audit-logs', teamGated: true },
@@ -336,8 +337,6 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'account-settings.print-templates': { id: 'account-settings.print-templates', kind: 'link', icon: 'Printer', labelKey: 'sidebar.items.printTemplates', href: '/settings/print-templates' },
   'account-settings.payment-methods': { id: 'account-settings.payment-methods', kind: 'link', icon: 'CreditCard', labelKey: 'sidebar.items.paymentMethods', href: '/settings/payment-methods' },
   'account-settings.discount-codes': { id: 'account-settings.discount-codes', kind: 'link', icon: 'Tag', labelKey: 'sidebar.items.discountCodes', href: '/settings/discount-codes' },
-  // Business-plan tool. The Sidebar also hides it from users without MANAGE_SHORT_LINKS.
-  'account-settings.url-shortener': { id: 'account-settings.url-shortener', kind: 'link', icon: 'Link2', labelKey: 'sidebar.items.urlShortener', href: '/settings/url-shortener', entitlement: 'urlShortener' },
   'account-settings.data': { id: 'account-settings.data', kind: 'link', icon: 'Database', labelKey: 'sidebar.items.dataManagement', href: '/settings/data' },
   'account-settings.billing': { id: 'account-settings.billing', kind: 'link', icon: 'Wallet', labelKey: 'sidebar.modules.billing', href: '/billing', billingGated: true },
   'account-settings.sms-credits': { id: 'account-settings.sms-credits', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.smsCredits', href: '/sms-credits' },
@@ -348,6 +347,8 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   tools: { id: 'tools', kind: 'module', icon: 'Wrench', labelKey: 'sidebar.modules.tools', moduleKey: 'tools' },
   // A member's own rich-text notes, pictures included. Private to the author.
   'tools.notes': { id: 'tools.notes', kind: 'link', icon: 'StickyNote', labelKey: 'sidebar.items.toolsNotes', href: '/tools/notes' },
+  // Business-plan tool. The Sidebar also hides it from users without MANAGE_SHORT_LINKS.
+  'tools.url-shortener': { id: 'tools.url-shortener', kind: 'link', icon: 'Link2', labelKey: 'sidebar.items.urlShortener', href: '/settings/url-shortener', entitlement: 'urlShortener' },
 
   'whats-new': { id: 'whats-new', kind: 'module', icon: 'Megaphone', labelKey: 'sidebar.items.whatsNew', href: '/whats-new' },
   // Entitlement-gated rather than plan-gated: `teamChat` is off on every plan
@@ -484,7 +485,7 @@ const SETTINGS_ANY = ['MANAGE_USERS', 'MANAGE_STORES', 'MANAGE_COUNTERS'] as con
 export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
   // The API gates `/kpis` on VIEW_FINANCIAL_REPORTS: margins, cash and runway
   // are the business's books, read by whoever may read its financial reports.
-  scorecard: ['VIEW_FINANCIAL_REPORTS'],
+  'account-settings.scorecard': ['VIEW_FINANCIAL_REPORTS'],
   sales: SALES_ANY,
   'sales.pos': ['CREATE_SALE'],
   'sales.new': ['CREATE_SALE'],
@@ -627,15 +628,17 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
  * A saved layout takes it with
  * `npx tsx prisma/sync-nav-layout.ts --nodes=hr.setup.skills`.
  *
- * The 2026-11-17 KPI scorecard added the root `scorecard` module beside the
- * dashboard, and `admin.kpis` under the admin console's Overview. A saved
- * layout takes them with
- * `npx tsx prisma/sync-nav-layout.ts --nodes=scorecard,admin.kpis`.
+ * The 2026-11-17 KPI scorecard first shipped as a root `scorecard` module beside
+ * the dashboard, plus `admin.kpis` under the admin console's Overview. It then
+ * moved into the tenant Admin module as `account-settings.scorecard`; a saved
+ * layout still naming the root `scorecard` id fails `validateNavLayout` and is
+ * replaced by this default at read time, so it needs nothing. The URL shortener
+ * moved the same way, from `account-settings.url-shortener` to
+ * `tools.url-shortener`. `admin.kpis` was not moved.
  */
 export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('dashboard', null, 0),
-  layoutNode('scorecard', null, 1),
-  layoutNode('sales', null, 2),
+  layoutNode('sales', null, 1),
   layoutNode('sales.overview', 'sales', 0),
   layoutNode('sales.list', 'sales', 1),
   layoutNode('sales.order-flow.returns', 'sales', 2),
@@ -837,11 +840,12 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('account-settings.profile', 'account-settings', 1),
   layoutNode('account-settings.team', 'account-settings', 2),
   layoutNode('account-settings.billing', 'account-settings', 3),
-  layoutNode('account-settings.url-shortener', 'account-settings', 4),
+  layoutNode('account-settings.scorecard', 'account-settings', 4),
 
   layoutNode('chat', null, 15),
   layoutNode('tools', null, 16),
   layoutNode('tools.notes', 'tools', 0),
+  layoutNode('tools.url-shortener', 'tools', 1),
   layoutNode('support', null, 17),
   layoutNode('admin', null, 18),
   layoutNode('admin.overview', 'admin', 0),

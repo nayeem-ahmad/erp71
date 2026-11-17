@@ -227,7 +227,7 @@ describe('nav-resolver', () => {
         const crm = buildNavModulesFromLayout(DEFAULT_TENANT_NAV_LAYOUT, enMessages as Record<string, unknown>)
             .find((mod) => mod.key === 'crm');
         const group = (crm?.children ?? [])
-            .find((child) => 'type' in child && child.type === 'subgroup' && child.label === 'Reports');
+            .find((child) => 'type' in child && child.type === 'subgroup' && child.label === 'CRM Reports');
 
         expect(group && 'children' in group ? group.children.map((link) => link.href) : []).toEqual([
             '/crm/reports/lead-sources',

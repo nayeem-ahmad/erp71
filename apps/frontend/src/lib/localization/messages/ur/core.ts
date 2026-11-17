@@ -472,7 +472,8 @@ export const coreMessages = {
 
             crmActivitySummary: "سرگرمیوں کا خلاصہ",
 
-            crmSetup: 'سیٹ اپ',
+            crmReports: 'سی آر ایم رپورٹس',
+            crmSetup: 'سی آر ایم سیٹ اپ',
             salesSettings: 'سیلز ترتیبات',
             printTemplates: 'پرنٹ ہیڈر',
             smsCredits: 'میسجنگ کریڈٹ',
@@ -866,7 +867,6 @@ export const coreMessages = {
                 documentNumbering: 'دستاویز نمبرنگ',
                 paymentMethods: 'ادائیگی کے طریقے',
                 discountCodes: 'رعایتی کوڈ',
-                urlShortener: 'یو آر ایل شارٹنر',
                 loyalty: 'لائلٹی پروگرام',
                 sms: 'ایس ایم ایس اطلاعات',
                 reportEmails: 'رپورٹ ای میلز',

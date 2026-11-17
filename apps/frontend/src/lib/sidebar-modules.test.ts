@@ -92,7 +92,7 @@ describe('resolveSidebarModules — tenant shell gated on app states', () => {
         }));
         const crm = modules.find((m) => m.key === 'crm');
         const reports = (crm?.children ?? []).find(
-            (c) => 'type' in c && c.type === 'subgroup' && c.label === 'Reports',
+            (c) => 'type' in c && c.type === 'subgroup' && c.label === 'CRM Reports',
         );
         const children = reports && 'children' in reports ? reports.children : [];
         expect(children.map((c) => c.href)).toEqual(['/crm/reports/cold-customers']);

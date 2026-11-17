@@ -166,17 +166,16 @@ describe('addNavNodesToLayout', () => {
     });
 
     /**
-     * The tenant's own shortener belongs in the "Admin" module — `account-settings`,
-     * not the platform `admin` block above, which tenants never see. It was
-     * registered from the start but shipped in no layout, so tenants could only
-     * reach it through a card on the settings hub.
+     * The tenant's own shortener belongs in the Tools module. It was registered
+     * as an Admin link from the start but shipped in no layout, so tenants could
+     * only reach it through a card on the settings hub; it then moved to Tools.
      */
-    it('ships account-settings.url-shortener in the tenant default layout under Admin', () => {
+    it('ships tools.url-shortener in the tenant default layout under Tools', () => {
         const defaults = getDefaultNavLayout(NavScope.TENANT);
-        const node = defaults.find((n) => n.id === 'account-settings.url-shortener');
-        const siblings = defaults.filter((n) => n.parentId === 'account-settings').map((n) => n.sortOrder);
+        const node = defaults.find((n) => n.id === 'tools.url-shortener');
+        const siblings = defaults.filter((n) => n.parentId === 'tools').map((n) => n.sortOrder);
 
-        expect(node).toEqual(expect.objectContaining({ parentId: 'account-settings', visible: true }));
+        expect(node).toEqual(expect.objectContaining({ parentId: 'tools', visible: true }));
         expect(new Set(siblings).size).toBe(siblings.length);
         expect(validateNavLayout(defaults)).toEqual({ valid: true });
     });
@@ -185,21 +184,23 @@ describe('addNavNodesToLayout', () => {
      * Production serves a saved tenant layout verbatim once one validates, and
      * `sync-nav-layout.ts` is the only thing that adds a new entry to it. The
      * script refuses a node absent from the default layout, so this is what makes
-     * `--nodes=account-settings.url-shortener` actually do something.
+     * `--nodes=tools.url-shortener` actually do something.
      */
-    it('can add account-settings.url-shortener to a tenant layout saved before it existed', () => {
+    it('can add tools.url-shortener to a tenant layout saved before it existed', () => {
         const saved: NavLayoutNode[] = [
             { id: 'account-settings', parentId: null, sortOrder: 11, visible: true },
             { id: 'account-settings.overview', parentId: 'account-settings', sortOrder: 0, visible: true },
             { id: 'account-settings.profile', parentId: 'account-settings', sortOrder: 1, visible: true },
             { id: 'account-settings.billing', parentId: 'account-settings', sortOrder: 2, visible: true },
+            { id: 'tools', parentId: null, sortOrder: 12, visible: true },
+            { id: 'tools.notes', parentId: 'tools', sortOrder: 0, visible: true },
         ];
 
-        const { layout, added } = addNavNodesToLayout(saved, ['account-settings.url-shortener']);
+        const { layout, added } = addNavNodesToLayout(saved, ['tools.url-shortener']);
 
-        expect(added).toEqual(['account-settings.url-shortener']);
-        expect(layout.find((n) => n.id === 'account-settings.url-shortener')).toEqual(
-            expect.objectContaining({ parentId: 'account-settings', visible: true }),
+        expect(added).toEqual(['tools.url-shortener']);
+        expect(layout.find((n) => n.id === 'tools.url-shortener')).toEqual(
+            expect.objectContaining({ parentId: 'tools', visible: true }),
         );
         expect(validateNavLayout(layout)).toEqual({ valid: true });
     });

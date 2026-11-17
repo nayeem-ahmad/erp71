@@ -562,11 +562,11 @@ describe('Sidebar — Story 30.1', () => {
 });
 
 /**
- * The URL shortener is a Business-plan tool inside the tenant "Admin" module.
- * Billing is asserted beside each hidden case to prove the menu actually opened —
+ * The URL shortener is a Business-plan tool inside the tenant Tools module.
+ * Notes is asserted beside each hidden case to prove the menu actually opened —
  * otherwise "not in the document" would also pass for a menu that never rendered.
  */
-describe('Sidebar — URL shortener under Admin', () => {
+describe('Sidebar — URL shortener under Tools', () => {
     beforeEach(() => {
         localStorage.clear();
         setBranding();
@@ -575,7 +575,7 @@ describe('Sidebar — URL shortener under Admin', () => {
     it('shows the URL Shortener to a short-link manager on a plan that includes it', () => {
         render(<Sidebar canManageBilling canManageShortLinks planFeatures={{ urlShortener: true }} />);
 
-        fireEvent.click(screen.getByText('Admin'));
+        fireEvent.click(screen.getByText('Tools'));
 
         expect(screen.getByRole('link', { name: 'URL Shortener' })).toHaveAttribute('href', '/settings/url-shortener');
     });
@@ -583,18 +583,18 @@ describe('Sidebar — URL shortener under Admin', () => {
     it('hides it from a tenant whose plan does not include it', () => {
         render(<Sidebar canManageBilling canManageShortLinks planFeatures={{ urlShortener: false }} />);
 
-        fireEvent.click(screen.getByText('Admin'));
+        fireEvent.click(screen.getByText('Tools'));
 
-        expect(screen.getByText('Billing')).toBeInTheDocument();
+        expect(screen.getByText('Notes')).toBeInTheDocument();
         expect(screen.queryByText('URL Shortener')).not.toBeInTheDocument();
     });
 
     it('hides it from staff without short-link permission, even on a plan that includes it', () => {
         render(<Sidebar canManageBilling planFeatures={{ urlShortener: true }} />);
 
-        fireEvent.click(screen.getByText('Admin'));
+        fireEvent.click(screen.getByText('Tools'));
 
-        expect(screen.getByText('Billing')).toBeInTheDocument();
+        expect(screen.getByText('Notes')).toBeInTheDocument();
         expect(screen.queryByText('URL Shortener')).not.toBeInTheDocument();
     });
 });

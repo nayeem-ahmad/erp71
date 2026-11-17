@@ -472,7 +472,8 @@ export const coreMessages = {
 
             crmActivitySummary: "Ringkasan aktiviti",
 
-            crmSetup: "Persediaan",
+            crmReports: "Laporan CRM",
+            crmSetup: "Persediaan CRM",
                 salesSettings: "Tetapan Jualan",
                 printTemplates: "Pengepala Cetakan",
                 smsCredits: "Kredit Pemesejan",
@@ -867,7 +868,6 @@ export const coreMessages = {
                     documentNumbering: "Penomboran Dokumen",
                     paymentMethods: "Kaedah Pembayaran",
                     discountCodes: "Kod Diskaun",
-                    urlShortener: "Pemendek URL",
                     loyalty: "Program Kesetiaan",
                     sms: "Pemberitahuan SMS",
                     reportEmails: "E-mel Laporan",

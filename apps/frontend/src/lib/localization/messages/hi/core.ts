@@ -472,7 +472,8 @@ export const coreMessages = {
 
             crmActivitySummary: "गतिविधि सारांश",
 
-            crmSetup: "सेटअप",
+            crmReports: "CRM रिपोर्ट",
+            crmSetup: "CRM सेटअप",
             salesSettings: "बिक्री सेटिंग्स",
             printTemplates: "प्रिंट हेडर",
             smsCredits: "मैसेजिंग क्रेडिट",
@@ -866,7 +867,6 @@ export const coreMessages = {
                 documentNumbering: "दस्तावेज़ क्रमांकन",
                 paymentMethods: "भुगतान विधियाँ",
                 discountCodes: "छूट कोड",
-                urlShortener: "URL शॉर्टनर",
                 loyalty: "लॉयल्टी कार्यक्रम",
                 sms: "SMS सूचनाएँ",
                 reportEmails: "रिपोर्ट ईमेल",

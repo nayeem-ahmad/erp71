@@ -472,7 +472,8 @@ export const coreMessages = {
 
             crmActivitySummary: "ملخص الأنشطة",
 
-            crmSetup: 'الإعداد',
+            crmReports: 'تقارير إدارة العلاقات',
+            crmSetup: 'إعداد إدارة العلاقات',
             salesSettings: 'إعدادات المبيعات',
             printTemplates: 'ترويسة الطباعة',
             smsCredits: 'رصيد المراسلة',
@@ -866,7 +867,6 @@ export const coreMessages = {
                 documentNumbering: 'ترقيم المستندات',
                 paymentMethods: 'طرق الدفع',
                 discountCodes: 'رموز الخصم',
-                urlShortener: 'مختصر الروابط',
                 loyalty: 'برنامج الولاء',
                 sms: 'إشعارات الرسائل النصية',
                 reportEmails: 'تقارير بالبريد',
