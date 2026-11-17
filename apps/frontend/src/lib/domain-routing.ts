@@ -98,6 +98,7 @@ const APP_ONLY_PREFIXES = [
     // `/t/<key>`, the short task link — it resolves against the signed-in workspace.
     '/t',
     '/team',
+    '/tools',
     '/w',
     '/whats-new',
     // Auth flows — see the note above.

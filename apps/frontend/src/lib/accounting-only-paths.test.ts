@@ -10,6 +10,7 @@ describe('isAccountingOnlyBlockedPath', () => {
         expect(isAccountingOnlyBlockedPath('/hr')).toBe(true);
         expect(isAccountingOnlyBlockedPath('/meetings')).toBe(true);
         expect(isAccountingOnlyBlockedPath('/meetings/actions')).toBe(true);
+        expect(isAccountingOnlyBlockedPath('/tools/notes')).toBe(true);
         expect(isAccountingOnlyBlockedPath('/storefront')).toBe(true);
     });
 
