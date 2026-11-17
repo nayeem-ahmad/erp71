@@ -56,6 +56,16 @@ import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { AuditService } from '../audit/audit.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { JOB_NAMES } from '../system-health/jobs/job-names';
+import { loadMarginSource } from '../sales-reports/sales-reports.service';
+import { returnLines, saleLines, summariseMargin } from '../sales-reports/gross-profit.utils';
+import { daysInRange } from '../common/period.util';
+import {
+    apportionCashMovements,
+    cashActivityOf,
+    FINANCING_ACCOUNT_PATTERN,
+    INVESTING_ACCOUNT_PATTERN,
+    type CashActivity,
+} from './cash-movements.util';
 import {
     AccountingOverviewQueryDto,
     CreateVoucherDto,
@@ -3136,11 +3146,28 @@ export class AccountingService {
             return s + this.calculateSignedBalance(AccountType.LIABILITY, t.debit, t.credit);
         }, 0);
 
+        // What was billed on credit in the period: the debits to receivable
+        // accounts (sales on account) and the credits to payable accounts
+        // (purchases on account). DSO and DPO divide by these, not by all
+        // revenue and all expenses — a cash sale never sits in receivables, so
+        // counting it would make a mostly-cash shop look like it collects in
+        // a day whatever its credit customers actually do.
+        const creditSales = arAccounts.reduce((s, a) => s + (plMap.get(a.id)?.debit ?? 0), 0);
+        const creditPurchases = apAccounts.reduce((s, a) => s + (plMap.get(a.id)?.credit ?? 0), 0);
+        const periodDays = daysInRange({ from: range.from, to: range.to });
+
+        // Gross margin from the cost stamped on each sold line, the figure every
+        // sales gross-profit report states. The ledger cannot give it: stock is
+        // kept on the periodic method, so purchases are expensed when billed and
+        // there is no cost-of-goods-sold account to subtract. Dividing net profit
+        // by revenue, as this did before, just repeated the net margin.
+        const margin = summariseMargin(await this.loadSalesMarginLines(tenantId, range.from, range.to, storeId));
+
         const currentRatio = totalLiabilities !== 0 ? this.roundAmount(totalAssets / totalLiabilities) : null;
-        const grossMarginPct = revenue !== 0 ? this.roundAmount((netProfit / revenue) * 100) : null;
+        const grossMarginPct = margin.grossMarginPct === null ? null : this.roundAmount(margin.grossMarginPct);
         const netProfitMarginPct = revenue !== 0 ? this.roundAmount((netProfit / revenue) * 100) : null;
-        const dsoDays = revenue !== 0 ? this.roundAmount((arBalance / revenue) * 30) : null;
-        const dpoDays = totalExpenses !== 0 ? this.roundAmount((apBalance / totalExpenses) * 30) : null;
+        const dsoDays = creditSales > 0 ? this.roundAmount((arBalance / creditSales) * periodDays) : null;
+        const dpoDays = creditPurchases > 0 ? this.roundAmount((apBalance / creditPurchases) * periodDays) : null;
 
         return {
             as_of: asOfDateStr,
@@ -3156,15 +3183,100 @@ export class AccountingService {
                 net_profit: netProfit,
                 total_assets: this.roundAmount(totalAssets),
                 total_liabilities: this.roundAmount(totalLiabilities),
+                /** Share of sales revenue with a cost behind it — the base gross margin is measured on. */
+                gross_margin_coverage_pct: margin.coverage.costedRevenuePct === null
+                    ? null
+                    : this.roundAmount(margin.coverage.costedRevenuePct),
+                credit_sales: this.roundAmount(creditSales),
+                credit_purchases: this.roundAmount(creditPurchases),
+                period_days: periodDays,
             },
+        };
+    }
+
+    /** Sales and returns in a window as signed margin lines, for the gross margin ratio. */
+    private async loadSalesMarginLines(tenantId: string, from: string, to: string, storeId?: string) {
+        const { sales, returns } = await loadMarginSource(this.db, tenantId, { from, to, storeId });
+        const one = () => ({ key: 'all', label: 'all' });
+        return [...saleLines(sales, one), ...returnLines(returns, one)];
+    }
+
+    /**
+     * Cash generated and spent in a window, by activity, read off the vouchers
+     * that moved cash (see `cash-movements.util.ts`), with the cash and bank
+     * balance at both ends. The KPI scorecard's operating cash flow and runway.
+     *
+     * Honours the tenant's approved-only reporting setting like every other
+     * ledger report, and a branch narrows it to that branch's vouchers.
+     */
+    async getCashMovements(tenantId: string, query: { from: string; to: string }, storeId?: string) {
+        const range = this.resolveDateRange(query.from, query.to);
+        const approvalFilter = await this.reportApprovalFilter(tenantId);
+        const scope = { tenant_id: tenantId, ...approvalFilter, ...this.branchVoucher(storeId) };
+
+        const accounts = await this.db.account.findMany({
+            where: { tenant_id: tenantId },
+            select: { id: true, name: true, code: true, type: true, category: true },
+        });
+        const cashIds = accounts
+            .filter((a) => a.category === AccountCategory.CASH || a.category === AccountCategory.BANK)
+            .map((a) => a.id);
+        const activity = new Map<string, CashActivity | null>(accounts.map((a) => [
+            a.id,
+            cashIds.includes(a.id) ? null : cashActivityOf(a),
+        ]));
+
+        if (cashIds.length === 0) {
+            return {
+                period: { from: range.from, to: range.to },
+                operating: 0, investing: 0, financing: 0, net: 0,
+                opening_cash_balance: 0, closing_cash_balance: 0,
+            };
+        }
+
+        const [lines, opening] = await Promise.all([
+            this.db.voucherDetail.findMany({
+                where: {
+                    voucher: {
+                        ...scope,
+                        date: { gte: range.fromDate, lte: range.toDate },
+                        details: { some: { account_id: { in: cashIds } } },
+                    },
+                },
+                select: { voucher_id: true, account_id: true, debit_amount: true, credit_amount: true },
+            }),
+            this.db.voucherDetail.aggregate({
+                where: { account_id: { in: cashIds }, voucher: { ...scope, date: { lt: range.fromDate } } },
+                _sum: { debit_amount: true, credit_amount: true },
+            }),
+        ]);
+
+        const totals = apportionCashMovements(
+            lines.map((l) => ({
+                voucherId: l.voucher_id,
+                accountId: l.account_id,
+                debit: Number(l.debit_amount ?? 0),
+                credit: Number(l.credit_amount ?? 0),
+            })),
+            (accountId) => activity.get(accountId) ?? 'operating',
+        );
+        const openingBalance = this.roundAmount(
+            Number(opening._sum.debit_amount ?? 0) - Number(opening._sum.credit_amount ?? 0),
+        );
+
+        return {
+            period: { from: range.from, to: range.to },
+            ...totals,
+            opening_cash_balance: openingBalance,
+            closing_cash_balance: this.roundAmount(openingBalance + totals.net),
         };
     }
 
     async getCashFlow(tenantId: string, query: CashFlowQueryDto, storeId?: string) {
         const range = this.resolveDateRange(query.from, query.to);
 
-        const INVESTING_PATTERN = /(fixed\s+asset|property|equipment|plant|machinery|vehicle|furniture|land|building)/i;
-        const FINANCING_PATTERN = /(loan|borrowing|debt|mortgage|bond)/i;
+        const INVESTING_PATTERN = INVESTING_ACCOUNT_PATTERN;
+        const FINANCING_PATTERN = FINANCING_ACCOUNT_PATTERN;
 
         const accounts = await this.db.account.findMany({
             where: { tenant_id: tenantId },

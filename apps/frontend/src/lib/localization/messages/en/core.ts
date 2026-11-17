@@ -402,6 +402,7 @@ export const coreMessages = {
         collapseAll: 'Collapse all',
         modules: {
             dashboard: 'Dashboard',
+            scorecard: 'Scorecard',
             sales: 'Sales',
             delivery: 'Delivery',
             manufacturing: 'Manufacturing',
@@ -544,6 +545,7 @@ export const coreMessages = {
             meet71: 'Meet71',
             call: 'Call',
             platformAccountingOverview: 'Books Overview',
+            platformKpis: 'KPI Scorecard',
             platformAccountingExpenses: 'Platform Expenses',
             platformAccountingLedger: 'Platform Ledger',
             platformAccountingReports: 'Financial Reports',

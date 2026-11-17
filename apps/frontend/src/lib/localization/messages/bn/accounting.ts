@@ -416,7 +416,7 @@ export const accountingMessages = {
                     currentRatio: "চলতি অনুপাত",
                     currentRatioDesc: "সম্পদ / দায় (১-এর বেশি হলে ভালো)",
                     grossMargin: "মোট মার্জিন",
-                    grossMarginDesc: "নিট মুনাফা / আয় × ১০০",
+                    grossMarginDesc: "(আয় − বিক্রীত পণ্যের খরচ) / আয় × ১০০",
                     netMargin: "নিট মার্জিন",
                     netProfitMargin: "নিট মুনাফার মার্জিন",
                     netProfitMarginDesc: "নিট মুনাফা / আয় × ১০০",

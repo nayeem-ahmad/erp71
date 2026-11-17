@@ -128,6 +128,7 @@ import { AlertsModule } from './alerts/alerts.module';
 import { HrDashboardModule } from './hr-dashboard/hr-dashboard.module';
 import { HrReportsModule } from './hr-reports/hr-reports.module';
 import { AdminDashboardModule } from './admin-dashboard/admin-dashboard.module';
+import { KpiModule } from './kpis/kpi.module';
 import { CrmLeadsModule } from './crm-leads/crm-leads.module';
 import { CrmLeadGenerationModule } from './crm-lead-generation/crm-lead-generation.module';
 import { CrmLeadConversationsModule } from './crm-lead-conversations/crm-lead-conversations.module';
@@ -281,6 +282,7 @@ import { Meet71Module } from './meet71/meet71.module';
         HrDashboardModule,
         HrReportsModule,
         AdminDashboardModule,
+        KpiModule,
         CrmLeadsModule,
         CrmLeadGenerationModule,
         CrmLeadConversationsModule,

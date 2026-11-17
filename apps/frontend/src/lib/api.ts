@@ -19,6 +19,7 @@ import type {
     SectionPartials,
     SupportedLocaleCode,
     TenantFeatureOverrides,
+    KpiScorecard,
 } from '@erp71/shared-types';
 import type {
     RefereePayoutMethod,
@@ -3348,6 +3349,9 @@ export const api = {
     getHrDashboardTrends: dashboardWindowFetcher('/hr/dashboard/trends'),
     getAdminDashboardOverview: dashboardWindowFetcher('/admin/dashboard/overview'),
     getAdminDashboardTrends: dashboardWindowFetcher('/admin/dashboard/trends'),
+    // CEO KPI scorecard: a shop's own (`/kpis`, branch-aware) and the platform's.
+    getKpiScorecard: dashboardWindowFetcher<KpiScorecard>('/kpis'),
+    getPlatformKpiScorecard: dashboardWindowFetcher<KpiScorecard>('/admin/kpis'),
     // CRM Campaigns
     getCrmCampaigns: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/crm/campaigns', params)),
     getCrmCampaign: (id: string) => fetchWithAuth(`/crm/campaigns/${id}`),
