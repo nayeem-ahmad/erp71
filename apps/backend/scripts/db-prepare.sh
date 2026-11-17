@@ -318,10 +318,11 @@ step sync:nav-expense-heads \
 step sync:nav-meetings \
     npm run sync:nav-layout --workspace=@erp71/database -- --nodes=meetings,meetings.list,meetings.actions,meetings.actions-all
 
-# Tools (Notes) is a new top-level utility module. Same reason as Meetings: a
-# saved sidebar never shows it until these ids are merged in. Idempotent.
+# Tools (Notes, URL Shortener, Meet71) is a new top-level utility module. Same
+# reason as Meetings: a saved sidebar never shows it until these ids are merged
+# in. Idempotent.
 step sync:nav-tools \
-    npm run sync:nav-layout --workspace=@erp71/database -- --nodes=tools,tools.notes
+    npm run sync:nav-layout --workspace=@erp71/database -- --nodes=tools,tools.notes,tools.url-shortener,tools.meet71
 
 # The KPI scorecard added a root `scorecard` module beside the dashboard and
 # `admin.kpis` under the admin console's Overview. Same reason as Tools: a
