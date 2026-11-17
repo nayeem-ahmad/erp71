@@ -317,7 +317,7 @@ export const accountingMessages = {
                 currentRatio: 'کرنٹ ریشو',
                 currentRatioDesc: 'اثاثے / واجبات (1 سے زیادہ بہتر ہے)',
                 grossMargin: 'مجموعی مارجن',
-                grossMarginDesc: 'خالص منافع / آمدنی × 100',
+                grossMarginDesc: '(آمدنی − فروخت شدہ مال کی لاگت) / آمدنی × 100',
                 netMargin: 'خالص مارجن',
                 netProfitMargin: 'خالص منافع کا مارجن',
                 netProfitMarginDesc: 'خالص منافع / آمدنی × 100',

@@ -317,7 +317,7 @@ export const accountingMessages = {
                 currentRatio: "Ratio de liquidité générale",
                 currentRatioDesc: "Actif / Passif (>1 est sain)",
                 grossMargin: "Marge brute",
-                grossMarginDesc: "Résultat net / Chiffre d'affaires × 100",
+                grossMarginDesc: "(Chiffre d'affaires − Coût des marchandises vendues) / Chiffre d'affaires × 100",
                 netMargin: "Marge nette",
                 netProfitMargin: "Marge bénéficiaire nette",
                 netProfitMarginDesc: "Résultat net / Chiffre d'affaires × 100",

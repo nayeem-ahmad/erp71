@@ -317,7 +317,7 @@ export const accountingMessages = {
                 currentRatio: "चालू अनुपात",
                 currentRatioDesc: "संपत्तियाँ / देनदारियाँ (>1 स्वस्थ है)",
                 grossMargin: "सकल मार्जिन",
-                grossMarginDesc: "शुद्ध लाभ / राजस्व × 100",
+                grossMarginDesc: "(राजस्व − बेचे गए माल की लागत) / राजस्व × 100",
                 netMargin: "शुद्ध मार्जिन",
                 netProfitMargin: "शुद्ध लाभ मार्जिन",
                 netProfitMarginDesc: "शुद्ध लाभ / राजस्व × 100",

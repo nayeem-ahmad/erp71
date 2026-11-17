@@ -278,6 +278,8 @@ describe('nav-resolver', () => {
         const admin = modules.find((mod) => mod.key === 'admin');
         expect((admin?.children ?? []).map((child) => child.label)).toEqual([
             'Overview',
+            // The platform's own KPIs, read right after the overview they deepen.
+            'KPI Scorecard',
             'Tenant Management',
             'Platform Accounting',
             'Inbox',

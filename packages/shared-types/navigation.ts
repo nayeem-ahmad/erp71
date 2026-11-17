@@ -55,6 +55,9 @@ export const navLayoutSchema = z.array(navLayoutNodeSchema);
 
 export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   dashboard: { id: 'dashboard', kind: 'module', icon: 'LayoutDashboard', labelKey: 'sidebar.modules.dashboard', href: '/dashboard' },
+  // The CEO KPI scorecard (`kpis.ts`): eighteen health figures on one page.
+  // Root-level beside the dashboard, because it reads across every module.
+  scorecard: { id: 'scorecard', kind: 'module', icon: 'Target', labelKey: 'sidebar.modules.scorecard', href: '/scorecard' },
   sales: { id: 'sales', kind: 'module', icon: 'ShoppingBag', labelKey: 'sidebar.modules.sales', moduleKey: 'sales' },
   'sales.overview': { id: 'sales.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/sales', exact: true },
   'sales.pos': { id: 'sales.pos', kind: 'link', icon: 'ShoppingCart', labelKey: 'sidebar.items.pos', href: '/sales/pos' },
@@ -355,6 +358,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   support: { id: 'support', kind: 'module', icon: 'MessageSquare', labelKey: 'sidebar.items.support', href: '/support', moduleKey: 'support', platformFeature: 'support' },
   admin: { id: 'admin', kind: 'module', icon: 'ShieldCheck', labelKey: 'sidebar.modules.admin', moduleKey: 'admin' },
   'admin.overview': { id: 'admin.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/admin' },
+  'admin.kpis': { id: 'admin.kpis', kind: 'link', icon: 'Target', labelKey: 'sidebar.items.platformKpis', href: '/admin/kpis' },
   'admin.tenant-management': { id: 'admin.tenant-management', kind: 'subgroup', icon: 'Crown', labelKey: 'sidebar.sections.tenantManagement' },
   'admin.tenant-management.tenants': { id: 'admin.tenant-management.tenants', kind: 'link', icon: 'Building2', labelKey: 'sidebar.items.tenants', href: '/admin/tenants' },
   'admin.tenant-management.ledger': { id: 'admin.tenant-management.ledger', kind: 'link', icon: 'BookOpen', labelKey: 'sidebar.items.tenantLedger', href: '/admin/tenants/ledger' },
@@ -478,6 +482,9 @@ const HR_ANY = ['VIEW_HR', 'MANAGE_HR', 'VIEW_PAYROLL'] as const;
 const SETTINGS_ANY = ['MANAGE_USERS', 'MANAGE_STORES', 'MANAGE_COUNTERS'] as const;
 
 export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
+  // The API gates `/kpis` on VIEW_FINANCIAL_REPORTS: margins, cash and runway
+  // are the business's books, read by whoever may read its financial reports.
+  scorecard: ['VIEW_FINANCIAL_REPORTS'],
   sales: SALES_ANY,
   'sales.pos': ['CREATE_SALE'],
   'sales.new': ['CREATE_SALE'],
@@ -619,10 +626,16 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
  * The 2026-11-11 HR skills catalogue added `hr.setup.skills` under HR Setup.
  * A saved layout takes it with
  * `npx tsx prisma/sync-nav-layout.ts --nodes=hr.setup.skills`.
+ *
+ * The 2026-11-17 KPI scorecard added the root `scorecard` module beside the
+ * dashboard, and `admin.kpis` under the admin console's Overview. A saved
+ * layout takes them with
+ * `npx tsx prisma/sync-nav-layout.ts --nodes=scorecard,admin.kpis`.
  */
 export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('dashboard', null, 0),
-  layoutNode('sales', null, 1),
+  layoutNode('scorecard', null, 1),
+  layoutNode('sales', null, 2),
   layoutNode('sales.overview', 'sales', 0),
   layoutNode('sales.list', 'sales', 1),
   layoutNode('sales.order-flow.returns', 'sales', 2),
@@ -658,14 +671,14 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('sales.cashier-sessions', 'sales.setup', 4),
   layoutNode('sales.setup.settings', 'sales.setup', 5),
 
-  layoutNode('storefront', null, 2),
+  layoutNode('storefront', null, 3),
   layoutNode('storefront.orders', 'storefront', 0),
   layoutNode('storefront.pages', 'storefront', 1),
   layoutNode('storefront.menu', 'storefront', 2),
   layoutNode('storefront.blog', 'storefront', 3),
   layoutNode('storefront.settings', 'storefront', 4),
 
-  layoutNode('purchase', null, 3),
+  layoutNode('purchase', null, 4),
   layoutNode('purchase.overview', 'purchase', 0),
   layoutNode('purchase.list', 'purchase', 1),
   layoutNode('purchase.payables.supplier-payments', 'purchase', 2),
@@ -681,12 +694,12 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('purchase.setup', 'purchase', 8),
   layoutNode('purchase.setup.suppliers', 'purchase.setup', 0),
 
-  layoutNode('imports', null, 4),
+  layoutNode('imports', null, 5),
   layoutNode('imports.shipments', 'imports', 0),
   layoutNode('imports.lc-register', 'imports', 1),
   layoutNode('imports.duty-report', 'imports', 2),
 
-  layoutNode('accounting', null, 5),
+  layoutNode('accounting', null, 6),
   layoutNode('accounting.overview', 'accounting', 0),
   layoutNode('accounting.vouchers', 'accounting', 1),
   layoutNode('accounting.vouchers-list', 'accounting', 2),
@@ -722,13 +735,13 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('accounting.setup.voucher-templates', 'accounting.setup', 9),
   layoutNode('accounting.setup.settings', 'accounting.setup', 10),
 
-  layoutNode('expenses', null, 6),
+  layoutNode('expenses', null, 7),
   layoutNode('expenses.list', 'expenses', 0),
   layoutNode('expenses.categories', 'expenses', 1),
   layoutNode('expenses.heads', 'expenses', 2),
   layoutNode('expenses.reports', 'expenses', 3),
 
-  layoutNode('inventory', null, 7),
+  layoutNode('inventory', null, 8),
   layoutNode('inventory.overview', 'inventory', 0),
   layoutNode('inventory.demands', 'inventory', 1),
   layoutNode('inventory.transfers', 'inventory', 2),
@@ -750,7 +763,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('inventory.setup.settings', 'inventory.setup', 4),
   layoutNode('inventory.setup.product-costs', 'inventory.setup', 5),
 
-  layoutNode('crm', null, 8),
+  layoutNode('crm', null, 9),
   layoutNode('crm.overview', 'crm', 0),
   layoutNode('crm.leads', 'crm', 1),
   layoutNode('crm.lead-generation', 'crm', 3),
@@ -767,7 +780,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.reports.cold-customers', 'crm.reports', 5),
   layoutNode('crm.setup', 'crm', 8),
 
-  layoutNode('projects', null, 9),
+  layoutNode('projects', null, 10),
   layoutNode('projects.list', 'projects', 0),
   layoutNode('projects.staffing', 'projects', 1),
   layoutNode('projects.boards', 'projects', 2),
@@ -779,13 +792,13 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('projects.hour-log-report', 'projects', 8),
   layoutNode('projects.setup', 'projects', 9),
 
-  layoutNode('manufacturing', null, 10),
+  layoutNode('manufacturing', null, 11),
   layoutNode('manufacturing.boms', 'manufacturing', 0),
   layoutNode('manufacturing.jobs', 'manufacturing', 1),
   layoutNode('manufacturing.analytics', 'manufacturing', 2),
   layoutNode('manufacturing.product-pl', 'manufacturing', 3),
 
-  layoutNode('hr', null, 11),
+  layoutNode('hr', null, 12),
   layoutNode('hr.overview', 'hr', 0),
   layoutNode('hr.employees', 'hr', 1),
   layoutNode('hr.attendance', 'hr', 2),
@@ -814,38 +827,39 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('hr.setup.skills', 'hr.setup', 3),
   layoutNode('hr.setup.schedules', 'hr.setup', 4),
 
-  layoutNode('meetings', null, 12),
+  layoutNode('meetings', null, 13),
   layoutNode('meetings.list', 'meetings', 0),
   layoutNode('meetings.actions', 'meetings', 1),
   layoutNode('meetings.actions-all', 'meetings', 2),
 
-  layoutNode('account-settings', null, 13),
+  layoutNode('account-settings', null, 14),
   layoutNode('account-settings.overview', 'account-settings', 0),
   layoutNode('account-settings.profile', 'account-settings', 1),
   layoutNode('account-settings.team', 'account-settings', 2),
   layoutNode('account-settings.billing', 'account-settings', 3),
   layoutNode('account-settings.url-shortener', 'account-settings', 4),
 
-  layoutNode('chat', null, 14),
-  layoutNode('tools', null, 15),
+  layoutNode('chat', null, 15),
+  layoutNode('tools', null, 16),
   layoutNode('tools.notes', 'tools', 0),
-  layoutNode('support', null, 16),
-  layoutNode('admin', null, 17),
+  layoutNode('support', null, 17),
+  layoutNode('admin', null, 18),
   layoutNode('admin.overview', 'admin', 0),
-  layoutNode('admin.tenant-management', 'admin', 1),
+  layoutNode('admin.kpis', 'admin', 1),
+  layoutNode('admin.tenant-management', 'admin', 2),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
   layoutNode('admin.tenant-management.activation-requests', 'admin.tenant-management', 1),
   layoutNode('admin.tenant-management.credit-topups', 'admin.tenant-management', 2),
   layoutNode('admin.tenant-management.ledger', 'admin.tenant-management', 3),
   layoutNode('admin.tenant-management.reminders', 'admin.tenant-management', 4),
-  layoutNode('admin.users', 'admin', 2),
-  layoutNode('admin.feedback', 'admin', 3),
-  layoutNode('admin.support', 'admin', 4),
-  layoutNode('admin.url-shortener', 'admin', 5),
-  layoutNode('admin.blog', 'admin', 6),
-  layoutNode('admin.social-media', 'admin', 7),
-  layoutNode('whats-new', null, 18),
-  layoutNode('help', null, 19),
+  layoutNode('admin.users', 'admin', 3),
+  layoutNode('admin.feedback', 'admin', 4),
+  layoutNode('admin.support', 'admin', 5),
+  layoutNode('admin.url-shortener', 'admin', 6),
+  layoutNode('admin.blog', 'admin', 7),
+  layoutNode('admin.social-media', 'admin', 8),
+  layoutNode('whats-new', null, 19),
+  layoutNode('help', null, 20),
 ];
 
 /**
@@ -880,8 +894,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
 export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin', null, 0),
   layoutNode('admin.overview', 'admin', 0),
+  layoutNode('admin.kpis', 'admin', 1),
 
-  layoutNode('admin.tenant-management', 'admin', 1),
+  layoutNode('admin.tenant-management', 'admin', 2),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
   layoutNode('admin.tenant-management.activation-requests', 'admin.tenant-management', 1),
   layoutNode('admin.tenant-management.credit-topups', 'admin.tenant-management', 2),
@@ -890,34 +905,34 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
 
   // Directly under Tenant Management: the books are read alongside the tenant
   // ledger they are projected from, not filed away under Platform.
-  layoutNode('admin.platform-accounting', 'admin', 2),
+  layoutNode('admin.platform-accounting', 'admin', 3),
   layoutNode('admin.platform-accounting.overview', 'admin.platform-accounting', 0),
   layoutNode('admin.platform-accounting.expenses', 'admin.platform-accounting', 1),
   layoutNode('admin.platform-accounting.ledger', 'admin.platform-accounting', 2),
   layoutNode('admin.platform-accounting.reports', 'admin.platform-accounting', 3),
 
-  layoutNode('admin.inbox', 'admin', 3),
+  layoutNode('admin.inbox', 'admin', 4),
   layoutNode('admin.support', 'admin.inbox', 0),
   layoutNode('admin.feedback', 'admin.inbox', 1),
 
-  layoutNode('admin.growth', 'admin', 4),
+  layoutNode('admin.growth', 'admin', 5),
   layoutNode('admin.referrals', 'admin.growth', 0),
   layoutNode('admin.blog', 'admin.growth', 1),
   layoutNode('admin.social-media', 'admin.growth', 2),
   layoutNode('admin.url-shortener', 'admin.growth', 3),
 
-  layoutNode('admin.plans-billing', 'admin', 5),
+  layoutNode('admin.plans-billing', 'admin', 6),
   layoutNode('admin.platform-settings.plans', 'admin.plans-billing', 0),
   layoutNode('admin.platform-settings.addons', 'admin.plans-billing', 1),
   layoutNode('admin.platform-settings.payments', 'admin.plans-billing', 2),
 
-  layoutNode('admin.channels', 'admin', 6),
+  layoutNode('admin.channels', 'admin', 7),
   layoutNode('admin.platform-settings.sms', 'admin.channels', 0),
   layoutNode('admin.platform-settings.email', 'admin.channels', 1),
   layoutNode('admin.platform-settings.whatsapp', 'admin.channels', 2),
   layoutNode('admin.platform-settings.buffer', 'admin.channels', 3),
 
-  layoutNode('admin.platform', 'admin', 7),
+  layoutNode('admin.platform', 'admin', 8),
   layoutNode('admin.system-health', 'admin.platform', 0),
   layoutNode('admin.audit-logs', 'admin.platform', 1),
   layoutNode('admin.record-history', 'admin.platform', 2),

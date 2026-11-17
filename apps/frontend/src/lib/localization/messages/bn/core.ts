@@ -402,6 +402,7 @@ export const coreMessages = {
             collapseAll: "সব বন্ধ করুন",
             modules: {
                 dashboard: "ড্যাশবোর্ড",
+                scorecard: "স্কোরকার্ড",
                 sales: "বিক্রয়",
                 delivery: "ডেলিভারি",
                 manufacturing: "ম্যানুফ্যাকচারিং",
@@ -552,6 +553,7 @@ export const coreMessages = {
                 meet71: "Meet71",
                 call: "কল",
                 platformAccountingOverview: "হিসাব সারসংক্ষেপ",
+                platformKpis: "KPI স্কোরকার্ড",
                 platformAccountingExpenses: "প্ল্যাটফর্ম খরচ",
                 platformAccountingLedger: "প্ল্যাটফর্ম খতিয়ান",
                 platformAccountingReports: "আর্থিক রিপোর্ট",

@@ -317,7 +317,7 @@ export const accountingMessages = {
                 currentRatio: "Liquiditätsgrad",
                 currentRatioDesc: "Vermögen / Verbindlichkeiten (>1 ist gesund)",
                 grossMargin: "Rohmarge",
-                grossMarginDesc: "Ergebnis / Umsatz × 100",
+                grossMarginDesc: "(Umsatz − Wareneinsatz) / Umsatz × 100",
                 netMargin: "Nettomarge",
                 netProfitMargin: "Nettogewinnmarge",
                 netProfitMarginDesc: "Ergebnis / Umsatz × 100",

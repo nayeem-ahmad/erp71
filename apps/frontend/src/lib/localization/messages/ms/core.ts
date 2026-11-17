@@ -402,6 +402,7 @@ export const coreMessages = {
             collapseAll: "Runtuhkan semua",
             modules: {
                 dashboard: "Dashboard",
+                scorecard: "Kad skor",
                 sales: "Jualan",
                 delivery: "Penghantaran",
                 manufacturing: "Pembuatan",
@@ -552,6 +553,7 @@ export const coreMessages = {
                 meet71: "Meet71",
                 call: "Panggil",
                 platformAccountingOverview: "Ringkasan Buku",
+                platformKpis: "Kad skor KPI",
                 platformAccountingExpenses: "Perbelanjaan Platform",
                 platformAccountingLedger: "Lejar Platform",
                 platformAccountingReports: "Laporan Kewangan",
