@@ -587,6 +587,8 @@ export const crmHrMessages = {
                 lostReasonRequired: "कृपया इस लीड को खोई हुई चिह्नित करने का कारण दें।",
             },
             fields: {
+                contact: "संपर्क",
+                contactPlaceholder: "नाम, कंपनी या फ़ोन से संपर्क खोजें…",
                 mobile: "मोबाइल",
                 email: "ईमेल",
                 address: "पता",

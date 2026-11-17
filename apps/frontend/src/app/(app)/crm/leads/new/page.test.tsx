@@ -26,6 +26,7 @@ jest.mock('@/lib/api', () => ({
         getLeadTaxonomy: jest.fn().mockResolvedValue([]),
         createLead: jest.fn(),
         getContact: jest.fn(),
+        getContacts: jest.fn().mockResolvedValue({ items: [], total: 0 }),
     },
 }));
 
@@ -199,5 +200,104 @@ describe('NewLeadPage — converting a contact', () => {
 
         await waitFor(() => expect(api.createLead).toHaveBeenCalled());
         expect(api.createLead.mock.calls[0][0]).not.toHaveProperty('contact_id');
+    });
+});
+
+describe('NewLeadPage — picking an existing contact', () => {
+    const contact = {
+        id: 'contact-9',
+        name: 'Rahima Begum',
+        company: 'Rahima Stores',
+        mobile: '01911-222333',
+        phone: null,
+        email: 'rahima@stores.com',
+        address: 'Dhanmondi, Dhaka',
+        linkedin_url: null,
+        website_url: null,
+        assigned_to: null,
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        api.createLead.mockResolvedValue({ id: 'lead-1' });
+        api.getContacts.mockResolvedValue({ items: [contact], total: 1 });
+    });
+
+    it('searches contacts and links the new lead to the one picked', async () => {
+        render(<NewLeadPage />);
+
+        const box = fieldControl('Contact');
+        fireEvent.focus(box);
+        fireEvent.change(box, { target: { value: 'Rahima' } });
+
+        const option = await screen.findByText('Rahima Begum');
+        fireEvent.click(option);
+
+        await waitFor(() => expect((fieldControl('Name') as HTMLInputElement).value).toBe('Rahima Begum'));
+        expect((fieldControl('Mobile') as HTMLInputElement).value).toBe('01911-222333');
+        expect(screen.getByText(/will be linked to contact/i)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /new lead/i }));
+
+        await waitFor(() => expect(api.createLead).toHaveBeenCalled());
+        expect(api.createLead).toHaveBeenCalledWith(expect.objectContaining({
+            name: 'Rahima Begum',
+            mobile: '01911-222333',
+            email: 'rahima@stores.com',
+            contact_id: 'contact-9',
+        }));
+    });
+
+    it('narrows the search with what was typed', async () => {
+        render(<NewLeadPage />);
+
+        const box = fieldControl('Contact');
+        fireEvent.focus(box);
+        fireEvent.change(box, { target: { value: 'Rahima' } });
+
+        await waitFor(() => expect(api.getContacts).toHaveBeenCalledWith(
+            expect.objectContaining({ search: 'Rahima' }),
+        ));
+    });
+
+    it('drops the link when the picked contact is cleared', async () => {
+        render(<NewLeadPage />);
+
+        const box = fieldControl('Contact');
+        fireEvent.focus(box);
+        fireEvent.change(box, { target: { value: 'Rahima' } });
+        fireEvent.click(await screen.findByText('Rahima Begum'));
+
+        await waitFor(() => expect((fieldControl('Name') as HTMLInputElement).value).toBe('Rahima Begum'));
+
+        fireEvent.click(screen.getByRole('button', { name: /remove/i }));
+
+        await waitFor(() => expect((fieldControl('Name') as HTMLInputElement).value).toBe(''));
+        expect(screen.queryByText(/will be linked to contact/i)).toBeNull();
+
+        fireEvent.change(fieldControl('Name'), { target: { value: 'Karim Traders' } });
+        fireEvent.click(screen.getByRole('button', { name: /new lead/i }));
+
+        await waitFor(() => expect(api.createLead).toHaveBeenCalled());
+        expect(api.createLead.mock.calls[0][0]).not.toHaveProperty('contact_id');
+    });
+
+    it('keeps what was typed after the pick when the contact is cleared', async () => {
+        render(<NewLeadPage />);
+
+        const box = fieldControl('Contact');
+        fireEvent.focus(box);
+        fireEvent.change(box, { target: { value: 'Rahima' } });
+        fireEvent.click(await screen.findByText('Rahima Begum'));
+
+        await waitFor(() => expect((fieldControl('Name') as HTMLInputElement).value).toBe('Rahima Begum'));
+
+        // Type over the contact's name, then unlink.
+        fireEvent.change(fieldControl('Name'), { target: { value: 'Rahima Stores deal' } });
+        fireEvent.click(screen.getByRole('button', { name: /remove/i }));
+
+        // The typed name survives; the untouched contact fields are cleared.
+        await waitFor(() => expect((fieldControl('Mobile') as HTMLInputElement).value).toBe(''));
+        expect((fieldControl('Name') as HTMLInputElement).value).toBe('Rahima Stores deal');
     });
 });

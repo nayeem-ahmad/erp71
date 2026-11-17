@@ -587,6 +587,8 @@ export const crmHrMessages = {
                 lostReasonRequired: "এই লিড হারানোর কারণ উল্লেখ করুন।",
             },
             fields: {
+                contact: "কন্টাক্ট",
+                contactPlaceholder: "নাম, প্রতিষ্ঠান বা ফোন দিয়ে কন্টাক্ট খুঁজুন…",
                 mobile: "মোবাইল",
                 email: "ইমেইল",
                 address: "ঠিকানা",

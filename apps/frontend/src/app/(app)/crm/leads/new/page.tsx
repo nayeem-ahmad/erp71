@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useRef, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { UserPlus } from 'lucide-react';
@@ -15,10 +15,13 @@ import {
     emptyLeadForm,
     leadFormToPayload,
     prefillLeadFromContact,
+    revertLeadFromContact,
     setLeadOwner,
     validateLeadFormErrors,
     type LeadFormErrors,
+    type LeadFormState,
 } from '@/components/crm/lead-form-fields';
+import LeadContactPicker, { type PickedContact } from '@/components/crm/LeadContactPicker';
 import { defaultTaxonomyId, useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 
 export default function NewLeadPage() {
@@ -77,19 +80,68 @@ function NewLeadForm() {
             .catch(() => null);
     }, []);
 
+    // `prePickForm` is what the form looked like before a contact touched it,
+    // so dropping the link can put those fields back. Only the first snapshot
+    // is kept, so swapping contacts starts from that same baseline.
+    const prePickForm = useRef<LeadFormState | null>(null);
+    // The full row behind the pick, kept so the seeded values can be identified
+    // and undone; `fromContact` is only what the page shows and submits.
+    const pickedContact = useRef<PickedContact | null>(null);
+
+    const seedFromContact = (form: LeadFormState, contact: PickedContact): LeadFormState => {
+        if (prePickForm.current === null) prePickForm.current = form;
+        return prefillLeadFromContact(form, contact);
+    };
+
+    const pickContact = (contact: PickedContact | null) => {
+        setContactLoadFailed(false);
+        const previous = pickedContact.current;
+
+        if (!contact) {
+            // Only the fields still holding this contact's details go back —
+            // anything typed over since is the user's and stays.
+            const baseline = prePickForm.current;
+            if (previous && baseline) {
+                setForm((prev) => revertLeadFromContact(prev, previous, baseline));
+            }
+            pickedContact.current = null;
+            prePickForm.current = null;
+            setFromContact(null);
+            return;
+        }
+
+        // Swapping contacts: undo the old one's fields first so the new
+        // contact is what fills them, not a leftover from the last pick.
+        const baseline = prePickForm.current;
+        const start = previous && baseline
+            ? revertLeadFromContact(form, previous, baseline)
+            : form;
+
+        pickedContact.current = contact;
+        setForm(seedFromContact(start, contact));
+        setFromContact({ id: contact.id, name: contact.name });
+    };
+
+    // Set by "Convert to lead" on a contact: the form starts from that contact
+    // and the lead is filed against it. Keyed on `contactId` alone — the
+    // prefill belongs to whichever contact the URL named on arrival, not to
+    // every later keystroke.
     useEffect(() => {
         if (!contactId) return;
         let cancelled = false;
         api.getContact(contactId)
             .then((contact: any) => {
                 if (cancelled || !contact?.id) return;
+                setContactLoadFailed(false);
+                pickedContact.current = contact;
+                setForm((prev) => seedFromContact(prev, contact));
                 setFromContact({ id: contact.id, name: String(contact.name ?? '') });
-                setForm((prev) => prefillLeadFromContact(prev, contact));
             })
             .catch(() => {
                 if (!cancelled) setContactLoadFailed(true);
             });
         return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [contactId]);
 
     useEffect(() => {
@@ -139,20 +191,24 @@ function NewLeadForm() {
                 )}
             />
 
-            {fromContact && (
-                <p className="text-xs text-gray-500">
-                    {convert.linkedTo.split('{name}')[0]}
-                    <Link href={routes.crm.contactDetail(fromContact.id)} className="text-blue-600 hover:underline">
-                        {fromContact.name}
-                    </Link>
-                    {convert.linkedTo.split('{name}')[1] ?? ''}
-                </p>
-            )}
-            {contactLoadFailed && (
-                <p role="alert" className="text-xs text-amber-700">{convert.loadFailed}</p>
-            )}
-
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+                <div className="mb-4">
+                    <LeadContactPicker
+                        selected={fromContact}
+                        onPick={pickContact}
+                        error={contactLoadFailed ? convert.loadFailed : undefined}
+                        hint={fromContact && (
+                            <span>
+                                {convert.linkedTo.split('{name}')[0]}
+                                <Link href={routes.crm.contactDetail(fromContact.id)} className="text-blue-600 hover:underline">
+                                    {fromContact.name}
+                                </Link>
+                                {convert.linkedTo.split('{name}')[1] ?? ''}
+                            </span>
+                        )}
+                    />
+                </div>
+
                 <LeadFormFields
                     form={form}
                     onChange={setForm}

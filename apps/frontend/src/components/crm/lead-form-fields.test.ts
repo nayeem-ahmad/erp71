@@ -1,4 +1,4 @@
-import { emptyLeadForm, leadFormToPayload, leadToFormState, prefillLeadFromContact, selectLeadStage, setLeadOwner, validateLeadForm } from './lead-form-fields';
+import { emptyLeadForm, leadFormToPayload, leadToFormState, prefillLeadFromContact, revertLeadFromContact, selectLeadStage, setLeadOwner, validateLeadForm } from './lead-form-fields';
 
 describe('lead photo fields', () => {
     it('starts empty', () => {
@@ -219,5 +219,51 @@ describe('prefillLeadFromContact', () => {
         expect(form.name).toBe('Karim Traders deal');
         expect(form.email).toBe('sales@karim.example');
         expect(form.mobile).toBe('01712-345678');
+    });
+});
+
+describe('revertLeadFromContact', () => {
+    const contact = {
+        name: 'Karim Uddin',
+        mobile: '01712-345678',
+        email: 'karim@shop.com',
+        address: 'Mirpur, Dhaka',
+        assigned_to: 'user-2',
+    };
+
+    it('puts back the fields the contact filled once it is unlinked', () => {
+        const baseline = setLeadOwner(emptyLeadForm(), 'me');
+        const seeded = prefillLeadFromContact(baseline, contact);
+
+        const reverted = revertLeadFromContact(seeded, contact, baseline);
+
+        expect(reverted.name).toBe('');
+        expect(reverted.mobile).toBe('');
+        expect(reverted.email).toBe('');
+        expect(reverted.address).toBe('');
+        expect(reverted.assigned_to).toBe('me');
+    });
+
+    it('keeps whatever the user typed over, which is no longer the contact\'s value', () => {
+        const baseline = emptyLeadForm();
+        const seeded = prefillLeadFromContact(baseline, contact);
+        const edited = { ...seeded, name: 'Karim Traders deal', mobile: '01999-000111' };
+
+        const reverted = revertLeadFromContact(edited, contact, baseline);
+
+        expect(reverted.name).toBe('Karim Traders deal');
+        expect(reverted.mobile).toBe('01999-000111');
+        expect(reverted.email).toBe('');
+    });
+
+    it('leaves fields the contact never supplied alone', () => {
+        const baseline = emptyLeadForm();
+        const seeded = prefillLeadFromContact(baseline, { name: 'Karim Uddin' });
+        const withRemarks = { ...seeded, remarks: 'Wants 50 units by Friday' };
+
+        const reverted = revertLeadFromContact(withRemarks, { name: 'Karim Uddin' }, baseline);
+
+        expect(reverted.name).toBe('');
+        expect(reverted.remarks).toBe('Wants 50 units by Friday');
     });
 });
