@@ -24,6 +24,7 @@ export type UploadPurpose =
     | 'crm-photo'
     | 'board-background'
     | 'sprint-background'
+    | 'note-image'
     | 'avatar';
 
 /** What `POST /assets/upload-signature` returns. */

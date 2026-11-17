@@ -70,6 +70,12 @@ export type RichTextEditorProps = {
     /** Hides the "**bold**, *italic*…" line when the caller says it elsewhere. */
     hideHint?: boolean;
     /**
+     * Replaces the line under the editor that explains pasting a picture. The
+     * default speaks of task attachments; a caller whose pictures are not
+     * attachments of anything (a note) says what happens there instead.
+     */
+    pasteHint?: string;
+    /**
      * Keeps an image the user pasted and says where it landed, or returns null
      * if it could not be kept. Reporting *why* is the caller's job — it is the
      * one that knows which types and sizes it takes — and a null simply takes
@@ -231,6 +237,7 @@ export function RichTextEditor({
     onCancel,
     showActions,
     hideHint,
+    pasteHint,
     uploadImage,
     onImageDiscarded,
     onUploadingChange,
@@ -674,7 +681,7 @@ export function RichTextEditor({
                     tries on the chance that it works. */}
                 {!hideHint || uploadImage ? (
                     <p className="text-xs text-gray-500">
-                        {[hideHint ? null : m.hint, uploadImage ? m.pasteImage : null]
+                        {[hideHint ? null : m.hint, uploadImage ? (pasteHint ?? m.pasteImage) : null]
                             .filter(Boolean)
                             .join(' ')}
                     </p>

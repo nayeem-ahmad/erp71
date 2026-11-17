@@ -91,7 +91,9 @@ import {
     Factory,
     Timer,
     Warehouse,
+    StickyNote,
     Video,
+    Wrench,
 } from 'lucide-react';
 
 export const NAV_ICON_MAP: Record<string, LucideIcon> = {
@@ -186,7 +188,9 @@ export const NAV_ICON_MAP: Record<string, LucideIcon> = {
     Briefcase,
     UserSearch,
     Menu,
+    StickyNote,
     Video,
+    Wrench,
 };
 
 export function resolveNavIcon(name: string): LucideIcon {

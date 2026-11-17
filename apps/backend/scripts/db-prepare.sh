@@ -318,6 +318,11 @@ step sync:nav-expense-heads \
 step sync:nav-meetings \
     npm run sync:nav-layout --workspace=@erp71/database -- --nodes=meetings,meetings.list,meetings.actions,meetings.actions-all
 
+# Tools (Notes) is a new top-level utility module. Same reason as Meetings: a
+# saved sidebar never shows it until these ids are merged in. Idempotent.
+step sync:nav-tools \
+    npm run sync:nav-layout --workspace=@erp71/database -- --nodes=tools,tools.notes
+
 # ---- After db push: fill what the schema just gained -----------------------
 
 # db:seed:platform — NOT db:seed. This runs unattended — before every deploy's

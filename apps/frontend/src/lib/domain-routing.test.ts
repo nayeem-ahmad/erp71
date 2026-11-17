@@ -74,6 +74,11 @@ describe('isAppOnlyPath', () => {
         expect(isAppOnlyPath('/m/abc123')).toBe(false);
     });
 
+    it('claims the Tools pages', () => {
+        expect(isAppOnlyPath('/tools')).toBe(true);
+        expect(isAppOnlyPath('/tools/notes')).toBe(true);
+    });
+
     it('leaves the public storefront and the shortener alone', () => {
         expect(isAppOnlyPath('/store/rahim-electronics')).toBe(false);
         expect(isAppOnlyPath('/q/abc123')).toBe(false);
