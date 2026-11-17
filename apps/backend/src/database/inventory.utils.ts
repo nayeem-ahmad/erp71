@@ -387,7 +387,7 @@ export async function applyInventoryMovement(
     // skip the movement/stock update entirely rather than failing on missing stock rows.
     const product = await tx.product.findUnique({
         where: { id: productId },
-        select: { type: true },
+        select: { type: true, name: true },
     });
     if (product?.type === 'SERVICE') {
         return 0;
@@ -445,7 +445,9 @@ export async function applyInventoryMovement(
             negativeAllowed = await tenantAllowsNegativeStock(tx, tenantId, movementType);
 
             if (!negativeAllowed) {
-                throw new BadRequestException(`Insufficient stock for product ${productId}`);
+                throw new BadRequestException(
+                    `Insufficient stock for product "${product?.name ?? productId}"`,
+                );
             }
 
             updateResult = await decrement(false);

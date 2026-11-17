@@ -396,7 +396,7 @@ describe('Sidebar — Story 30.1', () => {
         fireEvent.click(screen.getByText('Inventory'));
         fireEvent.click(screen.getByText('Inventory Reports'));
         expect(screen.queryByText('Reorder Report')).not.toBeInTheDocument();
-        expect(screen.queryByText('Shrinkage Report')).not.toBeInTheDocument();
+        expect(screen.queryByText('Stock Discrepancy Report')).not.toBeInTheDocument();
         expect(screen.getByText('Stock Ledger')).toBeInTheDocument();
     });
 

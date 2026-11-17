@@ -239,6 +239,9 @@ export const inventoryExtrasMessages = {
             availableInWarehouse: "এখানে মজুত: {qty}",
             exceedsStock: "মজুদের চেয়ে বেশি",
             quantityExceedsStock: "এই গুদামে মাত্র {qty} আছে।",
+            unitCost: "প্রতি একক খরচ",
+            deleteTitle: "এই এন্ট্রিটি মুছবেন?",
+            deleteDescription: "{reference} মুছে ফেললে এর স্টক ফিরে যাবে এবং এটি যে ভাউচার তৈরি করেছিল তা বাতিল হবে। এটি ফিরিয়ে আনা যাবে না।",
         listUi: {
             statsLabel: "সঙ্কোচনের সারাংশ",
             total: "এন্ট্রি",

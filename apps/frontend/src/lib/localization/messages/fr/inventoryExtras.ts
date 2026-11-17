@@ -239,6 +239,9 @@ export const inventoryExtrasMessages = {
         "availableInWarehouse": "En stock ici : {qty}",
         "exceedsStock": "Plus que le stock disponible",
         "quantityExceedsStock": "Seulement {qty} en stock dans cet entrepôt.",
+        "unitCost": "Coût unitaire",
+        "deleteTitle": "Supprimer cette écriture ?",
+        "deleteDescription": "Supprimer {reference} remet son stock en place et annule la pièce comptable générée. Cette action est irréversible.",
     "listUi": {
         "statsLabel": "Synthèse des pertes",
         "total": "Écritures",

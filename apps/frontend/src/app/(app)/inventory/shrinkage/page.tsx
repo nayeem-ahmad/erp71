@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, Hash, PackagePlus, Plus, Scale } from 'lucide-react';
+import { AlertTriangle, Eye, Hash, PackagePlus, Pencil, Plus, Scale, Trash2 } from 'lucide-react';
 import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { warehouseLabel } from '@/lib/warehouse-label';
+import { formatBDT, formatDateTime } from '@/lib/format';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
@@ -14,10 +15,12 @@ import { PostingBadge } from '@/components/PostingBadge';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { BranchFilter, Alert, Button, Field, Input, Select, StatusBadge } from '@/components/ui';
+import { BranchFilter, Alert, Button, ConfirmDialog, Field, Input, Select, StatusBadge } from '@/components/ui';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
+import { hasPermission, isOwner } from '@/lib/permissions';
+import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { useWarehouses } from '@/lib/hooks/useWarehouses';
 import { availableQtyOf } from '@/components/document-entry/ProductSearch';
 import StockProductPicker from '@/components/document-entry/StockProductPicker';
@@ -40,6 +43,29 @@ interface ShrinkageRecord {
     warehouse?: { name: string } | null;
     reason?: { label: string } | null;
     items: Array<{ id: string; quantity: number }>;
+    posting_status?: string | null;
+    voucher_number?: string | null;
+}
+
+/** The full document behind a list row — what View shows and Edit starts from. */
+interface ShrinkageDetail {
+    id: string;
+    reference_number: string;
+    created_at: string;
+    direction?: Direction | null;
+    notes?: string | null;
+    warehouse_id: string;
+    reason_id: string;
+    warehouse?: { name: string } | null;
+    reason?: { label: string } | null;
+    items: Array<{
+        id: string;
+        product_id: string;
+        quantity: number;
+        unit_cost?: string | number | null;
+        note?: string | null;
+        product: any;
+    }>;
     posting_status?: string | null;
     voucher_number?: string | null;
 }
@@ -87,12 +113,23 @@ export default function InventoryShrinkagePage() {
     const [formOpen, setFormOpen] = useState(false);
     const [form, setForm] = useState(EMPTY_FORM);
     const [errors, setErrors] = useState<FormErrors>({ items: {} });
+    /** Set while correcting a posted entry; `null` means the form is a new one. */
+    const [editing, setEditing] = useState<{ id: string; reference: string } | null>(null);
+    const [detail, setDetail] = useState<ShrinkageDetail | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<ShrinkageRecord | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const direction = form.direction;
     const isFound = direction === 'FOUND';
 
+    // Correcting or deleting reverses stock and voids an auto-posted voucher, so
+    // those actions are hidden without CANCEL_ENTRY rather than shown and left
+    // to a 403. OWNER bypasses the guard server-side and may hold no grants.
+    const { permissions, role } = useTenantPlanFeatures();
+    const canCorrect = isOwner(role) || hasPermission(permissions, 'CANCEL_ENTRY');
+
     // The warehouse the server would resolve anyway — the tenant's configured
-    // shrinkage default, then the branch's own. Opening this form on a blank
+    // discrepancy default, then the branch's own. Opening the form on a blank
     // required select made every entry start with a choice the system already
     // knew the answer to. A one-warehouse branch never sees the control.
     const { warehouses, defaultWarehouseId, multiple: multipleWarehouses } = useWarehouses('shrinkage');
@@ -121,7 +158,7 @@ export default function InventoryShrinkagePage() {
             setRecords(data);
         } catch (error) {
             if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
-            console.error('Failed to load shrinkage records', error);
+            console.error('Failed to load discrepancies', error);
         } finally {
             setLoading(false);
         }
@@ -129,15 +166,13 @@ export default function InventoryShrinkagePage() {
 
     // Both reason catalogues in one call: the direction toggle swaps between
     // them without a round trip, and the picker is never briefly empty
-    // mid-switch. The products themselves come from the picker's own search —
-    // loading the whole catalogue here was a full page-walk for a list of
-    // twenty.
+    // mid-switch. The products themselves come from the picker's own search.
     const loadReasons = async () => {
         try {
             const reasonData = await api.getInventoryReasons();
             setReasons(reasonData.filter((reason: any) => reason.is_active));
         } catch (error) {
-            console.error('Failed to load shrinkage reasons', error);
+            console.error('Failed to load discrepancy reasons', error);
         }
     };
 
@@ -160,6 +195,7 @@ export default function InventoryShrinkagePage() {
     // close — nothing else does, since a half-typed abandoned entry reappearing
     // on the next open is how the wrong quantity gets posted.
     const openForm = () => {
+        setEditing(null);
         setForm((current) => blankForm(current.direction));
         setErrors({ items: {} });
         setFormOpen(true);
@@ -167,7 +203,45 @@ export default function InventoryShrinkagePage() {
 
     const closeForm = () => {
         setFormOpen(false);
+        setEditing(null);
         setErrors({ items: {} });
+    };
+
+    /** The posted entry behind a row, with its product stock rows for the form. */
+    const fetchRecord = async (id: string): Promise<ShrinkageDetail | null> => {
+        try {
+            return await api.getInventoryShrinkageRecord(id);
+        } catch (error: any) {
+            toast.error(error.message || t.common.loadFailed);
+            return null;
+        }
+    };
+
+    const openDetail = async (id: string) => {
+        const record = await fetchRecord(id);
+        if (record) setDetail(record);
+    };
+
+    const openEdit = async (id: string) => {
+        const record = await fetchRecord(id);
+        if (!record) return;
+
+        setEditing({ id: record.id, reference: record.reference_number });
+        setForm({
+            // The direction is fixed by the stored entry — a correction cannot
+            // turn a write-off into a surplus, and the server refuses to try.
+            direction: record.direction === 'FOUND' ? 'FOUND' : 'LOSS',
+            warehouseId: record.warehouse_id,
+            reasonId: record.reason_id,
+            notes: record.notes ?? '',
+            items: record.items.map((item) => ({
+                productId: item.product_id,
+                product: item.product,
+                quantity: item.quantity,
+            })),
+        });
+        setErrors({ items: {} });
+        setFormOpen(true);
     };
 
     const setField = (patch: Partial<typeof EMPTY_FORM>) => setForm((current) => ({ ...current, ...patch }));
@@ -179,13 +253,18 @@ export default function InventoryShrinkagePage() {
         }));
 
     /**
-     * What a line's product has on hand in the entry's warehouse. Only a
-     * write-off is bounded by it — found stock is a surplus, so there is no
-     * ceiling to check. Before a warehouse is chosen the figure is the total
-     * across every warehouse, which still beats showing nothing.
+     * What a line's product has on hand in the entry's warehouse.
+     *
+     * `null` when the figure is not known: a product picked from the search
+     * carries its stock rows, but one restored from a posted entry may not, and
+     * refusing a line on a zero we made up would be worse than letting the
+     * server refuse it. Only a write-off is bounded by it — found stock is a
+     * surplus, so there is no ceiling to check.
      */
-    const availableFor = (line: LineItem): number | null =>
-        line.product ? availableQtyOf(line.product, form.warehouseId || undefined) : null;
+    const availableFor = (line: LineItem): number | null => {
+        if (!line.product || !Array.isArray(line.product.stocks)) return null;
+        return availableQtyOf(line.product, form.warehouseId || undefined);
+    };
 
     const overStockAt = (line: LineItem): number | null => {
         if (isFound) return null;
@@ -227,7 +306,7 @@ export default function InventoryShrinkagePage() {
         return hasError ? next : null;
     };
 
-    const handleCreate = async (event: React.FormEvent) => {
+    const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
         const invalid = validate();
         setErrors(invalid ?? { items: {} });
@@ -235,23 +314,60 @@ export default function InventoryShrinkagePage() {
 
         setSaving(true);
         try {
-            await api.createInventoryShrinkage({
-                direction,
-                warehouseId: form.warehouseId,
-                reasonId: form.reasonId,
-                notes: form.notes.trim(),
-                items: form.items.map((item) => ({ productId: item.productId, quantity: Number(item.quantity) })),
-            });
-            toast.success(isFound ? t.inventoryShrinkage.foundPosted : t.inventoryShrinkage.posted);
+            const items = form.items.map((item) => ({
+                productId: item.productId,
+                quantity: Number(item.quantity),
+            }));
+
+            if (editing) {
+                // Direction and warehouse are the document's identity; only the
+                // reason, the note and the lines are sent.
+                await api.updateInventoryShrinkage(editing.id, {
+                    reasonId: form.reasonId,
+                    notes: form.notes.trim(),
+                    items,
+                });
+                toast.success(t.common.saved);
+            } else {
+                await api.createInventoryShrinkage({
+                    direction,
+                    warehouseId: form.warehouseId,
+                    reasonId: form.reasonId,
+                    notes: form.notes.trim(),
+                    items,
+                });
+                toast.success(isFound ? t.inventoryShrinkage.foundPosted : t.inventoryShrinkage.posted);
+            }
+
             setForm(blankForm(direction));
             setFormOpen(false);
+            setEditing(null);
             await loadRecords();
         } catch (error: any) {
             toast.error(
-                error.message || (isFound ? t.inventoryShrinkage.postFoundFailed : t.inventoryShrinkage.postFailed),
+                error.message
+                    || (editing
+                        ? t.common.saveFailed
+                        : isFound ? t.inventoryShrinkage.postFoundFailed : t.inventoryShrinkage.postFailed),
             );
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
+        try {
+            await api.deleteInventoryShrinkage(deleteTarget.id);
+            toast.success(t.common.deleted);
+            setDeleteTarget(null);
+            if (detail?.id === deleteTarget.id) setDetail(null);
+            await loadRecords();
+        } catch (error: any) {
+            toast.error(error.message || t.common.deleteFailed);
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -292,8 +408,50 @@ export default function InventoryShrinkagePage() {
                 ),
                 size: 120,
             }),
+            columnHelper.display({
+                id: 'actions',
+                header: t.common.actions,
+                cell: ({ row }) => (
+                    <div className="flex items-center gap-1">
+                        <button
+                            type="button"
+                            onClick={() => void openDetail(row.original.id)}
+                            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                            title={t.common.view}
+                            aria-label={t.common.view}
+                        >
+                            <Eye className="h-4 w-4" />
+                        </button>
+                        {canCorrect ? (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => void openEdit(row.original.id)}
+                                    className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                                    title={t.common.edit}
+                                    aria-label={t.common.edit}
+                                >
+                                    <Pencil className="h-4 w-4" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setDeleteTarget(row.original)}
+                                    className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                    title={t.common.delete}
+                                    aria-label={t.common.delete}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            </>
+                        ) : null}
+                    </div>
+                ),
+                enableSorting: false,
+                enableResizing: false,
+                size: 120,
+            }),
         ],
-        [t],
+        [t, canCorrect],
     );
 
     const filters = useMemo<ListFilter[]>(() => [
@@ -327,6 +485,10 @@ export default function InventoryShrinkagePage() {
         ];
         return { items, loading, label: listUi.statsLabel };
     }, [records, loading, locale, listUi, t]);
+
+    const detailValue = detail
+        ? detail.items.reduce((sum, item) => sum + Number(item.unit_cost ?? 0) * item.quantity, 0)
+        : 0;
 
     return (
         <PageShell>
@@ -365,9 +527,118 @@ export default function InventoryShrinkagePage() {
                     viewOptions
                 />
 
+                {detail ? (
+                    <ModalShell size="lg" onBackdropClick={() => setDetail(null)}>
+                        <ModalHeader
+                            title={(
+                                <span className="inline-flex items-center gap-2">
+                                    {detail.direction === 'FOUND' ? (
+                                        <PackagePlus className="w-5 h-5 text-blue-600" />
+                                    ) : (
+                                        <AlertTriangle className="w-5 h-5 text-danger" />
+                                    )}
+                                    {detail.reference_number}
+                                </span>
+                            )}
+                            onClose={() => setDetail(null)}
+                            closeLabel={t.common.close}
+                        />
+
+                        <div className="flex-1 space-y-4 overflow-y-auto p-4">
+                            <div className="grid gap-3 md:grid-cols-2">
+                                <div>
+                                    <p className="text-xs font-medium text-gray-600">{t.inventoryShrinkage.columns.direction}</p>
+                                    <p className="mt-1 text-sm">
+                                        {detail.direction === 'FOUND'
+                                            ? t.inventoryShrinkage.directionFound
+                                            : t.inventoryShrinkage.directionLoss}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium text-gray-600">{t.inventoryShrinkage.columns.warehouse}</p>
+                                    <p className="mt-1 text-sm">{detail.warehouse?.name || '-'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium text-gray-600">{t.inventoryShrinkage.columns.reason}</p>
+                                    <p className="mt-1 text-sm">{detail.reason?.label || '-'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium text-gray-600">{t.common.createdAt}</p>
+                                    <p className="mt-1 text-sm">{formatDateTime(detail.created_at, locale)}</p>
+                                </div>
+                            </div>
+
+                            <div>
+                                <p className="text-xs font-medium text-gray-600">{t.inventoryShrinkage.notes}</p>
+                                <p className="mt-1 whitespace-pre-wrap text-sm text-gray-900">{detail.notes || '-'}</p>
+                            </div>
+
+                            <div className="overflow-hidden rounded border border-gray-200">
+                                <table className="w-full text-sm">
+                                    <thead className="bg-gray-50 text-xs text-gray-500">
+                                        <tr>
+                                            <th className="px-3 py-2 text-start font-medium">{t.inventoryShrinkage.selectProduct}</th>
+                                            <th className="px-3 py-2 text-end font-medium">{t.inventoryShrinkage.columns.totalQty}</th>
+                                            <th className="px-3 py-2 text-end font-medium">{t.inventoryShrinkage.unitCost}</th>
+                                            <th className="px-3 py-2 text-end font-medium">{t.common.amount}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {detail.items.map((item) => (
+                                            <tr key={item.id} className="border-t border-gray-100">
+                                                <td className="px-3 py-2">
+                                                    <div className="text-gray-900">{item.product?.name ?? item.product_id}</div>
+                                                    {item.note ? <div className="text-xs text-gray-500">{item.note}</div> : null}
+                                                </td>
+                                                <td className="px-3 py-2 text-end tabular-nums">{item.quantity}</td>
+                                                <td className="px-3 py-2 text-end tabular-nums">
+                                                    {item.unit_cost == null ? '-' : formatBDT(Number(item.unit_cost), { locale })}
+                                                </td>
+                                                <td className="px-3 py-2 text-end tabular-nums">
+                                                    {formatBDT(Number(item.unit_cost ?? 0) * item.quantity, { locale })}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot className="bg-gray-50">
+                                        <tr className="border-t border-gray-200">
+                                            <td className="px-3 py-2 font-medium text-gray-700" colSpan={3}>{t.common.total}</td>
+                                            <td className="px-3 py-2 text-end font-semibold tabular-nums">{formatBDT(detailValue, { locale })}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+
+                            {detail.voucher_number ? (
+                                <p className="text-xs text-gray-500">
+                                    {t.inventoryShrinkage.columns.voucher}: {detail.voucher_number}
+                                </p>
+                            ) : null}
+                        </div>
+
+                        <ModalFooter>
+                            <Button variant="secondary" onClick={() => setDetail(null)}>
+                                {t.common.close}
+                            </Button>
+                            {canCorrect ? (
+                                <Button
+                                    onClick={() => {
+                                        const id = detail.id;
+                                        setDetail(null);
+                                        void openEdit(id);
+                                    }}
+                                    icon={<Pencil className="w-4 h-4" />}
+                                >
+                                    {t.common.edit}
+                                </Button>
+                            ) : null}
+                        </ModalFooter>
+                    </ModalShell>
+                ) : null}
+
                 {formOpen ? (
                     <ModalShell size="lg" onBackdropClick={closeForm}>
-                        <form onSubmit={handleCreate} className="flex min-h-0 flex-1 flex-col" noValidate>
+                        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
                             <ModalHeader
                                 title={(
                                     <span className="inline-flex items-center gap-2">
@@ -376,7 +647,11 @@ export default function InventoryShrinkagePage() {
                                         ) : (
                                             <AlertTriangle className="w-5 h-5 text-danger" />
                                         )}
-                                        {isFound ? t.inventoryShrinkage.newFoundEntry : t.inventoryShrinkage.newEntry}
+                                        {editing
+                                            ? `${t.common.edit} · ${editing.reference}`
+                                            : isFound
+                                                ? t.inventoryShrinkage.newFoundEntry
+                                                : t.inventoryShrinkage.newEntry}
                                     </span>
                                 )}
                                 onClose={closeForm}
@@ -398,6 +673,10 @@ export default function InventoryShrinkagePage() {
                                         <Select
                                             id="shrinkage-direction"
                                             value={direction}
+                                            // Direction decides the reference series and the
+                                            // sign of every movement, so a posted entry
+                                            // keeps the one it was written with.
+                                            disabled={Boolean(editing)}
                                             // The reason catalogues are disjoint, so a reason
                                             // picked for one direction is never valid for the
                                             // other — clear it rather than post a mismatch.
@@ -409,7 +688,7 @@ export default function InventoryShrinkagePage() {
                                             <option value="FOUND">{t.inventoryShrinkage.directionFound}</option>
                                         </Select>
                                     </Field>
-                                    {multipleWarehouses ? (
+                                    {multipleWarehouses && !editing ? (
                                         <Field
                                             label={t.inventoryShrinkage.columns.warehouse}
                                             required
@@ -567,12 +846,32 @@ export default function InventoryShrinkagePage() {
                                     {t.common.cancel}
                                 </Button>
                                 <Button type="submit" variant={isFound ? 'primary' : 'danger'} loading={saving}>
-                                    {isFound ? t.inventoryShrinkage.postFound : t.inventoryShrinkage.postShrinkage}
+                                    {editing
+                                        ? t.common.saveChanges
+                                        : isFound
+                                            ? t.inventoryShrinkage.postFound
+                                            : t.inventoryShrinkage.postShrinkage}
                                 </Button>
                             </ModalFooter>
                         </form>
                     </ModalShell>
                 ) : null}
+
+                <ConfirmDialog
+                    open={Boolean(deleteTarget)}
+                    title={t.inventoryShrinkage.deleteTitle}
+                    prompt={t.inventoryShrinkage.deleteDescription.replace(
+                        '{reference}',
+                        deleteTarget?.reference_number ?? '',
+                    )}
+                    confirmLabel={t.common.delete}
+                    cancelLabel={t.common.cancel}
+                    workingLabel={t.common.delete}
+                    loading={deleting}
+                    danger
+                    onConfirm={() => void handleDelete()}
+                    onCancel={() => setDeleteTarget(null)}
+                />
     </PageShell>
     );
 }

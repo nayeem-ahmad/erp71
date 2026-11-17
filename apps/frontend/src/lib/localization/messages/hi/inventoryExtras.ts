@@ -239,6 +239,9 @@ export const inventoryExtrasMessages = {
         "availableInWarehouse": "यहाँ उपलब्ध: {qty}",
         "exceedsStock": "उपलब्ध से अधिक",
         "quantityExceedsStock": "इस गोदाम में केवल {qty} उपलब्ध है।",
+        "unitCost": "इकाई लागत",
+        "deleteTitle": "यह प्रविष्टि हटाएँ?",
+        "deleteDescription": "{reference} हटाने से इसका स्टॉक वापस आ जाएगा और इससे बना वाउचर उलट दिया जाएगा। इसे पूर्ववत नहीं किया जा सकता।",
     "listUi": {
         "statsLabel": "सिकुड़न सारांश",
         "total": "प्रविष्टियाँ",

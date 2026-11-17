@@ -239,6 +239,9 @@ export const inventoryExtrasMessages = {
         "availableInWarehouse": "المتوفر هنا: {qty}",
         "exceedsStock": "أكثر مما هو متوفر",
         "quantityExceedsStock": "المتوفر في هذا المستودع {qty} فقط.",
+        "unitCost": "تكلفة الوحدة",
+        "deleteTitle": "حذف هذا القيد؟",
+        "deleteDescription": "حذف {reference} يعيد مخزونه ويعكس القيد المحاسبي الذي أنشأه. لا يمكن التراجع عن ذلك.",
     "listUi": {
         "statsLabel": "ملخص الفاقد",
         "total": "القيود",

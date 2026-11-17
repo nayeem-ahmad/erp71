@@ -112,7 +112,7 @@ The sidebar on the left contains all modules. On mobile, tap the **☰ hamburger
 
 - **Sales** — POS, Sales, Orders, Quotes, Returns
 - **Purchases** — Purchases, Purchase Orders, RFQs, Returns
-- **Inventory** — Products, Stock Takes, Transfers, Shrinkage
+- **Inventory** — Products, Stock Takes, Transfers, Stock Discrepancy
 - **Customers** — Customers, Groups, CRM Tasks, Campaigns
 - **Accounting** — COA, Vouchers, Reports
 - **HR** — Employees, Attendance, Leave
@@ -361,13 +361,13 @@ A stock take reconciles physical shelf counts against system quantities.
 
 > **Note:** Posting cannot be undone without a reversing adjustment. Always double-check large variances before posting.
 
-### 5.7 Shrinkage and Found Stock
+### 5.7 Stock Discrepancy and Found Stock
 
-Both sides of a count that does not match the book are recorded from **Inventory → Shrinkage**. Pick the entry type at the top of the form:
+Both sides of a count that does not match the book are recorded from **Inventory → Stock Discrepancy**. Pick the entry type at the top of the form:
 
 | Entry type | Use it when | Effect |
 |------------|-------------|--------|
-| **Stock lost (shrinkage)** | Goods are damaged, expired, or stolen | Deducts stock, numbered `SHR-00001` |
+| **Stock lost** | Goods are damaged, expired, or stolen | Deducts stock, numbered `SHR-00001` |
 | **Stock found (extra)** | The shelf holds more than the book says | Adds stock back, numbered `FND-00001` |
 
 A **reason and a note are both required** on every entry. The reason comes from your own catalogue (**Inventory → Settings → Reason Catalog**), and each entry type has its own list — "Theft" can explain missing stock, never extra stock. The note is the only evidence behind the entry, so write what happened and who checked: *"crushed by forklift, bay 3, photos with Rahim"*, not just *"damage"*.
@@ -376,7 +376,9 @@ A **reason and a note are both required** on every entry. The reason comes from 
 
 Found stock joins your inventory at the average cost the rest of that product is already held at, so putting it back never changes what your stock is worth per unit.
 
-View the **Shrinkage Report** to track losses over time; switch its direction filter to **Stock found** to review surpluses separately. The two are never added together — a loss and a gain netted against each other would hide both.
+A posted entry can be **corrected** or **deleted** from the list by someone holding the *Cancel entries* permission. A correction returns the old lines' stock, applies the corrected ones and re-posts the voucher; a delete returns the stock and reverses the voucher. Neither is available once the entry's voucher sits in a closed fiscal period.
+
+View the **Stock Discrepancy Report** to track losses over time; switch its direction filter to **Stock found** to review surpluses separately. The two are never added together — a loss and a gain netted against each other would hide both.
 
 ### 5.8 Product Labels
 
@@ -392,7 +394,7 @@ Print barcode or price labels from **Inventory → Labels**:
 |--------|----------|--------------|
 | Stock Valuation | Inventory → Reports → Valuation | Total value of on-hand stock by product/category |
 | Reorder Report | Inventory → Reports → Reorder | Products at or below reorder point |
-| Shrinkage Report | Inventory → Reports → Shrinkage | Recorded stock losses by category and reason |
+| Stock Discrepancy Report | Inventory → Reports → Stock Discrepancy | Recorded stock losses by category and reason |
 | Inventory Ledger | Inventory → Ledger | Full movement log (in/out) per product |
 
 ---
