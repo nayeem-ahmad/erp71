@@ -83,6 +83,21 @@ describe('KpiScorecardView', () => {
         expect(screen.queryByTestId('kpi-quick_ratio')).not.toBeInTheDocument();
     });
 
+    it('says the platform is not burning cash instead of a burn multiple', async () => {
+        const load = jest.fn().mockResolvedValue({
+            ...scorecard(),
+            audience: KpiAudience.PLATFORM,
+            kpis: KPI_DEFINITIONS.map((d) => (d.id === 'burn_multiple'
+                ? ok('burn_multiple', null, null, { notes: ['ledger_based', 'subscription_mrr', 'not_burning'] })
+                : unavailableKpiResult(d.id, KpiAudience.PLATFORM))),
+        });
+        render(<KpiScorecardView audience={KpiAudience.PLATFORM} title="t" subtitle="s" breadcrumbs={[]} load={load} />);
+
+        const burn = await screen.findByTestId('kpi-burn_multiple');
+        expect(within(burn).getByText('Not burning cash')).toBeInTheDocument();
+        expect(within(burn).getByText(/Cash grew over the period/)).toBeInTheDocument();
+    });
+
     it('warns when vouchers awaiting approval are left out of the books', async () => {
         renderView({ ...scorecard(), unpostedVouchers: 3 });
         expect(await screen.findByText(/3 vouchers are waiting for approval/)).toBeInTheDocument();

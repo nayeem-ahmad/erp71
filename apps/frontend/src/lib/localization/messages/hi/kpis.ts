@@ -30,6 +30,7 @@ export const kpisMessages = {
         noData: "इस अवधि में पर्याप्त डेटा नहीं",
         planned: "चरण {phase} में आ रहा है",
         cashPositive: "नकदी-सकारात्मक",
+        notBurning: "नकदी खर्च नहीं हो रही",
     },
     units: {
         months: "{value} माह",
@@ -59,6 +60,9 @@ export const kpisMessages = {
         trailing_three_months: "बर्न अवधि के अंत तक के तीन महीनों का औसत है।",
         signup_to_activation: "वर्कस्पेस साइनअप से पहले सशुल्क सक्रियण तक मापा जाता है।",
         platform_workspace_staff: "प्लेटफ़ॉर्म टीम के HR रिकॉर्ड से।",
+        subscription_mrr: "सब्सक्रिप्शन MRR से — हर टेनेंट की छूट के बाद, वार्षिक शुल्क ÷ 12, ऐड-ऑन सहित।",
+        mrr_history_short: "MRR का इतिहास अभी इस अवधि की शुरुआत तक नहीं पहुँचता।",
+        not_burning: "इस अवधि में नकदी बढ़ी, इसलिए कोई नकदी खर्च नहीं हुई।",
     },
     basis: {
         revenue: "राजस्व",
@@ -88,6 +92,16 @@ export const kpisMessages = {
         averageHeadcount: "औसत कर्मचारी संख्या",
         creditSales: "उधार बिक्री",
         periodDays: "अवधि के दिन",
+        startingMrr: "शुरुआत में MRR",
+        endingMrr: "अंत में MRR",
+        newMrr: "नया MRR",
+        expansionMrr: "विस्तार MRR",
+        contractionMrr: "संकुचन MRR",
+        churnedMrr: "खोया MRR",
+        reactivationMrr: "पुनः सक्रिय MRR",
+        payingTenants: "भुगतान करने वाले वर्कस्पेस",
+        netBurn: "शुद्ध नकदी खर्च",
+        netNewArr: "शुद्ध नया ARR",
     },
     items: {
         revenue_growth: {

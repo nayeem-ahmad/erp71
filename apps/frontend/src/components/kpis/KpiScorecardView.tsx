@@ -47,7 +47,12 @@ const MONEY_INPUTS = new Set([
     'revenue', 'previousRevenue', 'grossProfit', 'costedRevenue', 'netProfit', 'investing', 'financing',
     'netChange', 'cashOnHand', 'monthlyBurn', 'monthlyGrossProfitPerCustomer', 'retainedRevenue',
     'startingRevenue', 'namedRevenue', 'averageBasket', 'creditSales',
+    'startingMrr', 'endingMrr', 'newMrr', 'expansionMrr', 'contractionMrr', 'churnedMrr', 'reactivationMrr',
+    'netBurn', 'netNewArr',
 ]);
+
+/** Notes that mean the figure is incomplete, shown in the warning colour. */
+const WARNING_NOTES = new Set<string>(['partly_costed', 'books_unavailable', 'mrr_history_short']);
 
 type Copy = ReturnType<typeof useI18n>['t']['kpis'];
 
@@ -66,6 +71,7 @@ function useKpiFormat() {
     const value = useCallback((definition: KpiDefinition, result: KpiResult): string => {
         if (result.value === null) {
             if (result.status === 'ok' && result.notes.includes('cash_positive')) return copy.status.cashPositive;
+            if (result.status === 'ok' && result.notes.includes('not_burning')) return copy.status.notBurning;
             return '—';
         }
         switch (definition.unit) {
@@ -158,7 +164,7 @@ export function KpiTile({ result }: { result: KpiResult }) {
                     {result.notes.length > 0 ? (
                         <ul className="mt-1 space-y-0.5 text-xs text-gray-500">
                             {result.notes.map((note) => (
-                                <li key={note} className={note === 'partly_costed' || note === 'books_unavailable' ? 'text-amber-700' : undefined}>
+                                <li key={note} className={WARNING_NOTES.has(note) ? 'text-amber-700' : undefined}>
                                     {copy.notes[note]}
                                 </li>
                             ))}

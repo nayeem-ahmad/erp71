@@ -49,7 +49,7 @@ export type KpiUnit = 'percent' | 'money' | 'months' | 'days' | 'ratio' | 'score
 
 /** What has to be built before a planned KPI can be computed. */
 export type KpiGap =
-  /** A log of subscription MRR changes (new, expansion, contraction, churn). */
+  /** A log of subscription MRR changes (new, expansion, contraction, churn). Delivered in phase 2. */
   | 'mrr_history'
   /** Expenses tagged as marketing, cost of service, interest, tax, depreciation. */
   | 'expense_classification'
@@ -87,15 +87,15 @@ export const KPI_DEFINITIONS: readonly KpiDefinition[] = [
   { id: 'customer_acquisition_cost', number: 6, unit: 'money', higherIsBetter: false, availability: { tenant: planned(3, 'expense_classification'), platform: planned(3, 'expense_classification') } },
   { id: 'customer_lifetime_value', number: 7, unit: 'money', higherIsBetter: true, availability: { tenant: LIVE, platform: planned(3, 'expense_classification') } },
   { id: 'ltv_to_cac', number: 8, unit: 'ratio', higherIsBetter: true, availability: { tenant: planned(3, 'expense_classification'), platform: planned(3, 'expense_classification') } },
-  { id: 'net_revenue_retention', number: 9, unit: 'percent', higherIsBetter: true, availability: { tenant: LIVE, platform: planned(2, 'mrr_history') } },
-  { id: 'churn_rate', number: 10, unit: 'percent', higherIsBetter: false, availability: { tenant: LIVE, platform: planned(2, 'mrr_history') } },
-  { id: 'avg_revenue_per_account', number: 11, unit: 'money', higherIsBetter: true, availability: { tenant: LIVE, platform: planned(2, 'mrr_history') } },
-  { id: 'burn_multiple', number: 12, unit: 'ratio', higherIsBetter: false, availability: { tenant: NOT_APPLICABLE, platform: planned(2, 'mrr_history') } },
+  { id: 'net_revenue_retention', number: 9, unit: 'percent', higherIsBetter: true, availability: { tenant: LIVE, platform: LIVE } },
+  { id: 'churn_rate', number: 10, unit: 'percent', higherIsBetter: false, availability: { tenant: LIVE, platform: LIVE } },
+  { id: 'avg_revenue_per_account', number: 11, unit: 'money', higherIsBetter: true, availability: { tenant: LIVE, platform: LIVE } },
+  { id: 'burn_multiple', number: 12, unit: 'ratio', higherIsBetter: false, availability: { tenant: NOT_APPLICABLE, platform: LIVE } },
   { id: 'sales_cycle_length', number: 13, unit: 'days', higherIsBetter: false, availability: { tenant: LIVE, platform: LIVE } },
   { id: 'employee_turnover', number: 14, unit: 'percent', higherIsBetter: false, availability: { tenant: LIVE, platform: LIVE } },
   { id: 'net_promoter_score', number: 15, unit: 'score', higherIsBetter: true, availability: { tenant: planned(4, 'nps_survey'), platform: planned(4, 'nps_survey') } },
   { id: 'days_sales_outstanding', number: 16, unit: 'days', higherIsBetter: false, availability: { tenant: LIVE, platform: LIVE } },
-  { id: 'quick_ratio', number: 17, unit: 'ratio', higherIsBetter: true, availability: { tenant: NOT_APPLICABLE, platform: planned(2, 'mrr_history') } },
+  { id: 'quick_ratio', number: 17, unit: 'ratio', higherIsBetter: true, availability: { tenant: NOT_APPLICABLE, platform: LIVE } },
   { id: 'ebitda', number: 18, unit: 'money', higherIsBetter: true, availability: { tenant: planned(3, 'expense_classification'), platform: planned(3, 'expense_classification') } },
 ];
 
@@ -132,7 +132,13 @@ export type KpiNote =
   /** Measured from workspace signup to first paid activation. */
   | 'signup_to_activation'
   /** Taken from the platform team's own HR records. */
-  | 'platform_workspace_staff';
+  | 'platform_workspace_staff'
+  /** Subscription MRR after each tenant's discount, yearly fees ÷ 12, add-ons included. */
+  | 'subscription_mrr'
+  /** The MRR history does not reach back to the start of this period. */
+  | 'mrr_history_short'
+  /** Cash grew over the period, so nothing was burned. */
+  | 'not_burning';
 
 export interface KpiResult {
   id: KpiId;

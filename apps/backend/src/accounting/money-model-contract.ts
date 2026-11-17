@@ -198,6 +198,7 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     },
     { model: 'SubscriptionPlan', exempt: 'Platform plan catalog.' },
     { model: 'TenantSubscription', exempt: 'Platform subscription record.' },
+    { model: 'TenantMrrSnapshot', exempt: 'Derived reporting figure: a tenant\'s MRR on a day, recomputed from TenantSubscription for the platform KPIs. No money moves; fees are BillingEvents.' },
     // An unverified claim that money was sent, not the money itself. Approving one
     // writes the BillingEvent above, and that row is what reaches the platform
     // books — which is the whole reason this is a separate table.

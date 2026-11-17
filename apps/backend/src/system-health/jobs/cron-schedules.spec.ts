@@ -74,9 +74,10 @@ describe('scheduled jobs', () => {
     const methods = scheduledMethods();
 
     it('finds every @Cron in the backend', () => {
-        // 25 tracked jobs, plus external sync, the platform ledger sync and the
-        // two blog publishers. A new one should land in the table in job-names.ts.
-        expect(methods).toHaveLength(29);
+        // 26 tracked jobs (the platform MRR snapshot joined 2026-11-17), plus
+        // external sync, the platform ledger sync and the two blog publishers.
+        // A new one should land in the table in job-names.ts.
+        expect(methods).toHaveLength(30);
     });
 
     it('runs every @Cron on Bangladesh time', () => {

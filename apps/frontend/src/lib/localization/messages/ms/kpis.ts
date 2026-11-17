@@ -30,6 +30,7 @@ export const kpisMessages = {
         noData: "Data tidak mencukupi dalam tempoh ini",
         planned: "Akan datang dalam fasa {phase}",
         cashPositive: "Tunai positif",
+        notBurning: "Tiada pembakaran tunai",
     },
     units: {
         months: "{value} bln",
@@ -59,6 +60,9 @@ export const kpisMessages = {
         trailing_three_months: "Pembakaran tunai ialah purata tiga bulan yang berakhir dengan tempoh ini.",
         signup_to_activation: "Diukur dari pendaftaran ruang kerja hingga pengaktifan berbayar pertama.",
         platform_workspace_staff: "Daripada rekod HR pasukan platform.",
+        subscription_mrr: "Daripada MRR langganan selepas diskaun setiap penyewa, yuran tahunan ÷ 12, termasuk tambahan.",
+        mrr_history_short: "Sejarah MRR belum lagi sampai ke permulaan tempoh ini.",
+        not_burning: "Tunai meningkat dalam tempoh ini, jadi tiada tunai dibakar.",
     },
     basis: {
         revenue: "Hasil",
@@ -88,6 +92,16 @@ export const kpisMessages = {
         averageHeadcount: "Purata bilangan kakitangan",
         creditSales: "Jualan kredit",
         periodDays: "Hari dalam tempoh",
+        startingMrr: "MRR pada permulaan",
+        endingMrr: "MRR pada penghujung",
+        newMrr: "MRR baharu",
+        expansionMrr: "MRR pengembangan",
+        contractionMrr: "MRR penguncupan",
+        churnedMrr: "MRR hilang",
+        reactivationMrr: "MRR diaktifkan semula",
+        payingTenants: "Ruang kerja berbayar",
+        netBurn: "Pembakaran tunai bersih",
+        netNewArr: "ARR baharu bersih",
     },
     items: {
         revenue_growth: {
