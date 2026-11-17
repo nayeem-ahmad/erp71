@@ -587,6 +587,8 @@ export const crmHrMessages = {
                 lostReasonRequired: 'Sila nyatakan sebab prospek ini hilang.',
             },
             fields: {
+                contact: 'Kenalan',
+                contactPlaceholder: 'Cari kenalan mengikut nama, syarikat atau telefon…',
                 mobile: 'Mudah Alih',
                 email: 'E-mel',
                 address: 'Alamat',

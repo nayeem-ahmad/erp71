@@ -587,6 +587,8 @@ export const crmHrMessages = {
                 lostReasonRequired: 'Please provide a reason for marking this lead as lost.',
             },
             fields: {
+                contact: 'Contact',
+                contactPlaceholder: 'Search contacts by name, company, or phone…',
                 mobile: 'Mobile',
                 email: 'Email',
                 address: 'Address',

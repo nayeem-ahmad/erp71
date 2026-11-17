@@ -73,7 +73,7 @@ const APP_PAGES: AppPage[] = [
     { path: '/inventory/reports/reorder', label: 'Reorder / Low Stock', description: 'items at or below their reorder level', modules: ['inventory'] },
     { path: '/inventory/reports/valuation', label: 'Stock Valuation', description: 'stock on hand and what it is worth, including aging', modules: ['inventory'] },
     { path: '/inventory/ledger', label: 'Stock Ledger', description: 'stock movements in and out over time', modules: ['inventory'] },
-    { path: '/inventory/shrinkage', label: 'Shrinkage', description: 'stock loss, wastage and adjustments', modules: ['inventory'] },
+    { path: '/inventory/shrinkage', label: 'Stock Discrepancy', description: 'stock loss, wastage and adjustments', modules: ['inventory'] },
 
     // Purchasing — retail
     { path: '/purchases', label: 'Purchases', description: 'purchasing overview', modules: ['retail'] },

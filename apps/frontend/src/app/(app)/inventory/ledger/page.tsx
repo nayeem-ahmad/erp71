@@ -52,14 +52,28 @@ const MOVEMENT_TYPES = [
     'STOCK_TAKE',
     'STOCK_TAKE_ADJUSTMENT',
     'SHRINKAGE',
+    'SHRINKAGE_REVERSAL',
     'STOCK_FOUND',
+    'STOCK_FOUND_REVERSAL',
     'MANUFACTURING_OUTPUT',
     'MANUFACTURING_CONSUMPTION',
     'MANUFACTURING_WASTAGE',
 ] as const;
 
+/**
+ * Names the ledger uses instead of the humanized enum. The `SHRINKAGE` movement
+ * is a stock discrepancy now (`Stock Discrepancy` in the UI); the enum keeps
+ * its old name because it is stamped on rows written before the rename.
+ */
+const MOVEMENT_LABELS: Record<string, string> = {
+    SHRINKAGE: 'Stock discrepancy',
+    SHRINKAGE_REVERSAL: 'Stock discrepancy (reversal)',
+    STOCK_FOUND_REVERSAL: 'Stock found (reversal)',
+};
+
 /** `PURCHASE_RECEIPT` → `Purchase Receipt`. */
 function humanizeMovementType(value: string): string {
+    if (MOVEMENT_LABELS[value]) return MOVEMENT_LABELS[value];
     return value
         .split('_')
         .filter(Boolean)

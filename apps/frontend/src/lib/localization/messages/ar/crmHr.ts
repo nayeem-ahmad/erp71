@@ -587,6 +587,8 @@ export const crmHrMessages = {
                 lostReasonRequired: 'الرجاء ذكر سبب اعتبار هذا العميل المحتمل خاسرًا.',
             },
             fields: {
+                contact: 'جهة الاتصال',
+                contactPlaceholder: 'ابحث عن جهة اتصال بالاسم أو الشركة أو الهاتف…',
                 mobile: 'الجوال',
                 email: 'البريد الإلكتروني',
                 address: 'العنوان',

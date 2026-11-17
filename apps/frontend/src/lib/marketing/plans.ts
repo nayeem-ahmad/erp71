@@ -241,7 +241,7 @@ export const PLAN_COMPARISON_GROUPS: ComparisonGroup[] = [
         rows: [
             { feature: 'Purchase entry & supplier records', ...all() },
             { feature: 'Purchase orders, quotations & returns', ...growthUp },
-            { feature: 'Stock takes & shrinkage recording', ...growthUp },
+            { feature: 'Stock takes & discrepancy recording', ...growthUp },
             { feature: 'Branch & warehouse transfers', ...growthUp },
             { feature: 'Stock valuation, aging & reorder analytics', ...growthUp },
         ],

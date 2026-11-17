@@ -106,7 +106,7 @@ export const NUMBERING_DOC_TYPE_INFO: Record<NumberingDocType, NumberingDocTypeI
   WAREHOUSE_TRANSFER: { label: 'Warehouse transfer', plural: 'warehouse transfers', group: 'INVENTORY', prefix: 'TRF', scopes: BRANCH_SCOPES },
   STOCK_TAKE: { label: 'Stock take', plural: 'stock takes', group: 'INVENTORY', prefix: 'STK', scopes: BRANCH_SCOPES },
   SHRINKAGE: {
-    label: 'Shrinkage (stock loss)', plural: 'shrinkage entries', group: 'INVENTORY', prefix: 'SHR', scopes: BRANCH_SCOPES,
+    label: 'Stock discrepancy (stock loss)', plural: 'stock discrepancy entries', group: 'INVENTORY', prefix: 'SHR', scopes: BRANCH_SCOPES,
     sharesColumnWith: 'STOCK_FOUND',
   },
   STOCK_FOUND: {

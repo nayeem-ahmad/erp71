@@ -819,7 +819,15 @@ export class InventoryReportsService {
                 direction,
                 totalQuantity,
                 totalValue,
-                costingMethod: 'CURRENT_SELLING_PRICE',
+                // Each line carries the cost it was written at
+                // (`InventoryShrinkageItem.unit_cost`). New lines store the
+                // weighted average the stock was held at; lines written before
+                // that was true stored the selling price, which overstated a
+                // write-off by the whole margin on it. The two cannot be told
+                // apart after the fact, so the label names what is actually
+                // summed — the line's own cost — rather than a basis that would
+                // be wrong for half the rows.
+                costingMethod: 'LINE_COST',
                 topReasons: groupedRows.slice(0, 5),
             },
             rows: groupedRows,

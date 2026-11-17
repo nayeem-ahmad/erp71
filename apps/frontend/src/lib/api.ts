@@ -2481,6 +2481,19 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    /**
+     * Correct a posted entry. Direction and warehouse are fixed by the stored
+     * row, so only reason, note and lines are sent.
+     */
+    updateInventoryShrinkage: (id: string, data: any) => fetchWithAuth(`/inventory-shrinkage/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    /** Puts the stock and the voucher back, then removes the entry. */
+    deleteInventoryShrinkage: (id: string) => fetchWithAuth(`/inventory-shrinkage/${id}`, {
+        method: 'DELETE',
+    }),
     getStockTakes: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/stock-takes', params)),
     getStockTake: (id: string) => fetchWithAuth(`/stock-takes/${id}`),
     createStockTake: (data: any) => fetchWithAuth('/stock-takes', {

@@ -182,6 +182,43 @@ export function prefillLeadFromContact(form: LeadFormState, contact: LeadContact
     return contact.assigned_to ? setLeadOwner(next, contact.assigned_to) : next;
 }
 
+/** The `LeadFormState` keys holding a plain string — the ones a contact fills. */
+type StringLeadField = Exclude<keyof LeadFormState, 'custom_fields'>;
+
+/** The value `prefillLeadFromContact` would have put in each field. */
+function contactSupplied(contact: LeadContactSeed): Partial<Record<StringLeadField, string>> {
+    return {
+        name: contact.name ?? '',
+        mobile: contact.mobile || contact.phone || '',
+        email: contact.email ?? '',
+        address: contact.address ?? '',
+        linkedin_url: contact.linkedin_url ?? '',
+        website_url: contact.website_url ?? '',
+        assigned_to: contact.assigned_to ?? '',
+    };
+}
+
+/**
+ * Undo `prefillLeadFromContact` when the contact is unlinked.
+ *
+ * A field is put back to `baseline` — the form as it stood before any contact
+ * touched it — only while it still holds what the contact supplied. Anything
+ * the user has since typed over is theirs, so it stays: clearing the picker
+ * must not silently discard work.
+ */
+export function revertLeadFromContact(
+    form: LeadFormState,
+    contact: LeadContactSeed,
+    baseline: LeadFormState,
+): LeadFormState {
+    const supplied = contactSupplied(contact);
+    const next = { ...form };
+    for (const [key, value] of Object.entries(supplied) as [StringLeadField, string][]) {
+        if (value && next[key] === value) next[key] = baseline[key];
+    }
+    return next;
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function validateLeadForm(form: LeadFormState): string | null {

@@ -73,3 +73,31 @@ export class CreateInventoryShrinkageDto {
     @Type(() => CreateInventoryShrinkageItemDto)
     items: CreateInventoryShrinkageItemDto[];
 }
+
+/**
+ * A correction to a posted entry.
+ *
+ * Direction and warehouse are deliberately absent: they decide which reference
+ * series the document belongs to and where the stock moved, so changing them
+ * would not correct the entry but replace it with a different one. Everything
+ * a person actually mistypes — the reason, the note, the products and the
+ * quantities — is editable.
+ *
+ * Costs nothing to leave `direction` out: the server reads it off the stored
+ * row and reverts that direction's movement.
+ */
+export class UpdateInventoryShrinkageDto {
+    @IsUUID(undefined, { message: 'A reason is required.' })
+    reasonId: string;
+
+    @IsString({ message: 'A note is required.' })
+    @Transform(trimmed)
+    @IsNotEmpty({ message: 'A note is required.' })
+    notes: string;
+
+    @IsArray()
+    @ArrayMinSize(1)
+    @ValidateNested({ each: true })
+    @Type(() => CreateInventoryShrinkageItemDto)
+    items: CreateInventoryShrinkageItemDto[];
+}

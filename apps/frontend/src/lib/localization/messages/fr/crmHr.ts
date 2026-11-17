@@ -587,6 +587,8 @@ export const crmHrMessages = {
                 lostReasonRequired: "Veuillez indiquer pourquoi cette piste est marquée comme perdue.",
             },
             fields: {
+                contact: "Contact",
+                contactPlaceholder: "Rechercher des contacts par nom, société ou téléphone…",
                 mobile: "Mobile",
                 email: "E-mail",
                 address: "Adresse",
