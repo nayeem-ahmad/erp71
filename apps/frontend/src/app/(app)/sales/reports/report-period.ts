@@ -44,14 +44,20 @@ export function reportPeriodFilter({
     /** What clearing the chip goes back to. */
     fallback?: () => CreatedRange;
 }): ListFilter {
+    // A report always runs over some period, so the chip is required: it has no
+    // ✕ and no Clear of its own, and it only counts as on — tinted, counted,
+    // offered to Clear all — once moved off the window the page opened on.
+    const fallbackRange = fallback();
     return {
         id,
         type: 'date-range',
         label,
         value,
-        onChange: (next) => onChange(next && (next.from || next.to) ? next : fallback()),
+        onChange: (next) => onChange(next && (next.from || next.to) ? next : fallbackRange),
         presets: REPORT_PERIOD_PRESETS,
         operators: true,
+        required: true,
+        defaultValue: fallbackRange,
     };
 }
 
