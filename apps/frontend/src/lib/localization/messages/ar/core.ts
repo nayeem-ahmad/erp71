@@ -402,6 +402,7 @@ export const coreMessages = {
         collapseAll: 'طي الكل',
         modules: {
             dashboard: 'لوحة المعلومات',
+            scorecard: 'بطاقة الأداء',
             sales: 'المبيعات',
             delivery: 'التسليم',
             manufacturing: 'التصنيع',
@@ -553,6 +554,7 @@ export const coreMessages = {
             meet71: 'Meet71',
             call: 'اتصال',
             platformAccountingOverview: 'ملخص الدفاتر',
+            platformKpis: 'بطاقة مؤشرات الأداء',
             platformAccountingExpenses: 'مصروفات المنصة',
             platformAccountingLedger: 'دفتر أستاذ المنصة',
             platformAccountingReports: 'التقارير المالية',

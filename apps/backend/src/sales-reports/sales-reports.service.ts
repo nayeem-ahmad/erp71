@@ -89,184 +89,11 @@ export interface BreakdownAggregate {
 export class SalesReportsService {
     constructor(private db: DatabaseService) {}
 
-    /**
-     * Sales and returns in a window, shaped for the margin helpers.
-     *
-     * Every gross-profit report loads the same two things, and each one used to
-     * write its own query — which is how three of them ended up folding an
-     * uncosted line in as free stock while a fourth handled it correctly. One
-     * loader, one shape, one set of rules on top.
-     */
-    private async loadMarginSource(
+    private loadMarginSource(
         tenantId: string,
         query: { from?: string; to?: string; storeId?: string },
-    ): Promise<{ sales: SaleForMargin[]; returns: ReturnForMargin[]; rawSales: any[]; rawReturns: any[] }> {
-        const saleWhere = {
-            tenant_id: tenantId,
-            status: 'COMPLETED',
-            ...(query.storeId ? { store_id: query.storeId } : {}),
-            ...buildSaleDateWindow(query.from, query.to),
-        };
-
-        const [rawSales, rawReturns, rawExchanges] = await Promise.all([
-            this.db.sale.findMany({
-                where: saleWhere,
-                select: {
-                    id: true,
-                    serial_number: true,
-                    total_amount: true,
-                    sale_date: true,
-                    store_id: true,
-                    counter_id: true,
-                    created_by: true,
-                    sales_rep_id: true,
-                    customer_id: true,
-                    customer: { select: { id: true, name: true, phone: true, customer_code: true } },
-                    items: {
-                        select: {
-                            product_id: true,
-                            quantity: true,
-                            price_at_sale: true,
-                            unit_cost_at_sale: true,
-                        },
-                    },
-                },
-                orderBy: { sale_date: 'asc' },
-            }),
-            this.db.salesReturn.findMany({
-                where: {
-                    tenant_id: tenantId,
-                    ...(query.storeId ? { store_id: query.storeId } : {}),
-                    ...buildReturnDateWindow(query.from, query.to),
-                },
-                select: {
-                    id: true,
-                    created_at: true,
-                    store_id: true,
-                    total_refund: true,
-                    // The customer who is getting the refund is the one on the
-                    // original sale — a return row carries no customer of its
-                    // own, so per-customer margin has to reach through it.
-                    sale: { select: { customer_id: true, counter_id: true, created_by: true, sales_rep_id: true } },
-                    items: {
-                        select: {
-                            product_id: true,
-                            quantity: true,
-                            refund_amount: true,
-                            unit_cost_at_return: true,
-                        },
-                    },
-                },
-            }),
-            this.db.salesExchange.findMany({
-                where: {
-                    tenant_id: tenantId,
-                    status: 'COMPLETED',
-                    ...(query.storeId ? { store_id: query.storeId } : {}),
-                    ...buildReturnDateWindow(query.from, query.to),
-                },
-                select: {
-                    id: true,
-                    created_at: true,
-                    store_id: true,
-                    returned_total: true,
-                    replacement_total: true,
-                    sale: {
-                        select: {
-                            customer_id: true,
-                            counter_id: true,
-                            created_by: true,
-                            sales_rep_id: true,
-                            customer: { select: { id: true, name: true, phone: true, customer_code: true } },
-                        },
-                    },
-                    items: {
-                        select: {
-                            returned_product_id: true,
-                            returned_quantity: true,
-                            returned_unit_price: true,
-                            returned_unit_cost: true,
-                            replacement_product_id: true,
-                            replacement_quantity: true,
-                            replacement_unit_price: true,
-                            replacement_unit_cost: true,
-                        },
-                    },
-                },
-            }),
-        ]);
-
-        // Outgoing lines count as sales and incoming lines as returns, so the
-        // net moves by the difference once. They are flagged so a bill count
-        // does not treat an exchange as another invoice.
-        const salesRows = rawSales as any[];
-        const returnRows = rawReturns as any[];
-        for (const exchange of rawExchanges as any[]) {
-            const saleMeta = exchange.sale ?? {};
-            salesRows.push({
-                id: `exchange-out-${exchange.id}`,
-                is_exchange: true,
-                serial_number: null,
-                total_amount: exchange.replacement_total,
-                sale_date: exchange.created_at,
-                store_id: exchange.store_id,
-                counter_id: saleMeta.counter_id ?? null,
-                created_by: saleMeta.created_by ?? null,
-                sales_rep_id: saleMeta.sales_rep_id ?? null,
-                customer_id: saleMeta.customer_id ?? null,
-                customer: saleMeta.customer ?? null,
-                items: (exchange.items ?? []).map((item: any) => ({
-                    product_id: item.replacement_product_id,
-                    quantity: item.replacement_quantity,
-                    price_at_sale: item.replacement_unit_price,
-                    unit_cost_at_sale: item.replacement_unit_cost,
-                })),
-            });
-            returnRows.push({
-                id: `exchange-in-${exchange.id}`,
-                is_exchange: true,
-                created_at: exchange.created_at,
-                store_id: exchange.store_id,
-                total_refund: exchange.returned_total,
-                sale: {
-                    customer_id: saleMeta.customer_id ?? null,
-                    counter_id: saleMeta.counter_id ?? null,
-                    created_by: saleMeta.created_by ?? null,
-                    sales_rep_id: saleMeta.sales_rep_id ?? null,
-                },
-                items: (exchange.items ?? []).map((item: any) => ({
-                    product_id: item.returned_product_id,
-                    quantity: item.returned_quantity,
-                    refund_amount: Number(item.returned_unit_price) * Number(item.returned_quantity),
-                    unit_cost_at_return: item.returned_unit_cost,
-                })),
-            });
-        }
-
-        return {
-            rawSales,
-            rawReturns,
-            sales: rawSales.map((sale: any) => ({
-                id: sale.id,
-                totalAmount: Number(sale.total_amount),
-                items: sale.items.map((item: any) => ({
-                    productId: item.product_id,
-                    quantity: item.quantity,
-                    priceAtSale: Number(item.price_at_sale),
-                    unitCostAtSale: item.unit_cost_at_sale === null ? null : Number(item.unit_cost_at_sale),
-                })),
-            })),
-            returns: rawReturns.map((ret: any) => ({
-                id: ret.id,
-                items: ret.items.map((item: any) => ({
-                    productId: item.product_id,
-                    quantity: item.quantity,
-                    refundAmount: Number(item.refund_amount),
-                    unitCostAtReturn:
-                        item.unit_cost_at_return === null ? null : Number(item.unit_cost_at_return),
-                })),
-            })),
-        };
+    ) {
+        return loadMarginSource(this.db, tenantId, query);
     }
 
     async getSalesSummary(tenantId: string, query: GetSalesSummaryDto, timezone: string) {
@@ -2022,6 +1849,190 @@ function tally(entries: Array<{ key: string; label: string; amount: number; coun
     const rows = Array.from(map.values()).sort((a, b) => b.amount - a.amount);
     const total = rows.reduce((sum, r) => sum + r.amount, 0);
     return rows.map((row) => ({ ...row, sharePct: total > 0 ? (row.amount / total) * 100 : 0 }));
+}
+
+/**
+ * Sales and returns in a window, shaped for the margin helpers.
+ *
+ * Exported for the accounting ratios and the KPI scorecard, which state the
+ * same gross margin the sales reports do and must not compute it a second way.
+ *
+ * Every gross-profit report loads the same two things, and each one used to
+ * write its own query — which is how three of them ended up folding an
+ * uncosted line in as free stock while a fourth handled it correctly. One
+ * loader, one shape, one set of rules on top.
+ */
+export async function loadMarginSource(
+    db: DatabaseService,
+    tenantId: string,
+    query: { from?: string; to?: string; storeId?: string },
+): Promise<{ sales: SaleForMargin[]; returns: ReturnForMargin[]; rawSales: any[]; rawReturns: any[] }> {
+    const saleWhere = {
+        tenant_id: tenantId,
+        status: 'COMPLETED',
+        ...(query.storeId ? { store_id: query.storeId } : {}),
+        ...buildSaleDateWindow(query.from, query.to),
+    };
+
+    const [rawSales, rawReturns, rawExchanges] = await Promise.all([
+        db.sale.findMany({
+            where: saleWhere,
+            select: {
+                id: true,
+                serial_number: true,
+                total_amount: true,
+                sale_date: true,
+                store_id: true,
+                counter_id: true,
+                created_by: true,
+                sales_rep_id: true,
+                customer_id: true,
+                customer: { select: { id: true, name: true, phone: true, customer_code: true } },
+                items: {
+                    select: {
+                        product_id: true,
+                        quantity: true,
+                        price_at_sale: true,
+                        unit_cost_at_sale: true,
+                    },
+                },
+            },
+            orderBy: { sale_date: 'asc' },
+        }),
+        db.salesReturn.findMany({
+            where: {
+                tenant_id: tenantId,
+                ...(query.storeId ? { store_id: query.storeId } : {}),
+                ...buildReturnDateWindow(query.from, query.to),
+            },
+            select: {
+                id: true,
+                created_at: true,
+                store_id: true,
+                total_refund: true,
+                // The customer who is getting the refund is the one on the
+                // original sale — a return row carries no customer of its
+                // own, so per-customer margin has to reach through it.
+                sale: { select: { customer_id: true, counter_id: true, created_by: true, sales_rep_id: true } },
+                items: {
+                    select: {
+                        product_id: true,
+                        quantity: true,
+                        refund_amount: true,
+                        unit_cost_at_return: true,
+                    },
+                },
+            },
+        }),
+        db.salesExchange.findMany({
+            where: {
+                tenant_id: tenantId,
+                status: 'COMPLETED',
+                ...(query.storeId ? { store_id: query.storeId } : {}),
+                ...buildReturnDateWindow(query.from, query.to),
+            },
+            select: {
+                id: true,
+                created_at: true,
+                store_id: true,
+                returned_total: true,
+                replacement_total: true,
+                sale: {
+                    select: {
+                        customer_id: true,
+                        counter_id: true,
+                        created_by: true,
+                        sales_rep_id: true,
+                        customer: { select: { id: true, name: true, phone: true, customer_code: true } },
+                    },
+                },
+                items: {
+                    select: {
+                        returned_product_id: true,
+                        returned_quantity: true,
+                        returned_unit_price: true,
+                        returned_unit_cost: true,
+                        replacement_product_id: true,
+                        replacement_quantity: true,
+                        replacement_unit_price: true,
+                        replacement_unit_cost: true,
+                    },
+                },
+            },
+        }),
+    ]);
+
+    // Outgoing lines count as sales and incoming lines as returns, so the
+    // net moves by the difference once. They are flagged so a bill count
+    // does not treat an exchange as another invoice.
+    const salesRows = rawSales as any[];
+    const returnRows = rawReturns as any[];
+    for (const exchange of rawExchanges as any[]) {
+        const saleMeta = exchange.sale ?? {};
+        salesRows.push({
+            id: `exchange-out-${exchange.id}`,
+            is_exchange: true,
+            serial_number: null,
+            total_amount: exchange.replacement_total,
+            sale_date: exchange.created_at,
+            store_id: exchange.store_id,
+            counter_id: saleMeta.counter_id ?? null,
+            created_by: saleMeta.created_by ?? null,
+            sales_rep_id: saleMeta.sales_rep_id ?? null,
+            customer_id: saleMeta.customer_id ?? null,
+            customer: saleMeta.customer ?? null,
+            items: (exchange.items ?? []).map((item: any) => ({
+                product_id: item.replacement_product_id,
+                quantity: item.replacement_quantity,
+                price_at_sale: item.replacement_unit_price,
+                unit_cost_at_sale: item.replacement_unit_cost,
+            })),
+        });
+        returnRows.push({
+            id: `exchange-in-${exchange.id}`,
+            is_exchange: true,
+            created_at: exchange.created_at,
+            store_id: exchange.store_id,
+            total_refund: exchange.returned_total,
+            sale: {
+                customer_id: saleMeta.customer_id ?? null,
+                counter_id: saleMeta.counter_id ?? null,
+                created_by: saleMeta.created_by ?? null,
+                sales_rep_id: saleMeta.sales_rep_id ?? null,
+            },
+            items: (exchange.items ?? []).map((item: any) => ({
+                product_id: item.returned_product_id,
+                quantity: item.returned_quantity,
+                refund_amount: Number(item.returned_unit_price) * Number(item.returned_quantity),
+                unit_cost_at_return: item.returned_unit_cost,
+            })),
+        });
+    }
+
+    return {
+        rawSales,
+        rawReturns,
+        sales: rawSales.map((sale: any) => ({
+            id: sale.id,
+            totalAmount: Number(sale.total_amount),
+            items: sale.items.map((item: any) => ({
+                productId: item.product_id,
+                quantity: item.quantity,
+                priceAtSale: Number(item.price_at_sale),
+                unitCostAtSale: item.unit_cost_at_sale === null ? null : Number(item.unit_cost_at_sale),
+            })),
+        })),
+        returns: rawReturns.map((ret: any) => ({
+            id: ret.id,
+            items: ret.items.map((item: any) => ({
+                productId: item.product_id,
+                quantity: item.quantity,
+                refundAmount: Number(item.refund_amount),
+                unitCostAtReturn:
+                    item.unit_cost_at_return === null ? null : Number(item.unit_cost_at_return),
+            })),
+        })),
+    };
 }
 
 export function buildSaleDateWindow(from?: string, to?: string) {

@@ -317,7 +317,7 @@ export const accountingMessages = {
                 currentRatio: "Ratio de liquidez",
                 currentRatioDesc: "Activo / Pasivo (>1 es saludable)",
                 grossMargin: "Margen bruto",
-                grossMarginDesc: "Beneficio neto / Ingresos × 100",
+                grossMarginDesc: "(Ingresos − Coste de ventas) / Ingresos × 100",
                 netMargin: "Margen neto",
                 netProfitMargin: "Margen de beneficio neto",
                 netProfitMarginDesc: "Beneficio neto / Ingresos × 100",

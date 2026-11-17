@@ -317,7 +317,7 @@ export const accountingMessages = {
                 currentRatio: 'نسبة التداول',
                 currentRatioDesc: 'الأصول / الالتزامات (أكبر من 1 وضع سليم)',
                 grossMargin: 'الهامش الإجمالي',
-                grossMarginDesc: 'صافي الربح / الإيراد × 100',
+                grossMarginDesc: '(الإيراد − تكلفة البضاعة المباعة) / الإيراد × 100',
                 netMargin: 'صافي الهامش',
                 netProfitMargin: 'هامش صافي الربح',
                 netProfitMarginDesc: 'صافي الربح / الإيراد × 100',

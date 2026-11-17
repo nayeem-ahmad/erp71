@@ -317,7 +317,7 @@ export const accountingMessages = {
                 currentRatio: 'Current Ratio',
                 currentRatioDesc: 'Assets / Liabilities (>1 is healthy)',
                 grossMargin: 'Gross Margin',
-                grossMarginDesc: 'Net Profit / Revenue × 100',
+                grossMarginDesc: '(Revenue − Cost of Goods Sold) / Revenue × 100',
                 netMargin: 'Net Margin',
                 netProfitMargin: 'Net Profit Margin',
                 netProfitMarginDesc: 'Net Profit / Revenue × 100',
