@@ -239,6 +239,9 @@ export const inventoryExtrasMessages = {
         "availableInWarehouse": "Existencias aquí: {qty}",
         "exceedsStock": "Más de lo disponible",
         "quantityExceedsStock": "Solo hay {qty} en este almacén.",
+        "unitCost": "Coste unitario",
+        "deleteTitle": "¿Eliminar este registro?",
+        "deleteDescription": "Eliminar {reference} devuelve su stock y anula el asiento que generó. No se puede deshacer.",
     "listUi": {
         "statsLabel": "Resumen de merma",
         "total": "Registros",

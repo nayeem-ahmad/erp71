@@ -136,6 +136,13 @@ export const INVENTORY_REPORT_READ: P[] = [
 export const INVENTORY_WRITE: P[] = [P.CREATE_INVENTORY_MOVEMENTS, P.MANAGE_STORES];
 export const STOCK_TAKE_STAFF: P[] = [P.STOCK_TAKE, P.CREATE_INVENTORY_MOVEMENTS];
 export const SHRINKAGE_STAFF: P[] = [P.CREATE_INVENTORY_MOVEMENTS, P.STOCK_TAKE];
+/**
+ * Correcting or deleting a posted discrepancy reverses its stock movement and
+ * voids its auto-posted voucher, so it is a ledger correction rather than a
+ * counting one — gated like a sale delete. The person who records entries is
+ * not the one who erases them.
+ */
+export const SHRINKAGE_CORRECT: P[] = [P.CANCEL_ENTRY];
 export const MANUFACTURING_READ: P[] = [
     P.CREATE_INVENTORY_MOVEMENTS,
     P.STOCK_TAKE,

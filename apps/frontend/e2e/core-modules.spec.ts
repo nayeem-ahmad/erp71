@@ -178,13 +178,13 @@ test.describe.serial('Core modules — sales, purchase, accounting, inventory', 
         await saveStepScreenshot(page, 'I1-inventory-ledger');
     });
 
-    test('I2 — stock takes, shrinkage, and valuation report', async ({ page }) => {
+    test('I2 — stock takes, discrepancies, and valuation report', async ({ page }) => {
         await page.goto('/inventory/stock-takes');
         await expect(page.getByText(/stock take/i).first()).toBeVisible({ timeout: 10_000 });
         await saveStepScreenshot(page, 'I2-stock-takes');
 
         await page.goto('/inventory/shrinkage');
-        await expect(page.getByText(/shrinkage/i).first()).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByText(/discrepancy/i).first()).toBeVisible({ timeout: 10_000 });
         await saveStepScreenshot(page, 'I2-shrinkage');
 
         await page.goto('/inventory/reports/valuation');

@@ -239,6 +239,9 @@ export const inventoryExtrasMessages = {
         "availableInWarehouse": "Hier vorrätig: {qty}",
         "exceedsStock": "Mehr als vorrätig",
         "quantityExceedsStock": "In diesem Lager sind nur {qty} vorrätig.",
+        "unitCost": "Stückkosten",
+        "deleteTitle": "Diesen Eintrag löschen?",
+        "deleteDescription": "Beim Löschen von {reference} wird der Bestand zurückgebucht und der erzeugte Beleg storniert. Das lässt sich nicht rückgängig machen.",
     "listUi": {
         "statsLabel": "Schwundübersicht",
         "total": "Einträge",

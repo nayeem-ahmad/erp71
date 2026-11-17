@@ -239,6 +239,9 @@ export const inventoryExtrasMessages = {
             availableInWarehouse: "Stok di sini: {qty}",
             exceedsStock: "Lebih daripada stok",
             quantityExceedsStock: "Hanya {qty} tersedia di gudang ini.",
+            unitCost: "Kos seunit",
+            deleteTitle: "Padam entri ini?",
+            deleteDescription: "Memadam {reference} memulangkan stoknya dan membalikkan baucar yang dihasilkan. Tindakan ini tidak boleh dibatalkan.",
         listUi: {
             statsLabel: "Ringkasan susut",
             total: "Entri",

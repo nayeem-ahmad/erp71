@@ -41,7 +41,7 @@ const mockSettings = {
 };
 
 const mockReasons = [
-    { id: 'rsn-1', type: 'SHRINKAGE', code: 'SHR', label: 'Shrinkage', is_active: true },
+    { id: 'rsn-1', type: 'SHRINKAGE', code: 'SHR', label: 'Stock Discrepancy', is_active: true },
     { id: 'rsn-2', type: 'DAMAGE', code: 'DMG', label: 'Damaged', is_active: true },
 ];
 
@@ -83,7 +83,7 @@ describe('InventorySettingsPage', () => {
     it('shows inventory reasons', async () => {
         render(<InventorySettingsPage />);
         await waitFor(() => {
-            expect(screen.getAllByText('Shrinkage').length).toBeGreaterThan(0);
+            expect(screen.getAllByText('Stock Discrepancy').length).toBeGreaterThan(0);
             expect(screen.getAllByText('Damaged').length).toBeGreaterThan(0);
         });
     });

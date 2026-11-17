@@ -239,6 +239,9 @@ export const inventoryExtrasMessages = {
         "availableInWarehouse": "یہاں دستیاب: {qty}",
         "exceedsStock": "دستیاب سے زیادہ",
         "quantityExceedsStock": "اس گودام میں صرف {qty} دستیاب ہیں۔",
+        "unitCost": "فی یونٹ لاگت",
+        "deleteTitle": "یہ اندراج حذف کریں؟",
+        "deleteDescription": "{reference} حذف کرنے سے اس کا اسٹاک واپس آ جائے گا اور اس سے بنایا گیا واؤچر منسوخ ہو جائے گا۔ اسے واپس نہیں کیا جا سکتا۔",
     "listUi": {
         "statsLabel": "نقصان کا خلاصہ",
         "total": "اندراجات",

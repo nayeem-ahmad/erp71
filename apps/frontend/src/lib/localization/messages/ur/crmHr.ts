@@ -587,6 +587,8 @@ export const crmHrMessages = {
                 lostReasonRequired: 'براہِ کرم اس لیڈ کو ضائع قرار دینے کی وجہ بتائیں۔',
             },
             fields: {
+                contact: 'رابطہ',
+                contactPlaceholder: 'نام، کمپنی یا فون سے رابطہ تلاش کریں…',
                 mobile: 'موبائل',
                 email: 'ای میل',
                 address: 'پتہ',

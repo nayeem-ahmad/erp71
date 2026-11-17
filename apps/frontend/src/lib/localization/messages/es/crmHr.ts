@@ -587,6 +587,8 @@ export const crmHrMessages = {
                 lostReasonRequired: "Indica un motivo para marcar esta oportunidad como perdida.",
             },
             fields: {
+                contact: "Contacto",
+                contactPlaceholder: "Buscar contactos por nombre, empresa o teléfono…",
                 mobile: "Móvil",
                 email: "Correo electrónico",
                 address: "Dirección",

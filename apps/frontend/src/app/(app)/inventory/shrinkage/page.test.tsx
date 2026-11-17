@@ -10,10 +10,22 @@ jest.mock('@/lib/api', () => ({
         getInventoryWarehouses: jest.fn(),
         getInventoryReasons: jest.fn(),
         getInventorySettings: jest.fn(),
+        getInventoryShrinkageRecord: jest.fn(),
         getProducts: jest.fn(),
         searchProductsByQuantity: jest.fn(),
         createInventoryShrinkage: jest.fn(),
+        updateInventoryShrinkage: jest.fn(),
+        deleteInventoryShrinkage: jest.fn(),
     },
+}));
+
+const plan = {
+    permissions: ['CREATE_INVENTORY_MOVEMENTS', 'CANCEL_ENTRY'],
+    role: 'MANAGER',
+};
+
+jest.mock('@/lib/use-tenant-plan-features', () => ({
+    useTenantPlanFeatures: () => plan,
 }));
 
 jest.mock('next/navigation', () => ({
@@ -49,7 +61,7 @@ function getApi() {
 
 /** The log is the landing view; every entry starts at the header button. */
 async function openEntryForm() {
-    fireEvent.click(screen.getByRole('button', { name: /new shrinkage entry/i }));
+    fireEvent.click(screen.getByRole('button', { name: /new discrepancy entry/i }));
     await screen.findByLabelText(/^entry type/i);
 }
 
@@ -78,6 +90,35 @@ async function fillEntry({ notes }: { notes: string }) {
     if (notes) fireEvent.change(screen.getByLabelText(/^notes/i), { target: { value: notes } });
 }
 
+const postedEntry = {
+    id: 'shr-1',
+    reference_number: 'SHR-00001',
+    created_at: '2026-08-01T00:00:00.000Z',
+    direction: 'LOSS',
+    notes: 'Crushed by the forklift',
+    warehouse_id: 'wh-1',
+    reason_id: 'rsn-loss',
+    warehouse: { name: 'Main Warehouse' },
+    reason: { label: 'Theft' },
+    items: [
+        {
+            id: 'item-1',
+            product_id: 'prod-1',
+            quantity: 2,
+            unit_cost: '120.00',
+            note: null,
+            product: {
+                id: 'prod-1',
+                name: 'Rice 5kg',
+                sku: 'R5',
+                stocks: [{ warehouse_id: 'wh-1', quantity: 40 }],
+            },
+        },
+    ],
+    posting_status: 'posted',
+    voucher_number: 'JV-00001',
+};
+
 describe('InventoryShrinkagePage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -86,9 +127,13 @@ describe('InventoryShrinkagePage', () => {
         api.getInventoryWarehouses.mockResolvedValue(mockWarehouses);
         api.getInventoryReasons.mockResolvedValue(mockReasons);
         api.getInventorySettings.mockResolvedValue({ default_shrinkage_warehouse_id: 'wh-1' });
+        api.getInventoryShrinkageRecord.mockResolvedValue(postedEntry);
         api.getProducts.mockResolvedValue(mockProducts);
         api.searchProductsByQuantity.mockResolvedValue(mockProducts);
         api.createInventoryShrinkage.mockResolvedValue({ id: 'shr-1' });
+        api.updateInventoryShrinkage.mockResolvedValue({ id: 'shr-1' });
+        api.deleteInventoryShrinkage.mockResolvedValue({ deleted: true });
+        plan.permissions = ['CREATE_INVENTORY_MOVEMENTS', 'CANCEL_ENTRY'];
     });
 
     // The entry form used to sit open above the log with no button to reach it,
@@ -120,7 +165,7 @@ describe('InventoryShrinkagePage', () => {
         const api = await renderOpenForm();
 
         await fillEntry({ notes: '' });
-        fireEvent.click(screen.getByRole('button', { name: /post shrinkage/i }));
+        fireEvent.click(screen.getByRole('button', { name: /post discrepancy/i }));
 
         await waitFor(() => expect(screen.getByText('A note is required.')).toBeInTheDocument());
         expect(api.createInventoryShrinkage).not.toHaveBeenCalled();
@@ -131,7 +176,7 @@ describe('InventoryShrinkagePage', () => {
         const api = await renderOpenForm();
 
         await fillEntry({ notes: '   ' });
-        fireEvent.click(screen.getByRole('button', { name: /post shrinkage/i }));
+        fireEvent.click(screen.getByRole('button', { name: /post discrepancy/i }));
 
         await waitFor(() => expect(screen.getByText('A note is required.')).toBeInTheDocument());
         expect(api.createInventoryShrinkage).not.toHaveBeenCalled();
@@ -143,7 +188,7 @@ describe('InventoryShrinkagePage', () => {
         fireEvent.change(screen.getByLabelText(/warehouse/i), { target: { value: 'wh-1' } });
         await pickProduct();
         fireEvent.change(screen.getByLabelText(/^notes/i), { target: { value: 'Crushed in bay 3' } });
-        fireEvent.click(screen.getByRole('button', { name: /post shrinkage/i }));
+        fireEvent.click(screen.getByRole('button', { name: /post discrepancy/i }));
 
         await waitFor(() => expect(screen.getByText('Select a reason.')).toBeInTheDocument());
         expect(api.createInventoryShrinkage).not.toHaveBeenCalled();
@@ -153,7 +198,7 @@ describe('InventoryShrinkagePage', () => {
         const api = await renderOpenForm();
 
         await fillEntry({ notes: 'Crushed by the forklift in bay 3' });
-        fireEvent.click(screen.getByRole('button', { name: /post shrinkage/i }));
+        fireEvent.click(screen.getByRole('button', { name: /post discrepancy/i }));
 
         await waitFor(() =>
             expect(api.createInventoryShrinkage).toHaveBeenCalledWith(
@@ -172,7 +217,7 @@ describe('InventoryShrinkagePage', () => {
         await renderOpenForm();
 
         await fillEntry({ notes: 'Crushed by the forklift in bay 3' });
-        fireEvent.click(screen.getByRole('button', { name: /post shrinkage/i }));
+        fireEvent.click(screen.getByRole('button', { name: /post discrepancy/i }));
 
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
@@ -257,7 +302,7 @@ describe('InventoryShrinkagePage', () => {
         fireEvent.change(screen.getByLabelText(/total qty/i), { target: { value: '41' } });
         fireEvent.change(screen.getByLabelText(/^reason/i), { target: { value: 'rsn-loss' } });
         fireEvent.change(screen.getByLabelText(/^notes/i), { target: { value: 'Over the shelf count' } });
-        fireEvent.click(screen.getByRole('button', { name: /post shrinkage/i }));
+        fireEvent.click(screen.getByRole('button', { name: /post discrepancy/i }));
 
         expect(await screen.findByText(/Only 40 on hand in this warehouse/)).toBeInTheDocument();
         expect(api.createInventoryShrinkage).not.toHaveBeenCalled();
@@ -310,5 +355,86 @@ describe('InventoryShrinkagePage', () => {
         await renderOpenForm();
 
         expect(screen.queryByLabelText(/warehouse/i)).not.toBeInTheDocument();
+    });
+
+    // The list carried only a reference and a total, so there was no way to see
+    // which products went into an entry without opening the database.
+    it('shows the posted entry, its lines and their value', async () => {
+        getApi().getInventoryShrinkage.mockResolvedValue([postedEntry]);
+        render(<InventoryShrinkagePage />);
+
+        fireEvent.click(await screen.findByRole('button', { name: /^view$/i }));
+
+        const dialog = await screen.findByRole('dialog');
+        expect(within(dialog).getByText('SHR-00001')).toBeInTheDocument();
+        expect(within(dialog).getByText('Rice 5kg')).toBeInTheDocument();
+        expect(within(dialog).getByText('Crushed by the forklift')).toBeInTheDocument();
+        // 2 × 120.00, on the line and again as the total.
+        expect(within(dialog).getAllByText(/240/).length).toBeGreaterThan(0);
+    });
+
+    // Correcting reverses the old lines and applies the new ones server-side;
+    // the screen only sends what a correction may change.
+    it('opens a posted entry for correction and saves the change', async () => {
+        const api = getApi();
+        api.getInventoryShrinkage.mockResolvedValue([postedEntry]);
+        render(<InventoryShrinkagePage />);
+
+        fireEvent.click(await screen.findByRole('button', { name: /^edit$/i }));
+
+        expect(await screen.findByLabelText(/^notes/i)).toHaveValue('Crushed by the forklift');
+        // Direction decides the document's series, so it is frozen.
+        expect(screen.getByLabelText(/^entry type/i)).toBeDisabled();
+
+        fireEvent.change(screen.getByLabelText(/^notes/i), {
+            target: { value: 'Crushed by the forklift, recounted with Rahim' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => {
+            expect(api.updateInventoryShrinkage).toHaveBeenCalledWith('shr-1', {
+                reasonId: 'rsn-loss',
+                notes: 'Crushed by the forklift, recounted with Rahim',
+                items: [{ productId: 'prod-1', quantity: 2 }],
+            });
+        });
+        // No second document is created by a correction.
+        expect(api.createInventoryShrinkage).not.toHaveBeenCalled();
+    });
+
+    it('asks before deleting, and then deletes the entry', async () => {
+        const api = getApi();
+        api.getInventoryShrinkage.mockResolvedValue([postedEntry]);
+        render(<InventoryShrinkagePage />);
+
+        fireEvent.click(await screen.findByRole('button', { name: /^delete$/i }));
+
+        const dialog = await screen.findByRole('dialog');
+        expect(within(dialog).getByText(/SHR-00001/)).toBeInTheDocument();
+        expect(api.deleteInventoryShrinkage).not.toHaveBeenCalled();
+
+        fireEvent.click(within(dialog).getByRole('button', { name: /^delete$/i }));
+
+        await waitFor(() => expect(api.deleteInventoryShrinkage).toHaveBeenCalledWith('shr-1'));
+    });
+
+    // Correcting voids the voucher and reverses stock, so it is a ledger
+    // correction — refused to anyone the server would refuse.
+    it('hides correction and delete without CANCEL_ENTRY, but still allows viewing', async () => {
+        plan.permissions = ['CREATE_INVENTORY_MOVEMENTS'];
+        getApi().getInventoryShrinkage.mockResolvedValue([postedEntry]);
+        render(<InventoryShrinkagePage />);
+
+        expect(await screen.findByRole('button', { name: /^view$/i })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^delete$/i })).not.toBeInTheDocument();
+    });
+
+    // The feature is called Stock Discrepancy now; the sidebar, page title and
+    // report all read that way.
+    it('is titled Stock Discrepancy', async () => {
+        render(<InventoryShrinkagePage />);
+
+        await waitFor(() => expect(screen.getByRole('heading', { name: 'Stock Discrepancy' })).toBeInTheDocument());
     });
 });
