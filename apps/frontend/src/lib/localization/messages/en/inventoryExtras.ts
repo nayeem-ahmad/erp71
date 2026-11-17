@@ -232,6 +232,13 @@ export const inventoryExtrasMessages = {
         "remove": "Remove",
         "notes": "Notes",
         "selectProduct": "Select product",
+        "popularProducts": "Popular products",
+        "typeToSearch": "Type a name or SKU to search",
+        "noProductsFound": "No products match that search",
+        "clearProduct": "Clear product",
+        "availableInWarehouse": "In stock here: {qty}",
+        "exceedsStock": "More than is on hand",
+        "quantityExceedsStock": "Only {qty} on hand in this warehouse.",
         "listUi": {
             "statsLabel": "Shrinkage summary",
             "total": "Entries",

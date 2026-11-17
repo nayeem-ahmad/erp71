@@ -18,7 +18,9 @@ import { BranchFilter, Alert, Button, Field, Input, Select, StatusBadge } from '
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
-import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
+import { useWarehouses } from '@/lib/hooks/useWarehouses';
+import { availableQtyOf } from '@/components/document-entry/ProductSearch';
+import StockProductPicker from '@/components/document-entry/StockProductPicker';
 
 /**
  * LOSS writes stock off; FOUND puts a surplus back. They are the same document
@@ -42,8 +44,14 @@ interface ShrinkageRecord {
     voucher_number?: string | null;
 }
 
+/**
+ * A line holds the picked product itself, not just its id: the row has to show
+ * what is on the shelf for *that* product, and a write-off must refuse a
+ * quantity the warehouse cannot cover before the post is attempted.
+ */
 interface LineItem {
     productId: string;
+    product: any | null;
     quantity: string | number;
 }
 
@@ -54,12 +62,14 @@ interface FormErrors {
     items: Record<number, { productId?: string; quantity?: string }>;
 }
 
+const BLANK_LINE: LineItem = { productId: '', product: null, quantity: 1 };
+
 const EMPTY_FORM = {
     direction: 'LOSS' as Direction,
     warehouseId: '',
     reasonId: '',
     notes: '',
-    items: [{ productId: '', quantity: 1 }] as LineItem[],
+    items: [{ ...BLANK_LINE }],
 };
 
 const columnHelper = createColumnHelper<ShrinkageRecord>();
@@ -69,9 +79,7 @@ export default function InventoryShrinkagePage() {
     const branch = useBranchScope();
     const listUi = t.inventoryShrinkage.listUi;
     const [records, setRecords] = useState<ShrinkageRecord[]>([]);
-    const [warehouses, setWarehouses] = useState<any[]>([]);
     const [reasons, setReasons] = useState<any[]>([]);
-    const [products, setProducts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
@@ -83,13 +91,23 @@ export default function InventoryShrinkagePage() {
     const direction = form.direction;
     const isFound = direction === 'FOUND';
 
+    // The warehouse the server would resolve anyway — the tenant's configured
+    // shrinkage default, then the branch's own. Opening this form on a blank
+    // required select made every entry start with a choice the system already
+    // knew the answer to. A one-warehouse branch never sees the control.
+    const { warehouses, defaultWarehouseId, multiple: multipleWarehouses } = useWarehouses('shrinkage');
+
+    useEffect(() => {
+        setForm((current) => (current.warehouseId ? current : { ...current, warehouseId: defaultWarehouseId }));
+    }, [defaultWarehouseId]);
+
     useEffect(() => {
         if (!branch.ready) return;
         void loadRecords();
     }, [createdRange, directionFilter, branch.ready, branch.apiStoreId]);
 
     useEffect(() => {
-        void loadOptions();
+        void loadReasons();
     }, []);
 
     const loadRecords = async () => {
@@ -109,20 +127,17 @@ export default function InventoryShrinkagePage() {
         }
     };
 
-    // Both catalogues in one call: the direction toggle swaps between them
-    // without a round trip, and the picker is never briefly empty mid-switch.
-    const loadOptions = async () => {
+    // Both reason catalogues in one call: the direction toggle swaps between
+    // them without a round trip, and the picker is never briefly empty
+    // mid-switch. The products themselves come from the picker's own search —
+    // loading the whole catalogue here was a full page-walk for a list of
+    // twenty.
+    const loadReasons = async () => {
         try {
-            const [warehouseData, reasonData, productData] = await Promise.all([
-                api.getInventoryWarehouses(),
-                api.getInventoryReasons(),
-                api.getProducts(),
-            ]);
-            setWarehouses(warehouseData.filter((warehouse: any) => warehouse.is_active));
+            const reasonData = await api.getInventoryReasons();
             setReasons(reasonData.filter((reason: any) => reason.is_active));
-            setProducts(productData);
         } catch (error) {
-            console.error('Failed to load shrinkage options', error);
+            console.error('Failed to load shrinkage reasons', error);
         }
     };
 
@@ -131,10 +146,13 @@ export default function InventoryShrinkagePage() {
         [reasons, direction],
     );
 
-    const blankForm = (keepDirection: Direction) => ({
+    const blankForm = (keepDirection: Direction): typeof EMPTY_FORM => ({
         ...EMPTY_FORM,
         direction: keepDirection,
-        items: [{ productId: '', quantity: 1 }],
+        // The warehouse is the same one for the rest of the shift; re-asking
+        // for it on every entry is the kind of blank this form should not have.
+        warehouseId: defaultWarehouseId,
+        items: [{ ...BLANK_LINE }],
     });
 
     // A counter working through a stack of found-stock slips shouldn't have to
@@ -161,9 +179,28 @@ export default function InventoryShrinkagePage() {
         }));
 
     /**
+     * What a line's product has on hand in the entry's warehouse. Only a
+     * write-off is bounded by it — found stock is a surplus, so there is no
+     * ceiling to check. Before a warehouse is chosen the figure is the total
+     * across every warehouse, which still beats showing nothing.
+     */
+    const availableFor = (line: LineItem): number | null =>
+        line.product ? availableQtyOf(line.product, form.warehouseId || undefined) : null;
+
+    const overStockAt = (line: LineItem): number | null => {
+        if (isFound) return null;
+        const available = availableFor(line);
+        if (available === null) return null;
+        const quantity = Number(line.quantity);
+        return Number.isInteger(quantity) && quantity > available ? available : null;
+    };
+
+    /**
      * Every rule the server enforces, checked here too so the counter sees
      * which field is wrong rather than one banner for the whole form. The
-     * server remains the authority — this only saves a round trip.
+     * server remains the authority — this only saves a round trip, and the
+     * over-stock check is the one that used to arrive as a toast naming a
+     * product uuid.
      */
     const validate = (): FormErrors | null => {
         const next: FormErrors = { items: {} };
@@ -176,6 +213,11 @@ export default function InventoryShrinkagePage() {
             if (!line.productId) lineErrors.productId = t.inventoryShrinkage.productRequired;
             if (!Number.isInteger(Number(line.quantity)) || Number(line.quantity) < 1) {
                 lineErrors.quantity = t.inventoryShrinkage.quantityRequired;
+            } else {
+                const available = overStockAt(line);
+                if (available !== null) {
+                    lineErrors.quantity = t.inventoryShrinkage.quantityExceedsStock.replace('{qty}', String(available));
+                }
             }
             if (Object.keys(lineErrors).length > 0) next.items[index] = lineErrors;
         });
@@ -367,24 +409,26 @@ export default function InventoryShrinkagePage() {
                                             <option value="FOUND">{t.inventoryShrinkage.directionFound}</option>
                                         </Select>
                                     </Field>
-                                    <Field
-                                        label={t.inventoryShrinkage.columns.warehouse}
-                                        required
-                                        error={errors.warehouseId}
-                                        htmlFor="shrinkage-warehouse"
-                                    >
-                                        <Select
-                                            id="shrinkage-warehouse"
-                                            error={Boolean(errors.warehouseId)}
-                                            value={form.warehouseId}
-                                            onChange={(event) => setField({ warehouseId: event.target.value })}
+                                    {multipleWarehouses ? (
+                                        <Field
+                                            label={t.inventoryShrinkage.columns.warehouse}
+                                            required
+                                            error={errors.warehouseId}
+                                            htmlFor="shrinkage-warehouse"
                                         >
-                                            <option value="">{t.inventoryShrinkage.selectWarehouse}</option>
-                                            {warehouses.map((warehouse) => (
-                                                <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>
-                                            ))}
-                                        </Select>
-                                    </Field>
+                                            <Select
+                                                id="shrinkage-warehouse"
+                                                error={Boolean(errors.warehouseId)}
+                                                value={form.warehouseId}
+                                                onChange={(event) => setField({ warehouseId: event.target.value })}
+                                            >
+                                                <option value="">{t.inventoryShrinkage.selectWarehouse}</option>
+                                                {warehouses.map((warehouse) => (
+                                                    <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>
+                                                ))}
+                                            </Select>
+                                        </Field>
+                                    ) : null}
                                     <Field
                                         label={t.inventoryShrinkage.columns.reason}
                                         required
@@ -421,64 +465,97 @@ export default function InventoryShrinkagePage() {
                                 </div>
 
                                 <div className="space-y-3">
-                                    {form.items.map((item, index) => (
-                                        <div key={index} className="grid md:grid-cols-[1fr_160px_120px] gap-3 items-start">
-                                            <Field
-                                                label={t.inventoryShrinkage.selectProduct}
-                                                required
-                                                error={errors.items[index]?.productId}
-                                                htmlFor={`shrinkage-product-${index}`}
-                                            >
-                                                <IdSearchSelect
-                                                    id={`shrinkage-product-${index}`}
-                                                    items={products}
-                                                    value={item.productId}
-                                                    onChange={(id) => setLine(index, { productId: id })}
-                                                    placeholder={t.inventoryShrinkage.selectProduct}
-                                                    emptyLabel={t.pos.searchPlaceholder}
-                                                    noMatchLabel={t.common.noData}
-                                                    subtitle={(product) => product.sku ?? ''}
-                                                />
-                                            </Field>
-                                            <Field
-                                                label={t.inventoryShrinkage.columns.totalQty}
-                                                required
-                                                error={errors.items[index]?.quantity}
-                                                htmlFor={`shrinkage-quantity-${index}`}
-                                            >
-                                                <Input
-                                                    id={`shrinkage-quantity-${index}`}
-                                                    type="number"
-                                                    min="1"
-                                                    step="1"
-                                                    error={Boolean(errors.items[index]?.quantity)}
-                                                    value={item.quantity}
-                                                    onChange={(event) => setLine(index, { quantity: event.target.value })}
-                                                />
-                                            </Field>
-                                            <Button
-                                                variant="secondary"
-                                                className="md:mt-5"
-                                                onClick={() =>
-                                                    setForm((current) => ({
-                                                        ...current,
-                                                        items: current.items.length === 1
-                                                            ? current.items
-                                                            : current.items.filter((_, lineIndex) => lineIndex !== index),
-                                                    }))
-                                                }
-                                            >
-                                                {t.inventoryShrinkage.remove}
-                                            </Button>
-                                        </div>
-                                    ))}
+                                    {form.items.map((item, index) => {
+                                        const overStock = overStockAt(item);
+                                        // A product already on another line may not be
+                                        // picked again — the server rejects duplicate
+                                        // lines, so offering it only leads to a failed
+                                        // post after the whole form is filled in.
+                                        const takenIds = form.items
+                                            .filter((_, lineIndex) => lineIndex !== index)
+                                            .map((line) => line.productId)
+                                            .filter(Boolean);
+                                        return (
+                                            <div key={index} className="space-y-1">
+                                                <div className="grid md:grid-cols-[1fr_160px_120px] gap-3 items-start">
+                                                    <Field
+                                                        label={t.inventoryShrinkage.selectProduct}
+                                                        required
+                                                        error={errors.items[index]?.productId}
+                                                        htmlFor={`shrinkage-product-${index}`}
+                                                    >
+                                                        <StockProductPicker
+                                                            id={`shrinkage-product-${index}`}
+                                                            value={item.productId}
+                                                            takenIds={takenIds}
+                                                            onChange={(product) => setLine(index, {
+                                                                productId: product?.id ?? '',
+                                                                product,
+                                                            })}
+                                                            placeholder={t.inventoryShrinkage.selectProduct}
+                                                            searchPlaceholder={t.inventoryShrinkage.popularProducts}
+                                                            emptyLabel={t.inventoryShrinkage.typeToSearch}
+                                                            noMatchLabel={t.inventoryShrinkage.noProductsFound}
+                                                            clearLabel={t.inventoryShrinkage.clearProduct}
+                                                            subtitle={(product) => {
+                                                                const stock = availableQtyOf(product, form.warehouseId || undefined);
+                                                                const sku = product.sku ? `${product.sku} · ` : '';
+                                                                return `${sku}${t.inventoryShrinkage.availableInWarehouse.replace('{qty}', String(stock))}`;
+                                                            }}
+                                                        />
+                                                    </Field>
+                                                    <Field
+                                                        label={t.inventoryShrinkage.columns.totalQty}
+                                                        required
+                                                        error={errors.items[index]?.quantity}
+                                                        htmlFor={`shrinkage-quantity-${index}`}
+                                                    >
+                                                        <Input
+                                                            id={`shrinkage-quantity-${index}`}
+                                                            type="number"
+                                                            min="1"
+                                                            step="1"
+                                                            error={Boolean(errors.items[index]?.quantity)}
+                                                            value={item.quantity}
+                                                            onChange={(event) => setLine(index, { quantity: event.target.value })}
+                                                        />
+                                                    </Field>
+                                                    <Button
+                                                        variant="secondary"
+                                                        className="md:mt-5"
+                                                        onClick={() =>
+                                                            setForm((current) => ({
+                                                                ...current,
+                                                                items: current.items.length === 1
+                                                                    ? current.items
+                                                                    : current.items.filter((_, lineIndex) => lineIndex !== index),
+                                                            }))
+                                                        }
+                                                    >
+                                                        {t.inventoryShrinkage.remove}
+                                                    </Button>
+                                                </div>
+                                                {item.product ? (
+                                                    <p className="ms-1 text-xs text-gray-500">
+                                                        {t.inventoryShrinkage.availableInWarehouse.replace(
+                                                            '{qty}',
+                                                            String(availableFor(item) ?? 0),
+                                                        )}
+                                                        {overStock !== null ? (
+                                                            <span className="text-amber-700"> · {t.inventoryShrinkage.exceedsStock}</span>
+                                                        ) : null}
+                                                    </p>
+                                                ) : null}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
 
                                 <Button
                                     variant="secondary"
                                     icon={<Plus className="w-4 h-4" />}
                                     onClick={() =>
-                                        setForm((current) => ({ ...current, items: [...current.items, { productId: '', quantity: 1 }] }))
+                                        setForm((current) => ({ ...current, items: [...current.items, { ...BLANK_LINE }] }))
                                     }
                                 >
                                     {t.inventoryShrinkage.addLine}

@@ -232,6 +232,13 @@ export const inventoryExtrasMessages = {
         "remove": "Supprimer",
         "notes": "Notes",
         "selectProduct": "Sélectionner un produit",
+        "popularProducts": "Produits populaires",
+        "typeToSearch": "Saisir un nom ou un SKU pour rechercher",
+        "noProductsFound": "Aucun produit ne correspond à cette recherche",
+        "clearProduct": "Retirer le produit",
+        "availableInWarehouse": "En stock ici : {qty}",
+        "exceedsStock": "Plus que le stock disponible",
+        "quantityExceedsStock": "Seulement {qty} en stock dans cet entrepôt.",
     "listUi": {
         "statsLabel": "Synthèse des pertes",
         "total": "Écritures",

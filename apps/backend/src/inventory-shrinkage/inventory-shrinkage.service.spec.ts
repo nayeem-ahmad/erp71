@@ -3,6 +3,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { InventoryShrinkageService } from './inventory-shrinkage.service';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant } from '../database/inventory.utils';
+import { resolveProductCosts } from '../database/product-cost.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import { issueDocumentNumber } from '../database/document-number.utils';
 
@@ -14,6 +15,11 @@ jest.mock('../database/document-number.utils', () => ({
 jest.mock('../database/inventory.utils', () => ({
     applyInventoryMovement: jest.fn(),
     assertWarehouseBelongsToTenant: jest.fn(),
+}));
+
+jest.mock('../database/product-cost.utils', () => ({
+    ...jest.requireActual('../database/product-cost.utils'),
+    resolveProductCosts: jest.fn(),
 }));
 
 jest.mock('../accounting/posting.utils', () => ({
@@ -50,6 +56,7 @@ describe('InventoryShrinkageService', () => {
         service = module.get(InventoryShrinkageService);
         (assertWarehouseBelongsToTenant as jest.Mock).mockResolvedValue({ id: 'wh-1', store_id: 'store-1' });
         (applyInventoryMovement as jest.Mock).mockResolvedValue(3);
+        (resolveProductCosts as jest.Mock).mockResolvedValue(new Map([['prod-1', 18]]));
         (autoPostFromRules as jest.Mock).mockResolvedValue({
             postingStatus: 'posted',
             voucherId: 'voucher-1',
@@ -88,6 +95,38 @@ describe('InventoryShrinkageService', () => {
             expect.objectContaining({ where: expect.objectContaining({ type: 'SHRINKAGE' }) }),
         );
         expect(result.reference_number).toBe('SHR-00001');
+    });
+
+    // The report a shopkeeper reads is valued from this column, so it has to be
+    // what the stock cost — not what the product sells for, which is what it
+    // used to be and which overstated every write-off by the margin.
+    it('snapshots the cost the stock was held at, not the selling price', async () => {
+        tx.inventoryReason.findFirst.mockResolvedValue({ id: 'reason-1' });
+        tx.product.findMany.mockResolvedValue([{ id: 'prod-1', price: 25 }]);
+        tx.inventoryShrinkage.create.mockResolvedValue({
+            id: 'shrink-1',
+            reference_number: 'SHR-00001',
+            items: [{ product_id: 'prod-1', quantity: 2, unit_cost: 18 }],
+        });
+
+        await service.create('tenant-1', {
+            warehouseId: 'wh-1',
+            reasonId: 'reason-1',
+            notes: 'Crushed by the forklift in bay 3',
+            items: [{ productId: 'prod-1', quantity: 2 }],
+        });
+
+        expect(resolveProductCosts).toHaveBeenCalledWith(
+            tx,
+            expect.objectContaining({ tenantId: 'tenant-1', storeId: 'store-1', productIds: ['prod-1'] }),
+        );
+        expect(tx.inventoryShrinkage.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({
+                    items: { create: [expect.objectContaining({ unit_cost: 18 })] },
+                }),
+            }),
+        );
     });
 
     // The whole point of the FOUND direction: the same document, the same

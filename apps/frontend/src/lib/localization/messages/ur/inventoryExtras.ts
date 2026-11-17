@@ -232,6 +232,13 @@ export const inventoryExtrasMessages = {
         "remove": "ہٹائیں",
         "notes": "نوٹس",
         "selectProduct": "پروڈکٹ منتخب کریں",
+        "popularProducts": "مقبول پروڈکٹس",
+        "typeToSearch": "تلاش کے لیے نام یا SKU لکھیں",
+        "noProductsFound": "اس تلاش سے کوئی پروڈکٹ نہیں ملا",
+        "clearProduct": "پروڈکٹ ہٹائیں",
+        "availableInWarehouse": "یہاں دستیاب: {qty}",
+        "exceedsStock": "دستیاب سے زیادہ",
+        "quantityExceedsStock": "اس گودام میں صرف {qty} دستیاب ہیں۔",
     "listUi": {
         "statsLabel": "نقصان کا خلاصہ",
         "total": "اندراجات",
