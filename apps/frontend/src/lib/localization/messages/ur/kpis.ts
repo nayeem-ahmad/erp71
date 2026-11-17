@@ -30,6 +30,7 @@ export const kpisMessages = {
         noData: 'اس مدت میں کافی ڈیٹا نہیں',
         planned: 'مرحلہ {phase} میں آ رہا ہے',
         cashPositive: 'نقد مثبت',
+        notBurning: 'نقدی خرچ نہیں ہو رہی',
     },
     units: {
         months: '{value} ماہ',
@@ -59,6 +60,9 @@ export const kpisMessages = {
         trailing_three_months: 'برن مدت کے اختتام تک کے تین مہینوں کا اوسط ہے۔',
         signup_to_activation: 'ورک اسپیس سائن اپ سے پہلی ادا شدہ ایکٹیویشن تک ناپا جاتا ہے۔',
         platform_workspace_staff: 'پلیٹ فارم ٹیم کے HR ریکارڈ سے۔',
+        subscription_mrr: 'سبسکرپشن MRR سے — ہر ٹیننٹ کی رعایت کے بعد، سالانہ فیس ÷ 12، ایڈ آنز سمیت۔',
+        mrr_history_short: 'MRR کی تاریخ ابھی اس مدت کے آغاز تک نہیں پہنچتی۔',
+        not_burning: 'اس مدت میں نقدی بڑھی، اس لیے کوئی نقدی خرچ نہیں ہوئی۔',
     },
     basis: {
         revenue: 'آمدنی',
@@ -88,6 +92,16 @@ export const kpisMessages = {
         averageHeadcount: 'عملے کی اوسط تعداد',
         creditSales: 'ادھار فروخت',
         periodDays: 'مدت کے دن',
+        startingMrr: 'آغاز پر MRR',
+        endingMrr: 'اختتام پر MRR',
+        newMrr: 'نیا MRR',
+        expansionMrr: 'توسیعی MRR',
+        contractionMrr: 'کمی والا MRR',
+        churnedMrr: 'کھویا ہوا MRR',
+        reactivationMrr: 'دوبارہ فعال MRR',
+        payingTenants: 'ادائیگی کرنے والے ورک اسپیسز',
+        netBurn: 'خالص نقدی خرچ',
+        netNewArr: 'خالص نیا ARR',
     },
     items: {
         revenue_growth: {

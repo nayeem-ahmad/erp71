@@ -7,11 +7,12 @@ import { PlatformAdminGuard } from '../auth/platform-admin.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { PlatformKpiController, TenantKpiController } from './kpi.controller';
+import { MrrModule } from './mrr/mrr.module';
 import { PlatformKpiService } from './platform-kpi.service';
 import { TenantKpiService } from './tenant-kpi.service';
 
 @Module({
-    imports: [DatabaseModule, AccountingModule, PlatformSettingsModule, PlatformWorkspaceModule],
+    imports: [DatabaseModule, AccountingModule, PlatformSettingsModule, PlatformWorkspaceModule, MrrModule],
     controllers: [TenantKpiController, PlatformKpiController],
     providers: [TenantKpiService, PlatformKpiService, PlatformAdminGuard, StorePermissionGuard, SubscriptionAccessGuard],
     exports: [TenantKpiService, PlatformKpiService],

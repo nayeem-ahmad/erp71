@@ -28,7 +28,7 @@ type OverviewResponse = {
         expiring_trials: number;
         lapsed: number;
     };
-    revenue: { billed_in_period: number; payments: number; mrr_ceiling: number };
+    revenue: { billed_in_period: number; payments: number; mrr: number | null; paying_tenants: number | null };
     support: { open_threads: number; awaiting_reply: number };
     top_tenants: Array<{
         id: string;
@@ -124,11 +124,10 @@ export default function AdminDashboard({
         {
             key: 'mrr',
             title: adm.kpiMrr,
-            value: money(revenue?.mrr_ceiling ?? 0),
-            delta: compare(revenue?.mrr_ceiling, prev?.revenue.mrr_ceiling),
-            // Says out loud that discounts are not applied, rather than letting
-            // the number pass for the real run rate.
-            note: adm.helperMrrCaveat,
+            // Null before the MRR history starts: a dash, not a misleading ৳0.
+            value: revenue?.mrr == null ? '—' : money(revenue.mrr),
+            delta: compare(revenue?.mrr ?? undefined, prev?.revenue.mrr ?? undefined),
+            note: adm.helperMrrBasis,
         },
     ];
 

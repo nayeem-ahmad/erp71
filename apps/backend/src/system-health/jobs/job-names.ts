@@ -7,6 +7,7 @@ export const JOB_NAMES = {
     BILLING_RETRY: 'billing.retry-failed-payments',
     BILLING_DUNNING: 'billing.dunning',
     BILLING_PERIOD_FEES: 'billing.post-subscription-period-fees',
+    PLATFORM_MRR_SNAPSHOT: 'platform.mrr-snapshot',
     NOTIFICATIONS_EXPIRY_WARNINGS: 'notifications.subscription-expiry-warnings',
     NOTIFICATIONS_LOW_STOCK: 'notifications.low-stock-alerts',
     NOTIFICATIONS_WEEKLY: 'notifications.weekly-reports',
@@ -122,6 +123,8 @@ export const JOB_REGISTRY: JobDefinition[] = [
     { name: JOB_NAMES.BILLING_RETRY, label: 'Billing: retry failed payments', schedule: '0 2 * * *', maxIntervalMs: DAY + 2 * HOUR },
     { name: JOB_NAMES.BILLING_DUNNING, label: 'Billing: dunning', schedule: '0 3 * * *', maxIntervalMs: DAY + 2 * HOUR },
     { name: JOB_NAMES.BILLING_PERIOD_FEES, label: 'Billing: post subscription period fees', schedule: '0 4 * * *', maxIntervalMs: DAY + 2 * HOUR },
+    // Late in the Dhaka day so the row records the day's closing state.
+    { name: JOB_NAMES.PLATFORM_MRR_SNAPSHOT, label: 'Platform KPIs: record each tenant’s MRR', schedule: '50 23 * * *', maxIntervalMs: DAY + 2 * HOUR },
     { name: JOB_NAMES.NOTIFICATIONS_EXPIRY_WARNINGS, label: 'Notifications: subscription expiry warnings', schedule: '0 14 * * *', maxIntervalMs: DAY + 2 * HOUR },
     { name: JOB_NAMES.NOTIFICATIONS_LOW_STOCK, label: 'Notifications: low stock alerts', schedule: '0 13 * * *', maxIntervalMs: DAY + 2 * HOUR },
     { name: JOB_NAMES.NOTIFICATIONS_WEEKLY, label: 'Notifications: weekly reports', schedule: '0 13 * * 1', maxIntervalMs: 7 * DAY + 2 * HOUR },

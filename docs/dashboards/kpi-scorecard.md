@@ -45,13 +45,36 @@ only and say so on the tile.
 Ledger KPIs honour the tenant's approved-only reporting setting; the scorecard
 warns when vouchers are waiting for approval.
 
+## Phase 2: platform subscription KPIs
+
+Read from the MRR history (`apps/backend/src/kpis/mrr/`, table
+`tenant_mrr_snapshots`). A nightly job (23:50 Dhaka) records every tenant's
+MRR: the subscription fee after the tenant's discount (yearly ÷ 12) plus active
+add-ons, for tenants that are active, or past due after a first payment, and
+not suspended. Today is computed live. The first boot backfills 12 month-ends
+from `subscription_fee` events (approximate, no add-ons).
+
+Each tenant's MRR on the day before the period and on its last day is sorted
+into new, expansion, contraction, churn or reactivation (paid before, not at
+the start, paying at the end).
+
+| # | KPI | Formula |
+|---|---|---|
+| 9 | Net revenue retention | (start MRR + expansion − contraction − churned) ÷ start MRR |
+| 10 | Churn rate | Paying tenants lost ÷ paying tenants at the start |
+| 11 | ARPA | MRR ÷ paying tenants, on the last day |
+| 12 | Burn multiple | Net cash burn (books) ÷ net new ARR ((end − start MRR) × 12); "Not burning cash" when cash grew |
+| 17 | SaaS quick ratio | (new + expansion + reactivation) ÷ (churned + contraction) |
+
+A period that starts before the history says "history does not reach back"
+instead of guessing. The admin dashboard's MRR tile reads the same figures.
+
 ## Not live yet
 
 | KPI | Shop | Platform | Needs |
 |---|---|---|---|
 | 6 CAC, 8 LTV:CAC, 18 EBITDA | Phase 3 | Phase 3 | Expenses/accounts tagged as marketing, cost of service, interest, tax, depreciation, amortisation |
 | 2 Gross margin, 7 LTV | live | Phase 3 | Platform cost-of-service classification |
-| 9, 10, 11, 12 Burn multiple, 17 SaaS quick ratio | 12 and 17 do not apply to a shop | Phase 2 | A log of subscription MRR changes |
 | 15 NPS | Phase 4 | Phase 4 | A customer survey |
 
 The phases are tracked in `TODO.md` under "CEO KPI scorecard".

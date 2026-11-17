@@ -15,7 +15,9 @@ import { PlatformWorkspaceService } from '../platform-workspace/platform-workspa
 import { addDays, resolveComparisonRange, type DateRange } from '../common/period.util';
 import { resolveDateWindow } from '../common/dashboard-window';
 import { DEFAULT_TENANT_TIMEZONE } from '../common/tenant-time.util';
-import { average, cashRunway, daysBetween, growthPct, monthsIn } from './kpi-math';
+import { average, cashRunway, daysBetween, growthPct, monthsIn, ratioPct, round1 } from './kpi-math';
+import { MrrSnapshotService } from './mrr/mrr-snapshot.service';
+import { mrrMovements, type MrrMovements } from './mrr/mrr.util';
 import { loadStaffTurnover, result, runwayResult, RUNWAY_TRAILING_DAYS } from './kpi-results';
 
 /** A customer workspace: not deleted, and not the platform's own. */
@@ -30,8 +32,9 @@ const LIVE_TENANT = { deleted_at: null, platform_workspace_key: null } as const;
  * activations; staff turnover reads the platform workspace's HR records.
  *
  * The subscription KPIs (churn, retention, ARPA, burn multiple, quick ratio)
- * need a history of MRR changes the platform does not keep yet, and are
- * returned as planned.
+ * read the MRR history (`TenantMrrSnapshot`, see `mrr/`): each tenant's MRR on
+ * the day before the period and on its last day, classified into new,
+ * expansion, contraction, churn and reactivation.
  */
 @Injectable()
 export class PlatformKpiService {
@@ -40,6 +43,7 @@ export class PlatformKpiService {
         private readonly accounting: AccountingService,
         private readonly platformSettings: PlatformSettingsService,
         private readonly workspace: PlatformWorkspaceService,
+        private readonly mrr: MrrSnapshotService,
     ) {}
 
     async getScorecard(query: { from?: string; to?: string }): Promise<KpiScorecard> {
@@ -51,12 +55,13 @@ export class PlatformKpiService {
         const workspace = await this.workspace.find();
         const booksOn = workspace !== null && (await this.platformSettings.isFeatureEnabled('platformAccounting'));
 
-        const [books, salesCycle, turnover] = await Promise.all([
+        const [books, salesCycle, turnover, subscriptions] = await Promise.all([
             booksOn ? this.bookFigures(workspace.id, period, previousPeriod) : Promise.resolve(null),
             this.salesCycle(period, previousPeriod, timezone),
             workspace
                 ? loadStaffTurnover(this.db, { tenantId: workspace.id }, [period, previousPeriod], timezone)
                 : Promise.resolve(null),
+            this.subscriptionFigures(period, previousPeriod),
         ]);
 
         const computed: Partial<Record<KpiId, KpiResult>> = {
@@ -98,6 +103,8 @@ export class PlatformKpiService {
             }
         }
 
+        Object.assign(computed, subscriptionKpis(subscriptions, books?.cash ?? null));
+
         return {
             audience: KpiAudience.PLATFORM,
             period,
@@ -107,6 +114,27 @@ export class PlatformKpiService {
                 computed[definition.id] ?? unavailableKpiResult(definition.id, KpiAudience.PLATFORM)),
             unpostedVouchers: books?.pending ?? 0,
             generatedAt: new Date().toISOString(),
+        };
+    }
+
+    /**
+     * MRR movements for the period and the one before it, from three days of
+     * MRR: the day before the previous period, the day before this one, and
+     * the last day of this one. Null for a period the history does not reach.
+     */
+    private async subscriptionFigures(period: DateRange, previous: DateRange): Promise<SubscriptionFigures> {
+        const beforePrevious = addDays(previous.from, -1);
+        const beforeCurrent = addDays(period.from, -1);
+        const [a, b, c, paidByA, paidByB] = await Promise.all([
+            this.mrr.mrrOn(beforePrevious),
+            this.mrr.mrrOn(beforeCurrent),
+            this.mrr.mrrOn(period.to),
+            this.mrr.paidOnOrBefore(beforePrevious),
+            this.mrr.paidOnOrBefore(beforeCurrent),
+        ]);
+        return {
+            current: b.covered && c.covered ? mrrMovements(b.byTenant, c.byTenant, paidByB) : null,
+            previous: a.covered && b.covered ? mrrMovements(a.byTenant, b.byTenant, paidByA) : null,
         };
     }
 
@@ -159,6 +187,96 @@ export class PlatformKpiService {
         return { current, previous: before };
     }
 
+}
+
+interface SubscriptionFigures {
+    current: MrrMovements | null;
+    previous: MrrMovements | null;
+}
+
+type CashFigures = { current: { net: number }; previous: { net: number } };
+
+const SUBSCRIPTION_NOTES: KpiNote[] = ['subscription_mrr'];
+const round2 = (value: number) => Math.round(value * 100) / 100 + 0;
+
+/**
+ * Churn, revenue retention, ARPA, quick ratio and burn multiple from the MRR
+ * movements. Exported for the spec: the formulas are the infographic's, read
+ * off MRR rather than off a SaaS billing system.
+ */
+export function subscriptionKpis(
+    figures: SubscriptionFigures,
+    cash: CashFigures | null,
+): Partial<Record<KpiId, KpiResult>> {
+    const { current, previous } = figures;
+    const short = (id: KpiId): KpiResult => ({
+        id, status: 'no_data', value: null, previous: null, basis: {}, notes: ['mrr_history_short'],
+    });
+    if (!current) {
+        return Object.fromEntries(
+            (['churn_rate', 'net_revenue_retention', 'avg_revenue_per_account', 'quick_ratio', 'burn_multiple'] as const)
+                .map((id) => [id, short(id)]),
+        );
+    }
+
+    const churn = (m: MrrMovements | null) => (m ? ratioPct(m.lostCustomers, m.startCustomers) : null);
+    const retention = (m: MrrMovements | null) => (m && m.startMrr > 0
+        ? round1(((m.startMrr + m.expansionMrr - m.contractionMrr - m.churnedMrr) / m.startMrr) * 100)
+        : null);
+    const quick = (m: MrrMovements | null) => {
+        if (!m) return null;
+        const lost = m.churnedMrr + m.contractionMrr;
+        return lost > 0 ? round2((m.newMrr + m.expansionMrr + m.reactivationMrr) / lost) : null;
+    };
+    const burnMultiple = (m: MrrMovements | null, netCashChange: number | undefined) => {
+        if (!m || netCashChange === undefined) return { value: null, burn: null, arr: null, notBurning: false };
+        const burn = round2(-netCashChange);
+        const arr = round2((m.endMrr - m.startMrr) * 12);
+        if (burn <= 0) return { value: null, burn, arr, notBurning: true };
+        return { value: arr > 0 ? round2(burn / arr) : null, burn, arr, notBurning: false };
+    };
+
+    const burnNow = burnMultiple(current, cash?.current.net);
+    const burnBefore = burnMultiple(previous, cash?.previous.net);
+
+    return {
+        churn_rate: result('churn_rate', churn(current), churn(previous), {
+            lostCustomers: current.lostCustomers,
+            startingCustomers: current.startCustomers,
+            churnedMrr: current.churnedMrr,
+        }, SUBSCRIPTION_NOTES),
+        net_revenue_retention: result('net_revenue_retention', retention(current), retention(previous), {
+            startingMrr: current.startMrr,
+            expansionMrr: current.expansionMrr,
+            contractionMrr: current.contractionMrr,
+            churnedMrr: current.churnedMrr,
+        }, SUBSCRIPTION_NOTES),
+        avg_revenue_per_account: result(
+            'avg_revenue_per_account',
+            current.endCustomers > 0 ? round2(current.endMrr / current.endCustomers) : null,
+            current.startCustomers > 0 ? round2(current.startMrr / current.startCustomers) : null,
+            { endingMrr: current.endMrr, payingTenants: current.endCustomers },
+            SUBSCRIPTION_NOTES,
+        ),
+        quick_ratio: result('quick_ratio', quick(current), quick(previous), {
+            newMrr: current.newMrr,
+            expansionMrr: current.expansionMrr,
+            reactivationMrr: current.reactivationMrr,
+            churnedMrr: current.churnedMrr,
+            contractionMrr: current.contractionMrr,
+        }, SUBSCRIPTION_NOTES),
+        burn_multiple: !cash
+            ? noBooks('burn_multiple')
+            : {
+                id: 'burn_multiple',
+                // Not burning is an answer, not a gap.
+                status: burnNow.value !== null || burnNow.notBurning ? 'ok' : 'no_data',
+                value: burnNow.value,
+                previous: burnBefore.value,
+                basis: { netBurn: burnNow.burn, netNewArr: burnNow.arr },
+                notes: ['ledger_based', ...SUBSCRIPTION_NOTES, ...(burnNow.notBurning ? ['not_burning' as const] : [])],
+            },
+    };
 }
 
 function noBooks(id: KpiId): KpiResult {

@@ -38,7 +38,7 @@ const overview = (patch: Record<string, unknown> = {}) => ({
         expiring_trials: 3,
         lapsed: 2,
     },
-    revenue: { billed_in_period: 260_000, payments: 74, mrr_ceiling: 310_000 },
+    revenue: { billed_in_period: 260_000, payments: 74, mrr: 310_000, paying_tenants: 42 },
     support: { open_threads: 6, awaiting_reply: 2 },
     top_tenants: [{ id: 't1', name: 'Beta Store', plan: 'PREMIUM', revenue: 24_000, payments: 3 }],
     recent_signups: [
@@ -87,11 +87,11 @@ describe('AdminDashboard', () => {
         expect(screen.getByText('340 users · 22 new')).toBeInTheDocument();
     });
 
-    it('labels the run rate as a ceiling and says discounts are not applied', async () => {
+    it('shows MRR after discounts, add-ons included', async () => {
         renderWithQueryClient(<AdminDashboard {...identity} />);
 
-        expect(await screen.findByText('Run rate (ceiling)')).toBeInTheDocument();
-        expect(screen.getByText('List prices, before discounts')).toBeInTheDocument();
+        expect(await screen.findByText('Monthly recurring revenue')).toBeInTheDocument();
+        expect(screen.getByText('After discounts, add-ons included')).toBeInTheDocument();
     });
 
     it('ranks tenants by revenue with their plan alongside', async () => {

@@ -30,6 +30,7 @@ export const kpisMessages = {
         noData: "Nicht genug Daten in diesem Zeitraum",
         planned: "Kommt in Phase {phase}",
         cashPositive: "Cash-positiv",
+        notBurning: "Kein Cash-Burn",
     },
     units: {
         months: "{value} Mon.",
@@ -59,6 +60,9 @@ export const kpisMessages = {
         trailing_three_months: "Der Burn ist der Durchschnitt der drei Monate bis zum Ende des Zeitraums.",
         signup_to_activation: "Gemessen von der Workspace-Registrierung bis zur ersten bezahlten Aktivierung.",
         platform_workspace_staff: "Aus den HR-Daten des Plattformteams.",
+        subscription_mrr: "Aus dem Abo-MRR nach dem Rabatt jedes Mandanten, Jahresgebühren ÷ 12, inkl. Add-ons.",
+        mrr_history_short: "Die MRR-Historie reicht noch nicht bis zum Beginn dieses Zeitraums zurück.",
+        not_burning: "Die liquiden Mittel sind im Zeitraum gestiegen, es wurde also kein Geld verbrannt.",
     },
     basis: {
         revenue: "Umsatz",
@@ -88,6 +92,16 @@ export const kpisMessages = {
         averageHeadcount: "Durchschnittliche Mitarbeiterzahl",
         creditSales: "Verkäufe auf Kredit",
         periodDays: "Tage im Zeitraum",
+        startingMrr: "MRR zu Beginn",
+        endingMrr: "MRR am Ende",
+        newMrr: "Neuer MRR",
+        expansionMrr: "Expansions-MRR",
+        contractionMrr: "Kontraktions-MRR",
+        churnedMrr: "Abgewanderter MRR",
+        reactivationMrr: "Reaktivierter MRR",
+        payingTenants: "Zahlende Arbeitsbereiche",
+        netBurn: "Netto-Cash-Burn",
+        netNewArr: "Netto-Neu-ARR",
     },
     items: {
         revenue_growth: {

@@ -139,7 +139,19 @@ describe('TenantKpiService.getScorecard', () => {
 });
 
 describe('PlatformKpiService.getScorecard', () => {
-    function build({ workspace = { id: 'platform-ws' }, booksOn = true } = {}) {
+    // Three MRR days: before the previous period (Mar 2), before this one (Mar 31), and Apr 30.
+    const MRR_DAYS: Record<string, Map<string, number>> = {
+        '2026-03-01': new Map([['a', 1000], ['b', 1000]]),
+        '2026-03-31': new Map([['a', 1000], ['b', 1000], ['c', 500]]),
+        '2026-04-30': new Map([['a', 1500], ['b', 0], ['c', 500], ['d', 2000]]),
+    };
+
+    function build({
+        workspace = { id: 'platform-ws' } as { id: string } | null,
+        booksOn = true,
+        historyFrom = '2026-01-01',
+        netCash = 3000,
+    } = {}) {
         const db = {
             tenantSubscription: {
                 findMany: jest.fn().mockResolvedValue([
@@ -153,11 +165,22 @@ describe('PlatformKpiService.getScorecard', () => {
             .mockResolvedValueOnce(ratios({ revenue: 30000 }))
             .mockResolvedValueOnce(ratios({ revenue: 20000 }));
         const settings = { isFeatureEnabled: jest.fn().mockResolvedValue(booksOn) };
+        accounting.getCashMovements.mockResolvedValue(cash({ net: netCash }));
         const ws = { find: jest.fn().mockResolvedValue(workspace) };
-        return { service: new PlatformKpiService(db as any, accounting as any, settings as any, ws as any), accounting };
+        const mrr = {
+            mrrOn: jest.fn(async (day: string) => (day < historyFrom
+                ? { covered: false, byTenant: new Map() }
+                : { covered: true, byTenant: MRR_DAYS[day] ?? new Map() })),
+            paidOnOrBefore: jest.fn(async () => new Set(['a', 'b'])),
+        };
+        return {
+            service: new PlatformKpiService(db as any, accounting as any, settings as any, ws as any, mrr as any),
+            accounting,
+            mrr,
+        };
     }
 
-    it('reads the money KPIs from the platform books and marks the MRR ones as phase 2', async () => {
+    it('reads the money KPIs from the platform books', async () => {
         const { service, accounting } = build();
         const card = await service.getScorecard({ from: '2026-04-01', to: '2026-04-30' });
         const byId = Object.fromEntries(card.kpis.map((k) => [k.id, k]));
@@ -165,9 +188,45 @@ describe('PlatformKpiService.getScorecard', () => {
         expect(accounting.getFinancialRatios).toHaveBeenCalledWith('platform-ws', expect.anything());
         expect(byId.revenue_growth.value).toBe(50);
         expect(byId.sales_cycle_length).toMatchObject({ value: 14, notes: ['signup_to_activation'] });
-        for (const id of ['churn_rate', 'net_revenue_retention', 'avg_revenue_per_account', 'burn_multiple', 'quick_ratio'] as const) {
-            expect(byId[id]).toMatchObject({ status: 'planned', phase: 2, needs: 'mrr_history' });
-        }
+        expect(card.kpis.filter((k) => k.status === 'planned').map((k) => k.id)).toEqual([
+            'gross_margin', 'customer_acquisition_cost', 'customer_lifetime_value', 'ltv_to_cac', 'net_promoter_score', 'ebitda',
+        ]);
+    });
+
+    it('computes the subscription KPIs from MRR on the day before the period and its last day', async () => {
+        const { service, mrr } = build({ netCash: -9000 });
+        const card = await service.getScorecard({ from: '2026-04-01', to: '2026-04-30' });
+        const byId = Object.fromEntries(card.kpis.map((k) => [k.id, k]));
+
+        expect(mrr.mrrOn).toHaveBeenCalledWith('2026-03-31');
+        expect(mrr.mrrOn).toHaveBeenCalledWith('2026-04-30');
+        // Start ৳2,500 over a, b, c. b churned (৳1,000), a expanded (৳500), d is new (৳2,000).
+        expect(byId.churn_rate).toMatchObject({ status: 'ok', value: 33.3, notes: ['subscription_mrr'] });
+        expect(byId.net_revenue_retention.value).toBe(80);
+        expect(byId.avg_revenue_per_account.value).toBe(1333.33);
+        // (2,000 new + 500 expansion) / 1,000 churned.
+        expect(byId.quick_ratio.value).toBe(2.5);
+        // ৳9,000 burned for (4,000 − 2,500) × 12 = ৳18,000 of net new ARR.
+        expect(byId.burn_multiple).toMatchObject({ status: 'ok', value: 0.5, basis: { netBurn: 9000, netNewArr: 18000 } });
+        // Last period: c joined, nobody left.
+        expect(byId.churn_rate.previous).toBe(0);
+    });
+
+    it('says when the platform is not burning cash instead of a burn multiple', async () => {
+        const { service } = build({ netCash: 5000 });
+        const card = await service.getScorecard({ from: '2026-04-01', to: '2026-04-30' });
+        const burn = card.kpis.find((k) => k.id === 'burn_multiple')!;
+
+        expect(burn).toMatchObject({ status: 'ok', value: null });
+        expect(burn.notes).toContain('not_burning');
+    });
+
+    it('marks the subscription KPIs as short of history before the first snapshot', async () => {
+        const { service } = build({ historyFrom: '2026-04-15' });
+        const card = await service.getScorecard({ from: '2026-04-01', to: '2026-04-30' });
+        const churn = card.kpis.find((k) => k.id === 'churn_rate')!;
+
+        expect(churn).toMatchObject({ status: 'no_data', notes: ['mrr_history_short'] });
     });
 
     it('says the books are unavailable when platform accounting is off', async () => {
