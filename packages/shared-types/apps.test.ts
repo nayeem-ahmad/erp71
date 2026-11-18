@@ -45,7 +45,7 @@ describe('APP_REGISTRY', () => {
     it('lists the business apps, which are the only ones an owner may hide', () => {
         expect([...BUSINESS_APP_IDS].sort()).toEqual([
             'accounting', 'crm', 'expenses', 'hr', 'imports', 'inventory',
-            'manufacturing', 'meetings', 'projects', 'purchase', 'sales', 'storefront',
+            'manufacturing', 'projects', 'purchase', 'sales', 'storefront',
         ]);
     });
 });
@@ -95,10 +95,12 @@ describe('resolveAppStates', () => {
         const bookkeeper = resolveAppStates(input({ isOwner: false, permissions: ['VIEW_LEDGER', 'VIEW_PROJECTS'] }));
         expect(bookkeeper.accounting).toBe('available');
         expect(bookkeeper.projects).toBe('available');
-        expect(bookkeeper.meetings).toBe('unavailable');
 
+        // Meetings is not an app any more — it moved under Tools, so it has no
+        // state here. Its VIEW_MEETINGS gate is a NAV_PERMISSIONS tag now.
         const minutesClerk = resolveAppStates(input({ isOwner: false, permissions: ['VIEW_MEETINGS'] }));
-        expect(minutesClerk.meetings).toBe('available');
+        expect(minutesClerk).not.toHaveProperty('meetings');
+        expect(minutesClerk.tools).toBe('available');
         expect(minutesClerk.projects).toBe('unavailable');
     });
 

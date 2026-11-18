@@ -312,7 +312,7 @@ export const helpMessages = {
             faqs: [
                 {
                     q: 'How do I record meeting minutes?',
-                    a: 'Open Meetings → Meetings and click New meeting. Fill in the title, date and attendees, then add each discussion with its title, notes, an optional decision, and any action points that came out of it. Save as a draft while you write; Finalize when the minutes are ready. Drafts never email anyone.',
+                    a: 'Open Tools → Meetings and click New meeting. Fill in the title, date and attendees, then add each discussion with its title, notes, an optional decision, and any action points that came out of it. Save as a draft while you write; Finalize when the minutes are ready. Drafts never email anyone.',
                 },
                 {
                     q: 'How do action points and reminders work?',
@@ -324,7 +324,7 @@ export const helpMessages = {
                 },
                 {
                     q: 'Who can see a meeting?',
-                    a: 'The organizer, attendees, and anyone assigned an action point can open it. A "view all meetings" permission (owners and admins) shows every meeting. My action points lists what is assigned to you; All action points needs the view-all permission. Accounting-only shops do not get the Meetings module.',
+                    a: 'The organizer, attendees, and anyone assigned an action point can open it. A "view all meetings" permission (owners and admins) shows every meeting. My action points lists what is assigned to you; All action points needs the view-all permission. Meetings sits under Tools, and accounting-only shops do not get it.',
                 },
             ],
         },

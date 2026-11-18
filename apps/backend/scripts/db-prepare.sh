@@ -313,16 +313,18 @@ step sync:expense-reparent \
 step sync:nav-expense-heads \
     npm run sync:nav-layout --workspace=@erp71/database -- --nodes=expenses.heads
 
-# Meetings is a new top-level module. A saved sidebar stays frozen until these
-# ids are merged in. Idempotent: a layout that already has them is skipped.
-step sync:nav-meetings \
-    npm run sync:nav-layout --workspace=@erp71/database -- --nodes=meetings,meetings.list,meetings.actions,meetings.actions-all
-
-# Tools (Notes, URL Shortener, Meet71) is a new top-level utility module. Same
-# reason as Meetings: a saved sidebar never shows it until these ids are merged
-# in. Idempotent.
+# Tools (Notes, URL Shortener, Meet71) is a new top-level utility module. A saved
+# sidebar stays frozen until these ids are merged in. Idempotent.
 step sync:nav-tools \
     npm run sync:nav-layout --workspace=@erp71/database -- --nodes=tools,tools.notes,tools.url-shortener,tools.meet71
+
+# Meetings moved under Tools, so its ids follow the Tools step that creates the
+# parent they hang from. A saved sidebar naming the retired root `meetings` ids
+# fails validation and is served the code default instead, which needs no merge
+# at all; this covers a layout saved after the move but before these nodes.
+# Idempotent.
+step sync:nav-meetings \
+    npm run sync:nav-layout --workspace=@erp71/database -- --nodes=tools.meetings,tools.meetings.list,tools.meetings.actions,tools.meetings.actions-all
 
 # The KPI scorecard added a root `scorecard` module beside the dashboard and
 # `admin.kpis` under the admin console's Overview. Same reason as Tools: a

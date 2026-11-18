@@ -312,7 +312,7 @@ export const helpMessages = {
             faqs: [
                 {
                     q: 'Wie halte ich ein Besprechungsprotokoll fest?',
-                    a: 'Öffnen Sie Meetings → Meetings und klicken Sie auf New meeting. Tragen Sie Titel, Datum und Teilnehmer ein und fügen Sie jede Diskussion mit Titel, Notizen, optionalem Beschluss und den daraus entstandenen Maßnahmen hinzu. Speichern Sie während des Schreibens als Entwurf; Finalize, wenn das Protokoll fertig ist. Entwürfe senden keine E-Mails.',
+                    a: 'Öffnen Sie Tools → Meetings und klicken Sie auf New meeting. Tragen Sie Titel, Datum und Teilnehmer ein und fügen Sie jede Diskussion mit Titel, Notizen, optionalem Beschluss und den daraus entstandenen Maßnahmen hinzu. Speichern Sie während des Schreibens als Entwurf; Finalize, wenn das Protokoll fertig ist. Entwürfe senden keine E-Mails.',
                 },
                 {
                     q: 'Wie funktionieren Maßnahmen und Erinnerungen?',
@@ -324,7 +324,7 @@ export const helpMessages = {
                 },
                 {
                     q: 'Wer kann eine Besprechung sehen?',
-                    a: 'Organisator, Teilnehmer und jeder mit einer zugewiesenen Maßnahme können sie öffnen. Die Berechtigung "view all meetings" (Inhaber und Admins) zeigt alle Besprechungen. My action points listet Ihre Aufgaben; All action points braucht die view-all-Berechtigung. Nur-Buchhaltungs-Shops erhalten das Meetings-Modul nicht.',
+                    a: 'Organisator, Teilnehmer und jeder mit einer zugewiesenen Maßnahme können sie öffnen. Die Berechtigung "view all meetings" (Inhaber und Admins) zeigt alle Besprechungen. My action points listet Ihre Aufgaben; All action points braucht die view-all-Berechtigung. Meetings liegt unter Tools; Nur-Buchhaltungs-Shops erhalten es nicht.',
                 },
             ],
         },

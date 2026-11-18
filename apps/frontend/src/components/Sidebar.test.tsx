@@ -618,6 +618,39 @@ describe('Sidebar — Meet71 under Tools', () => {
     });
 });
 
+describe('Sidebar — Meetings under Tools', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        setBranding();
+    });
+
+    it('files the minutes screens under Tools instead of a menu of their own', () => {
+        render(<Sidebar canAccessAccounting />);
+
+        // No top-level Meetings menu any more.
+        expect(screen.queryByText('Meetings')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByText('Tools'));
+        // The subgroup is closed until asked for, then the three screens appear.
+        expect(screen.queryByRole('link', { name: 'My action points' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByText('Meetings'));
+
+        expect(screen.getByRole('link', { name: 'Meetings' })).toHaveAttribute('href', '/meetings');
+        expect(screen.getByRole('link', { name: 'My action points' })).toHaveAttribute('href', '/meetings/actions');
+        expect(screen.getByRole('link', { name: 'All action points' })).toHaveAttribute('href', '/meetings/actions/all');
+    });
+
+    it('hides the whole group from a member without VIEW_MEETINGS, as the module gate used to', () => {
+        render(<Sidebar canAccessAccounting memberPermissions={['CREATE_SALE']} memberIsOwner={false} />);
+
+        fireEvent.click(screen.getByText('Tools'));
+
+        // Notes proves the menu opened — absence alone could mean it never did.
+        expect(screen.getByText('Notes')).toBeInTheDocument();
+        expect(screen.queryByText('Meetings')).not.toBeInTheDocument();
+    });
+});
+
 describe('Sidebar — team chat unread badge', () => {
     beforeEach(() => {
         localStorage.clear();

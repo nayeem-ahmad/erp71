@@ -667,7 +667,11 @@ function AppShell({ children }: DashboardLayoutProps) {
         if (!canAccessProjects && pathname.startsWith(routes.projects.root)) {
             router.replace(routes.home);
         }
-        if (appStates.meetings !== 'available' && pathname.startsWith(routes.meetings.root)) {
+        // Meetings is no longer an app of its own — it lives under Tools as a
+        // subgroup tagged VIEW_MEETINGS, so the member's own gate decides here.
+        // Every /meetings endpoint requires VIEW_MEETINGS and the shell would
+        // otherwise render around a screenful of 403s.
+        if (!canAccessMeetings && pathname.startsWith(routes.meetings.root)) {
             router.replace(routes.home);
         }
         // The books switched off, or the viewer is not a platform admin. Either
@@ -685,7 +689,7 @@ function AppShell({ children }: DashboardLayoutProps) {
         if (!posEnabled && pathname.startsWith(routes.sales.pos)) {
             router.replace(routes.sales.list);
         }
-    }, [accountingOnlyMode, activeContext, appStates.meetings, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canAccessPlatformAccounting, canAccessProjects, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformRole, platformFeatures.help, platformFeatures.support, platformFeatures.feedback, posEnabled, router, user]);
+    }, [accountingOnlyMode, activeContext, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canAccessMeetings, canAccessPlatformAccounting, canAccessProjects, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformRole, platformFeatures.help, platformFeatures.support, platformFeatures.feedback, posEnabled, router, user]);
 
     const activeStore =
         tenantStores.find((store: { id: string }) => store.id === activeStoreId) ?? tenantStores[0];
@@ -723,7 +727,6 @@ function AppShell({ children }: DashboardLayoutProps) {
         canAccessPremiumCrm: hasPremiumCrm,
         canAccessManufacturing,
         canAccessProjects,
-        canAccessMeetings,
         canAccessPlatformAccounting,
         canAccessAdmin: isPlatformAdmin,
         platformRole: inPlatformAdminMode ? platformRole : null,
