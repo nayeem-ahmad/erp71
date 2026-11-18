@@ -75,7 +75,9 @@ export const APP_REGISTRY: Record<string, AppDefinition> = {
   inventory: { id: 'inventory', kind: 'business' },
   crm: { id: 'crm', kind: 'business' },
   projects: { id: 'projects', kind: 'business', platformFeature: 'projects', permissionsAny: ['VIEW_PROJECTS'] },
-  meetings: { id: 'meetings', kind: 'business', permissionsAny: ['VIEW_MEETINGS'] },
+  // Meeting minutes is no longer an app: it moved under Tools as the
+  // `tools.meetings` subgroup, so its `VIEW_MEETINGS` gate is a NAV_PERMISSIONS
+  // tag now instead of an APP_REGISTRY one.
   manufacturing: {
     id: 'manufacturing',
     kind: 'business',

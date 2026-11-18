@@ -243,11 +243,6 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'projects.hour-log-report': { id: 'projects.hour-log-report', kind: 'link', icon: 'BarChart3', labelKey: 'sidebar.items.projectsHourLogReport', href: '/projects/hour-logs/report' },
   'projects.setup': { id: 'projects.setup', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.projectsSetup', href: '/projects/settings' },
 
-  meetings: { id: 'meetings', kind: 'module', icon: 'CalendarDays', labelKey: 'sidebar.modules.meetings', moduleKey: 'meetings' },
-  'meetings.list': { id: 'meetings.list', kind: 'link', icon: 'CalendarDays', labelKey: 'sidebar.items.meetingsList', href: '/meetings', exact: true },
-  'meetings.actions': { id: 'meetings.actions', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.meetingActions', href: '/meetings/actions', exact: true },
-  'meetings.actions-all': { id: 'meetings.actions-all', kind: 'link', icon: 'ClipboardList', labelKey: 'sidebar.items.meetingActionsAll', href: '/meetings/actions/all' },
-
   crm: { id: 'crm', kind: 'module', icon: 'Users', labelKey: 'sidebar.modules.crm', moduleKey: 'crm' },
   'crm.overview': { id: 'crm.overview', kind: 'link', icon: 'LayoutDashboard', labelKey: 'sidebar.items.overview', href: '/crm', exact: true },
   'crm.leads': { id: 'crm.leads', kind: 'link', icon: 'UserPlus', labelKey: 'sidebar.items.crmLeads', href: '/crm/leads', premiumOnly: true },
@@ -352,6 +347,14 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   // Meet71 is a separate product on its own origin, so this is the one nav
   // link whose href is absolute — the sidebar opens it in a new tab.
   'tools.meet71': { id: 'tools.meet71', kind: 'link', icon: 'Video', labelKey: 'sidebar.items.meet71', href: 'https://meet.erp71.com/' },
+  // Minutes moved from the rail's business apps to Tools on 2026-11-18. It is a
+  // subgroup, not a module, because only links and subgroups render inside a
+  // parent. The `VIEW_MEETINGS` tag replaces the APP_REGISTRY gate the module
+  // used to carry: a member without it is not offered minutes at all.
+  'tools.meetings': { id: 'tools.meetings', kind: 'subgroup', icon: 'CalendarDays', labelKey: 'sidebar.modules.meetings' },
+  'tools.meetings.list': { id: 'tools.meetings.list', kind: 'link', icon: 'CalendarDays', labelKey: 'sidebar.items.meetingsList', href: '/meetings', exact: true },
+  'tools.meetings.actions': { id: 'tools.meetings.actions', kind: 'link', icon: 'ListChecks', labelKey: 'sidebar.items.meetingActions', href: '/meetings/actions', exact: true },
+  'tools.meetings.actions-all': { id: 'tools.meetings.actions-all', kind: 'link', icon: 'ClipboardList', labelKey: 'sidebar.items.meetingActionsAll', href: '/meetings/actions/all' },
 
   'whats-new': { id: 'whats-new', kind: 'module', icon: 'Megaphone', labelKey: 'sidebar.items.whatsNew', href: '/whats-new' },
   // Entitlement-gated rather than plan-gated: `teamChat` is off on every plan
@@ -542,9 +545,13 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
   // is useless without its own management permission carries a tag.
   'projects.setup': ['MANAGE_PROJECT_SETTINGS'],
 
-  // Meetings is gated by APP_REGISTRY `VIEW_MEETINGS`, like Projects. Only the
-  // all-actions list needs its own tag: VIEW_ALL_MEETINGS is owner/admin-only.
-  'meetings.actions-all': ['VIEW_ALL_MEETINGS'],
+  // Meetings used to be a root module, so APP_REGISTRY's `VIEW_MEETINGS` gate
+  // covered it. Under Tools there is no app gate any more, so the subgroup
+  // carries the tag itself — a member without VIEW_MEETINGS loses the whole
+  // group, exactly as they lost the module before. The all-actions list keeps
+  // its own tag on top: VIEW_ALL_MEETINGS is owner/admin-only.
+  'tools.meetings': ['VIEW_MEETINGS'],
+  'tools.meetings.actions-all': ['VIEW_ALL_MEETINGS'],
 
   crm: CRM_ANY,
   'crm.reports.lead-sources': ['VIEW_LEADS'],
@@ -642,6 +649,13 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
  * The 2026-11-17 Meet71 link added `tools.meet71` under Tools, after the URL
  * shortener. It is a new leaf, so a saved layout takes it with
  * `npx tsx prisma/sync-nav-layout.ts --nodes=tools.meet71` and needs no reset.
+ *
+ * The 2026-11-18 Meetings move retired the root `meetings` module and hung its
+ * three screens under Tools as the `tools.meetings` subgroup. A saved layout
+ * still naming `meetings*` fails `validateNavLayout` — those ids are gone from
+ * the registry — and is replaced by this default at read time, so it needs no
+ * sync run at all. `addNavNodesToLayout` cannot reparent anyway, so this is the
+ * only path that leaves a customised sidebar with minutes in the right place.
  */
 export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('dashboard', null, 0),
@@ -837,11 +851,6 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('hr.setup.skills', 'hr.setup', 3),
   layoutNode('hr.setup.schedules', 'hr.setup', 4),
 
-  layoutNode('meetings', null, 13),
-  layoutNode('meetings.list', 'meetings', 0),
-  layoutNode('meetings.actions', 'meetings', 1),
-  layoutNode('meetings.actions-all', 'meetings', 2),
-
   layoutNode('account-settings', null, 14),
   layoutNode('account-settings.overview', 'account-settings', 0),
   layoutNode('account-settings.profile', 'account-settings', 1),
@@ -854,6 +863,10 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('tools.notes', 'tools', 0),
   layoutNode('tools.url-shortener', 'tools', 1),
   layoutNode('tools.meet71', 'tools', 2),
+  layoutNode('tools.meetings', 'tools', 3),
+  layoutNode('tools.meetings.list', 'tools.meetings', 0),
+  layoutNode('tools.meetings.actions', 'tools.meetings', 1),
+  layoutNode('tools.meetings.actions-all', 'tools.meetings', 2),
   layoutNode('support', null, 17),
   layoutNode('admin', null, 18),
   layoutNode('admin.overview', 'admin', 0),

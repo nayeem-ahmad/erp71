@@ -312,7 +312,7 @@ export const helpMessages = {
             faqs: [
                 {
                     q: 'Bagaimana saya merekod minit mesyuarat?',
-                    a: 'Buka Meetings → Meetings dan klik New meeting. Isi tajuk, tarikh dan hadirin, kemudian tambah setiap perbincangan dengan tajuk, nota, keputusan pilihan, dan titik tindakan yang timbul. Simpan sebagai draf semasa menulis; Finalize apabila minit sedia. Draf tidak pernah menghantar e-mel.',
+                    a: 'Buka Tools → Meetings dan klik New meeting. Isi tajuk, tarikh dan hadirin, kemudian tambah setiap perbincangan dengan tajuk, nota, keputusan pilihan, dan titik tindakan yang timbul. Simpan sebagai draf semasa menulis; Finalize apabila minit sedia. Draf tidak pernah menghantar e-mel.',
                 },
                 {
                     q: 'Bagaimana titik tindakan dan peringatan berfungsi?',
@@ -324,7 +324,7 @@ export const helpMessages = {
                 },
                 {
                     q: 'Siapa boleh melihat mesyuarat?',
-                    a: 'Penganjur, hadirin, dan sesiapa yang diberi titik tindakan boleh membukanya. Kebenaran "view all meetings" (pemilik dan pentadbir) menunjukkan setiap mesyuarat. My action points menyenaraikan tugasan anda; All action points memerlukan kebenaran lihat semua. Kedai perakaunan sahaja tidak mendapat modul Meetings.',
+                    a: 'Penganjur, hadirin, dan sesiapa yang diberi titik tindakan boleh membukanya. Kebenaran "view all meetings" (pemilik dan pentadbir) menunjukkan setiap mesyuarat. My action points menyenaraikan tugasan anda; All action points memerlukan kebenaran lihat semua. Meetings kini di bawah Tools, dan kedai perakaunan sahaja tidak mendapatnya.',
                 },
             ],
         },

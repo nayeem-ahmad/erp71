@@ -67,7 +67,6 @@ describe('buildRail', () => {
         expect(rail.business.map((entry) => entry.key)).toEqual([
             'sales', 'storefront', 'purchase', 'imports', 'accounting', 'expenses',
             'inventory', 'crm', 'projects', 'manufacturing', 'hr',
-            'meetings',
         ]);
         // Settings last, the way a rail ends with its gear.
         expect(rail.utility.map((entry) => entry.key)).toEqual(['chat', 'tools', 'help', 'account-settings']);

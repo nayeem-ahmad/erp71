@@ -312,7 +312,7 @@ export const helpMessages = {
             faqs: [
                 {
                     q: 'Comment consigner un compte rendu de réunion ?',
-                    a: 'Ouvrez Meetings → Meetings puis New meeting. Renseignez le titre, la date et les participants, puis ajoutez chaque discussion avec son titre, ses notes, une décision facultative et les points d’action qui en sont issus. Enregistrez en brouillon pendant la rédaction ; Finalize lorsque le compte rendu est prêt. Les brouillons n’envoient aucun e-mail.',
+                    a: 'Ouvrez Tools → Meetings puis New meeting. Renseignez le titre, la date et les participants, puis ajoutez chaque discussion avec son titre, ses notes, une décision facultative et les points d’action qui en sont issus. Enregistrez en brouillon pendant la rédaction ; Finalize lorsque le compte rendu est prêt. Les brouillons n’envoient aucun e-mail.',
                 },
                 {
                     q: 'Comment fonctionnent les points d’action et les rappels ?',
@@ -324,7 +324,7 @@ export const helpMessages = {
                 },
                 {
                     q: 'Qui peut voir une réunion ?',
-                    a: 'L’organisateur, les participants et toute personne assignée à un point d’action peuvent l’ouvrir. La permission "view all meetings" (propriétaires et administrateurs) affiche toutes les réunions. My action points liste ce qui vous est assigné ; All action points exige la permission de tout voir. Les boutiques comptabilité seule n’ont pas le module Meetings.',
+                    a: 'L’organisateur, les participants et toute personne assignée à un point d’action peuvent l’ouvrir. La permission "view all meetings" (propriétaires et administrateurs) affiche toutes les réunions. My action points liste ce qui vous est assigné ; All action points exige la permission de tout voir. Meetings se trouve sous Tools ; les boutiques comptabilité seule ne l’ont pas.',
                 },
             ],
         },

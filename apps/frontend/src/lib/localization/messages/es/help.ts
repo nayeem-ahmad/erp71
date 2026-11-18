@@ -312,7 +312,7 @@ export const helpMessages = {
             faqs: [
                 {
                     q: '¿Cómo registro el acta de una reunión?',
-                    a: 'Abra Meetings → Meetings y pulse New meeting. Complete título, fecha y asistentes, y añada cada debate con su título, notas, una decisión opcional y los puntos de acción que salieron de él. Guarde como borrador mientras escribe; Finalize cuando el acta esté lista. Los borradores no envían correo.',
+                    a: 'Abra Tools → Meetings y pulse New meeting. Complete título, fecha y asistentes, y añada cada debate con su título, notas, una decisión opcional y los puntos de acción que salieron de él. Guarde como borrador mientras escribe; Finalize cuando el acta esté lista. Los borradores no envían correo.',
                 },
                 {
                     q: '¿Cómo funcionan los puntos de acción y los recordatorios?',
@@ -324,7 +324,7 @@ export const helpMessages = {
                 },
                 {
                     q: '¿Quién puede ver una reunión?',
-                    a: 'El organizador, los asistentes y quien tenga un punto de acción asignado pueden abrirla. El permiso "view all meetings" (propietarios y administradores) muestra todas. My action points lista lo asignado a usted; All action points necesita el permiso de ver todas. Las tiendas solo de contabilidad no tienen el módulo Meetings.',
+                    a: 'El organizador, los asistentes y quien tenga un punto de acción asignado pueden abrirla. El permiso "view all meetings" (propietarios y administradores) muestra todas. My action points lista lo asignado a usted; All action points necesita el permiso de ver todas. Meetings está en Tools; las tiendas solo de contabilidad no lo tienen.',
                 },
             ],
         },
