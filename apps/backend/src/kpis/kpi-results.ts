@@ -1,8 +1,8 @@
-import type { KpiId, KpiNote, KpiResult } from '@erp71/shared-types';
+import type { KpiExpenseClass, KpiId, KpiNote, KpiResult } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { resolveDateWindow } from '../common/dashboard-window';
 import type { DateRange } from '../common/period.util';
-import { employeeTurnover } from './kpi-math';
+import { acquisitionCost, ebitda, employeeTurnover, ltvToCac } from './kpi-math';
 
 /** Runway divides cash by the average burn over this many trailing days. */
 export const RUNWAY_TRAILING_DAYS = 90;
@@ -65,4 +65,63 @@ export async function loadStaffTurnover(
         const window = resolveDateWindow(range, timezone);
         return employeeTurnover(staff, window.fromDate, window.toDate);
     });
+}
+
+/** What `AccountingService.getKpiLedgerBreakdown` returns, as far as the KPIs read it. */
+export interface KpiLedgerBreakdown {
+    revenue: number;
+    net_profit: number;
+    by_class: Record<KpiExpenseClass, number>;
+    accounts_by_class: Record<KpiExpenseClass, number>;
+}
+
+type Pair<T> = [current: T, previous: T];
+
+/** EBITDA for the period and the one before, from the ledger breakdown. */
+export function ebitdaResult(ledger: Pair<KpiLedgerBreakdown>): KpiResult {
+    const [current, previous] = ledger;
+    const of = (b: KpiLedgerBreakdown) => ebitda(b.net_profit, b.by_class);
+    return result('ebitda', of(current), of(previous), {
+        netProfit: current.net_profit,
+        interest: current.by_class.interest,
+        tax: current.by_class.tax,
+        depreciation: current.by_class.depreciation,
+        amortization: current.by_class.amortization,
+    }, ['ledger_based', 'classified_accounts']);
+}
+
+/**
+ * CAC and LTV:CAC. Spend is the sales & marketing class from the ledger; the
+ * caller says who counts as a new customer (a shop's first-time buyer, the
+ * platform's newly paying workspace) and what a customer is worth.
+ */
+export function acquisitionKpis(input: {
+    ledger: Pair<KpiLedgerBreakdown>;
+    newCustomers: { current: number; previous: number | null };
+    ltv: number | null;
+    customerNotes: KpiNote[];
+}): Record<'customer_acquisition_cost' | 'ltv_to_cac', KpiResult> {
+    const [current, previous] = input.ledger;
+    const notes: KpiNote[] = ['ledger_based', 'classified_accounts', ...input.customerNotes];
+    if (current.accounts_by_class.sales_marketing === 0) {
+        const none = (id: KpiId): KpiResult => ({
+            id, status: 'no_data', value: null, previous: null, basis: {}, notes: [...notes, 'no_marketing_accounts'],
+        });
+        return { customer_acquisition_cost: none('customer_acquisition_cost'), ltv_to_cac: none('ltv_to_cac') };
+    }
+    const spend = current.by_class.sales_marketing;
+    const cac = acquisitionCost(spend, input.newCustomers.current);
+    const previousCac = input.newCustomers.previous === null
+        ? null
+        : acquisitionCost(previous.by_class.sales_marketing, input.newCustomers.previous);
+    return {
+        customer_acquisition_cost: result('customer_acquisition_cost', cac, previousCac, {
+            salesMarketingSpend: spend,
+            newCustomers: input.newCustomers.current,
+        }, notes),
+        ltv_to_cac: result('ltv_to_cac', ltvToCac(input.ltv, cac), null, {
+            ltv: input.ltv,
+            cac,
+        }, notes),
+    };
 }

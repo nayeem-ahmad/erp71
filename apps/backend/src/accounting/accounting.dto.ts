@@ -19,6 +19,7 @@ import {
     Max,
 } from 'class-validator';
 import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
+import { KPI_ACCOUNT_CLASSES, type KpiAccountClass } from '@erp71/shared-types';
 import { AccountCategory, AccountType, VoucherApprovalStatus, VoucherAttribution, VoucherType } from './accounting.constants';
 import { REPORT_LEVELS } from './report-level.utils';
 
@@ -149,6 +150,15 @@ export class CreateAccountDto {
     @ValidateIf((_object, value) => value !== null && value !== '')
     @IsString()
     storeId?: string | null;
+
+    /**
+     * What this expense counts toward on the KPI scorecard. Omitted leaves it
+     * unchanged; null clears it back to "guess from the name".
+     */
+    @IsOptional()
+    @ValidateIf((_object, value) => value !== null)
+    @IsIn([...KPI_ACCOUNT_CLASSES])
+    kpiClass?: KpiAccountClass | null;
 }
 
 /**
@@ -184,6 +194,15 @@ export class UpdateAccountDto {
     @ValidateIf((_object, value) => value !== null && value !== '')
     @IsString()
     storeId?: string | null;
+
+    /**
+     * What this expense counts toward on the KPI scorecard. Omitted leaves it
+     * unchanged; null clears it back to "guess from the name".
+     */
+    @IsOptional()
+    @ValidateIf((_object, value) => value !== null)
+    @IsIn([...KPI_ACCOUNT_CLASSES])
+    kpiClass?: KpiAccountClass | null;
 }
 
 export class ListAccountSubgroupsQueryDto {

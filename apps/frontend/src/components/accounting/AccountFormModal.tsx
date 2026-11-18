@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { compactDensity } from '@/lib/ui/compact-density';
+import { KPI_ACCOUNT_CLASSES, resolveKpiAccountClass, type KpiAccountClass } from '@erp71/shared-types';
 
 export type AccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
 export type AccountCategory = 'cash' | 'bank' | 'general';
@@ -54,6 +55,8 @@ export interface Account {
     store_id?: string | null;
     /** True when a Mobile Wallet method already posts to this account. */
     linked_wallet?: boolean;
+    /** What this expense counts toward on the KPI scorecard; null = guessed from the name. */
+    kpi_class?: KpiAccountClass | null;
 }
 
 /** bKash and Nagad are named cash accounts, but they are wallets, not drawers. */
@@ -105,6 +108,7 @@ export default function AccountFormModal({
     const [codeSuggestion, setCodeSuggestion] = useState('');
     const [category, setCategory] = useState<AccountCategory>(account?.category ?? 'general');
     const [storeId, setStoreId] = useState(account?.store_id ?? '');
+    const [kpiClass, setKpiClass] = useState<KpiAccountClass | ''>(account?.kpi_class ?? '');
     const [sharedWallet, setSharedWallet] = useState(false);
     const [stores, setStores] = useState<Array<{ id: string; name: string }>>([]);
     const [saving, setSaving] = useState(false);
@@ -121,6 +125,16 @@ export default function AccountFormModal({
     const availableSubgroups = subgroups.filter((subgroup) => subgroupGroupId(subgroup) === groupId);
     const selectedSubgroup = availableSubgroups.find((sub) => sub.id === subgroupId) ?? null;
     const codePrefix = accountCodePrefix(selectedGroup, selectedSubgroup);
+    /** What "Auto" would pick for this account as it is now named and placed. */
+    const detectedKpiClass = derivedType === 'expense'
+        ? resolveKpiAccountClass({
+            type: 'expense',
+            name,
+            code,
+            groupName: selectedGroup?.name,
+            subgroupName: selectedSubgroup?.name,
+        })
+        : null;
 
     useEffect(() => {
         if (!drawer) return;
@@ -207,6 +221,8 @@ export default function AccountFormModal({
                 // Omitting storeId on update keeps the current branch. A drawer
                 // sends the one it belongs to; a shared account clears it.
                 ...(drawer ? { storeId } : account || sharedWallet ? { storeId: null } : {}),
+                // Only an expense has a KPI class; "Auto" (empty) is sent as null.
+                ...(derivedType === 'expense' ? { kpiClass: kpiClass || null } : {}),
             };
 
             if (account) {
@@ -371,6 +387,33 @@ export default function AccountFormModal({
                             </select>
                         </label>
                     </div>
+
+                    {derivedType === 'expense' ? (
+                        <label className="block">
+                            <span className={`${compactDensity.formLabel} block mb-1`}>
+                                {t.kpis.accountClass.label}
+                            </span>
+                            <select
+                                aria-label={t.kpis.accountClass.label}
+                                value={kpiClass}
+                                onChange={(event) => setKpiClass(event.target.value as KpiAccountClass | '')}
+                                className={compactDensity.formField}
+                                data-testid="account-kpi-class"
+                            >
+                                <option value="">
+                                    {formatMessage(t.kpis.accountClass.auto, {
+                                        detected: t.kpis.accountClass.classes[detectedKpiClass ?? 'operating'],
+                                    })}
+                                </option>
+                                {KPI_ACCOUNT_CLASSES.map((option) => (
+                                    <option key={option} value={option}>
+                                        {t.kpis.accountClass.classes[option]}
+                                    </option>
+                                ))}
+                            </select>
+                            <span className="mt-1 block text-xs text-gray-500">{t.kpis.accountClass.hint}</span>
+                        </label>
+                    ) : null}
 
                     {!account && namedDrawer ? (
                         <label className="flex min-h-touch items-center gap-2 text-sm text-gray-700">
