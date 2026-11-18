@@ -16,7 +16,7 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import { formatBDT } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { ALL_BRANCHES, handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { BranchFilter, Button, ConfirmDialog, PageShell, StatusBadge } from '@/components/ui';
 import { AllocateAdvance } from './AllocateAdvance';
@@ -42,6 +42,15 @@ const columnHelper = createColumnHelper<PartyPayment>();
 
 /** How long a just-saved row stays tinted in the list. */
 const FRESH_ROW_MS = 4000;
+
+/** The list endpoint's own order, newest first, so a written row lands where a reload would put it. */
+function newestFirst(rows: PartyPayment[]): PartyPayment[] {
+    const time = (row: PartyPayment) => {
+        const parsed = Date.parse(row.created_at);
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+    return [...rows].sort((a, b) => time(b) - time(a));
+}
 
 /**
  * The customer payments and supplier payments page: totals for the period, the
@@ -152,6 +161,34 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
         void loadParties(true);
     }, [loadPayments, loadParties]);
 
+    /**
+     * Put a written payment into the list and the party's new due into the
+     * picker, from what the write itself answered.
+     *
+     * The reload this replaces re-read the whole history — one request per 100
+     * payments, so ~30 on a shop with a few thousand — and it ran after every
+     * save. That is most of the route's per-minute request budget for a single
+     * save, so a clerk entering several receipts in a row could have the next
+     * reload refused: "Failed to load customer payments" over a payment that
+     * had in fact been recorded.
+     */
+    const applyWrittenPayment = useCallback((saved: PartyPayment) => {
+        // A payment belongs to its party's branch: one taken at another branch
+        // is not this page's row, and the server's reloaded list would not show it.
+        const onThisBranch = !branchStoreId
+            || branchStoreId === ALL_BRANCHES
+            || !saved.store_id
+            || saved.store_id === branchStoreId;
+        if (onThisBranch) {
+            setPayments((current) => newestFirst([saved, ...current.filter((payment) => payment.id !== saved.id)]));
+        }
+        // Both directions end with `balance_after` as the party's due today.
+        const partyId = adapter.partyOf(saved)?.id;
+        const due = Number(saved.balance_after);
+        if (!partyId || saved.balance_after === undefined || saved.balance_after === null || !Number.isFinite(due)) return;
+        setParties((current) => current.map((party) => (party.id === partyId ? { ...party, due_balance: due } : party)));
+    }, [adapter, branchStoreId]);
+
     const print = useCallback(async (payment: PartyPayment) => {
         // The payment's branch picks the letterhead, as a sale's does on its invoice.
         const header = await printHeader.resolve(payment.store_id ?? undefined);
@@ -176,26 +213,33 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
         });
         if (andPrint) void print(saved);
         setFreshId(saved.id);
+        applyWrittenPayment(saved);
         // Stay open for the next one, cleared.
         openCreate();
-        refreshAfterWrite();
     };
 
     const handleUpdated = (previous: PartyPayment, saved: PartyPayment) => {
         toast.success(labels.paymentUpdated);
-        setPanel({ kind: 'view', payment: { ...previous, ...saved } });
-        refreshAfterWrite();
+        // The update answers with the payment; the row it replaces carries what
+        // that answer leaves out.
+        const merged = { ...previous, ...saved };
+        setPanel({ kind: 'view', payment: merged });
+        applyWrittenPayment(merged);
     };
 
     const confirmDelete = async () => {
         if (!deleteTarget) return;
+        const target = deleteTarget;
         setDeleting(true);
         try {
-            await adapter.remove(deleteTarget.id);
+            await adapter.remove(target.id);
             toast.success(labels.paymentDeleted);
-            setPanel((current) => ('payment' in current && current.payment.id === deleteTarget.id ? { kind: 'closed' } : current));
+            setPanel((current) => ('payment' in current && current.payment.id === target.id ? { kind: 'closed' } : current));
+            setPayments((current) => current.filter((payment) => payment.id !== target.id));
             setDeleteTarget(null);
-            refreshAfterWrite();
+            // A delete answers without the party's new due, so the picker is
+            // re-read — one request, not the whole payment history.
+            void loadParties(true);
         } catch (error: unknown) {
             toast.error(error instanceof Error && error.message ? error.message : labels.deleteFailed);
         } finally {

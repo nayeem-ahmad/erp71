@@ -289,6 +289,21 @@ describe('CustomerPaymentsPage — details', () => {
         expect(confirmSpy).not.toHaveBeenCalled();
         confirmSpy.mockRestore();
     });
+
+    it('drops a deleted payment from the list without re-reading the whole history', async () => {
+        const panel = await openRow('CPY-00005');
+        const loads = (api.getCustomerCreditPayments as jest.Mock).mock.calls.length;
+
+        fireEvent.click(within(panel).getByRole('button', { name: 'Delete' }));
+        const confirm = screen.getAllByRole('dialog').at(-1)!;
+        fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
+
+        await waitFor(() => expect(api.deleteCustomerCreditPayment).toHaveBeenCalledWith('pay-2'));
+        await waitFor(() => expect(screen.queryByText('CPY-00005')).not.toBeInTheDocument());
+        expect((api.getCustomerCreditPayments as jest.Mock).mock.calls.length).toBe(loads);
+        // Only the picker is re-read: a delete answers without the party's new due.
+        await waitFor(() => expect(api.getCustomers).toHaveBeenCalledTimes(2));
+    });
 });
 
 describe('CustomerPaymentsPage — duplicate', () => {
@@ -428,6 +443,40 @@ describe('CustomerPaymentsPage — entry', () => {
         fireEvent.click(within(dialog()).getByRole('button', { name: /save & print/i }));
 
         await waitFor(() => expect(printCustomerPaymentReceipt).toHaveBeenCalledTimes(1));
+    });
+
+    it('puts the saved payment in the list without re-reading the whole history', async () => {
+        (api.recordCreditPayment as jest.Mock).mockResolvedValue({
+            id: 'pay-9',
+            type: 'PAYMENT',
+            payment_number: 'CPY-00008',
+            amount: '400.00',
+            created_at: '2026-10-10T05:00:00.000Z',
+            balance_after: '600.00',
+            payment_method_name: 'Cash',
+            customer: { id: 'cust-1', name: 'Alice Corp', phone: '01700000001' },
+            creator: { id: 'user-1', name: 'Test User' },
+        });
+        await openReadyForm();
+        fireEvent.change(within(dialog()).getByLabelText('Amount'), { target: { value: '400' } });
+        const loads = (api.getCustomerCreditPayments as jest.Mock).mock.calls.length;
+
+        save();
+
+        // The strip counts two payments now: the one that was there and the one
+        // the write answered with.
+        const strip = screen.getByRole('region', { name: 'Payments summary' });
+        await waitFor(() => {
+            expect(within(strip).getByText('Payments', { selector: 'p' }).parentElement).toHaveTextContent('2');
+        });
+        expect(within(strip).getByText('Received', { selector: 'p' }).parentElement).toHaveTextContent('400');
+        // A shop with thousands of payments spends dozens of requests on that
+        // list; a save must not repeat them, or it trips the route's rate limit.
+        expect((api.getCustomerCreditPayments as jest.Mock).mock.calls.length).toBe(loads);
+
+        // The next payment's due card is what the save moved it to.
+        pickCustomer('Alice Corp');
+        expect(within(dialog()).getByTestId('due-flow')).toHaveTextContent(/600\.00/);
     });
 });
 
