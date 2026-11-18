@@ -21,13 +21,10 @@ describe('KPI definitions', () => {
         expect(kpiDefinitionsFor(KpiAudience.PLATFORM)).toHaveLength(18);
     });
 
-    it('describes a planned KPI by the phase and data gap that unlock it', () => {
-        expect(unavailableKpiResult('net_promoter_score', KpiAudience.PLATFORM)).toMatchObject({
-            status: 'planned',
-            phase: 4,
-            needs: 'nps_survey',
-            value: null,
-        });
+    it('has every KPI live for the platform, and only the SaaS-only two not applicable to a shop', () => {
+        expect(KPI_DEFINITIONS.every((d) => d.availability.platform.kind === 'live')).toBe(true);
+        expect(KPI_DEFINITIONS.filter((d) => d.availability.tenant.kind !== 'live').map((d) => d.id))
+            .toEqual(['burn_multiple', 'quick_ratio']);
         expect(unavailableKpiResult('burn_multiple', KpiAudience.TENANT).status).toBe('not_applicable');
     });
 });

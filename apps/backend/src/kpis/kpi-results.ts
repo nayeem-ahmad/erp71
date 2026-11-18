@@ -125,3 +125,20 @@ export function acquisitionKpis(input: {
         }, notes),
     };
 }
+
+/** Below this many answers the score swings on a single customer; the tile says so. */
+export const NPS_SMALL_SAMPLE = 10;
+
+/** The NPS tile from this period's and last period's answers. */
+export function npsResult(
+    current: { score: number | null; responses: number; promoters: number; passives: number; detractors: number },
+    previous: { score: number | null },
+    sourceNote: KpiNote,
+): KpiResult {
+    return result('net_promoter_score', current.score, previous.score, {
+        responses: current.responses,
+        promoters: current.promoters,
+        passives: current.passives,
+        detractors: current.detractors,
+    }, [sourceNote, ...(current.responses > 0 && current.responses < NPS_SMALL_SAMPLE ? ['small_sample' as const] : [])]);
+}

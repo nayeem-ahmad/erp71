@@ -48,6 +48,18 @@ export class UpdateSalesSettingsDto {
   @IsOptional()
   @IsBoolean()
   branch_customers_only?: boolean;
+
+  /** Put the "how likely are you to recommend us" link on the receipt SMS. */
+  @IsOptional()
+  @IsBoolean()
+  nps_survey_enabled?: boolean;
+
+  /** Days without a purchase before a named customer counts as lost (KPI churn). */
+  @IsOptional()
+  @IsInt()
+  @Min(7)
+  @Max(730)
+  customer_lapse_days?: number;
 }
 
 export class SalesSettingsResponseDto {
@@ -59,6 +71,8 @@ export class SalesSettingsResponseDto {
   require_cashier_session: boolean;
   show_customer_credit: boolean;
   branch_customers_only: boolean;
+  nps_survey_enabled: boolean;
+  customer_lapse_days: number;
   created_at: Date;
   updated_at: Date;
 }

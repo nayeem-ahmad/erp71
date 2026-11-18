@@ -189,10 +189,13 @@ export class SmsService {
         saleTotal: number,
         saleRef: string,
         tenantId?: string,
+        /** The receipt survey link, when the shop has it on; replaces the closing "Thank you!". */
+        surveyUrl?: string | null,
     ): Promise<SendSmsResult> {
         const message =
             `Dear ${customerName}, your purchase of BDT ${saleTotal.toFixed(2)} ` +
-            `(Ref: ${saleRef}) has been confirmed. Thank you!`;
+            `(Ref: ${saleRef}) has been confirmed. ` +
+            (surveyUrl ? `Rate us: ${surveyUrl}` : 'Thank you!');
         return this.sendToCustomer(phone, message, tenantId, 'Sale receipt');
     }
 

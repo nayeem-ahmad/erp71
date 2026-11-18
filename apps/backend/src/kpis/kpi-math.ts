@@ -209,3 +209,22 @@ export function subscriptionLifetimeValue(input: {
         capped: uncapped > MAX_LIFESPAN_MONTHS,
     };
 }
+
+/**
+ * Net Promoter Score from 0–10 answers: % promoters (9–10) − % detractors
+ * (0–6), a whole number from −100 to 100. Passives (7–8) count toward the
+ * total only.
+ */
+export function netPromoterScore(scores: readonly number[]): {
+    score: number | null;
+    responses: number;
+    promoters: number;
+    passives: number;
+    detractors: number;
+} {
+    const promoters = scores.filter((s) => s >= 9).length;
+    const detractors = scores.filter((s) => s <= 6).length;
+    const passives = scores.length - promoters - detractors;
+    const score = scores.length > 0 ? Math.round(((promoters - detractors) / scores.length) * 100) + 0 : null;
+    return { score, responses: scores.length, promoters, passives, detractors };
+}

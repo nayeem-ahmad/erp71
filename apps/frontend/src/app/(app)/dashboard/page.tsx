@@ -14,6 +14,7 @@ import RetailDashboard from '@/components/dashboard/RetailDashboard';
 import PageShell from '@/components/ui/compact/PageShell';
 import AppTiles from '@/components/app-shell/AppTiles';
 import HomeLanding from '@/components/app-shell/HomeLanding';
+import OwnerNpsPrompt from '@/components/kpis/OwnerNpsPrompt';
 import { useAppShell } from '@/contexts/AppShellContext';
 import { getWorkspaceItem } from '@/lib/session-store';
 
@@ -97,7 +98,14 @@ export default function DashboardPage() {
         homeSlot: appShellEnabled ? <AppTiles /> : undefined,
     };
 
-    const dashboard = renderVariant(resolved.variant, identity);
+    // The owner's "would you recommend ERP71" question sits above whichever
+    // dashboard this is; it renders nothing unless the API says to ask.
+    const dashboard = (
+        <>
+            <OwnerNpsPrompt />
+            {renderVariant(resolved.variant, identity)}
+        </>
+    );
     // A member with a single app is sent into it rather than shown Home.
     return appShellEnabled ? <HomeLanding fallback={skeleton}>{dashboard}</HomeLanding> : dashboard;
 }

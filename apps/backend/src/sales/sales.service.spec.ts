@@ -1340,6 +1340,8 @@ describe('SalesService', () => {
         1000,
         'SL-1',
         'tenant-1',
+        // No survey link: the shop has not turned the NPS survey on.
+        null,
       );
     });
 

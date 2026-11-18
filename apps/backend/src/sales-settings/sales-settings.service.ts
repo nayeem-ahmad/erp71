@@ -66,6 +66,12 @@ export class SalesSettingsService {
           ...(dto.branch_customers_only !== undefined
             ? { branch_customers_only: dto.branch_customers_only }
             : {}),
+          ...(dto.nps_survey_enabled !== undefined
+            ? { nps_survey_enabled: dto.nps_survey_enabled }
+            : {}),
+          ...(dto.customer_lapse_days !== undefined
+            ? { customer_lapse_days: dto.customer_lapse_days }
+            : {}),
         },
       });
     }
@@ -118,6 +124,9 @@ export class SalesSettingsService {
       // On unless a tenant admin turns it off: a sale to another branch's
       // customer splits its receivable across two branches.
       branch_customers_only: settings.branch_customers_only ?? true,
+      // Off until a shop opts in: the link lengthens the receipt SMS.
+      nps_survey_enabled: settings.nps_survey_enabled ?? false,
+      customer_lapse_days: settings.customer_lapse_days ?? 90,
       created_at: settings.created_at,
       updated_at: settings.updated_at,
     };

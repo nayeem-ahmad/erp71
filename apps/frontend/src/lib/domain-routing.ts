@@ -64,7 +64,8 @@ export type HostRoute =
  * because it reads the session to pick a workspace before forwarding into the app.
  *
  * Deliberately absent: `/store/*` (a shop's public storefront), `/q/*` and
- * `/s/*` (the quotation shortener), `/m/*` (shared meeting minutes) and `/r/*`
+ * `/s/*` (the quotation shortener), `/m/*` (shared meeting minutes), `/f/*`
+ * (the receipt survey a shop's customer answers) and `/r/*`
  * (referral links, which forward to `/signup` with a relative `Location` and so
  * pick up this redirect anyway). Those are public, session-free, and correct on
  * either host.
@@ -90,6 +91,8 @@ const APP_ONLY_PREFIXES = [
     '/purchases',
     '/referrals',
     '/sales',
+    // The CEO KPI scorecard.
+    '/scorecard',
     '/settings',
     '/sms-credits',
     '/status',

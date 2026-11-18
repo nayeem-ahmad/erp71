@@ -1,4 +1,5 @@
 import {
+    netPromoterScore,
     acquisitionCost,
     ebitda,
     ltvToCac,
@@ -135,5 +136,20 @@ describe('phase 3 formulas', () => {
     it('caps the lifespan at five years when nobody churned', () => {
         expect(subscriptionLifetimeValue({ arpa: 1_000, grossMarginPct: 50, churnRatePct: 0, periodMonths: 1 }))
             .toEqual({ value: 30_000, lifespanMonths: 60, capped: true });
+    });
+});
+
+describe('netPromoterScore', () => {
+    it('is the share of promoters less the share of detractors', () => {
+        // 5 promoters, 3 passives, 2 detractors out of 10: 50% − 20%.
+        expect(netPromoterScore([10, 9, 9, 10, 9, 8, 7, 8, 6, 0])).toEqual({
+            score: 30, responses: 10, promoters: 5, passives: 3, detractors: 2,
+        });
+    });
+
+    it('runs from −100 to 100 and has no score without answers', () => {
+        expect(netPromoterScore([0, 3]).score).toBe(-100);
+        expect(netPromoterScore([10]).score).toBe(100);
+        expect(netPromoterScore([]).score).toBeNull();
     });
 });
