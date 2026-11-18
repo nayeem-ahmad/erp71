@@ -76,6 +76,9 @@ describe('isAppOnlyPath', () => {
 
     it('claims the Tools pages', () => {
         expect(isAppOnlyPath('/tools')).toBe(true);
+        expect(isAppOnlyPath('/scorecard')).toBe(true);
+        // The receipt survey is public and works on either host.
+        expect(isAppOnlyPath('/f/Ab3dE9xQ')).toBe(false);
         expect(isAppOnlyPath('/tools/notes')).toBe(true);
     });
 

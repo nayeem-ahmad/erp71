@@ -93,6 +93,8 @@ export const OPEN_ROUTES: Record<string, string> = {
     'NotificationsController.markRead': "self-scoped: acts only on the signed-in member’s own data", // PATCH /notifications/:id/read
     'NotesController.findAll': "self-scoped: lists only the signed-in member’s own notes in this workspace", // GET /notes
     'NotesController.create': "self-scoped: creates a note owned by the signed-in member", // POST /notes
+    'OwnerNpsController.prompt': "self-scoped: whether to ask the signed-in owner the ERP71 recommend question; the service answers no for anyone but the owner", // GET /nps/platform/prompt
+    'OwnerNpsController.submit': "self-scoped: records only the signed-in owner's own answer; the service refuses anyone but the owner", // POST /nps/platform
     'NotesController.uploadImage': "self-scoped: keeps a picture for the signed-in member’s own note, in the tenant’s notes folder", // POST /notes/images
     'NotesController.findOne': "self-scoped: opens only a note the signed-in member owns", // GET /notes/:id
     'NotesController.update': "self-scoped: edits only a note the signed-in member owns", // PATCH /notes/:id

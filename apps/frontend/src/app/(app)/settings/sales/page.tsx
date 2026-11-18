@@ -11,7 +11,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import type { PaperSize } from '@/lib/sales-invoice-printer';
 import { hasPermission, isOwner } from '@/lib/permissions';
 import { toast } from '@/lib/toast';
-import { Button, Checkbox, Field, PageShell, Select } from '@/components/ui';
+import { Button, Checkbox, Field, Input, PageShell, Select } from '@/components/ui';
 import { getWorkspaceItem } from '@/lib/session-store';
 import { routes } from '@/lib/routes';
 
@@ -29,6 +29,7 @@ const PAPER_SIZE_OPTIONS: { value: PaperSize; label: string }[] = [
 export default function SalesSettingsPage() {
     const { t } = useI18n();
     const pageTitle = 'Sales Settings';
+    const kpiCopy = t.kpis.settings;
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -37,6 +38,9 @@ export default function SalesSettingsPage() {
     const [requireCashierSession, setRequireCashierSession] = useState(false);
     const [showCustomerCredit, setShowCustomerCredit] = useState(false);
     const [branchCustomersOnly, setBranchCustomersOnly] = useState(true);
+    const [npsSurveyEnabled, setNpsSurveyEnabled] = useState(false);
+    const [lapseDays, setLapseDays] = useState('90');
+    const [lapseError, setLapseError] = useState('');
     const [isShopOwner, setIsShopOwner] = useState(false);
     const [isSettingsAdmin, setIsSettingsAdmin] = useState(false);
 
@@ -55,6 +59,8 @@ export default function SalesSettingsPage() {
             setRequireCashierSession(Boolean(data?.require_cashier_session));
             setShowCustomerCredit(Boolean(data?.show_customer_credit));
             setBranchCustomersOnly(data?.branch_customers_only !== false);
+            setNpsSurveyEnabled(Boolean(data?.nps_survey_enabled));
+            setLapseDays(String(data?.customer_lapse_days ?? 90));
         } catch (err: any) {
             toast.error(err?.message || 'Failed to load settings');
         } finally {
@@ -68,11 +74,23 @@ export default function SalesSettingsPage() {
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
+        const lapse = Number(lapseDays);
+        if (isShopOwner && (!Number.isInteger(lapse) || lapse < 7 || lapse > 730)) {
+            setLapseError(kpiCopy.lapseInvalid);
+            return;
+        }
+        setLapseError('');
         setSaving(true);
         try {
             await api.updateSalesSettings({
                 paper_size: paperSize,
-                ...(isShopOwner ? { pos_enabled: posEnabled, require_cashier_session: requireCashierSession, show_customer_credit: showCustomerCredit } : {}),
+                ...(isShopOwner ? {
+                    pos_enabled: posEnabled,
+                    require_cashier_session: requireCashierSession,
+                    show_customer_credit: showCustomerCredit,
+                    nps_survey_enabled: npsSurveyEnabled,
+                    customer_lapse_days: lapse,
+                } : {}),
                 ...(isSettingsAdmin ? { branch_customers_only: branchCustomersOnly } : {}),
             });
             window.dispatchEvent(new Event('erp71:sales-settings-updated'));
@@ -171,6 +189,42 @@ export default function SalesSettingsPage() {
                                     </span>
                                 </span>
                             </label>
+                        </div>
+                    ) : null}
+
+                    {isShopOwner ? (
+                        <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
+                            <h2 className="text-sm font-semibold text-gray-700">{kpiCopy.heading}</h2>
+                            <label className="flex items-start gap-3 cursor-pointer">
+                                <Checkbox
+                                    checked={npsSurveyEnabled}
+                                    onChange={(e) => setNpsSurveyEnabled(e.target.checked)}
+                                    className="mt-0.5"
+                                    aria-label={kpiCopy.npsLabel}
+                                />
+                                <span>
+                                    <span className="block text-sm font-semibold text-gray-700">{kpiCopy.npsLabel}</span>
+                                    <span className="block mt-1 text-xs text-gray-400">{kpiCopy.npsHint}</span>
+                                </span>
+                            </label>
+                            <Field
+                                label={kpiCopy.lapseLabel}
+                                hint={kpiCopy.lapseHint}
+                                error={lapseError}
+                                htmlFor="customer-lapse-days"
+                                className="max-w-xs"
+                            >
+                                <Input
+                                    id="customer-lapse-days"
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={7}
+                                    max={730}
+                                    value={lapseDays}
+                                    onChange={(e) => { setLapseDays(e.target.value); setLapseError(''); }}
+                                    error={Boolean(lapseError)}
+                                />
+                            </Field>
                         </div>
                     ) : null}
 

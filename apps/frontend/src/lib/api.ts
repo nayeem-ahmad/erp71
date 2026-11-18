@@ -3366,6 +3366,13 @@ export const api = {
     // CEO KPI scorecard: a shop's own (`/kpis`, branch-aware) and the platform's.
     getKpiScorecard: dashboardWindowFetcher<KpiScorecard>('/kpis'),
     getPlatformKpiScorecard: dashboardWindowFetcher<KpiScorecard>('/admin/kpis'),
+    // The owner's "would you recommend ERP71" question (platform NPS).
+    getOwnerNpsPrompt: (): Promise<{ ask: boolean }> => fetchWithAuth('/nps/platform/prompt'),
+    submitOwnerNps: (body: { score?: number; comment?: string; dismissed?: boolean }) => fetchWithAuth('/nps/platform', {
+        method: 'POST',
+        body: JSON.stringify(body),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     // CRM Campaigns
     getCrmCampaigns: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/crm/campaigns', params)),
     getCrmCampaign: (id: string) => fetchWithAuth(`/crm/campaigns/${id}`),

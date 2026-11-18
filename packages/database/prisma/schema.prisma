@@ -1596,6 +1596,14 @@ model SalesSettings {
   /// another branch's customer splits its receivable across two branches.
   /// A tenant admin turns it off under Sales Settings.
   branch_customers_only Boolean @default(true)
+  /// When on, the receipt SMS carries a short link asking the customer how
+  /// likely they are to recommend the shop (0–10) — the KPI scorecard's Net
+  /// Promoter Score. Off by default: the link lengthens the SMS, so a shop
+  /// opts in.
+  nps_survey_enabled    Boolean @default(false)
+  /// A named customer with no purchase for this many days counts as lost on
+  /// the KPI scorecard (churn rate). 7–730.
+  customer_lapse_days   Int     @default(90)
 
   /// Beneficiary bank details printed on a proforma invoice, so a buyer (or a
   /// buyer's bank opening an LC) knows where to remit. Held on the tenant
@@ -5235,6 +5243,49 @@ model TenantSubscription {
 
   @@index([plan_id, status])
   @@index([status, past_due_since])
+}
+
+/// A short survey link sent with a sale's receipt: "how likely are you to
+/// recommend us?". The code is the whole authorisation (like a meeting share
+/// token), short so the link fits in the receipt SMS. One answer per invite.
+model NpsInvite {
+  id           String    @id @default(uuid())
+  code         String    @unique
+  tenant_id    String
+  store_id     String?
+  sale_id      String?
+  customer_id  String?
+  created_at   DateTime  @default(now())
+  responded_at DateTime?
+
+  @@index([tenant_id, created_at])
+  @@map("nps_invites")
+}
+
+/// One answer to "how likely are you to recommend …?" on a 0–10 scale.
+///
+/// `audience` says who was asked about whom: `tenant` is a shop's customer
+/// rating the shop (from an `NpsInvite`), `platform` is a shop owner rating
+/// ERP71 (asked in the app). A `platform` row with `dismissed` and no score
+/// records that the owner closed the question, so they are not asked again
+/// for a while; the KPI only counts scores.
+model NpsResponse {
+  id          String   @id @default(uuid())
+  audience    String
+  tenant_id   String
+  store_id    String?
+  customer_id String?
+  user_id     String?
+  invite_id   String?  @unique
+  score       Int?
+  comment     String?
+  dismissed   Boolean  @default(false)
+  created_at  DateTime @default(now())
+
+  @@index([audience, tenant_id, created_at])
+  @@index([audience, created_at])
+  @@index([user_id, audience, created_at])
+  @@map("nps_responses")
 }
 
 /// One tenant's monthly recurring revenue on one calendar day (Asia/Dhaka).

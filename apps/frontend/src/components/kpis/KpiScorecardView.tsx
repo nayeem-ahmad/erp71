@@ -53,7 +53,7 @@ const MONEY_INPUTS = new Set([
 ]);
 
 /** Notes that mean the figure is incomplete, shown in the warning colour. */
-const WARNING_NOTES = new Set<string>(['partly_costed', 'books_unavailable', 'mrr_history_short', 'no_marketing_accounts']);
+const WARNING_NOTES = new Set<string>(['partly_costed', 'books_unavailable', 'mrr_history_short', 'no_marketing_accounts', 'small_sample']);
 
 type Copy = ReturnType<typeof useI18n>['t']['kpis'];
 
