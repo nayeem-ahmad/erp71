@@ -69,12 +69,32 @@ the start, paying at the end).
 A period that starts before the history says "history does not reach back"
 instead of guessing. The admin dashboard's MRR tile reads the same figures.
 
+## Phase 3: classified expenses
+
+Expense accounts carry an optional KPI class (`Account.kpi_class`): cost of
+sales, sales & marketing, interest, tax, depreciation, amortisation, or
+"operating" (none of these). Set it in Accounting › Chart of Accounts, or leave
+it on Auto, which guesses from the account name, then its subgroup and group
+(`resolveKpiAccountClass` in `packages/shared-types/kpis.ts`). The default
+charts work untouched: a shop's "Depreciation Expense" and "Cost of Sales"
+subgroup, the platform's "Infrastructure & Platform Costs" group and "Sales &
+Marketing" subgroup. `AccountingService.getKpiLedgerBreakdown` sums each class.
+
+| # | KPI | Shop | Platform |
+|---|---|---|---|
+| 2 | Gross margin | (unchanged: stamped sale-line cost) | (revenue − cost of sales) ÷ revenue, platform books |
+| 6 | CAC | Sales & marketing spend ÷ customers whose first purchase was in the period | Sales & marketing spend ÷ workspaces that started paying in the period |
+| 7 | LTV | (unchanged) | ARPA × gross margin × lifespan; lifespan = 1 ÷ monthly churn, capped at 60 months |
+| 8 | LTV:CAC | LTV ÷ CAC | LTV ÷ CAC |
+| 18 | EBITDA | Net profit + interest + tax + depreciation + amortisation | Same, platform books |
+
+With no account in the sales & marketing class, CAC and LTV:CAC say so
+rather than reporting zero.
+
 ## Not live yet
 
 | KPI | Shop | Platform | Needs |
 |---|---|---|---|
-| 6 CAC, 8 LTV:CAC, 18 EBITDA | Phase 3 | Phase 3 | Expenses/accounts tagged as marketing, cost of service, interest, tax, depreciation, amortisation |
-| 2 Gross margin, 7 LTV | live | Phase 3 | Platform cost-of-service classification |
 | 15 NPS | Phase 4 | Phase 4 | A customer survey |
 
 The phases are tracked in `TODO.md` under "CEO KPI scorecard".

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AccountFormModal from './AccountFormModal';
 import { api } from '@/lib/api';
 
@@ -92,5 +92,45 @@ describe('AccountFormModal branch', () => {
             type: 'asset',
             storeId: null,
         }));
+    });
+});
+
+describe('AccountFormModal KPI classification', () => {
+    const expenseGroups = [{ id: 'g5', name: 'Operating Expenses', code: '51', type: 'expense' as const }];
+
+    beforeEach(() => {
+        (api.createAccount as jest.Mock).mockReset().mockResolvedValue({});
+    });
+
+    function openExpense(name: string) {
+        render(<AccountFormModal account={null} groups={expenseGroups} subgroups={[]} onClose={() => {}} onSaved={() => {}} />);
+        fireEvent.change(screen.getByLabelText('Account group'), { target: { value: 'g5' } });
+        fireEvent.change(screen.getByLabelText('Account name'), { target: { value: name } });
+    }
+
+    it('offers the KPI classes on an expense account, with what Auto would pick', () => {
+        openExpense('Depreciation Expense');
+        const select = screen.getByTestId('account-kpi-class');
+        expect(select).toHaveDisplayValue('Auto (Depreciation)');
+    });
+
+    it('is not offered on an asset account', () => {
+        open();
+        expect(screen.queryByTestId('account-kpi-class')).not.toBeInTheDocument();
+    });
+
+    it('sends Auto as null, so the class is guessed from the name', async () => {
+        openExpense('Rent');
+        fireEvent.click(screen.getByRole('button', { name: 'Create Account' }));
+        await waitFor(() => expect(api.createAccount).toHaveBeenCalled());
+        expect((api.createAccount as jest.Mock).mock.calls[0][0]).toMatchObject({ kpiClass: null });
+    });
+
+    it('sends a class chosen by hand', async () => {
+        openExpense('Facebook boosts');
+        fireEvent.change(screen.getByTestId('account-kpi-class'), { target: { value: 'sales_marketing' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Create Account' }));
+        await waitFor(() => expect(api.createAccount).toHaveBeenCalled());
+        expect((api.createAccount as jest.Mock).mock.calls[0][0]).toMatchObject({ kpiClass: 'sales_marketing' });
     });
 });

@@ -59,6 +59,7 @@ import { JOB_NAMES } from '../system-health/jobs/job-names';
 import { loadMarginSource } from '../sales-reports/sales-reports.service';
 import { returnLines, saleLines, summariseMargin } from '../sales-reports/gross-profit.utils';
 import { daysInRange } from '../common/period.util';
+import { KPI_EXPENSE_CLASSES, resolveKpiAccountClass, type KpiExpenseClass } from '@erp71/shared-types';
 import {
     apportionCashMovements,
     cashActivityOf,
@@ -558,6 +559,7 @@ export class AccountingService {
                     type: dto.type,
                     category: dto.category,
                     store_id: storeId,
+                    ...(dto.kpiClass ? { kpi_class: dto.kpiClass } : {}),
                 },
                 include: {
                     group: true,
@@ -899,6 +901,7 @@ export class AccountingService {
                     type: group.type,
                     category: dto.category,
                     store_id: storeId,
+                    ...(dto.kpiClass !== undefined ? { kpi_class: dto.kpiClass } : {}),
                 },
                 include: { group: true, subgroup: true },
             });
@@ -3199,6 +3202,89 @@ export class AccountingService {
         const { sales, returns } = await loadMarginSource(this.db, tenantId, { from, to, storeId });
         const one = () => ({ key: 'all', label: 'all' });
         return [...saleLines(sales, one), ...returnLines(returns, one)];
+    }
+
+    /**
+     * Revenue, expenses and net profit for a window, with expenses also summed
+     * by their KPI class (cost of sales, sales & marketing, interest, tax,
+     * depreciation, amortisation — see `resolveKpiAccountClass`). Gross margin,
+     * CAC and EBITDA on the KPI scorecard read this.
+     *
+     * `accounts_by_class` counts the accounts in each class, so a KPI can tell
+     * "no sales & marketing spend this month" from "nothing is classified as
+     * sales & marketing at all". Honours the approved-only reporting setting
+     * and the branch like every other ledger report.
+     */
+    async getKpiLedgerBreakdown(tenantId: string, query: { from: string; to: string }, storeId?: string) {
+        const range = this.resolveDateRange(query.from, query.to);
+        const approvalFilter = await this.reportApprovalFilter(tenantId);
+
+        const accounts = await this.db.account.findMany({
+            where: { tenant_id: tenantId, type: { in: [AccountType.REVENUE, AccountType.EXPENSE] } },
+            select: {
+                id: true,
+                name: true,
+                code: true,
+                type: true,
+                kpi_class: true,
+                group: { select: { name: true } },
+                subgroup: { select: { name: true } },
+            },
+        });
+
+        const byClass = Object.fromEntries(KPI_EXPENSE_CLASSES.map((c) => [c, 0])) as Record<KpiExpenseClass, number>;
+        const accountsByClass = Object.fromEntries(KPI_EXPENSE_CLASSES.map((c) => [c, 0])) as Record<KpiExpenseClass, number>;
+        const classOf = new Map<string, KpiExpenseClass | null>();
+        for (const account of accounts) {
+            const kpiClass = resolveKpiAccountClass({
+                type: account.type,
+                name: account.name,
+                code: account.code,
+                kpiClass: account.kpi_class,
+                groupName: account.group?.name,
+                subgroupName: account.subgroup?.name,
+            });
+            classOf.set(account.id, kpiClass);
+            if (kpiClass) accountsByClass[kpiClass] += 1;
+        }
+
+        const details = accounts.length === 0 ? [] : await this.db.voucherDetail.findMany({
+            where: {
+                account_id: { in: accounts.map((a) => a.id) },
+                voucher: {
+                    tenant_id: tenantId,
+                    ...approvalFilter,
+                    ...this.branchVoucher(storeId),
+                    date: { gte: range.fromDate, lte: range.toDate },
+                },
+            },
+            select: { account_id: true, debit_amount: true, credit_amount: true },
+        });
+
+        const typeOf = new Map(accounts.map((a) => [a.id, a.type]));
+        let revenue = 0;
+        let expenses = 0;
+        for (const detail of details) {
+            const debit = Number(detail.debit_amount ?? 0);
+            const credit = Number(detail.credit_amount ?? 0);
+            if (typeOf.get(detail.account_id) === AccountType.REVENUE) {
+                revenue += credit - debit;
+            } else {
+                expenses += debit - credit;
+                const kpiClass = classOf.get(detail.account_id);
+                if (kpiClass) byClass[kpiClass] += debit - credit;
+            }
+        }
+
+        const rounded = (value: number) => this.roundAmount(value);
+        return {
+            period: { from: range.from, to: range.to },
+            revenue: rounded(revenue),
+            expenses: rounded(expenses),
+            net_profit: rounded(revenue - expenses),
+            by_class: Object.fromEntries(KPI_EXPENSE_CLASSES.map((c) => [c, rounded(byClass[c])])) as Record<KpiExpenseClass, number>,
+            accounts_by_class: accountsByClass,
+        };
     }
 
     /**

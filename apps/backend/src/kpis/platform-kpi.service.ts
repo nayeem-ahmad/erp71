@@ -15,10 +15,18 @@ import { PlatformWorkspaceService } from '../platform-workspace/platform-workspa
 import { addDays, resolveComparisonRange, type DateRange } from '../common/period.util';
 import { resolveDateWindow } from '../common/dashboard-window';
 import { DEFAULT_TENANT_TIMEZONE } from '../common/tenant-time.util';
-import { average, cashRunway, daysBetween, growthPct, monthsIn, ratioPct, round1 } from './kpi-math';
+import { average, cashRunway, daysBetween, growthPct, monthsIn, ratioPct, round1, subscriptionLifetimeValue } from './kpi-math';
 import { MrrSnapshotService } from './mrr/mrr-snapshot.service';
 import { mrrMovements, type MrrMovements } from './mrr/mrr.util';
-import { loadStaffTurnover, result, runwayResult, RUNWAY_TRAILING_DAYS } from './kpi-results';
+import {
+    acquisitionKpis,
+    ebitdaResult,
+    loadStaffTurnover,
+    result,
+    runwayResult,
+    RUNWAY_TRAILING_DAYS,
+    type KpiLedgerBreakdown,
+} from './kpi-results';
 
 /** A customer workspace: not deleted, and not the platform's own. */
 const LIVE_TENANT = { deleted_at: null, platform_workspace_key: null } as const;
@@ -104,6 +112,13 @@ export class PlatformKpiService {
         }
 
         Object.assign(computed, subscriptionKpis(subscriptions, books?.cash ?? null));
+        if (books) {
+            Object.assign(computed, unitEconomicsKpis(books.ledger, subscriptions, period));
+        } else {
+            for (const id of ['gross_margin', 'customer_acquisition_cost', 'customer_lifetime_value', 'ltv_to_cac', 'ebitda'] as const) {
+                computed[id] = noBooks(id);
+            }
+        }
 
         return {
             audience: KpiAudience.PLATFORM,
@@ -144,13 +159,17 @@ export class PlatformKpiService {
             .getFinancialRatios(booksTenantId, { from: range.from, to: range.to, asOfDate: range.to })
             .then((r) => r.ratios);
 
-        const [currentRatios, previousRatios, currentCash, previousCash, recentCash, pending] = await Promise.all([
+        const [currentRatios, previousRatios, currentCash, previousCash, recentCash, pending, ledger] = await Promise.all([
             ratios(period),
             ratios(previous),
             this.accounting.getCashMovements(booksTenantId, period),
             this.accounting.getCashMovements(booksTenantId, previous),
             this.accounting.getCashMovements(booksTenantId, trailing),
             this.accounting.getPendingVoucherCount(booksTenantId),
+            Promise.all([
+                this.accounting.getKpiLedgerBreakdown(booksTenantId, period),
+                this.accounting.getKpiLedgerBreakdown(booksTenantId, previous),
+            ]),
         ]);
 
         return {
@@ -164,6 +183,7 @@ export class PlatformKpiService {
                 },
             },
             pending: pending.count,
+            ledger,
         };
     }
 
@@ -276,6 +296,68 @@ export function subscriptionKpis(
                 basis: { netBurn: burnNow.burn, netNewArr: burnNow.arr },
                 notes: ['ledger_based', ...SUBSCRIPTION_NOTES, ...(burnNow.notBurning ? ['not_burning' as const] : [])],
             },
+    };
+}
+
+/**
+ * Gross margin, CAC, LTV, LTV:CAC and EBITDA from the platform books, with
+ * customers from the MRR history. Cost of service is the `cost_of_sales`
+ * class (the chart's "Infrastructure & Platform Costs" group by default),
+ * acquisition spend the `sales_marketing` class (its "Sales & Marketing"
+ * subgroup), and a new customer a workspace that started paying in the period.
+ */
+export function unitEconomicsKpis(
+    ledger: [KpiLedgerBreakdown, KpiLedgerBreakdown],
+    figures: SubscriptionFigures,
+    period: DateRange,
+): Partial<Record<KpiId, KpiResult>> {
+    const margin = (b: KpiLedgerBreakdown) => (b.revenue > 0
+        ? round1(((b.revenue - b.by_class.cost_of_sales) / b.revenue) * 100)
+        : null);
+    const [current] = ledger;
+    const grossMargin = margin(current);
+    const movements = figures.current;
+
+    let ltv: KpiResult;
+    if (!movements) {
+        ltv = { id: 'customer_lifetime_value', status: 'no_data', value: null, previous: null, basis: {}, notes: ['mrr_history_short'] };
+    } else if (grossMargin === null || movements.endCustomers === 0) {
+        ltv = result('customer_lifetime_value', null, null, {}, ['subscription_mrr', 'ledger_based', 'classified_accounts']);
+    } else {
+        const arpa = movements.endMrr / movements.endCustomers;
+        const lifetime = subscriptionLifetimeValue({
+            arpa,
+            grossMarginPct: grossMargin,
+            churnRatePct: ratioPct(movements.lostCustomers, movements.startCustomers) ?? 0,
+            periodMonths: monthsIn(period),
+        });
+        ltv = result('customer_lifetime_value', lifetime.value, null, {
+            arpa: round2(arpa),
+            grossMarginPct: grossMargin,
+            lifespanMonths: lifetime.lifespanMonths,
+        }, ['subscription_mrr', 'ledger_based', 'classified_accounts', ...(lifetime.capped ? ['lifespan_capped' as const] : [])]);
+    }
+
+    const acquisition = movements
+        ? acquisitionKpis({
+            ledger,
+            newCustomers: { current: movements.newCustomers, previous: figures.previous?.newCustomers ?? null },
+            ltv: ltv.value,
+            customerNotes: ['subscription_mrr'],
+        })
+        : {
+            customer_acquisition_cost: { id: 'customer_acquisition_cost' as const, status: 'no_data' as const, value: null, previous: null, basis: {}, notes: ['mrr_history_short' as const] },
+            ltv_to_cac: { id: 'ltv_to_cac' as const, status: 'no_data' as const, value: null, previous: null, basis: {}, notes: ['mrr_history_short' as const] },
+        };
+
+    return {
+        gross_margin: result('gross_margin', grossMargin, margin(ledger[1]), {
+            revenue: current.revenue,
+            costOfSales: current.by_class.cost_of_sales,
+        }, ['ledger_based', 'classified_accounts']),
+        customer_lifetime_value: ltv,
+        ...acquisition,
+        ebitda: ebitdaResult(ledger),
     };
 }
 

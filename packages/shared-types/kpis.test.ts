@@ -1,4 +1,5 @@
 import {
+    resolveKpiAccountClass,
     KPI_DEFINITIONS,
     KPI_IDS,
     KpiAudience,
@@ -21,10 +22,10 @@ describe('KPI definitions', () => {
     });
 
     it('describes a planned KPI by the phase and data gap that unlock it', () => {
-        expect(unavailableKpiResult('ebitda', KpiAudience.PLATFORM)).toMatchObject({
+        expect(unavailableKpiResult('net_promoter_score', KpiAudience.PLATFORM)).toMatchObject({
             status: 'planned',
-            phase: 3,
-            needs: 'expense_classification',
+            phase: 4,
+            needs: 'nps_survey',
             value: null,
         });
         expect(unavailableKpiResult('burn_multiple', KpiAudience.TENANT).status).toBe('not_applicable');
@@ -54,5 +55,32 @@ describe('kpiChange', () => {
         expect(kpiChange(cash, 100, null)).toBeNull();
         expect(kpiChange(cash, 100, 0)).toBeNull();
         expect(kpiChange(margin, 20, 20)).toEqual({ kind: 'points', amount: 0, improved: null });
+    });
+});
+
+describe('resolveKpiAccountClass', () => {
+    const expense = (name: string, extra: Record<string, string | null> = {}) => ({ type: 'expense', name, ...extra });
+
+    it('guesses from the account name', () => {
+        expect(resolveKpiAccountClass(expense('Depreciation Expense'))).toBe('depreciation');
+        expect(resolveKpiAccountClass(expense('Loan Interest'))).toBe('interest');
+        expect(resolveKpiAccountClass(expense('Income Tax'))).toBe('tax');
+        expect(resolveKpiAccountClass(expense('Facebook Advertising'))).toBe('sales_marketing');
+        expect(resolveKpiAccountClass(expense('Rent'))).toBeNull();
+    });
+
+    it('falls back to the subgroup and group, as the default charts are laid out', () => {
+        expect(resolveKpiAccountClass(expense('Purchases', { subgroupName: 'Cost of Sales', groupName: 'Operating Expenses' }))).toBe('cost_of_sales');
+        expect(resolveKpiAccountClass(expense('Server & Hosting', { subgroupName: 'Hosting & Services', groupName: 'Infrastructure & Platform Costs' }))).toBe('cost_of_sales');
+        expect(resolveKpiAccountClass(expense('Referral Commission', { subgroupName: 'Sales & Marketing' }))).toBe('sales_marketing');
+    });
+
+    it('lets a class set by hand win, and operating switch the guess off', () => {
+        expect(resolveKpiAccountClass(expense('Rent', { kpiClass: 'cost_of_sales' }))).toBe('cost_of_sales');
+        expect(resolveKpiAccountClass(expense('Depreciation Expense', { kpiClass: 'operating' }))).toBeNull();
+    });
+
+    it('never classifies an account that is not an expense', () => {
+        expect(resolveKpiAccountClass({ type: 'asset', name: 'Accumulated Depreciation' })).toBeNull();
     });
 });

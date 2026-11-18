@@ -31,11 +31,26 @@ const cash = (overrides: Record<string, number> = {}) => ({
     ...overrides,
 });
 
+const CLASSES = ['cost_of_sales', 'sales_marketing', 'interest', 'tax', 'depreciation', 'amortization'] as const;
+
+/** A ledger breakdown: revenue, net profit, and spend per KPI class (all classes have one account unless said). */
+function breakdown(overrides: { revenue?: number; net_profit?: number; spend?: Partial<Record<(typeof CLASSES)[number], number>>; accounts?: Partial<Record<(typeof CLASSES)[number], number>> } = {}) {
+    return {
+        period: { from: '', to: '' },
+        revenue: overrides.revenue ?? 20000,
+        expenses: 0,
+        net_profit: overrides.net_profit ?? 4000,
+        by_class: Object.fromEntries(CLASSES.map((c) => [c, overrides.spend?.[c] ?? 0])),
+        accounts_by_class: Object.fromEntries(CLASSES.map((c) => [c, overrides.accounts?.[c] ?? 1])),
+    };
+}
+
 function accountingMock() {
     return {
         getFinancialRatios: jest.fn().mockResolvedValue(ratios()),
         getCashMovements: jest.fn().mockResolvedValue(cash()),
         getPendingVoucherCount: jest.fn().mockResolvedValue({ count: 2, approvalEnabled: true }),
+        getKpiLedgerBreakdown: jest.fn().mockResolvedValue(breakdown()),
     };
 }
 
@@ -77,7 +92,7 @@ describe('TenantKpiService.getScorecard', () => {
         const byId = Object.fromEntries(card.kpis.map((k) => [k.id, k]));
         expect(byId.burn_multiple.status).toBe('not_applicable');
         expect(byId.quick_ratio.status).toBe('not_applicable');
-        expect(byId.customer_acquisition_cost).toMatchObject({ status: 'planned', phase: 3, needs: 'expense_classification' });
+        expect(card.kpis.filter((k) => k.status === 'planned').map((k) => k.id)).toEqual(['net_promoter_score']);
         expect(byId.net_promoter_score).toMatchObject({ status: 'planned', phase: 4 });
         expect(card.previousPeriod).toEqual({ from: '2026-03-02', to: '2026-03-31' });
         expect(card.unpostedVouchers).toBe(2);
@@ -126,12 +141,37 @@ describe('TenantKpiService.getScorecard', () => {
         expect(byId.employee_turnover).toMatchObject({ status: 'no_data', value: null });
     });
 
+    it('computes EBITDA and acquisition cost from the classified ledger', async () => {
+        const { service, accounting } = build();
+        accounting.getKpiLedgerBreakdown.mockResolvedValue(breakdown({
+            net_profit: 10000,
+            spend: { interest: 1000, tax: 2000, depreciation: 1500, sales_marketing: 6000 },
+        }));
+        const card = await service.getScorecard('t1', { from: '2026-04-01', to: '2026-04-30' }, undefined, 'Asia/Dhaka');
+        const byId = Object.fromEntries(card.kpis.map((k) => [k.id, k]));
+
+        expect(byId.ebitda).toMatchObject({ status: 'ok', value: 14500 });
+        // No first-time customers in April in this fixture, so no CAC to state.
+        expect(byId.customer_acquisition_cost).toMatchObject({ status: 'no_data', basis: { salesMarketingSpend: 6000, newCustomers: 0 } });
+    });
+
+    it('says no account is classified as marketing instead of reporting a zero CAC', async () => {
+        const { service, accounting } = build();
+        accounting.getKpiLedgerBreakdown.mockResolvedValue(breakdown({ accounts: { sales_marketing: 0 } }));
+        const card = await service.getScorecard('t1', { from: '2026-04-01', to: '2026-04-30' }, undefined, 'Asia/Dhaka');
+        const cac = card.kpis.find((k) => k.id === 'customer_acquisition_cost')!;
+
+        expect(cac.status).toBe('no_data');
+        expect(cac.notes).toContain('no_marketing_accounts');
+    });
+
     it('passes the branch to every source', async () => {
         const { service, db, accounting } = build();
         await service.getScorecard('t1', { from: '2026-04-01', to: '2026-04-30' }, 'store-1', 'Asia/Dhaka');
 
         expect(accounting.getFinancialRatios).toHaveBeenCalledWith('t1', expect.anything(), 'store-1');
         expect(accounting.getCashMovements).toHaveBeenCalledWith('t1', expect.anything(), 'store-1');
+        expect(accounting.getKpiLedgerBreakdown).toHaveBeenCalledWith('t1', expect.anything(), 'store-1');
         expect(db.sale.groupBy.mock.calls[0][0].where.store_id).toBe('store-1');
         expect(db.lead.findMany.mock.calls[0][0].where.store_id).toBe('store-1');
         expect(db.employee.findMany.mock.calls[0][0].where.store_id).toBe('store-1');
@@ -188,9 +228,7 @@ describe('PlatformKpiService.getScorecard', () => {
         expect(accounting.getFinancialRatios).toHaveBeenCalledWith('platform-ws', expect.anything());
         expect(byId.revenue_growth.value).toBe(50);
         expect(byId.sales_cycle_length).toMatchObject({ value: 14, notes: ['signup_to_activation'] });
-        expect(card.kpis.filter((k) => k.status === 'planned').map((k) => k.id)).toEqual([
-            'gross_margin', 'customer_acquisition_cost', 'customer_lifetime_value', 'ltv_to_cac', 'net_promoter_score', 'ebitda',
-        ]);
+        expect(card.kpis.filter((k) => k.status === 'planned').map((k) => k.id)).toEqual(['net_promoter_score']);
     });
 
     it('computes the subscription KPIs from MRR on the day before the period and its last day', async () => {
@@ -210,6 +248,26 @@ describe('PlatformKpiService.getScorecard', () => {
         expect(byId.burn_multiple).toMatchObject({ status: 'ok', value: 0.5, basis: { netBurn: 9000, netNewArr: 18000 } });
         // Last period: c joined, nobody left.
         expect(byId.churn_rate.previous).toBe(0);
+    });
+
+    it('computes gross margin, CAC, LTV and EBITDA from the books and the MRR history', async () => {
+        const { service, accounting } = build();
+        accounting.getKpiLedgerBreakdown.mockResolvedValue(breakdown({
+            revenue: 20000,
+            net_profit: 3000,
+            spend: { cost_of_sales: 5000, sales_marketing: 4000, depreciation: 500 },
+        }));
+        const card = await service.getScorecard({ from: '2026-04-01', to: '2026-04-30' });
+        const byId = Object.fromEntries(card.kpis.map((k) => [k.id, k]));
+
+        expect(byId.gross_margin).toMatchObject({ status: 'ok', value: 75, basis: { costOfSales: 5000 } });
+        // One new paying workspace (d) for ৳4,000 of sales & marketing.
+        expect(byId.customer_acquisition_cost.value).toBe(4000);
+        // ARPA 1,333.33 × 75% × lifespan. 33.3% churn over April (30 of an average
+        // 30.44 days, so 0.9856 months) is 33.8% a month: a 2.96-month lifespan.
+        expect(byId.customer_lifetime_value).toMatchObject({ value: 2959.84, basis: { lifespanMonths: 3 } });
+        expect(byId.ltv_to_cac.value).toBe(0.74);
+        expect(byId.ebitda.value).toBe(3500);
     });
 
     it('says when the platform is not burning cash instead of a burn multiple', async () => {
