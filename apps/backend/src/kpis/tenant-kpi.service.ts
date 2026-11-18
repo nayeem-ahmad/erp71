@@ -14,7 +14,8 @@ import { addDays, resolveComparisonRange, type DateRange } from '../common/perio
 import { resolveDateWindow } from '../common/dashboard-window';
 import { buildSaleDateWindow, loadMarginSource } from '../sales-reports/sales-reports.service';
 import { groupMargin, returnLines, saleLines, summariseMargin } from '../sales-reports/gross-profit.utils';
-import { acquisitionKpis, ebitdaResult, loadStaffTurnover, result, runwayResult, RUNWAY_TRAILING_DAYS } from './kpi-results';
+import { acquisitionKpis, ebitdaResult, loadStaffTurnover, npsResult, result, runwayResult, RUNWAY_TRAILING_DAYS } from './kpi-results';
+import { loadNps } from '../nps/nps.service';
 import {
     average,
     cashRunway,
@@ -29,7 +30,7 @@ import {
     round2,
 } from './kpi-math';
 
-/** A named customer with no purchase for this long counts as lost. */
+/** The default lapse window, when a shop has not set its own in Sales Settings. */
 export const CUSTOMER_LAPSE_DAYS = 90;
 
 const WALK_IN = '__walk_in__';
@@ -62,12 +63,17 @@ export class TenantKpiService {
         const period: DateRange = { from: window.from, to: window.to };
         const previousPeriod = resolveComparisonRange(period, 'previous_period') as DateRange;
         const scope = { tenantId, storeId };
+        const settings = await this.db.salesSettings.findUnique({
+            where: { tenant_id: tenantId },
+            select: { customer_lapse_days: true },
+        });
+        const lapseDays = settings?.customer_lapse_days ?? CUSTOMER_LAPSE_DAYS;
 
-        const [sales, ratios, cash, customers, salesCycle, turnover, pending, ledger] = await Promise.all([
+        const [sales, ratios, cash, customers, salesCycle, turnover, pending, ledger, nps] = await Promise.all([
             this.salesFigures(scope, period, previousPeriod),
             this.ratios(scope, period, previousPeriod),
             this.cashFigures(scope, period, previousPeriod),
-            this.customerFigures(scope, period, previousPeriod),
+            this.customerFigures(scope, period, previousPeriod, lapseDays),
             this.salesCycle(scope, period, previousPeriod, timezone),
             loadStaffTurnover(this.db, scope, [period, previousPeriod], timezone),
             this.accounting.getPendingVoucherCount(tenantId),
@@ -75,6 +81,11 @@ export class TenantKpiService {
                 this.accounting.getKpiLedgerBreakdown(tenantId, period, storeId),
                 this.accounting.getKpiLedgerBreakdown(tenantId, previousPeriod, storeId),
             ]),
+            Promise.all([period, previousPeriod].map((range) => loadNps(
+                this.db,
+                { audience: 'tenant', tenantId, storeId },
+                resolveDateWindow(range, timezone),
+            ))),
         ]);
 
         const ltv = customerLifetimeValue({
@@ -119,7 +130,8 @@ export class TenantKpiService {
             churn_rate: result('churn_rate', customers.churn.current.rate, customers.churn.previous.rate, {
                 lostCustomers: customers.churn.current.lost,
                 startingCustomers: customers.churn.current.base,
-            }, ['named_customers_only', 'lapse_after_90_days']),
+                lapseDays,
+            }, ['named_customers_only', 'lapse_window']),
             avg_revenue_per_account: result('avg_revenue_per_account', customers.arpa.current, customers.arpa.previous, {
                 namedRevenue: customers.namedRevenue,
                 activeCustomers: customers.activeCustomers,
@@ -143,6 +155,7 @@ export class TenantKpiService {
                 customerNotes: ['named_customers_only'],
             }),
             ebitda: ebitdaResult(ledger),
+            net_promoter_score: npsResult(nps[0], nps[1], 'nps_from_receipts'),
         };
 
         return {
@@ -232,7 +245,7 @@ export class TenantKpiService {
 
     // ── Customers ────────────────────────────────────────────────────────────
 
-    private async customerFigures(scope: Scope, period: DateRange, previous: DateRange) {
+    private async customerFigures(scope: Scope, period: DateRange, previous: DateRange, lapseDays: number) {
         const named = {
             tenant_id: scope.tenantId,
             status: 'COMPLETED',
@@ -251,8 +264,8 @@ export class TenantKpiService {
         // A customer was active going into a period if they bought in the
         // lapse window just before it, and is lost if they have not bought in
         // the lapse window that ends with it.
-        const lapseBefore = (start: string): DateRange => ({ from: addDays(start, -CUSTOMER_LAPSE_DAYS), to: addDays(start, -1) });
-        const lapseEnding = (end: string): DateRange => ({ from: addDays(end, -(CUSTOMER_LAPSE_DAYS - 1)), to: end });
+        const lapseBefore = (start: string): DateRange => ({ from: addDays(start, -lapseDays), to: addDays(start, -1) });
+        const lapseEnding = (end: string): DateRange => ({ from: addDays(end, -(lapseDays - 1)), to: end });
 
         const [current, before, baseNow, activeNow, basePrev, activePrev, lifetime] = await Promise.all([
             revenueByCustomer(period),

@@ -53,7 +53,7 @@ export type KpiGap =
   | 'mrr_history'
   /** Expenses tagged as marketing, cost of service, interest, tax, depreciation. */
   | 'expense_classification'
-  /** A way to ask customers how likely they are to recommend the business. */
+  /** A way to ask customers how likely they are to recommend the business. Delivered in phase 4. */
   | 'nps_survey';
 
 export type KpiAvailability =
@@ -93,7 +93,7 @@ export const KPI_DEFINITIONS: readonly KpiDefinition[] = [
   { id: 'burn_multiple', number: 12, unit: 'ratio', higherIsBetter: false, availability: { tenant: NOT_APPLICABLE, platform: LIVE } },
   { id: 'sales_cycle_length', number: 13, unit: 'days', higherIsBetter: false, availability: { tenant: LIVE, platform: LIVE } },
   { id: 'employee_turnover', number: 14, unit: 'percent', higherIsBetter: false, availability: { tenant: LIVE, platform: LIVE } },
-  { id: 'net_promoter_score', number: 15, unit: 'score', higherIsBetter: true, availability: { tenant: planned(4, 'nps_survey'), platform: planned(4, 'nps_survey') } },
+  { id: 'net_promoter_score', number: 15, unit: 'score', higherIsBetter: true, availability: { tenant: LIVE, platform: LIVE } },
   { id: 'days_sales_outstanding', number: 16, unit: 'days', higherIsBetter: false, availability: { tenant: LIVE, platform: LIVE } },
   { id: 'quick_ratio', number: 17, unit: 'ratio', higherIsBetter: true, availability: { tenant: NOT_APPLICABLE, platform: LIVE } },
   { id: 'ebitda', number: 18, unit: 'money', higherIsBetter: true, availability: { tenant: LIVE, platform: LIVE } },
@@ -125,8 +125,8 @@ export type KpiNote =
   | 'ledger_based'
   /** The platform's books are not set up, or platform accounting is switched off. */
   | 'books_unavailable'
-  /** A customer counts as lost after 90 days without a purchase. */
-  | 'lapse_after_90_days'
+  /** A customer counts as lost after the lapse window set in Sales Settings (the `lapseDays` input). */
+  | 'lapse_window'
   /** Burn is averaged over the three months ending with the period. */
   | 'trailing_three_months'
   /** Measured from workspace signup to first paid activation. */
@@ -144,7 +144,13 @@ export type KpiNote =
   /** No expense account is classified as sales & marketing, so there is no spend to divide. */
   | 'no_marketing_accounts'
   /** No churn in the period, so customer lifespan is capped at five years. */
-  | 'lifespan_capped';
+  | 'lifespan_capped'
+  /** From customers who answered the survey link on their receipt SMS. */
+  | 'nps_from_receipts'
+  /** From shop owners, asked in the app at most every 90 days. */
+  | 'nps_owner_survey'
+  /** Fewer than 10 answers, so one answer moves the score a lot. */
+  | 'small_sample';
 
 export interface KpiResult {
   id: KpiId;

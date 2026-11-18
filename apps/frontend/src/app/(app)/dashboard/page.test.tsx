@@ -56,6 +56,8 @@ jest.mock('@/lib/api', () => ({
         getProjectTimeReport: jest.fn(),
         getProjects: jest.fn(),
         getProjectTimer: jest.fn(),
+        // The owner's NPS question above the dashboard; not asked in these tests.
+        getOwnerNpsPrompt: jest.fn().mockResolvedValue({ ask: false }),
     },
 }));
 

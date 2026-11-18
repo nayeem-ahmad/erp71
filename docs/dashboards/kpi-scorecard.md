@@ -91,10 +91,29 @@ Marketing" subgroup. `AccountingService.getKpiLedgerBreakdown` sums each class.
 With no account in the sales & marketing class, CAC and LTV:CAC say so
 rather than reporting zero.
 
-## Not live yet
+## Phase 4: Net Promoter Score and the churn setting
 
-| KPI | Shop | Platform | Needs |
-|---|---|---|---|
-| 15 NPS | Phase 4 | Phase 4 | A customer survey |
+**Shop NPS.** With *Ask customers to rate us* on (Settings › Sales Settings,
+owner only, off by default), the plain receipt SMS ends with `Rate us:
+<FRONTEND_URL>/f/<code>` instead of "Thank you!". The 8-character code
+(`NpsInvite`) is the whole authorisation; the public page asks 0–10 plus an
+optional comment, one answer per receipt (`NpsResponse`, `audience = 'tenant'`,
+with the branch and customer). The credit-sale SMS carries no link.
 
-The phases are tracked in `TODO.md` under "CEO KPI scorecard".
+**Platform NPS.** Shop owners see "How likely are you to recommend ERP71…" on
+Home once their workspace is 14 days old, then at most every 90 days; "Not
+now" counts as an answer for that purpose (`audience = 'platform'`,
+`dismissed`, no score).
+
+NPS = % promoters (9–10) − % detractors (0–6), from −100 to 100, over answers
+given in the period. Fewer than 10 answers is flagged on the tile.
+
+**Churn window.** *A customer counts as lost after (days)*, 7–730, default 90
+(`SalesSettings.customer_lapse_days`), drives the shop churn rate.
+
+## Not applicable
+
+Burn multiple (12) and SaaS quick ratio (17) have no meaning for a shop and are
+hidden on its scorecard. Every other KPI is live for both audiences.
+
+Follow-ups are tracked in `TODO.md` under "CEO KPI scorecard".

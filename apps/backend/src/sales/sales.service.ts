@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Injectable, BadRequestException, ConflictException, HttpException, NotFoundException, Logger } from '@nestjs/common';
 import { roundMoney, saleGoodsValue } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
+import { createSaleSurveyLink } from '../nps/nps-invite';
 import { CreateSaleDto, CreateSalesFromQuotationsDto, FinalizeSaleDto, UpdateSaleDto } from './sale.dto';
 import {
     BULK_CONVERTIBLE_QUOTATION_STATUSES,
@@ -418,6 +419,8 @@ export class SalesService {
         // Fire-and-forget receipt (after transaction commits)
         if (dto.customerId) {
             this.notifyCustomerOfSale(tenantId, dto.customerId, {
+                saleId: result.id,
+                storeId: result.store_id ?? null,
                 totalAmount: Number(result.total_amount),
                 serialNumber: result.serial_number,
                 notice: result.customer_notice ?? null,
@@ -1549,6 +1552,8 @@ export class SalesService {
         // Fire-and-forget receipt (after transaction commits)
         if (result.customer_id) {
             this.notifyCustomerOfSale(tenantId, result.customer_id, {
+                saleId: result.id,
+                storeId: result.store_id ?? null,
                 totalAmount: Number(result.total_amount),
                 serialNumber: result.serial_number,
                 notice: result.customer_notice ?? null,
@@ -1568,7 +1573,13 @@ export class SalesService {
     private notifyCustomerOfSale(
         tenantId: string,
         customerId: string,
-        sale: { totalAmount: number; serialNumber: string; notice: SaleCustomerNotice | null },
+        sale: {
+            saleId: string;
+            storeId: string | null;
+            totalAmount: number;
+            serialNumber: string;
+            notice: SaleCustomerNotice | null;
+        },
     ): void {
         Promise.all([
             this.db.customer.findUnique({
@@ -1630,14 +1641,22 @@ export class SalesService {
                 }
 
                 if (tenant.sms_on_sale && customer?.phone && !sentLedgerSms) {
+                    // The NPS survey link rides on the plain receipt only, and
+                    // only when the shop turned it on (Sales Settings).
                     tasks.push(
-                        this.smsService.sendSaleReceipt(
-                            customer.phone,
+                        createSaleSurveyLink(this.db, {
+                            tenantId,
+                            saleId: sale.saleId,
+                            customerId,
+                            storeId: sale.storeId,
+                        }).then((surveyUrl) => this.smsService.sendSaleReceipt(
+                            customer.phone as string,
                             customer.name ?? 'Customer',
                             sale.totalAmount,
                             sale.serialNumber,
                             tenantId,
-                        ),
+                            surveyUrl,
+                        )),
                     );
                 }
 

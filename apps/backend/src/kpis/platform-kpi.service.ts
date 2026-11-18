@@ -17,11 +17,13 @@ import { resolveDateWindow } from '../common/dashboard-window';
 import { DEFAULT_TENANT_TIMEZONE } from '../common/tenant-time.util';
 import { average, cashRunway, daysBetween, growthPct, monthsIn, ratioPct, round1, subscriptionLifetimeValue } from './kpi-math';
 import { MrrSnapshotService } from './mrr/mrr-snapshot.service';
+import { loadNps } from '../nps/nps.service';
 import { mrrMovements, type MrrMovements } from './mrr/mrr.util';
 import {
     acquisitionKpis,
     ebitdaResult,
     loadStaffTurnover,
+    npsResult,
     result,
     runwayResult,
     RUNWAY_TRAILING_DAYS,
@@ -63,13 +65,18 @@ export class PlatformKpiService {
         const workspace = await this.workspace.find();
         const booksOn = workspace !== null && (await this.platformSettings.isFeatureEnabled('platformAccounting'));
 
-        const [books, salesCycle, turnover, subscriptions] = await Promise.all([
+        const [books, salesCycle, turnover, subscriptions, nps] = await Promise.all([
             booksOn ? this.bookFigures(workspace.id, period, previousPeriod) : Promise.resolve(null),
             this.salesCycle(period, previousPeriod, timezone),
             workspace
                 ? loadStaffTurnover(this.db, { tenantId: workspace.id }, [period, previousPeriod], timezone)
                 : Promise.resolve(null),
             this.subscriptionFigures(period, previousPeriod),
+            Promise.all([period, previousPeriod].map((range) => loadNps(
+                this.db,
+                { audience: 'platform' },
+                resolveDateWindow(range, timezone),
+            ))),
         ]);
 
         const computed: Partial<Record<KpiId, KpiResult>> = {
@@ -111,6 +118,7 @@ export class PlatformKpiService {
             }
         }
 
+        computed.net_promoter_score = npsResult(nps[0], nps[1], 'nps_owner_survey');
         Object.assign(computed, subscriptionKpis(subscriptions, books?.cash ?? null));
         if (books) {
             Object.assign(computed, unitEconomicsKpis(books.ledger, subscriptions, period));

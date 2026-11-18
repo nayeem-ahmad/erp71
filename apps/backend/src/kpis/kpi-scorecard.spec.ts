@@ -68,7 +68,10 @@ function groupByFor(buyers: Record<string, Array<[string, number]>>) {
 }
 
 describe('TenantKpiService.getScorecard', () => {
-    function build(buyers: Record<string, Array<[string, number]>> = {}) {
+    function build(
+        buyers: Record<string, Array<[string, number]>> = {},
+        { lapseDays = null as number | null, npsScores = [] as number[] } = {},
+    ) {
         const db = {
             sale: { findMany: jest.fn().mockResolvedValue([]), groupBy: groupByFor(buyers) },
             salesReturn: { findMany: jest.fn().mockResolvedValue([]) },
@@ -79,6 +82,8 @@ describe('TenantKpiService.getScorecard', () => {
                 ]),
             },
             employee: { findMany: jest.fn().mockResolvedValue([]) },
+            salesSettings: { findUnique: jest.fn().mockResolvedValue(lapseDays ? { customer_lapse_days: lapseDays } : null) },
+            npsResponse: { findMany: jest.fn().mockResolvedValue(npsScores.map((score) => ({ score }))) },
         };
         const accounting = accountingMock();
         return { service: new TenantKpiService(db as any, accounting as any), db, accounting };
@@ -92,8 +97,8 @@ describe('TenantKpiService.getScorecard', () => {
         const byId = Object.fromEntries(card.kpis.map((k) => [k.id, k]));
         expect(byId.burn_multiple.status).toBe('not_applicable');
         expect(byId.quick_ratio.status).toBe('not_applicable');
-        expect(card.kpis.filter((k) => k.status === 'planned').map((k) => k.id)).toEqual(['net_promoter_score']);
-        expect(byId.net_promoter_score).toMatchObject({ status: 'planned', phase: 4 });
+        expect(card.kpis.filter((k) => k.status === 'planned')).toEqual([]);
+        expect(byId.net_promoter_score).toMatchObject({ status: 'no_data', notes: ['nps_from_receipts'] });
         expect(card.previousPeriod).toEqual({ from: '2026-03-02', to: '2026-03-31' });
         expect(card.unpostedVouchers).toBe(2);
     });
@@ -128,7 +133,8 @@ describe('TenantKpiService.getScorecard', () => {
         expect(byId.churn_rate).toMatchObject({ value: 33.3, basis: { lostCustomers: 1, startingCustomers: 3 } });
         expect(byId.net_revenue_retention.value).toBe(75);
         expect(byId.avg_revenue_per_account.value).toBe(1500);
-        expect(byId.churn_rate.notes).toEqual(['named_customers_only', 'lapse_after_90_days']);
+        expect(byId.churn_rate.notes).toEqual(['named_customers_only', 'lapse_window']);
+        expect(byId.churn_rate.basis.lapseDays).toBe(90);
     });
 
     it('marks a KPI with nothing to divide by as no data rather than zero', async () => {
@@ -165,6 +171,30 @@ describe('TenantKpiService.getScorecard', () => {
         expect(cac.notes).toContain('no_marketing_accounts');
     });
 
+    it("measures churn over the shop's own lapse window from Sales Settings", async () => {
+        const { service, db } = build({
+            // With a 30-day window: active in the 30 days before April, gone by the end.
+            '2026-03-02': [['a', 100], ['b', 100]],
+            '2026-04-01': [['a', 100]],
+        }, { lapseDays: 30 });
+        const card = await service.getScorecard('t1', { from: '2026-04-01', to: '2026-04-30' }, undefined, 'Asia/Dhaka');
+        const churn = card.kpis.find((k) => k.id === 'churn_rate')!;
+
+        expect(churn.basis.lapseDays).toBe(30);
+        const windows = db.sale.groupBy.mock.calls.map(([arg]: any[]) => arg.where.sale_date?.gte?.toISOString().slice(0, 10));
+        expect(windows).toContain('2026-03-02');
+    });
+
+    it('scores NPS from receipt-survey answers, and flags a small sample', async () => {
+        const { service } = build({}, { npsScores: [10, 9, 9, 7, 3] });
+        const card = await service.getScorecard('t1', { from: '2026-04-01', to: '2026-04-30' }, undefined, 'Asia/Dhaka');
+        const nps = card.kpis.find((k) => k.id === 'net_promoter_score')!;
+
+        // 3 promoters, 1 detractor of 5: 60% − 20%.
+        expect(nps).toMatchObject({ status: 'ok', value: 40, basis: { responses: 5, promoters: 3, detractors: 1 } });
+        expect(nps.notes).toEqual(['nps_from_receipts', 'small_sample']);
+    });
+
     it('passes the branch to every source', async () => {
         const { service, db, accounting } = build();
         await service.getScorecard('t1', { from: '2026-04-01', to: '2026-04-30' }, 'store-1', 'Asia/Dhaka');
@@ -199,6 +229,7 @@ describe('PlatformKpiService.getScorecard', () => {
                 ]),
             },
             employee: { findMany: jest.fn().mockResolvedValue([]) },
+            npsResponse: { findMany: jest.fn().mockResolvedValue([{ score: 9 }, { score: 10 }, { score: 4 }]) },
         };
         const accounting = accountingMock();
         accounting.getFinancialRatios
@@ -228,7 +259,7 @@ describe('PlatformKpiService.getScorecard', () => {
         expect(accounting.getFinancialRatios).toHaveBeenCalledWith('platform-ws', expect.anything());
         expect(byId.revenue_growth.value).toBe(50);
         expect(byId.sales_cycle_length).toMatchObject({ value: 14, notes: ['signup_to_activation'] });
-        expect(card.kpis.filter((k) => k.status === 'planned').map((k) => k.id)).toEqual(['net_promoter_score']);
+        expect(card.kpis.filter((k) => k.status === 'planned')).toEqual([]);
     });
 
     it('computes the subscription KPIs from MRR on the day before the period and its last day', async () => {
@@ -268,6 +299,8 @@ describe('PlatformKpiService.getScorecard', () => {
         expect(byId.customer_lifetime_value).toMatchObject({ value: 2959.84, basis: { lifespanMonths: 3 } });
         expect(byId.ltv_to_cac.value).toBe(0.74);
         expect(byId.ebitda.value).toBe(3500);
+        // Two promoters and a detractor among owners: 67% − 33%.
+        expect(byId.net_promoter_score).toMatchObject({ value: 33, notes: ['nps_owner_survey', 'small_sample'] });
     });
 
     it('says when the platform is not burning cash instead of a burn multiple', async () => {
