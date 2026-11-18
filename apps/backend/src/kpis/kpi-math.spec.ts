@@ -1,4 +1,8 @@
 import {
+    acquisitionCost,
+    ebitda,
+    ltvToCac,
+    subscriptionLifetimeValue,
     average,
     cashRunway,
     churnRate,
@@ -103,5 +107,33 @@ describe('helpers', () => {
     it('averages to one decimal place', () => {
         expect(average([10, 20, 31])).toBe(20.3);
         expect(average([])).toBeNull();
+    });
+});
+
+describe('phase 3 formulas', () => {
+    it('adds interest, tax, depreciation and amortisation back to net profit', () => {
+        expect(ebitda(10_000, { interest: 1_000, tax: 2_000, depreciation: 1_500, amortization: 500 })).toBe(15_000);
+    });
+
+    it('divides acquisition spend by new customers, with no answer and no customers', () => {
+        expect(acquisitionCost(30_000, 12)).toBe(2_500);
+        expect(acquisitionCost(30_000, 0)).toBeNull();
+    });
+
+    it('needs both a lifetime value and a cost to compare them', () => {
+        expect(ltvToCac(7_500, 2_500)).toBe(3);
+        expect(ltvToCac(7_500, null)).toBeNull();
+        expect(ltvToCac(7_500, 0)).toBeNull();
+    });
+
+    it('values a subscriber at ARPA × margin ÷ monthly churn', () => {
+        // 6% churn over 3 months is 2% a month: a 50-month lifespan.
+        expect(subscriptionLifetimeValue({ arpa: 2_000, grossMarginPct: 80, churnRatePct: 6, periodMonths: 3 }))
+            .toEqual({ value: 80_000, lifespanMonths: 50, capped: false });
+    });
+
+    it('caps the lifespan at five years when nobody churned', () => {
+        expect(subscriptionLifetimeValue({ arpa: 1_000, grossMarginPct: 50, churnRatePct: 0, periodMonths: 1 }))
+            .toEqual({ value: 30_000, lifespanMonths: 60, capped: true });
     });
 });

@@ -159,3 +159,53 @@ export function employeeTurnover(
     const averageHeadcount = (opening + closing) / 2;
     return { rate: averageHeadcount > 0 ? round1((departures / averageHeadcount) * 100) : null, departures, averageHeadcount };
 }
+
+/** Expense classes EBITDA adds back to net profit. */
+export interface EbitdaAddBacks {
+    interest: number;
+    tax: number;
+    depreciation: number;
+    amortization: number;
+}
+
+/** Net income + interest + taxes + depreciation + amortisation. */
+export function ebitda(netProfit: number, addBacks: EbitdaAddBacks): number {
+    return round2(netProfit + addBacks.interest + addBacks.tax + addBacks.depreciation + addBacks.amortization);
+}
+
+/** (Sales + marketing spend) ÷ new customers. */
+export function acquisitionCost(spend: number, newCustomers: number): number | null {
+    if (newCustomers <= 0) return null;
+    return round2(spend / newCustomers);
+}
+
+/** Lifetime value ÷ acquisition cost; nothing to say when either is missing or zero. */
+export function ltvToCac(ltv: number | null, cac: number | null): number | null {
+    if (ltv === null || cac === null || cac <= 0 || ltv <= 0) return null;
+    return round2(ltv / cac);
+}
+
+/** Five years: the longest a subscription customer is assumed to stay when nobody churned. */
+export const MAX_LIFESPAN_MONTHS = 60;
+
+/**
+ * Subscription lifetime value: ARPA × gross margin × expected lifespan, where
+ * the lifespan is 1 ÷ monthly churn. A period's churn is spread evenly over
+ * its months. With no churn the lifespan is capped at five years rather than
+ * read as infinite.
+ */
+export function subscriptionLifetimeValue(input: {
+    arpa: number;
+    grossMarginPct: number;
+    churnRatePct: number;
+    periodMonths: number;
+}): { value: number; lifespanMonths: number; capped: boolean } {
+    const monthlyChurn = input.periodMonths > 0 ? input.churnRatePct / 100 / input.periodMonths : 0;
+    const uncapped = monthlyChurn > 0 ? 1 / monthlyChurn : Infinity;
+    const lifespanMonths = Math.min(uncapped, MAX_LIFESPAN_MONTHS);
+    return {
+        value: round2(input.arpa * (input.grossMarginPct / 100) * lifespanMonths),
+        lifespanMonths: round1(lifespanMonths),
+        capped: uncapped > MAX_LIFESPAN_MONTHS,
+    };
+}

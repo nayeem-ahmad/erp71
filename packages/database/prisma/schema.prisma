@@ -4306,6 +4306,11 @@ model Account {
   /// its balance is maintained as a subsidiary ledger, one balance per party.
   /// autoPostFromRules tags the voucher line hitting this account with party_id.
   party_type  PartyType?
+  /// What this expense counts toward on the KPI scorecard: cost_of_sales,
+  /// sales_marketing, interest, tax, depreciation, amortization, or operating
+  /// ("none of these"). Null means guess from the name and parent group — see
+  /// `resolveKpiAccountClass` in `@erp71/shared-types`.
+  kpi_class   String?
   created_at  DateTime   @default(now())
   updated_at  DateTime   @updatedAt
 

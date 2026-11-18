@@ -76,8 +76,8 @@ describe('KpiScorecardView', () => {
     it('lists planned KPIs under Coming soon and leaves out the ones that do not apply to a shop', async () => {
         renderView(scorecard());
 
-        const ebitda = await screen.findByTestId('kpi-ebitda');
-        expect(within(ebitda).getByText('Coming in phase 3')).toBeInTheDocument();
+        const nps = await screen.findByTestId('kpi-net_promoter_score');
+        expect(within(nps).getByText('Coming in phase 4')).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: 'Coming soon' })).toBeInTheDocument();
         expect(screen.queryByTestId('kpi-burn_multiple')).not.toBeInTheDocument();
         expect(screen.queryByTestId('kpi-quick_ratio')).not.toBeInTheDocument();

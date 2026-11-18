@@ -80,13 +80,13 @@ const planned = (phase: 2 | 3 | 4, needs: KpiGap): KpiAvailability => ({ kind: '
 
 export const KPI_DEFINITIONS: readonly KpiDefinition[] = [
   { id: 'revenue_growth', number: 1, unit: 'percent', higherIsBetter: true, availability: { tenant: LIVE, platform: LIVE } },
-  { id: 'gross_margin', number: 2, unit: 'percent', higherIsBetter: true, availability: { tenant: LIVE, platform: planned(3, 'expense_classification') } },
+  { id: 'gross_margin', number: 2, unit: 'percent', higherIsBetter: true, availability: { tenant: LIVE, platform: LIVE } },
   { id: 'net_profit_margin', number: 3, unit: 'percent', higherIsBetter: true, availability: { tenant: LIVE, platform: LIVE } },
   { id: 'operating_cash_flow', number: 4, unit: 'money', higherIsBetter: true, availability: { tenant: LIVE, platform: LIVE } },
   { id: 'cash_runway', number: 5, unit: 'months', higherIsBetter: true, availability: { tenant: LIVE, platform: LIVE } },
-  { id: 'customer_acquisition_cost', number: 6, unit: 'money', higherIsBetter: false, availability: { tenant: planned(3, 'expense_classification'), platform: planned(3, 'expense_classification') } },
-  { id: 'customer_lifetime_value', number: 7, unit: 'money', higherIsBetter: true, availability: { tenant: LIVE, platform: planned(3, 'expense_classification') } },
-  { id: 'ltv_to_cac', number: 8, unit: 'ratio', higherIsBetter: true, availability: { tenant: planned(3, 'expense_classification'), platform: planned(3, 'expense_classification') } },
+  { id: 'customer_acquisition_cost', number: 6, unit: 'money', higherIsBetter: false, availability: { tenant: LIVE, platform: LIVE } },
+  { id: 'customer_lifetime_value', number: 7, unit: 'money', higherIsBetter: true, availability: { tenant: LIVE, platform: LIVE } },
+  { id: 'ltv_to_cac', number: 8, unit: 'ratio', higherIsBetter: true, availability: { tenant: LIVE, platform: LIVE } },
   { id: 'net_revenue_retention', number: 9, unit: 'percent', higherIsBetter: true, availability: { tenant: LIVE, platform: LIVE } },
   { id: 'churn_rate', number: 10, unit: 'percent', higherIsBetter: false, availability: { tenant: LIVE, platform: LIVE } },
   { id: 'avg_revenue_per_account', number: 11, unit: 'money', higherIsBetter: true, availability: { tenant: LIVE, platform: LIVE } },
@@ -96,7 +96,7 @@ export const KPI_DEFINITIONS: readonly KpiDefinition[] = [
   { id: 'net_promoter_score', number: 15, unit: 'score', higherIsBetter: true, availability: { tenant: planned(4, 'nps_survey'), platform: planned(4, 'nps_survey') } },
   { id: 'days_sales_outstanding', number: 16, unit: 'days', higherIsBetter: false, availability: { tenant: LIVE, platform: LIVE } },
   { id: 'quick_ratio', number: 17, unit: 'ratio', higherIsBetter: true, availability: { tenant: NOT_APPLICABLE, platform: LIVE } },
-  { id: 'ebitda', number: 18, unit: 'money', higherIsBetter: true, availability: { tenant: planned(3, 'expense_classification'), platform: planned(3, 'expense_classification') } },
+  { id: 'ebitda', number: 18, unit: 'money', higherIsBetter: true, availability: { tenant: LIVE, platform: LIVE } },
 ];
 
 export const KPI_DEFINITION_BY_ID: Readonly<Record<KpiId, KpiDefinition>> = Object.fromEntries(
@@ -138,7 +138,13 @@ export type KpiNote =
   /** The MRR history does not reach back to the start of this period. */
   | 'mrr_history_short'
   /** Cash grew over the period, so nothing was burned. */
-  | 'not_burning';
+  | 'not_burning'
+  /** Sums accounts by their KPI class (set in the chart of accounts, or guessed from the name). */
+  | 'classified_accounts'
+  /** No expense account is classified as sales & marketing, so there is no spend to divide. */
+  | 'no_marketing_accounts'
+  /** No churn in the period, so customer lifespan is capped at five years. */
+  | 'lifespan_capped';
 
 export interface KpiResult {
   id: KpiId;
@@ -211,4 +217,81 @@ export function kpiChange(
   amount = Math.round(amount * 10) / 10 + 0;
   const improved = amount === 0 ? null : (amount > 0) === definition.higherIsBetter;
   return { kind, amount, improved };
+}
+
+// ---------------------------------------------------------------------------
+// Account classification for the KPIs (phase 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * What an expense account is, for the KPIs that need more than "an expense":
+ * gross margin (cost of sales), CAC (sales & marketing) and EBITDA (interest,
+ * tax, depreciation, amortisation). `operating` says "none of these" and stops
+ * the name-based guess.
+ */
+export const KPI_ACCOUNT_CLASSES = [
+  'cost_of_sales',
+  'sales_marketing',
+  'interest',
+  'tax',
+  'depreciation',
+  'amortization',
+  'operating',
+] as const;
+export type KpiAccountClass = (typeof KPI_ACCOUNT_CLASSES)[number];
+/** The classes a KPI sums; `operating` is the absence of one. */
+export type KpiExpenseClass = Exclude<KpiAccountClass, 'operating'>;
+export const KPI_EXPENSE_CLASSES = KPI_ACCOUNT_CLASSES.filter((c) => c !== 'operating') as KpiExpenseClass[];
+
+export function isKpiAccountClass(value: unknown): value is KpiAccountClass {
+  return typeof value === 'string' && (KPI_ACCOUNT_CLASSES as readonly string[]).includes(value);
+}
+
+export interface ClassifiableExpenseAccount {
+  /** `AccountType`, lower case (`expense`, `revenue`, …). */
+  type: string;
+  name: string;
+  code?: string | null;
+  /** The class set by hand, or null to infer it. */
+  kpiClass?: string | null;
+  groupName?: string | null;
+  subgroupName?: string | null;
+}
+
+const NAME_RULES: Array<[RegExp, KpiExpenseClass]> = [
+  [/depreciation/i, 'depreciation'],
+  [/amorti[sz]ation/i, 'amortization'],
+  [/\binterest\b/i, 'interest'],
+  [/(income|corporate)\s*tax|tax\s*expense/i, 'tax'],
+  [/marketing|advertis|promotion|campaign|referral\s*commission|sales\s*commission/i, 'sales_marketing'],
+  [/cost\s*of\s*(sales|goods|services?|revenue)|cogs/i, 'cost_of_sales'],
+];
+
+const PARENT_RULES: Array<[RegExp, KpiExpenseClass]> = [
+  [/sales\s*&\s*marketing|marketing/i, 'sales_marketing'],
+  [/cost\s*of\s*(sales|goods|services?|revenue)|infrastructure\s*&\s*platform\s*costs|usage\s*costs/i, 'cost_of_sales'],
+];
+
+/**
+ * The KPI class an expense account counts toward, or null for a plain
+ * operating expense (and for anything that is not an expense).
+ *
+ * A class set by hand wins. Otherwise it is guessed from the account's own
+ * name, then from its subgroup and group, so the default charts work without
+ * anyone tagging anything: a shop's "Depreciation Expense" and "Cost of Sales"
+ * subgroup, the platform's "Infrastructure & Platform Costs" group and its
+ * "Sales & Marketing" subgroup.
+ */
+export function resolveKpiAccountClass(account: ClassifiableExpenseAccount): KpiExpenseClass | null {
+  if (account.type !== 'expense') return null;
+  if (isKpiAccountClass(account.kpiClass)) {
+    return account.kpiClass === 'operating' ? null : account.kpiClass;
+  }
+  const own = `${account.name} ${account.code ?? ''}`;
+  for (const [pattern, kpiClass] of NAME_RULES) if (pattern.test(own)) return kpiClass;
+  for (const parent of [account.subgroupName, account.groupName]) {
+    if (!parent) continue;
+    for (const [pattern, kpiClass] of PARENT_RULES) if (pattern.test(parent)) return kpiClass;
+  }
+  return null;
 }

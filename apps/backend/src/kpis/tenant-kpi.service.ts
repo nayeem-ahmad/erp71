@@ -14,7 +14,7 @@ import { addDays, resolveComparisonRange, type DateRange } from '../common/perio
 import { resolveDateWindow } from '../common/dashboard-window';
 import { buildSaleDateWindow, loadMarginSource } from '../sales-reports/sales-reports.service';
 import { groupMargin, returnLines, saleLines, summariseMargin } from '../sales-reports/gross-profit.utils';
-import { loadStaffTurnover, result, runwayResult, RUNWAY_TRAILING_DAYS } from './kpi-results';
+import { acquisitionKpis, ebitdaResult, loadStaffTurnover, result, runwayResult, RUNWAY_TRAILING_DAYS } from './kpi-results';
 import {
     average,
     cashRunway,
@@ -63,7 +63,7 @@ export class TenantKpiService {
         const previousPeriod = resolveComparisonRange(period, 'previous_period') as DateRange;
         const scope = { tenantId, storeId };
 
-        const [sales, ratios, cash, customers, salesCycle, turnover, pending] = await Promise.all([
+        const [sales, ratios, cash, customers, salesCycle, turnover, pending, ledger] = await Promise.all([
             this.salesFigures(scope, period, previousPeriod),
             this.ratios(scope, period, previousPeriod),
             this.cashFigures(scope, period, previousPeriod),
@@ -71,6 +71,10 @@ export class TenantKpiService {
             this.salesCycle(scope, period, previousPeriod, timezone),
             loadStaffTurnover(this.db, scope, [period, previousPeriod], timezone),
             this.accounting.getPendingVoucherCount(tenantId),
+            Promise.all([
+                this.accounting.getKpiLedgerBreakdown(tenantId, period, storeId),
+                this.accounting.getKpiLedgerBreakdown(tenantId, previousPeriod, storeId),
+            ]),
         ]);
 
         const ltv = customerLifetimeValue({
@@ -132,6 +136,13 @@ export class TenantKpiService {
                 creditSales: ratios.current.credit_sales,
                 periodDays: ratios.current.period_days,
             }, ['ledger_based']),
+            ...acquisitionKpis({
+                ledger,
+                newCustomers: customers.newCustomers,
+                ltv: ltv.value,
+                customerNotes: ['named_customers_only'],
+            }),
+            ebitda: ebitdaResult(ledger),
         };
 
         return {
@@ -273,8 +284,15 @@ export class TenantKpiService {
                 .map((row) => ({ first: row._min.sale_date as Date, last: row._max.sale_date as Date })),
         );
 
+        // A customer is new in a window when their first purchase ever falls in it.
+        const firstDays = lifetime
+            .map((row) => row._min.sale_date?.toISOString().slice(0, 10))
+            .filter((day): day is string => Boolean(day));
+        const newIn = (range: DateRange) => firstDays.filter((day) => day >= range.from && day <= range.to).length;
+
         return {
             activeCustomers: currentRevenue.size,
+            newCustomers: { current: newIn(period), previous: newIn(previous) },
             namedRevenue,
             lifespanMonths,
             arpa: {

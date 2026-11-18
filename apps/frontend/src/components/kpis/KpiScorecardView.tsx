@@ -49,10 +49,11 @@ const MONEY_INPUTS = new Set([
     'startingRevenue', 'namedRevenue', 'averageBasket', 'creditSales',
     'startingMrr', 'endingMrr', 'newMrr', 'expansionMrr', 'contractionMrr', 'churnedMrr', 'reactivationMrr',
     'netBurn', 'netNewArr',
+    'salesMarketingSpend', 'ltv', 'cac', 'interest', 'tax', 'depreciation', 'amortization', 'costOfSales', 'arpa',
 ]);
 
 /** Notes that mean the figure is incomplete, shown in the warning colour. */
-const WARNING_NOTES = new Set<string>(['partly_costed', 'books_unavailable', 'mrr_history_short']);
+const WARNING_NOTES = new Set<string>(['partly_costed', 'books_unavailable', 'mrr_history_short', 'no_marketing_accounts']);
 
 type Copy = ReturnType<typeof useI18n>['t']['kpis'];
 
