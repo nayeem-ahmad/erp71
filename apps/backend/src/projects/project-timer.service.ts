@@ -175,6 +175,9 @@ export class ProjectTimerService {
         const tagIds = await liveTagIds(this.db, viewer.tenantId, timer.tag_ids);
         const note = (dto.note ?? timer.note)?.trim() || null;
 
+        // Outside the transaction: it is a read, and normally no query at all.
+        const employeeId = await this.access.employeeIdOf(viewer);
+
         const entry = await this.db.$transaction(async (tx) => {
             const created = await tx.projectTimeEntry.create({
                 data: {
@@ -182,6 +185,7 @@ export class ProjectTimerService {
                     task_id: timer.task_id,
                     project_id: timer.project_id,
                     user_id: viewer.userId,
+                    employee_id: employeeId,
                     work_date: workDate,
                     hours,
                     started_at: timer.started_at,

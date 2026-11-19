@@ -311,6 +311,9 @@ export class ProjectTimeService {
                 task_id: dto.taskId,
                 project_id: task.project_id,
                 user_id: userId,
+                // The employee card the hour is costed against. Resolved per
+                // request, so this is free; null for a login linked to none.
+                employee_id: await this.access.employeeIdOf(viewer),
                 work_date: new Date(dto.workDate),
                 hours,
                 started_at: span?.startedAt ?? null,

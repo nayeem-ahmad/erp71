@@ -35,6 +35,8 @@ describe('ProjectTimeService', () => {
                 aggregate: jest.fn().mockResolvedValue({ _sum: { hours: 0 }, _count: { _all: 0 } }),
             },
             projectTimeTag: { findMany: jest.fn().mockResolvedValue([]) },
+            // Only reached for a viewer built by hand, which carries no resolved employee.
+            employee: { findFirst: jest.fn().mockResolvedValue(null) },
             projectTimeEntryTag: {
                 deleteMany: jest.fn().mockResolvedValue({}),
                 createMany: jest.fn().mockResolvedValue({}),
@@ -62,6 +64,28 @@ describe('ProjectTimeService', () => {
             hours: 3,
             ...overrides,
         } as never);
+
+    it('stamps the entry with the employee the request resolved, without looking it up', async () => {
+        await service.create({ ...OWNER, employeeId: 'emp-1' }, {
+            taskId: 'task-1',
+            workDate: '2026-08-03',
+            hours: 3,
+        } as never);
+
+        expect(db.projectTimeEntry.create.mock.calls[0][0].data.employee_id).toBe('emp-1');
+        expect(db.employee.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('stamps no employee for a login linked to none', async () => {
+        await service.create({ ...OWNER, employeeId: null }, {
+            taskId: 'task-1',
+            workDate: '2026-08-03',
+            hours: 3,
+        } as never);
+
+        expect(db.projectTimeEntry.create.mock.calls[0][0].data.employee_id).toBeNull();
+        expect(db.employee.findFirst).not.toHaveBeenCalled();
+    });
 
     it('suggests the remainder after logged hours when none is supplied', async () => {
         await log();

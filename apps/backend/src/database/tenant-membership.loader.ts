@@ -11,6 +11,13 @@ export interface LoadedTenantMembership {
     role: string;
     tenant: { deleted_at: Date | null; timezone: string | null };
     roles: { tenantRole: { name: string; record_scope: TenantRecordScope } }[];
+    /**
+     * The employee record this login is linked to in this workspace, or null.
+     * `@@unique([tenant_id, user_id])` makes it at most one. Carried here rather
+     * than looked up by each module that needs it, so "who is this person on the
+     * payroll" costs nothing on top of the membership read every request makes.
+     */
+    employee_id: string | null;
 }
 
 /** What the joined query below returns, before it is reshaped for callers. */
@@ -21,6 +28,7 @@ interface MembershipRow {
     tenant_deleted_at: Date | null;
     tenant_timezone: string | null;
     roles: { name: string; record_scope: string }[] | null;
+    employee_id: string | null;
 }
 
 const CACHE_KEY = Symbol('erp71.tenantMembership');
@@ -98,10 +106,14 @@ async function fetchMembership(
     // back as one row. `FILTER` keeps the aggregate empty — rather than a row of
     // nulls — for a member who holds none.
     //
-    // These four table names are written out, so none of them may be given an
+    // These five table names are written out, so none of them may be given an
     // `@@map` in schema.prisma without changing them here too — Prisma would
     // rename the table and this query would fail at runtime, not at build time.
     // None of them has one today.
+    //
+    // The employee join cannot fan the row out: `(tenant_id, user_id)` is unique
+    // on "Employee", so it matches at most one row. A soft-deleted employee has
+    // its `user_id` cleared, and is excluded here as well in case one was not.
     const rows = await db.$queryRaw<MembershipRow[]>`
         SELECT tu.tenant_id,
                tu.user_id,
@@ -113,14 +125,18 @@ async function fetchMembership(
                        json_build_object('name', tr.name, 'record_scope', tr.record_scope::text)
                    ) FILTER (WHERE tr.id IS NOT NULL),
                    '[]'::json
-               )               AS roles
+               )               AS roles,
+               e.id            AS employee_id
         FROM "TenantUser" tu
         JOIN "Tenant" t            ON t.id = tu.tenant_id
         LEFT JOIN "TenantUserRole" tur ON tur.tenant_user_id = tu.id
         LEFT JOIN "TenantRole" tr      ON tr.id = tur.tenant_role_id
+        LEFT JOIN "Employee" e         ON e.tenant_id = tu.tenant_id
+                                      AND e.user_id = tu.user_id
+                                      AND e.deleted_at IS NULL
         WHERE tu.tenant_id = ${tenantId}
           AND tu.user_id = ${userId}
-        GROUP BY tu.tenant_id, tu.user_id, tu.role, t.deleted_at, t.timezone
+        GROUP BY tu.tenant_id, tu.user_id, tu.role, t.deleted_at, t.timezone, e.id
     `;
 
     const row = rows[0];
@@ -137,5 +153,6 @@ async function fetchMembership(
                 record_scope: r.record_scope as TenantRecordScope,
             },
         })),
+        employee_id: row.employee_id ?? null,
     };
 }

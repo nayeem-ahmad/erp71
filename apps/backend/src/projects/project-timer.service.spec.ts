@@ -46,6 +46,8 @@ describe('ProjectTimerService', () => {
                 delete: jest.fn().mockResolvedValue({}),
             },
             projectTimeTag: { findMany: jest.fn().mockResolvedValue([]) },
+            // Only reached for a viewer built by hand, which carries no resolved employee.
+            employee: { findFirst: jest.fn().mockResolvedValue(null) },
             projectTimeEntry: {
                 create: jest.fn().mockResolvedValue({ id: 'entry-1', started_at: null, ended_at: null }),
                 findFirst: jest.fn().mockResolvedValue(null),
@@ -146,6 +148,28 @@ describe('ProjectTimerService', () => {
             expect(data.started_at).toBe(timer.started_at);
             expect(data.ended_at).toBeInstanceOf(Date);
             expect(data.hours).toBeCloseTo(2, 2);
+        });
+
+        it('stamps the entry with the employee the request resolved, without looking it up', async () => {
+            db.projectTimer.findFirst.mockResolvedValue(runningFor(3600));
+
+            await service.stop({ ...OWNER, employeeId: 'emp-1' }, {} as never);
+
+            expect(db.projectTimeEntry.create.mock.calls[0][0].data.employee_id).toBe('emp-1');
+            expect(db.employee.findFirst).not.toHaveBeenCalled();
+        });
+
+        it('looks the employee up for a viewer that arrived without one', async () => {
+            db.projectTimer.findFirst.mockResolvedValue(runningFor(3600));
+            db.employee.findFirst.mockResolvedValue({ id: 'emp-9' });
+
+            await service.stop(OWNER, {} as never);
+
+            expect(db.employee.findFirst).toHaveBeenCalledWith({
+                where: { tenant_id: OWNER.tenantId, user_id: OWNER.userId, deleted_at: null },
+                select: { id: true },
+            });
+            expect(db.projectTimeEntry.create.mock.calls[0][0].data.employee_id).toBe('emp-9');
         });
 
         it('deletes the timer in the same transaction that writes the entry', async () => {

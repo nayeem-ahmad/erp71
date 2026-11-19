@@ -554,6 +554,15 @@ step sync:found-reasons \
 step sync:project-members \
     npm run sync:project-members --workspace=@erp71/database
 
+# sync:time-entry-employee stamps each project hour log with the employee its
+# login is linked to. ProjectTimeEntry.employee_id was never written before
+# 2026-11-19, and project costing prices hours through it. New entries and a
+# fresh link stamp themselves; this fills the entries logged before that. Only
+# fills NULLs, so an hour stays with the card it was logged under. Idempotent.
+# See prisma/sync-time-entry-employee.ts.
+step sync:time-entry-employee \
+    npm run sync:time-entry-employee --workspace=@erp71/database
+
 # sync:crm-activity-approval marks every DONE and CANCELLED CrmActivity approved.
 # REQUIRED for the same reason as sync:lead-activity above: db push adds
 # `is_approved` at its default of false and never runs the migration that fills

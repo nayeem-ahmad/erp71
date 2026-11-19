@@ -104,7 +104,7 @@ describe('AuthService', () => {
         emailVerificationToken: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }), create: jest.fn().mockResolvedValue({}) },
         tenantAddonSubscription: { findMany: jest.fn().mockResolvedValue([]) },
         referee: { findFirst: jest.fn().mockResolvedValue(null) },
-        employee: { findFirst: jest.fn().mockResolvedValue(null) },
+        employee: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
         referralSignup: { create: jest.fn() },
         termsAcceptance: { create: jest.fn() },
         $transaction: jest.fn(),
@@ -183,6 +183,8 @@ describe('AuthService', () => {
         emailService.sendWelcome.mockResolvedValue(undefined);
         emailService.sendEmailVerification.mockResolvedValue(undefined);
         db.$transaction.mockImplementation(async (callback: any) => callback(db));
+        // getMe lists the login's portal cards; none unless a case says so.
+        db.employee.findMany.mockResolvedValue([]);
         db.accountGroup.upsert.mockResolvedValue({ id: 'group-1', name: 'Current Assets', code: '11' });
         db.accountSubgroup.upsert.mockResolvedValue({ id: 'subgroup-1', name: 'Cash and Bank', code: '1101' });
         // Code allocation looks up existing codes before every upsert.

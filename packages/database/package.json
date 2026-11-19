@@ -51,6 +51,7 @@
     "sync:lead-activity": "tsx prisma/sync-lead-activity.ts",
     "sync:found-reasons": "tsx prisma/sync-found-reasons.ts",
     "sync:project-members": "tsx prisma/sync-project-members.ts",
+    "sync:time-entry-employee": "tsx prisma/sync-time-entry-employee.ts",
     "sync:setup-fee-paid": "tsx prisma/sync-setup-fee-paid.ts",
     "sync:member-prefs-legacy": "tsx prisma/sync-member-prefs-legacy.ts",
     "backfill:product-costs": "tsx prisma/backfill-product-costs.ts",

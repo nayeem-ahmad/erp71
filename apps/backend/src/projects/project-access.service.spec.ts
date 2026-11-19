@@ -344,6 +344,25 @@ describe('ProjectAccessService', () => {
             });
         });
 
+        it('uses the employee the request already resolved instead of looking it up', async () => {
+            const filter = await service.taskFilter({ ...narrowStaff, employeeId: 'emp-7' });
+
+            expect((filter.AND as any[])[1]).toEqual({
+                OR: [
+                    { assignee_id: 'user-staff' },
+                    { created_by: 'user-staff' },
+                    { assignee_employee_id: 'emp-7' },
+                ],
+            });
+            expect(db.employee.findFirst).not.toHaveBeenCalled();
+        });
+
+        it('takes a resolved "linked to none" at its word, without a lookup', async () => {
+            await service.taskFilter({ ...narrowStaff, employeeId: null });
+
+            expect(db.employee.findFirst).not.toHaveBeenCalled();
+        });
+
         it('narrows an hour log to the viewer own entries', async () => {
             db.userStorePermission.findFirst.mockResolvedValue({ id: 'grant-1' });
 

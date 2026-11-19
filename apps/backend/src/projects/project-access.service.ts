@@ -25,6 +25,13 @@ export interface ProjectViewer {
      * interceptor has not run.
      */
     recordScope?: TenantRecordScope;
+    /**
+     * The employee this login is linked to, as `TenantContext` carries it —
+     * resolved by `TenantInterceptor` for every HTTP request. `undefined` is
+     * "not resolved" (a viewer built by hand), and `employeeIdOf` looks it up;
+     * `null` is the resolved answer "linked to none".
+     */
+    employeeId?: string | null;
 }
 
 /**
@@ -177,10 +184,13 @@ export class ProjectAccessService {
      * column, so "my tasks" has to ask about both or half of their work
      * disappears the day somebody assigns it to their employee card.
      */
-    private async viewerEmployeeId(viewer: ProjectViewer): Promise<string | null> {
+    async employeeIdOf(viewer: ProjectViewer): Promise<string | null> {
         if (!viewer.userId) return null;
+        // Every HTTP request arrives with it already resolved; only a viewer
+        // assembled by hand — a sweep, a spec — pays for the lookup.
+        if (viewer.employeeId !== undefined) return viewer.employeeId;
         const employee = await this.db.employee.findFirst({
-            where: { tenant_id: viewer.tenantId, user_id: viewer.userId },
+            where: { tenant_id: viewer.tenantId, user_id: viewer.userId, deleted_at: null },
             select: { id: true },
         });
         return employee?.id ?? null;
@@ -203,7 +213,7 @@ export class ProjectAccessService {
         const visibility = await this.relatedFilter(viewer);
         if (!this.ownRecordsOnly(viewer)) return visibility;
 
-        const employeeId = await this.viewerEmployeeId(viewer);
+        const employeeId = await this.employeeIdOf(viewer);
         const own = {
             OR: [
                 { assignee_id: viewer.userId },
@@ -239,7 +249,7 @@ export class ProjectAccessService {
         // tasks to its members; it does not open what each of them logged.
         if (!this.ownRecordsOnly(viewer) && !this.memberProjectsOnly(viewer)) return visibility;
 
-        const employeeId = await this.viewerEmployeeId(viewer);
+        const employeeId = await this.employeeIdOf(viewer);
         const own = employeeId
             ? { OR: [{ user_id: viewer.userId }, { employee_id: employeeId }] }
             : { user_id: viewer.userId };

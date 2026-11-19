@@ -524,7 +524,11 @@ export class TenantsService {
         keep: string[] = [],
     ) {
         if (userRole !== 'OWNER') throw new ForbiddenException('Only the shop owner can clear data');
-        return clearTenantData(this.db, tenantId, mode, storeId, keep);
+        const result = await clearTenantData(this.db, tenantId, mode, storeId, keep);
+        // A clear can delete employees, and each member's cached membership
+        // names the employee their login is linked to.
+        this.authCache.invalidateTenant(tenantId);
+        return result;
     }
 
     async updateLocalizationSettings(tenantId: string, dto: UpdateLocalizationSettingsDto) {

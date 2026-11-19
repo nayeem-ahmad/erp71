@@ -1,6 +1,6 @@
 import {
     Controller, Get, Post, Patch, Delete, Body, Param, Query,
-    UseGuards, UseInterceptors, HttpCode, HttpStatus,
+    UseGuards, UseInterceptors, HttpCode, HttpStatus, Request,
 } from '@nestjs/common';
 import { EmployeesService } from './employees.service';
 import {
@@ -20,6 +20,7 @@ import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { BranchScopeService } from '../database/branch-scope.service';
 import { ImportRowsDto } from '../common/import.dto';
+import { extractRequestMeta } from '../audit/audit-route.util';
 
 /**
  * `VIEW_HR` gates reading the roster; `MANAGE_HR` gates changing it. Salary
@@ -212,20 +213,31 @@ export class EmployeesController {
 
     @Post(':id/link-user')
     @RequireStorePermission(StorePermission.MANAGE_HR)
-    async linkUser(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: LinkUserDto) {
+    async linkUser(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: LinkUserDto,
+        @Request() req: any,
+    ) {
         const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
             permissions: [StorePermission.MANAGE_HR],
         });
-        return this.employeesService.linkUser(tenant.tenantId, id, dto.user_id, storeId);
+        return this.employeesService.linkUser(tenant.tenantId, id, dto.user_id, storeId, {
+            userId: tenant.userId,
+            ...extractRequestMeta(req),
+        });
     }
 
     @Delete(':id/link-user')
     @RequireStorePermission(StorePermission.MANAGE_HR)
     @HttpCode(HttpStatus.OK)
-    async unlinkUser(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+    async unlinkUser(@Tenant() tenant: TenantContext, @Param('id') id: string, @Request() req: any) {
         const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
             permissions: [StorePermission.MANAGE_HR],
         });
-        return this.employeesService.unlinkUser(tenant.tenantId, id, storeId);
+        return this.employeesService.unlinkUser(tenant.tenantId, id, storeId, {
+            userId: tenant.userId,
+            ...extractRequestMeta(req),
+        });
     }
 }

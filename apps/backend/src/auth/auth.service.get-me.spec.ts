@@ -690,7 +690,7 @@ describe('AuthService.getMe — the response the app shell reads', () => {
         expect(log.map((entry) => [entry.model, entry.op, entry.statements])).toEqual([
             ['user', 'findUnique', 11],
             ['referee', 'findMany', 1],
-            ['employee', 'findFirst', 1],
+            ['employee', 'findMany', 1],
             ['tenantAddonSubscription', 'findMany', 2],
             ['tenantAddonSubscription', 'findMany', 2],
         ]);
