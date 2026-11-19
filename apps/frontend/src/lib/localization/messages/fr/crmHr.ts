@@ -128,6 +128,13 @@ export const crmHrMessages = {
             open: "Ouvrir",
             viewActivities: "Voir les activités",
             openRecord: "Ouvrir la fiche complète",
+            panelSections: 'Sections du panneau latéral',
+            tabActivities: 'Activités',
+            tabDetails: 'Détails du prospect',
+            previousActivity: 'Activité précédente',
+            nextActivity: 'Activité suivante',
+            position: '{current} sur {total}',
+            leadDeleted: 'Prospect supprimé.',
             bulk: {
                 approve: "Approuver la sélection",
                 withdrawApproval: "Retirer l'approbation",

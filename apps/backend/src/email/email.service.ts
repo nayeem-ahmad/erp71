@@ -3,6 +3,7 @@ import * as nodemailer from 'nodemailer';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
 import { TenantMessagingIdentityService } from '../tenant-messaging/tenant-messaging-identity.service';
+import { TenantSmtpService } from '../tenant-messaging/tenant-smtp.service';
 import { SmsCreditService } from '../sms/sms-credit.service';
 import { InsufficientMessagingCreditsError } from '../sms/messaging-channel';
 import { formatEmailAddress, parseEmailAddress } from './address.util';
@@ -35,6 +36,10 @@ export interface SendEmailOptions {
      * Sends under this tenant's own sender identity when a platform admin has
      * configured and enabled one. Omit for platform mail (password resets,
      * billing, verification) — those must stay on the platform address.
+     *
+     * When the shop has switched on its own mail server (`TenantSmtpService`),
+     * any message carrying `tenantId` or `billTenantId` goes through that
+     * server instead, from the shop's address, and no credit is billed.
      */
     tenantId?: string | null;
     /**
@@ -60,6 +65,7 @@ export class EmailService {
         private readonly breakers: CircuitBreakerRegistry,
         private readonly tenantIdentity: TenantMessagingIdentityService,
         private readonly credits: SmsCreditService,
+        private readonly tenantSmtp: TenantSmtpService,
     ) {}
 
     /** Prefer an explicit DB value; otherwise fall back to env, then schema default. */
@@ -891,6 +897,24 @@ ${link}`,
         opts: { to: string; subject: string; html: string },
         options?: SendEmailOptions,
     ): Promise<void> {
+        // A message is the shop's own when it carries either tenant field —
+        // platform mail (resets, billing, verification) carries neither and
+        // never touches a shop's server.
+        const shopTenantId = options?.tenantId ?? options?.billTenantId ?? null;
+        const ownServer = await this.tenantSmtp.resolve(shopTenantId);
+        if (ownServer && shopTenantId) {
+            // Sent through the shop's own server, so it costs the platform
+            // nothing and spends no email credits.
+            try {
+                await this.tenantSmtp.deliver(shopTenantId, ownServer, opts);
+            } catch (err) {
+                const detail = err instanceof Error ? err.message : String(err);
+                this.logger.warn(`Failed to send email to ${opts.to} via tenant ${shopTenantId}'s own server: ${detail}`);
+                if (options?.throwOnError) throw new Error(detail);
+            }
+            return;
+        }
+
         if (options?.billTenantId) {
             const { allowed } = await this.credits.consume(options.billTenantId, 1, {
                 channel: 'EMAIL',

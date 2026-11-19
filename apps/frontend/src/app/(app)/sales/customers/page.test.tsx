@@ -3,6 +3,7 @@ import { act, render, screen, fireEvent, waitFor, within } from '@testing-librar
 import CustomersPage from './page';
 import { formatBDT, formatDate } from '@/lib/format';
 import { mockBranchScope } from '@/test-utils/branch-scope';
+import { asRendered } from '@/test-utils/rendered-text';
 
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
@@ -120,7 +121,7 @@ describe('CustomersPage — Customer Management', () => {
         for (const label of ['Customers', 'New this month', 'With due', 'Receivable', 'VIP', 'At-Risk']) {
             expect(within(strip).getByText(label)).toBeInTheDocument();
         }
-        expect(within(strip).getByText(formatBDT(18250, { minimumFractionDigits: 0, maximumFractionDigits: 0 }))).toHaveClass('text-amber-700');
+        expect(within(strip).getByText(asRendered(formatBDT(18250, { minimumFractionDigits: 0, maximumFractionDigits: 0 })))).toHaveClass('text-amber-700');
         // The old per-segment cards gave way to the strip.
         expect(screen.queryByText('Total Customers')).not.toBeInTheDocument();
     });
@@ -207,8 +208,8 @@ describe('CustomersPage — Customer Management', () => {
         const row = (await screen.findByText('Alice Smith')).closest('tr')!;
 
         expect(screen.getByRole('button', { name: 'View options' })).toBeInTheDocument();
-        expect(within(row).getByText(formatBDT(250)).closest('td')).toHaveClass('text-end');
-        expect(within(row).getByText(formatBDT(1500)).closest('td')).toHaveClass('text-end');
+        expect(within(row).getByText(asRendered(formatBDT(250))).closest('td')).toHaveClass('text-end');
+        expect(within(row).getByText(asRendered(formatBDT(1500))).closest('td')).toHaveClass('text-end');
     });
 
     it('renders the Customers page heading', async () => {
@@ -293,7 +294,7 @@ describe('CustomersPage — Customer Management', () => {
 
         const row = screen.getByText('Alice Smith').closest('tr')!;
         expect(within(row).getByText(formatDate('2026-10-30T09:15:00.000Z'))).toBeInTheDocument();
-        expect(within(row).getByText(formatBDT(1250.5))).toBeInTheDocument();
+        expect(within(row).getByText(asRendered(formatBDT(1250.5)))).toBeInTheDocument();
         const link = within(row).getByRole('link', { name: 'INV-2627-00042' });
         expect(link).toHaveAttribute('href', '/sales/sale-42');
 
@@ -664,8 +665,8 @@ describe('CustomersPage — Customer Management', () => {
         render(<CustomersPage />);
         await waitFor(() => screen.getByText('Alice Smith'));
         expect(screen.getByRole('columnheader', { name: /^due$/i })).toBeInTheDocument();
-        expect(screen.getByText(formatBDT(1500))).toBeInTheDocument();
-        expect(screen.queryByText(`/ ${formatBDT(5000)}`)).not.toBeInTheDocument();
+        expect(screen.getByText(asRendered(formatBDT(1500)))).toBeInTheDocument();
+        expect(screen.queryByText(asRendered(`/ ${formatBDT(5000)}`))).not.toBeInTheDocument();
     });
 
     it('adds the credit limit under the due once the Sales Settings switch is on', async () => {
@@ -673,7 +674,7 @@ describe('CustomersPage — Customer Management', () => {
         api.getSalesSettings.mockResolvedValue({ show_customer_credit: true });
         render(<CustomersPage />);
         await waitFor(() => {
-            expect(screen.getByText(`/ ${formatBDT(5000)}`)).toBeInTheDocument();
+            expect(screen.getByText(asRendered(`/ ${formatBDT(5000)}`))).toBeInTheDocument();
         });
     });
 });

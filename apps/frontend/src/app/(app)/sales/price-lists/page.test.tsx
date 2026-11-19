@@ -3,6 +3,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { formatBDT } from '@/lib/format';
 import PriceListsPage from './page';
+import { asRendered } from '@/test-utils/rendered-text';
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -95,7 +96,7 @@ describe('PriceListsPage', () => {
         const row = (await screen.findByText('Wholesale')).closest('tr')!;
         expect(within(row).getByText('7.5%').closest('td')).toHaveClass('text-end');
         const offer = screen.getByText('Eid Offer').closest('tr')!;
-        expect(within(offer).getByText(formatBDT(50))).toBeInTheDocument();
+        expect(within(offer).getByText(asRendered(formatBDT(50)))).toBeInTheDocument();
     });
 
     it('sums the lists in the strip', async () => {

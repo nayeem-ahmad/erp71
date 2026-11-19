@@ -6,7 +6,9 @@ import type { Delta } from '@/lib/dashboard-delta';
 import PageShell from '@/components/ui/compact/PageShell';
 import { AttentionStrip, type AttentionItem } from './AttentionStrip';
 import { DashboardHeader, RangeTabs, type DashboardRange } from './DashboardHeader';
-import { HealthKpiTile } from './HealthKpiTile';
+import type { LucideIcon } from 'lucide-react';
+import { useUiStyle } from '@/lib/ui-theme';
+import { HealthKpiTile, KPI_TONES, type KpiTone } from './HealthKpiTile';
 
 /**
  * Where the dashboard is mounted. `embedded` is a module Overview, under a
@@ -29,15 +31,29 @@ export type KpiTileSpec = {
      * rather than the whole band.
      */
     loading?: boolean;
+    /** COLORFUL card colour. Defaults to the tile's place in the band, so neighbours never match. */
+    tone?: KpiTone;
+    /** COLORFUL card icon, top right. */
+    icon?: LucideIcon;
 };
 
 /** A labelled band. Every dashboard is four of these in the same order. */
 export function DashboardSection({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
     return (
         <section>
-            <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">{label}</p>
+            <SectionLabel>{label}</SectionLabel>
             {children}
         </section>
+    );
+}
+
+/** A band's heading: 10px grey caps in CLASSIC, a sentence-case title otherwise. */
+export function SectionLabel({ children }: Readonly<{ children: ReactNode }>) {
+    const { polished } = useUiStyle();
+    return (
+        <p className={polished ? 'mb-2 text-sm font-semibold text-gray-900' : 'mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400'}>
+            {children}
+        </p>
     );
 }
 
@@ -83,7 +99,7 @@ export function KpiTileGrid({
 
     return (
         <div className={TILE_GRID}>
-            {tiles.map((tile) => tile.loading ? <KpiTileSkeleton key={tile.key} /> : (
+            {tiles.map((tile, index) => tile.loading ? <KpiTileSkeleton key={tile.key} /> : (
                 <HealthKpiTile
                     key={tile.key}
                     title={tile.title}
@@ -95,6 +111,8 @@ export function KpiTileGrid({
                     deltaContext={tile.delta.label === '—' ? undefined : deltaContext}
                     points={tile.points ?? []}
                     note={tile.note}
+                    tone={tile.tone ?? KPI_TONES[index % KPI_TONES.length]}
+                    icon={tile.icon}
                 />
             ))}
         </div>

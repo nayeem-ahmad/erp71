@@ -1,6 +1,6 @@
 'use client';
 
-import { Clock } from 'lucide-react';
+import { Activity, Clock, HandCoins, Package, PieChart, ShoppingBag, TrendingUp, Users, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
@@ -21,7 +21,9 @@ import { BranchFilter } from '@/components/ui';
 import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 import type { DashboardIdentity } from './dashboard-identity';
 import { dashboardQueryKey } from './dashboard-query';
-import { KpiTileGrid, type KpiTileSpec } from './ModuleDashboard';
+import { KpiTileGrid, SectionLabel, type KpiTileSpec } from './ModuleDashboard';
+import { CardTitle, useDashboardCardClass } from './DashboardCard';
+import { useUiStyle } from '@/lib/ui-theme';
 
 type FinancialKpis = {
     cash_inflow: number;
@@ -152,6 +154,10 @@ function dimWhile(refreshing: boolean): string {
 export default function RetailDashboard({ greeting, tenantName, renewalEnd, homeSlot }: DashboardIdentity) {
     const { t, locale } = useI18n();
     const copy = t.dashboardHome;
+    const { polished } = useUiStyle();
+    const cardClass = useDashboardCardClass();
+    // Headline figures read in whole taka outside CLASSIC: ৳ 3,46,400, not ৳ 3,46,400.00.
+    const headline = polished ? { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 } : { locale };
 
     const [range, setRange] = useState<DashboardRange>('week');
     // Every panel answers for the branch filter's choice: the header branch to
@@ -266,7 +272,7 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd, home
         attentionItems.push({
             id: 'receivables',
             tone: 'red',
-            value: formatBDT(receivable, { locale }),
+            value: formatBDT(receivable, headline),
             label: copy.attnReceivablesOutstanding,
             href: '/sales',
             cta: copy.viewAll,
@@ -333,28 +339,32 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd, home
         {
             key: 'sales',
             title: copy.kpiSales,
-            value: formatBDT(financialKpis.gross_revenue, { locale }),
+            icon: ShoppingBag,
+            value: formatBDT(financialKpis.gross_revenue, headline),
             points: salesSeries,
             delta: compare(financialKpis.gross_revenue, previousKpis?.gross_revenue),
         },
         {
             key: 'net-profit',
             title: copy.kpiNetProfit,
-            value: formatBDT(netProfit, { locale }),
+            icon: TrendingUp,
+            value: formatBDT(netProfit, headline),
             points: profitSeries,
             delta: compare(netProfit, previousNetProfit),
         },
         {
             key: 'cash',
             title: copy.kpiCashInHand,
-            value: formatBDT(financialKpis.net_cash_movement, { locale }),
+            icon: Wallet,
+            value: formatBDT(financialKpis.net_cash_movement, headline),
             points: cashSeries,
             delta: compare(financialKpis.net_cash_movement, previousKpis?.net_cash_movement),
         },
         {
             key: 'receivables',
             title: copy.kpiReceivables,
-            value: receivable == null ? copy.notConfigured : formatBDT(receivable, { locale }),
+            icon: HandCoins,
+            value: receivable == null ? copy.notConfigured : formatBDT(receivable, headline),
             points: [],
             // Receivables are a balance, not a flow: comparing it against the previous
             // window would read as a trend when it is just the amount currently owed.
@@ -378,7 +388,9 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd, home
                             <BranchFilter scope={branch} />
                             <Link
                                 href={routes.sales.dailyReport}
-                                className="inline-flex min-h-touch items-center rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[10px] font-bold text-blue-600 hover:bg-gray-50"
+                                className={polished
+                                    ? 'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 max-md:min-h-touch'
+                                    : 'inline-flex min-h-touch items-center rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[10px] font-bold text-blue-600 hover:bg-gray-50'}
                             >
                                 {copy.todaysReport}
                             </Link>
@@ -390,7 +402,7 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd, home
                 <FrequentQuickLinks />
 
                 <section>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">{copy.sectionHealth}</p>
+                    <SectionLabel>{copy.sectionHealth}</SectionLabel>
                     <div aria-busy={kpisQuery.isPlaceholderData} className={`space-y-2 ${dimWhile(kpisQuery.isPlaceholderData)}`}>
                         {financialError ? (
                             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
@@ -402,7 +414,7 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd, home
                 </section>
 
                 <section>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">{copy.sectionAttention}</p>
+                    <SectionLabel>{copy.sectionAttention}</SectionLabel>
                     {isAttentionLoading ? (
                         <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
                             {Array.from({ length: 4 }).map((_, index) => (
@@ -418,11 +430,11 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd, home
                 </section>
 
                 <section>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">{copy.sectionMoney}</p>
+                    <SectionLabel>{copy.sectionMoney}</SectionLabel>
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-[3fr_2fr]">
-                        <div className={`rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ${dimWhile(trendQuery.isPlaceholderData)}`}>
+                        <div className={`${cardClass} ${dimWhile(trendQuery.isPlaceholderData)}`}>
                             <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-                                <h3 className="text-xs font-bold text-gray-900">{copy.cashFlowMovement}</h3>
+                                <CardTitle icon={Activity} tone="sky" spaced={false}>{copy.cashFlowMovement}</CardTitle>
                                 {financialTrendError ? (
                                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-800">
                                         {financialTrendError}
@@ -446,8 +458,8 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd, home
                             )}
                         </div>
 
-                        <div className={`rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ${dimWhile(categoryQuery.isPlaceholderData)}`}>
-                            <h3 className="mb-2 text-xs font-bold text-gray-900">{copy.salesByCategory}</h3>
+                        <div className={`${cardClass} ${dimWhile(categoryQuery.isPlaceholderData)}`}>
+                            <CardTitle icon={PieChart} tone="violet">{copy.salesByCategory}</CardTitle>
                             {categoryQuery.isPending ? (
                                 <div data-testid="category-skeleton" className="h-24 animate-pulse rounded-lg bg-gray-100" />
                             ) : (
@@ -465,11 +477,13 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd, home
                 </section>
 
                 <section>
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">{copy.sectionDrivers}</p>
+                    <SectionLabel>{copy.sectionDrivers}</SectionLabel>
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                         <div className={dimWhile(productQuery.isPlaceholderData)}>
                             <RankedListPanel
                                 title={copy.topProducts}
+                                icon={Package}
+                                tone="emerald"
                                 items={topProducts}
                                 emptyLabel={copy.noProductsFound}
                                 loading={productQuery.isPending}
@@ -478,13 +492,15 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd, home
                         <div className={dimWhile(customerQuery.isPlaceholderData)}>
                             <RankedListPanel
                                 title={copy.topCustomers}
+                                icon={Users}
+                                tone="pink"
                                 items={topCustomers}
                                 emptyLabel={copy.noRecentActivity}
                                 loading={customerQuery.isPending}
                             />
                         </div>
-                        <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                            <h3 className="mb-2 text-xs font-bold text-gray-900">{copy.recentActivity}</h3>
+                        <div className={cardClass}>
+                            <CardTitle icon={Clock} tone="orange">{copy.recentActivity}</CardTitle>
                             {sales.length > 0 ? (
                                 <div>
                                     {sales.slice(0, 5).map((sale) => (

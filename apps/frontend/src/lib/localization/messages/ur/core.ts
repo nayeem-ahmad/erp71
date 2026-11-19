@@ -607,6 +607,7 @@ export const coreMessages = {
             loyaltyProgram: 'لائلٹی پروگرام',
             smsNotifications: 'ایس ایم ایس اطلاعات',
             reportEmails: 'رپورٹ ای میلز',
+            emailServer: "ای میل سرور",
             discountCodes: 'رعایتی کوڈ',
             urlShortener: 'یو آر ایل شارٹنر',
             shortLinks: 'مختصر لنکس',
@@ -882,6 +883,7 @@ export const coreMessages = {
                 loyalty: 'لائلٹی پروگرام',
                 sms: 'ایس ایم ایس اطلاعات',
                 reportEmails: 'رپورٹ ای میلز',
+                emailServer: "ای میل سرور",
                 smsCredits: 'میسجنگ کریڈٹ',
                 aiCredits: 'اے آئی کریڈٹ',
                 auditLogs: 'آڈٹ لاگز',
@@ -1221,6 +1223,7 @@ export const coreMessages = {
         compactViewTitle: 'مختصر منظر',
         loadingProducts: 'پروڈکٹس لوڈ ہو رہے ہیں...',
         stockLeft: '{count} باقی',
+        outOfStockShort: 'ختم',
         notAvailable: 'دستیاب نہیں',
         tabs: {
             checkout: 'چیک آؤٹ',
