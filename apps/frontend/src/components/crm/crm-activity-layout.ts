@@ -139,6 +139,35 @@ export function groupActivities<T extends { status: string; due_at: string | nul
     }));
 }
 
+/**
+ * The agenda's rows in the order it draws them — group by group, each group by
+ * due day. What the side panel's Previous / Next step through in that layout,
+ * so "next" is the row below on screen rather than the next one the server
+ * happened to send.
+ */
+export function agendaOrder<T extends { status: string; due_at: string | null }>(
+    rows: T[],
+    today: string = tenantDateOnly(),
+): T[] {
+    return groupActivities(rows, today).flatMap((group) => group.rows);
+}
+
+/**
+ * The nearest row from `from` (inclusive), walking by `step`, that has a lead
+ * or customer to open — an orphaned activity has no timeline to show, so the
+ * side panel steps over it. -1 when there is none that way.
+ */
+export function nearestTargetedIndex(
+    rows: Pick<CrmActivityListRow, 'lead' | 'customer'>[],
+    from: number,
+    step: 1 | -1,
+): number {
+    for (let i = from; i >= 0 && i < rows.length; i += step) {
+        if (activityTarget(rows[i])) return i;
+    }
+    return -1;
+}
+
 /** How many of the filters tucked behind "More filters" are narrowed. */
 export function countExtraActivityFilters(filters: {
     approval: string;

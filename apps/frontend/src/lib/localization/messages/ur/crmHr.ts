@@ -128,6 +128,13 @@ export const crmHrMessages = {
             open: 'کھولیں',
             viewActivities: 'سرگرمیاں دیکھیں',
             openRecord: 'مکمل ریکارڈ کھولیں',
+            panelSections: 'سائیڈ پینل کے حصے',
+            tabActivities: 'سرگرمیاں',
+            tabDetails: 'لیڈ کی تفصیلات',
+            previousActivity: 'پچھلی سرگرمی',
+            nextActivity: 'اگلی سرگرمی',
+            position: '{total} میں سے {current}',
+            leadDeleted: 'لیڈ حذف ہو گئی۔',
             bulk: {
                 approve: 'منتخب کی منظوری دیں',
                 withdrawApproval: 'منظوری واپس لیں',

@@ -128,6 +128,13 @@ export const crmHrMessages = {
             open: 'فتح',
             viewActivities: 'عرض الأنشطة',
             openRecord: 'فتح السجل كاملاً',
+            panelSections: 'أقسام اللوحة الجانبية',
+            tabActivities: 'الأنشطة',
+            tabDetails: 'تفاصيل العميل المحتمل',
+            previousActivity: 'النشاط السابق',
+            nextActivity: 'النشاط التالي',
+            position: '{current} من {total}',
+            leadDeleted: 'تم حذف العميل المحتمل.',
             bulk: {
                 approve: 'اعتماد المحدد',
                 withdrawApproval: 'سحب الاعتماد',
