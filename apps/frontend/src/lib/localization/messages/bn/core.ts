@@ -472,6 +472,18 @@ export const coreMessages = {
 
                 crmActivitySummary: "কার্যক্রমের সারসংক্ষেপ",
 
+                crmCampaignReport: "ক্যাম্পেইনের কার্যকারিতা",
+
+                crmBirthdays: "আসন্ন জন্মদিন",
+
+                crmContactCoverage: "যোগাযোগের কভারেজ",
+
+                crmRfm: "গ্রাহক মূল্য (RFM)",
+
+                crmLeadFunnel: "লিড ফানেল",
+
+                crmLostLeads: "হারানো লিড",
+
                 crmReports: "CRM রিপোর্ট",
                 crmSetup: "CRM সেটআপ",
                 salesSettings: "বিক্রয় সেটিংস",

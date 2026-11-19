@@ -655,6 +655,12 @@ function AppShell({ children }: DashboardLayoutProps) {
             routes.crm.reports.scorecard,
             routes.crm.reports.leadAging,
             routes.crm.reports.activitySummary,
+            routes.crm.reports.campaigns,
+            routes.crm.reports.birthdays,
+            routes.crm.reports.contactCoverage,
+            routes.crm.reports.rfm,
+            routes.crm.reports.leadFunnel,
+            routes.crm.reports.lostLeads,
             routes.crm.reports.followUpCompliance,
         ];
         if (!hasPremiumCrm && premiumCrmPaths.some((p) => pathname.startsWith(p))) {

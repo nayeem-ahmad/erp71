@@ -472,6 +472,18 @@ export const coreMessages = {
 
             crmActivitySummary: "गतिविधि सारांश",
 
+            crmCampaignReport: "अभियान प्रदर्शन",
+
+            crmBirthdays: "आने वाले जन्मदिन",
+
+            crmContactCoverage: "संपर्क कवरेज",
+
+            crmRfm: "ग्राहक मूल्य (RFM)",
+
+            crmLeadFunnel: "लीड फ़नल",
+
+            crmLostLeads: "खोई लीड",
+
             crmReports: "CRM रिपोर्ट",
             crmSetup: "CRM सेटअप",
             salesSettings: "बिक्री सेटिंग्स",

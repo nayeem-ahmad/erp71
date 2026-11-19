@@ -413,9 +413,9 @@ Second external-ERP provider alongside Express Retail Pro, built on a new multi-
 
 ### CRM reports — follow-ups (2026-11-16)
 
-- [ ] **Run `sync:nav-layout --nodes=crm.reports,crm.reports.lead-sources,crm.reports.scorecard,crm.reports.lead-aging,crm.reports.activity-summary,crm.reports.follow-up-compliance,crm.reports.cold-customers` against production** after deploy, dry run first. Saved custom sidebars keep the old tree verbatim, so a tenant who rearranged CRM before this release will not see the Reports subgroup.
-- [ ] **The six proposed reports not yet built:** lead funnel by arrival month, lost leads, RFM, contact coverage, upcoming birthdays, campaign performance. Lead aging and Activity summary (counts by type and by team member) shipped 2026-11-16. The "activity register" proposal — a flat log of every touch — is already served by the Activities list, so it needs no report.
-- [ ] **`lost_reason` is free text.** Make it a pick-list before building the lost-leads report.
+- [ ] **Run `sync:nav-layout --nodes=crm.reports,crm.reports.lead-sources,crm.reports.scorecard,crm.reports.lead-aging,crm.reports.activity-summary,crm.reports.campaigns,crm.reports.lead-funnel,crm.reports.lost-leads,crm.reports.rfm,crm.reports.contact-coverage,crm.reports.birthdays,crm.reports.follow-up-compliance,crm.reports.cold-customers` against production** after deploy, dry run first. Saved custom sidebars keep the old tree verbatim, so a tenant who rearranged CRM before this release will not see the Reports subgroup.
+- [x] **All twelve proposed CRM reports are now built.** The last six — Campaign performance, Lead funnel by arrival month, Lost leads, RFM, Contact coverage, Upcoming birthdays — shipped 2026-11-16, alongside Lead aging and Activity summary. The "activity register" proposal needed no report: the Activities list already is that flat log.
+- [ ] **`lost_reason` is still free text.** The Lost leads report names the ten most common reasons and folds the rest into one row, which is a workaround, not a fix — a pick-list would make the grouping real.
 - [ ] **There is no lead deal value,** so no pipeline-value or forecast report is possible.
 - [ ] **Status changes are not recorded,** so there is no time-in-stage report.
 - [ ] **Lead and activity reports cannot filter by branch** until CRM `store_id` is enforced (Phase 5). Customers going cold does filter, because it is sales data.

@@ -236,6 +236,12 @@ describe('nav-resolver', () => {
             '/crm/reports/activity-summary',
             '/crm/reports/follow-up-compliance',
             '/crm/reports/cold-customers',
+            '/crm/reports/campaigns',
+            '/crm/reports/lead-funnel',
+            '/crm/reports/lost-leads',
+            '/crm/reports/rfm',
+            '/crm/reports/contact-coverage',
+            '/crm/reports/birthdays',
         ]);
 
         const labels = group && 'children' in group ? group.children.map((link) => link.label) : [];

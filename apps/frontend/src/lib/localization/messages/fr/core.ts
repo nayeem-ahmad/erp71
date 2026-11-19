@@ -472,6 +472,18 @@ export const coreMessages = {
 
             crmActivitySummary: "Résumé des activités",
 
+            crmCampaignReport: "Performance des campagnes",
+
+            crmBirthdays: "Anniversaires à venir",
+
+            crmContactCoverage: "Couverture des contacts",
+
+            crmRfm: "Valeur client (RFM)",
+
+            crmLeadFunnel: "Entonnoir de pistes",
+
+            crmLostLeads: "Pistes perdues",
+
             crmReports: "Rapports CRM",
             crmSetup: "Configuration CRM",
             salesSettings: "Paramètres des ventes",
