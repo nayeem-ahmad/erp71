@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import {
   Palette, Globe, Receipt, Monitor, ShoppingBag, CreditCard, Tag, Gift,
   Bell, Mail, HandCoins, Sparkles, FileSearch, Database, Store, Printer,
-  BarChart3, KeyRound, Hash, LayoutGrid,
+  BarChart3, KeyRound, Hash, LayoutGrid, Send,
 } from 'lucide-react';
 import CompactLinkGrid from '@/components/ui/compact/CompactLinkGrid';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -52,6 +52,7 @@ const SECTIONS: Section[] = [
   { key: 'communications', cards: [
     { href: routes.settings.sms, key: 'sms', icon: Bell, accent: 'bg-green-50 text-green-700 border-green-100' },
     { href: routes.settings.reports, key: 'reportEmails', icon: Mail, accent: 'bg-teal-50 text-teal-700 border-teal-100' },
+    { href: routes.settings.email, key: 'emailServer', icon: Send, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
   ]},
   { key: 'billingCredits', cards: [
     { href: '/sms-credits', key: 'smsCredits', icon: HandCoins, accent: 'bg-green-50 text-green-700 border-green-100' },
