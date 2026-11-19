@@ -472,6 +472,18 @@ export const coreMessages = {
 
             crmActivitySummary: "سرگرمیوں کا خلاصہ",
 
+            crmCampaignReport: "مہم کی کارکردگی",
+
+            crmBirthdays: "آنے والی سالگرہیں",
+
+            crmContactCoverage: "رابطے کی کوریج",
+
+            crmRfm: "گاہک کی قدر (RFM)",
+
+            crmLeadFunnel: "لیڈ فنل",
+
+            crmLostLeads: "کھوئی ہوئی لیڈز",
+
             crmReports: 'سی آر ایم رپورٹس',
             crmSetup: 'سی آر ایم سیٹ اپ',
             salesSettings: 'سیلز ترتیبات',

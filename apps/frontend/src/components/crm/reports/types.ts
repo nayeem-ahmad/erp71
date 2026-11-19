@@ -142,3 +142,165 @@ export type CrmActivitySummaryReport = {
     rows: ActivitySummaryRow[];
     totals: { total: number; unspecified: number; counts: Record<string, number> };
 };
+
+export type CampaignPerformanceRow = {
+    campaign_id: string;
+    name: string;
+    channel: string;
+    status: string;
+    sent_at: string | null;
+    recipients: number;
+    delivered: number;
+    failed: number;
+    delivery_pct: number | null;
+    orders: number;
+    revenue: number;
+    conversion_pct: number | null;
+    revenue_per_order: number | null;
+};
+
+export type CampaignChannelRow = {
+    channel: string;
+    campaigns: number;
+    recipients: number;
+    delivered: number;
+    orders: number;
+    revenue: number;
+};
+
+export type CampaignPerformanceReport = {
+    filters: { from: string; to: string; mine: boolean };
+    rows: CampaignPerformanceRow[];
+    by_channel: CampaignChannelRow[];
+    totals: {
+        campaigns: number;
+        recipients: number;
+        delivered: number;
+        failed: number;
+        orders: number;
+        revenue: number;
+        delivery_pct: number | null;
+        conversion_pct: number | null;
+    };
+};
+
+export type BirthdayRow = {
+    customer_id: string;
+    name: string;
+    phone: string | null;
+    birthday: string;
+    next_birthday: string;
+    days_until: number;
+    turning: number | null;
+    today: boolean;
+};
+
+export type BirthdaysReport = {
+    filters: { from: string; to: string };
+    days: number;
+    rows: BirthdayRow[];
+    total: number;
+    today: number;
+};
+
+export type CoverageParty = 'lead' | 'customer';
+
+export type CoverageRow = {
+    party: CoverageParty;
+    total: number;
+    by_phone: number;
+    by_email: number;
+    by_both: number;
+    reachable: number;
+    unreachable: number;
+    reachable_pct: number | null;
+};
+
+export type SourceCoverageRow = {
+    source_id: string | null;
+    name: string | null;
+    total: number;
+    reachable: number;
+    reachable_pct: number | null;
+};
+
+export type ContactCoverageReport = {
+    by_party: CoverageRow[];
+    by_source: SourceCoverageRow[];
+    totals: { total: number; reachable: number; unreachable: number; reachable_pct: number | null };
+};
+
+export type RfmSegment = 'champion' | 'loyal' | 'new' | 'at_risk' | 'hibernating' | 'needs_attention';
+
+export type RfmRow = {
+    customer_id: string;
+    name: string;
+    orders: number;
+    revenue: number;
+    recency_days: number;
+    recency: number;
+    frequency: number;
+    monetary: number;
+    code: string;
+    segment: RfmSegment;
+};
+
+export type RfmSegmentRow = {
+    segment: RfmSegment;
+    customers: number;
+    revenue: number;
+    share_pct: number | null;
+};
+
+export type RfmReport = {
+    as_of: string;
+    rows: RfmRow[];
+    by_segment: RfmSegmentRow[];
+    totals: { customers: number; revenue: number; repeat: number };
+};
+
+export type FunnelRow = {
+    month: string;
+    arrived: number;
+    new: number;
+    contacted: number;
+    qualified: number;
+    converted: number;
+    lost: number;
+    open: number;
+    conversion_pct: number | null;
+};
+
+export type LeadFunnelReport = {
+    months: string[];
+    rows: FunnelRow[];
+    totals: {
+        arrived: number;
+        converted: number;
+        lost: number;
+        open: number;
+        conversion_pct: number | null;
+    };
+};
+
+export type LostLeadRow = {
+    lead_id: string;
+    name: string;
+    reason: string | null;
+    closed_at: string | null;
+    days_open: number;
+};
+
+export type LostReasonRow = {
+    reason: string | null;
+    leads: number;
+    share_pct: number | null;
+    avg_days_open: number | null;
+};
+
+export type LostLeadsReport = {
+    filters: { from: string; to: string; mine: boolean };
+    rows: LostLeadRow[];
+    by_reason: LostReasonRow[];
+    totals: { lost: number; avg_days_open: number | null };
+};

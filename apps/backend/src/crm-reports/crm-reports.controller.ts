@@ -13,6 +13,13 @@ import { FollowUpComplianceService } from './follow-up-compliance.service';
 import { SalespersonScorecardService } from './salesperson-scorecard.service';
 import { LeadAgingService } from './lead-aging.service';
 import { CrmActivitySummaryService } from './crm-activity-summary.service';
+import { CrmCampaignPerformanceService } from './crm-campaign-performance.service';
+import { CrmBirthdaysService } from './crm-birthdays.service';
+import { CrmContactCoverageService } from './crm-contact-coverage.service';
+import { CrmRfmService } from './crm-rfm.service';
+import { CrmLeadFunnelService } from './crm-lead-funnel.service';
+import { CrmLostLeadsService } from './crm-lost-leads.service';
+import { GetBirthdaysDto } from './crm-reports.dto';
 
 @Controller('crm/reports')
 @UseGuards(JwtAuthGuard, StorePermissionGuard, SubscriptionAccessGuard)
@@ -25,6 +32,12 @@ export class CrmReportsController {
         private readonly scorecardService: SalespersonScorecardService,
         private readonly leadAgingService: LeadAgingService,
         private readonly activitySummaryService: CrmActivitySummaryService,
+        private readonly campaignPerformanceService: CrmCampaignPerformanceService,
+        private readonly birthdaysService: CrmBirthdaysService,
+        private readonly contactCoverageService: CrmContactCoverageService,
+        private readonly rfmService: CrmRfmService,
+        private readonly leadFunnelService: CrmLeadFunnelService,
+        private readonly lostLeadsService: CrmLostLeadsService,
     ) {}
 
     private ownerScope(tenant: TenantContext, query: CrmDashboardQueryDto): string | undefined {
@@ -84,6 +97,58 @@ export class CrmReportsController {
     @RequireStorePermission(StorePermission.VIEW_CRM_INTERACTIONS)
     activitySummary(@Tenant() tenant: TenantContext, @Query() query: CrmDashboardQueryDto) {
         return this.activitySummaryService.report(
+            tenant.tenantId,
+            query,
+            tenant.timezone,
+            this.ownerScope(tenant, query),
+        );
+    }
+
+    /** What each outbound campaign returned, dated by when it was sent. */
+    @Get('campaigns')
+    @RequireStorePermission(StorePermission.VIEW_CRM_INTERACTIONS)
+    campaigns(@Tenant() tenant: TenantContext, @Query() query: CrmDashboardQueryDto) {
+        return this.campaignPerformanceService.report(tenant.tenantId, query, tenant.timezone);
+    }
+
+    /** Whose birthday is coming up, as a worklist. No window beyond `days`. */
+    @Get('birthdays')
+    @RequireStorePermission(StorePermission.VIEW_CRM_INTERACTIONS)
+    birthdays(@Tenant() tenant: TenantContext, @Query() query: GetBirthdaysDto) {
+        return this.birthdaysService.report(tenant.tenantId, query, tenant.timezone);
+    }
+
+    /** How much of the book can actually be reached, and which sources bring the unreachable. */
+    @Get('contact-coverage')
+    @RequireStorePermission(StorePermission.VIEW_CRM_INTERACTIONS)
+    contactCoverage(@Tenant() tenant: TenantContext) {
+        return this.contactCoverageService.report(tenant.tenantId);
+    }
+
+    /** Who is worth what, and who is slipping. A snapshot, so no window. */
+    @Get('rfm')
+    @RequireStorePermission(StorePermission.VIEW_CRM_INTERACTIONS)
+    rfm(@Tenant() tenant: TenantContext) {
+        return this.rfmService.report(tenant.tenantId, tenant.timezone);
+    }
+
+    /** Each month's arrivals, counted by where that cohort stands now. */
+    @Get('lead-funnel')
+    @RequireStorePermission(StorePermission.VIEW_LEADS)
+    leadFunnel(@Tenant() tenant: TenantContext, @Query() query: CrmDashboardQueryDto) {
+        return this.leadFunnelService.report(
+            tenant.tenantId,
+            tenant.timezone,
+            { from: query.from, to: query.to },
+            this.ownerScope(tenant, query),
+        );
+    }
+
+    /** What we lost in the window, and why. */
+    @Get('lost-leads')
+    @RequireStorePermission(StorePermission.VIEW_LEADS)
+    lostLeads(@Tenant() tenant: TenantContext, @Query() query: CrmDashboardQueryDto) {
+        return this.lostLeadsService.report(
             tenant.tenantId,
             query,
             tenant.timezone,

@@ -43,6 +43,12 @@ import type {
     ColdCustomersReport,
     LeadAgingReport,
     CrmActivitySummaryReport,
+    CampaignPerformanceReport,
+    BirthdaysReport,
+    ContactCoverageReport,
+    RfmReport,
+    LeadFunnelReport,
+    LostLeadsReport,
 } from '@/components/crm/reports/types';
 import type { DailyReport } from '@/lib/daily-report';
 import type { Note, NoteInput, NoteSummary } from '@/components/notes/types';
@@ -3379,6 +3385,16 @@ export const api = {
     },
     getCrmFollowUpCompliance: dashboardWindowFetcher<FollowUpComplianceReport>('/crm/reports/follow-up-compliance'),
     getCrmActivitySummaryReport: dashboardWindowFetcher<CrmActivitySummaryReport>('/crm/reports/activity-summary'),
+    getCrmCampaignPerformance: dashboardWindowFetcher<CampaignPerformanceReport>('/crm/reports/campaigns'),
+    getCrmLeadFunnel: dashboardWindowFetcher<LeadFunnelReport>('/crm/reports/lead-funnel'),
+    getCrmLostLeads: dashboardWindowFetcher<LostLeadsReport>('/crm/reports/lost-leads'),
+    // Snapshots: no window, so they are not on the shared window fetcher.
+    getCrmBirthdays: (p?: { days?: number }): Promise<BirthdaysReport> => {
+        const query = p?.days ? `?days=${p.days}` : '';
+        return fetchWithAuth(`/crm/reports/birthdays${query}`);
+    },
+    getCrmContactCoverage: (): Promise<ContactCoverageReport> => fetchWithAuth('/crm/reports/contact-coverage'),
+    getCrmRfm: (): Promise<RfmReport> => fetchWithAuth('/crm/reports/rfm'),
     getColdCustomers: (p: { storeId?: string; factor?: number; minGapDays?: number }): Promise<ColdCustomersReport> => {
         const query = buildReportQuery(p);
         return fetchWithAuth(`/sales-reports/cold-customers${query ? `?${query}` : ''}`);
