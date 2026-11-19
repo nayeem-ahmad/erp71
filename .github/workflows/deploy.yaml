@@ -77,15 +77,21 @@ jobs:
       # it.
       - run: npm run db:seed:platform --workspace=packages/database
       - name: Run backend unit tests with coverage
-        run: npx jest --testPathPatterns="src/" --passWithNoTests --coverage --forceExit
+        run: npx jest --testPathPatterns="src/" --passWithNoTests --coverage --workerIdleMemoryLimit=1536MB --forceExit
         working-directory: apps/backend
       # Serial, and in their own step: these suites TRUNCATE a shared set of tables,
       # so run in parallel workers they wipe each other's fixtures mid-test. The
       # three that used to be excluded here are back in — they were excluded because
       # they applied the legacy packages/database/migrations/*.sql, which recreated
       # PostingRuleEventType from a ten-value definition and broke every later signup.
+      #
+      # One worker rather than --runInBand: still one suite at a time, but a
+      # worker can be recycled between suites, which --runInBand's single
+      # process cannot. Each suite boots a Nest app and the process never gives
+      # all of it back, so run in-band the heap grew suite by suite until the
+      # run died of "JavaScript heap out of memory" after the last suite passed.
       - name: Run backend integration tests (serial — they share one database)
-        run: npx jest --testPathPatterns="test/" --passWithNoTests --runInBand --forceExit
+        run: npx jest --testPathPatterns="test/" --passWithNoTests --maxWorkers=1 --workerIdleMemoryLimit=1536MB --forceExit
         working-directory: apps/backend
       - name: Upload backend coverage report
         uses: actions/upload-artifact@v4
