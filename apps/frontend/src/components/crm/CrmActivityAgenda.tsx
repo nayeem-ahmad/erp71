@@ -128,6 +128,8 @@ export default function CrmActivityAgenda({
                 return haystack.includes(needle);
             })
             : rows;
+        // The page's side panel walks the same order (`agendaOrder`), so a change
+        // to the grouping here has to be made in `groupActivities`, not inline.
         return groupActivities(matched, tenantDateOnly());
     }, [rows, query]);
 

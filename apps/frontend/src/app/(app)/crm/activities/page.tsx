@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import {
@@ -30,6 +30,8 @@ import {
     activityKindName,
     activityLabel,
     activityTarget,
+    agendaOrder,
+    nearestTargetedIndex,
     readActivityLayout,
     writeActivityLayout,
     type ActivityLayout,
@@ -59,7 +61,7 @@ import {
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { formatDate } from '@/lib/format';
 import CrmActivityComposer from '@/components/crm/CrmActivityComposer';
-import CrmActivityDrawer from '@/components/crm/CrmActivityDrawer';
+import CrmActivityDrawer, { type CrmActivityDrawerNavigation } from '@/components/crm/CrmActivityDrawer';
 
 interface ActivitySummary {
     dueToday: number;
@@ -76,6 +78,15 @@ const statusTone: Record<string, StatusBadgeTone> = {
 const columnHelper = createColumnHelper<CrmActivityRow>();
 
 const ACTIVITIES_TABLE_ID = 'crm-activities';
+
+/** The row the side panel is open on, and where it sat when it was opened. */
+type ViewingRow = {
+    activityId: string;
+    /** Its place in the on-screen order when opened — where "next" resumes if it leaves the list. */
+    index: number;
+    target: ActivityTarget;
+    label: string;
+};
 
 /**
  * Every CRM activity across the tenant — the merged replacement for the separate
@@ -145,8 +156,10 @@ export default function CrmActivitiesPage() {
     const [composing, setComposing] = useState<'log' | 'schedule' | null>(null);
 
     // The row's whole lead read in place, rather than by leaving for the lead
-    // page and coming back to a list that has forgotten where it was.
-    const [viewing, setViewing] = useState<ActivityTarget | null>(null);
+    // page and coming back to a list that has forgotten where it was. Held by
+    // the row it was opened on, not only its lead, so the drawer can step to
+    // the rows either side of it.
+    const [viewing, setViewing] = useState<ViewingRow | null>(null);
 
     // Read after mount: the server has no localStorage, so the first paint is
     // the table and the remembered layout replaces it on the next one.
@@ -256,6 +269,77 @@ export default function CrmActivitiesPage() {
         if (!scopeReady) return;
         api.getCrmActivitySummary({ mine: mineOnly || undefined }).then(setSummary).catch(() => null);
     }, [mineOnly, scopeReady]);
+
+    /**
+     * What Previous / Next walk: the rows in the order they are on screen. The
+     * table draws the server's order; the agenda regroups it by when work is
+     * due, so it walks the agenda's order instead.
+     */
+    const sequence = useMemo(() => (layout === 'agenda' ? agendaOrder(rows) : rows), [layout, rows]);
+
+    const viewRow = useCallback((row: CrmActivityRow, index: number) => {
+        const target = activityTarget(row);
+        if (!target) return;
+        setViewing({ activityId: row.id, index, target, label: activityLabel(row) });
+    }, []);
+
+    // Read through a ref so the handler stays one function: the table's
+    // columns close over it, and a fresh one per reload would rebuild them.
+    const sequenceRef = useRef(sequence);
+    sequenceRef.current = sequence;
+    const openRow = useCallback((row: CrmActivityRow) => {
+        viewRow(row, sequenceRef.current.findIndex((candidate) => candidate.id === row.id));
+    }, [viewRow]);
+
+    /**
+     * Stepping off either end of a server page: ask for the next page and open
+     * its first (or the previous page's last) row once it lands. `staleRows`
+     * is the page being left — until `rows` is something else, the new page
+     * has not arrived, whatever `isLoading` says in the render between the
+     * page change and the fetch starting.
+     */
+    const pendingStep = useRef<{ edge: 'first' | 'last'; staleRows: CrmActivityRow[] } | null>(null);
+    useEffect(() => {
+        const pending = pendingStep.current;
+        if (!pending || isLoading || rows === pending.staleRows) return;
+        pendingStep.current = null;
+        const index = pending.edge === 'first'
+            ? nearestTargetedIndex(sequence, 0, 1)
+            : nearestTargetedIndex(sequence, sequence.length - 1, -1);
+        if (index >= 0) viewRow(sequence[index], index);
+    }, [isLoading, rows, sequence, viewRow]);
+
+    const { page, pageSize, total, onPageChange } = serverPagination;
+    const viewingNav = useMemo<{ target: ActivityTarget; navigation: CrmActivityDrawerNavigation } | null>(() => {
+        if (!viewing) return null;
+        const found = sequence.findIndex((row) => row.id === viewing.activityId);
+        // Still in the list: step either side of where it is now. Gone from it
+        // — completed under the Planned filter, say — and the rows after it
+        // have moved up one, so the row now in its old slot is the next one.
+        const previous = nearestTargetedIndex(sequence, (found >= 0 ? found : viewing.index) - 1, -1);
+        const next = nearestTargetedIndex(sequence, found >= 0 ? found + 1 : viewing.index, 1);
+        const hasPreviousPage = page > 1;
+        const hasNextPage = page * pageSize < total;
+        const stepPage = (edge: 'first' | 'last', to: number) => () => {
+            pendingStep.current = { edge, staleRows: rows };
+            onPageChange(to);
+        };
+        return {
+            // The fresh row once the list reloads, so an edit to the lead's name
+            // in the Details tab reaches the drawer's title too.
+            target: (found >= 0 ? activityTarget(sequence[found]) : null) ?? viewing.target,
+            navigation: {
+                position: found >= 0 ? (page - 1) * pageSize + found + 1 : null,
+                total,
+                onPrevious: previous >= 0
+                    ? () => viewRow(sequence[previous], previous)
+                    : hasPreviousPage ? stepPage('last', page - 1) : null,
+                onNext: next >= 0
+                    ? () => viewRow(sequence[next], next)
+                    : hasNextPage ? stepPage('first', page + 1) : null,
+            },
+        };
+    }, [viewing, sequence, rows, page, pageSize, total, onPageChange, viewRow]);
 
     /**
      * Flipped in place, not reloaded: the list is filtered and a reload would
@@ -463,7 +547,7 @@ export default function CrmActivitiesPage() {
                         <RowActionButton
                             icon={<ClipboardList />}
                             label={m.viewActivities}
-                            onClick={() => setViewing(target)}
+                            onClick={() => openRow(info.row.original)}
                         />
                         <RowActionButton icon={<Eye />} label={m.open} href={target.href} />
                     </RowActions>
@@ -513,7 +597,7 @@ export default function CrmActivitiesPage() {
             actionsColumn,
         ];
         return { standardColumns, compactColumns };
-    }, [m, t.common.createdAt, t.common.actions, canApprove, toggleApproval]);
+    }, [m, t.common.createdAt, t.common.actions, canApprove, toggleApproval, openRow]);
 
     const activityFilters = useMemo<ResolvedListFilter[]>(() => [
         {
@@ -703,10 +787,7 @@ export default function CrmActivitiesPage() {
                                 rows={rows}
                                 canApprove={canApprove}
                                 onToggleApproval={(id, approved) => { void toggleApproval(id, approved); }}
-                                onView={(row) => {
-                                    const target = activityTarget(row);
-                                    if (target) setViewing(target);
-                                }}
+                                onView={openRow}
                                 emptyMessage={m.emptyMessage}
                             />
                             {/* The agenda has no table footer, so it carries the
@@ -783,14 +864,17 @@ export default function CrmActivitiesPage() {
                 />
             )}
 
-            {viewing && (
+            {viewing && viewingNav && (
                 <CrmActivityDrawer
-                    leadId={viewing.leadId}
-                    customerId={viewing.customerId}
-                    name={viewing.name}
-                    phone={viewing.phone}
-                    href={viewing.href}
-                    onClose={() => setViewing(null)}
+                    leadId={viewingNav.target.leadId}
+                    customerId={viewingNav.target.customerId}
+                    name={viewingNav.target.name}
+                    phone={viewingNav.target.phone}
+                    href={viewingNav.target.href}
+                    activityId={viewing.activityId}
+                    activityLabel={viewing.label}
+                    navigation={viewingNav.navigation}
+                    onClose={() => { pendingStep.current = null; setViewing(null); }}
                     // Only on a write, so merely looking never swaps the table
                     // behind the drawer for "Loading…".
                     onChanged={() => { void reload(); loadSummary(); }}

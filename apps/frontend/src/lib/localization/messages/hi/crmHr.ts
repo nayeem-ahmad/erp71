@@ -128,6 +128,13 @@ export const crmHrMessages = {
             open: "खोलें",
             viewActivities: "गतिविधियाँ देखें",
             openRecord: "पूरा रिकॉर्ड खोलें",
+            panelSections: 'साइड पैनल के भाग',
+            tabActivities: 'गतिविधियाँ',
+            tabDetails: 'लीड का विवरण',
+            previousActivity: 'पिछली गतिविधि',
+            nextActivity: 'अगली गतिविधि',
+            position: '{total} में से {current}',
+            leadDeleted: 'लीड हटा दी गई।',
             bulk: {
                 approve: "चयनित स्वीकृत करें",
                 withdrawApproval: "स्वीकृति वापस लें",
