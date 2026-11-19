@@ -228,7 +228,12 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'Project', exempt: 'budget_amount is a planning figure; no costing rolls up into it in Phase 1.' },
     { model: 'ProjectTask', exempt: 'estimate_hours/remaining_hours are hours, not money.' },
     { model: 'ProjectTaskRemainingLog', exempt: 'Audit trail of remaining hours; no monetary amount.' },
-    { model: 'ProjectTimeEntry', exempt: 'Logged hours; costing them against payroll is Phase 2.' },
+    // Project costing is management accounting: the hourly cost is the salary
+    // seen per hour, and that salary already posts through SalaryAccrual.
+    // Posting hours too would count the same pay twice.
+    { model: 'ProjectTimeEntry', exempt: 'Logged hours, priced for project costing (cost_rate/cost_amount); the pay behind the price posts once, via SalaryAccrual.' },
+    { model: 'EmployeeCostRate', exempt: 'Hourly cost rate (config) used to price project hours; same category as Employee.basic_salary.' },
+    { model: 'ProjectCostingSettings', exempt: 'Costing configuration (standard hours, overhead %); moves no money.' },
     { model: 'SprintSnapshot', exempt: 'Daily burndown totals in hours.' },
     { model: 'SprintBurndownPoint', exempt: 'Burndown totals in hours, one per sprint change.' },
     { model: 'SprintTask', exempt: 'A task\'s stay in a sprint; remaining_at_close is hours.' },
