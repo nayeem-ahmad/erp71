@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useUiSidebar, useUiStyle } from '@/lib/ui-theme';
+import { moduleIconTone } from '@/lib/ui/module-tone';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Banknote,
@@ -152,6 +154,11 @@ export default function Sidebar({
     const isMdUp = useIsMdUp();
     const { logoUrl, businessName, primaryColor } = useBranding();
     const { t, fmt } = useI18n();
+    const { colorful } = useUiStyle();
+    // The dark navy rail (Settings › Branding), in any style.
+    const navy = useUiSidebar() === 'NAVY';
+    // COLORFUL gives each module's icon its own hue; the active item stays solid blue.
+    const toneFor = (key: string) => (colorful ? moduleIconTone(key, navy) : '');
     const { tenantLayout, platformAdminLayout } = useNavLayouts();
     const defaultWidth = compactNav ? SIDEBAR_DEFAULT_WIDTH.compact : SIDEBAR_DEFAULT_WIDTH.normal;
     const [collapsed, setCollapsed] = useState(false);
@@ -515,10 +522,10 @@ export default function Sidebar({
                 : `space-x-2.5 rtl:space-x-reverse px-2.5 ${navPad}`
         } ${navText} ${
             active
-                ? compactNav
-                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-200'
-                    : 'bg-blue-600 text-white shadow-lg shadow-blue-200'
-                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                ? `bg-blue-600 text-white ${compactNav ? 'shadow-sm' : 'shadow-lg'} ${navy ? 'shadow-black/30' : 'shadow-blue-200'}`
+                : navy
+                    ? 'text-slate-300 hover:bg-white/5 hover:text-white'
+                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
         }`;
 
     return (
@@ -538,7 +545,8 @@ export default function Sidebar({
                 aria-label={onClose ? t.sidebar.navigation : undefined}
                 style={{ width: sidebarWidth }}
                 className={`
-                    fixed inset-y-0 start-0 z-40 flex flex-col bg-white border-e border-gray-200 flex-shrink-0 pt-safe
+                    fixed inset-y-0 start-0 z-40 flex flex-col border-e flex-shrink-0 pt-safe
+                    ${navy ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200'}
                     ${isResizing ? '' : 'transition-[width] duration-300'}
                     ${isOpen ? 'translate-x-0' : '-translate-x-full rtl:translate-x-full'}
                     md:relative md:inset-y-auto md:start-auto md:z-auto md:translate-x-0
@@ -560,14 +568,14 @@ export default function Sidebar({
                 }}
             >
                 {/* Logo — height matches app header (layout.tsx) */}
-                <div className={`flex items-center ${compactNav ? 'min-h-[3.25rem]' : 'h-14'} border-b border-gray-100 flex-shrink-0 ${collapsed ? 'justify-center px-0' : compactNav ? 'px-3 gap-2' : 'px-5 gap-3'}`}>
+                <div className={`flex items-center ${compactNav ? 'min-h-[3.25rem]' : 'h-14'} border-b ${navy ? 'border-slate-800' : 'border-gray-100'} flex-shrink-0 ${collapsed ? 'justify-center px-0' : compactNav ? 'px-3 gap-2' : 'px-5 gap-3'}`}>
                     {/* The mark is the way home, the way every app's logo is. The
                         negative margin keeps it optically where it sat before the
                         hover target grew around it. */}
                     <Link
                         href={homeHref}
                         aria-label={t.sidebar.goToDashboard}
-                        className={`-mx-1 flex items-center min-w-0 rounded-xl px-1 py-1 transition-colors hover:bg-gray-50 ${collapsed ? '' : 'flex-1 space-x-3 rtl:space-x-reverse'}`}
+                        className={`-mx-1 flex items-center min-w-0 rounded-xl px-1 py-1 transition-colors ${navy ? 'hover:bg-white/5' : 'hover:bg-gray-50'} ${collapsed ? '' : 'flex-1 space-x-3 rtl:space-x-reverse'}`}
                     >
                         {logoUrl ? (
                             <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: primaryColor }}>
@@ -579,12 +587,13 @@ export default function Sidebar({
                             // square mark when collapsed (64px cannot fit 2200×860).
                             <BrandLogo
                                 variant={collapsed ? 'mark' : 'lockup'}
+                                tone={navy ? 'reverse' : 'default'}
                                 height={collapsed ? 28 : 32}
                                 decorative={Boolean(!collapsed && businessName)}
                             />
                         )}
                         {!collapsed && (logoUrl || businessName) && (
-                            <span className="min-w-0 truncate text-[15px] font-extrabold text-gray-950 tracking-tight leading-tight">
+                            <span className={`min-w-0 truncate text-[15px] font-extrabold tracking-tight leading-tight ${navy ? 'text-white' : 'text-gray-950'}`}>
                                 {businessName || BRAND_NAME}
                             </span>
                         )}
@@ -593,7 +602,7 @@ export default function Sidebar({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="md:hidden min-h-touch min-w-touch flex items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors flex-shrink-0"
+                            className={`md:hidden min-h-touch min-w-touch flex items-center justify-center rounded-xl transition-colors flex-shrink-0 ${navy ? 'text-slate-300 hover:bg-white/10 hover:text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
                             aria-label={t.sidebar.closeNavigation}
                         >
                             <X className="w-5 h-5" />
@@ -602,8 +611,8 @@ export default function Sidebar({
                 </div>
 
                 {!collapsed ? (
-                    <div className={`flex-shrink-0 space-y-1.5 border-b border-gray-100 ${compactNav ? 'px-2 py-2' : 'px-2 py-2.5'}`}>
-                        <label className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-2.5 py-2">
+                    <div className={`flex-shrink-0 space-y-1.5 border-b ${navy ? 'border-slate-800' : 'border-gray-100'} ${compactNav ? 'px-2 py-2' : 'px-2 py-2.5'}`}>
+                        <label className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 ${navy ? 'border-white/10 bg-white/5' : 'border-gray-100 bg-gray-50'}`}>
                             <Search className="h-4 w-4 flex-shrink-0 text-gray-400" aria-hidden />
                             <input
                                 ref={searchInputRef}
@@ -618,7 +627,7 @@ export default function Sidebar({
                                 }}
                                 placeholder={t.sidebar.searchPlaceholder}
                                 aria-label={t.sidebar.searchPlaceholder}
-                                className={`min-w-0 flex-1 bg-transparent outline-none ${compactNav ? 'text-[13px]' : 'text-sm'} text-gray-900 placeholder:text-gray-400`}
+                                className={`min-w-0 flex-1 bg-transparent outline-none ${compactNav ? 'text-[13px]' : 'text-sm'} ${navy ? 'text-white placeholder:text-slate-400' : 'text-gray-900 placeholder:text-gray-400'}`}
                             />
                             {isSearching ? (
                                 <button
@@ -627,7 +636,7 @@ export default function Sidebar({
                                         setSearchQuery('');
                                         searchInputRef.current?.focus();
                                     }}
-                                    className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                                    className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors ${navy ? 'hover:bg-white/10 hover:text-white' : 'hover:bg-gray-100 hover:text-gray-700'}`}
                                     aria-label={t.sidebar.clearSearch}
                                 >
                                     <X className="h-3.5 w-3.5" />
@@ -639,15 +648,15 @@ export default function Sidebar({
                                 <button
                                     type="button"
                                     onClick={expandAllGroups}
-                                    className={`font-semibold text-gray-500 transition-colors hover:text-blue-600 ${compactNav ? 'text-[11px]' : 'text-xs'}`}
+                                    className={`font-semibold transition-colors ${navy ? 'text-slate-400 hover:text-white' : 'text-gray-500 hover:text-blue-600'} ${compactNav ? 'text-[11px]' : 'text-xs'}`}
                                 >
                                     {t.sidebar.expandAll}
                                 </button>
-                                <span className="text-gray-300" aria-hidden>·</span>
+                                <span className={navy ? 'text-slate-600' : 'text-gray-300'} aria-hidden>·</span>
                                 <button
                                     type="button"
                                     onClick={collapseAllGroups}
-                                    className={`font-semibold text-gray-500 transition-colors hover:text-blue-600 ${compactNav ? 'text-[11px]' : 'text-xs'}`}
+                                    className={`font-semibold transition-colors ${navy ? 'text-slate-400 hover:text-white' : 'text-gray-500 hover:text-blue-600'} ${compactNav ? 'text-[11px]' : 'text-xs'}`}
                                 >
                                     {t.sidebar.collapseAll}
                                 </button>
@@ -683,14 +692,14 @@ export default function Sidebar({
                                     title={collapsed ? [mod.label, unreadLabel].filter(Boolean).join(' · ') : undefined}
                                     className={linkCls(active)}
                                 >
-                                    <Icon className={`flex-shrink-0 w-5 h-5 ${active ? 'text-white' : 'group-hover:scale-110 transition-transform'}`} />
+                                    <Icon className={`flex-shrink-0 w-5 h-5 ${active ? 'text-white' : `${toneFor(mod.key)} group-hover:scale-110 transition-transform`}`} />
                                     {!collapsed && <span className={navLabelCls}>{mod.label}</span>}
                                     {!collapsed && <NavCountBadge count={unread} title={unreadLabel} tone="blue" />}
                                     {collapsed && unread > 0 ? (
                                         <span
                                             aria-hidden
                                             className={`absolute end-1.5 top-1.5 h-2 w-2 rounded-full ring-2 ${
-                                                active ? 'bg-white ring-blue-600' : 'bg-blue-600 ring-white'
+                                                active ? 'bg-white ring-blue-600' : `bg-blue-600 ${navy ? 'ring-slate-900' : 'ring-white'}`
                                             }`}
                                         />
                                     ) : null}
@@ -706,13 +715,13 @@ export default function Sidebar({
                                     title={collapsed ? `${mod.label} (coming soon)` : undefined}
                                     className={`flex items-center rounded-xl cursor-default ${
                                         collapsed ? 'justify-center w-10 h-10 mx-auto' : 'space-x-3 rtl:space-x-reverse px-3 py-2'
-                                    } text-gray-300`}
+                                    } ${navy ? 'text-slate-600' : 'text-gray-300'}`}
                                 >
                                     <Icon className="flex-shrink-0 w-5 h-5" />
                                     {!collapsed && (
                                         <>
                                             <span className={navLabelCls}>{mod.label}</span>
-                                            <span className="ms-auto text-[9px] font-bold uppercase tracking-widest bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-md">Soon</span>
+                                            <span className={`ms-auto text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md ${navy ? 'bg-white/10 text-slate-400' : 'bg-gray-100 text-gray-400'}`}>Soon</span>
                                         </>
                                     )}
                                 </div>
@@ -734,7 +743,7 @@ export default function Sidebar({
                                         title={mod.label}
                                         className={linkCls(groupActive)}
                                     >
-                                        <Icon className={`flex-shrink-0 w-5 h-5 ${groupActive ? 'text-white' : 'group-hover:scale-110 transition-transform'}`} />
+                                        <Icon className={`flex-shrink-0 w-5 h-5 ${groupActive ? 'text-white' : `${toneFor(mod.key)} group-hover:scale-110 transition-transform`}`} />
                                     </Link>
                                 ) : (
                                     <button
@@ -746,16 +755,16 @@ export default function Sidebar({
                                             isSearching ? 'cursor-default' : ''
                                         } ${
                                             groupActive
-                                                ? 'text-blue-700 bg-blue-50'
-                                                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                                                ? navy ? 'text-white bg-white/10' : 'text-blue-700 bg-blue-50'
+                                                : navy ? 'text-slate-300 hover:bg-white/5 hover:text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
                                         }`}
                                     >
-                                        <Icon className={`flex-shrink-0 w-5 h-5 ${groupActive ? 'text-blue-600' : ''}`} />
+                                        <Icon className={`flex-shrink-0 w-5 h-5 ${toneFor(mod.key) || (groupActive ? (navy ? 'text-blue-400' : 'text-blue-600') : '')}`} />
                                         <span className={navLabelCls}>{mod.label}</span>
                                         <ChevronDown
                                             className={`ms-auto w-4 h-4 transition-transform duration-200 ${
                                                 groupOpen ? 'rotate-180' : ''
-                                            } ${groupActive ? 'text-blue-400' : 'text-gray-300'}`}
+                                            } ${groupActive ? (navy ? 'text-slate-300' : 'text-blue-400') : (navy ? 'text-slate-500' : 'text-gray-300')}`}
                                         />
                                     </button>
                                 )}
@@ -772,6 +781,7 @@ export default function Sidebar({
                                         compactNav={compactNav}
                                         badgeFor={pendingBadgeFor}
                                         badgeTitle={pendingBadgeTitle}
+                                        navy={navy}
                                     />
                                 )}
                             </div>

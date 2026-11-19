@@ -84,7 +84,7 @@ describe('SalesByProductPage', () => {
         render(<SalesByProductPage />);
         await screen.findByRole('cell', { name: 'Miniket Rice 5kg' });
 
-        expect(tile('Total Revenue')).toBe('৳ 10,000');
+        expect(tile('Total Revenue')).toBe('৳\u00a010,000');
         expect(tile('Units Sold')).toBe('68');
         expect(tile('Products Sold')).toBe('3');
         expect(tile('Top seller')).toContain('Miniket Rice 5kg');
@@ -100,7 +100,7 @@ describe('SalesByProductPage', () => {
 
         await waitFor(() => expect(screen.queryByRole('cell', { name: 'Miniket Rice 5kg' })).not.toBeInTheDocument());
         expect(screen.getByRole('cell', { name: 'USB-C Cable' })).toBeInTheDocument();
-        expect(tile('Total Revenue')).toBe('৳ 3,000');
+        expect(tile('Total Revenue')).toBe('৳\u00a03,000');
         expect(tile('Products Sold')).toBe('1');
         // Grouping narrows what is in hand rather than asking the server again.
         expect(api().getSalesByProduct).toHaveBeenCalledTimes(1);

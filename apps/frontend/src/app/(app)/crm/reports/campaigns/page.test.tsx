@@ -35,7 +35,7 @@ describe('CRM campaign performance report', () => {
         const cell = (id: string) => row.querySelector(`[data-column-id="${id}"]`)?.textContent;
         expect(cell('deliveryPct')).toBe('95%');
         expect(cell('conversionPct')).toBe('6.3%');
-        expect(cell('revenue')).toBe('৳ 5,000.00');
+        expect(cell('revenue')).toBe('৳\u00a05,000.00');
     });
 
     it('shows a dash where a campaign had no recipients', async () => {

@@ -882,6 +882,12 @@ model Tenant {
   brand_logo_url            String?
   brand_favicon_url         String?
   brand_business_name       String?
+  /// The workspace's visual style: CLASSIC | POLISHED | COLORFUL — see
+  /// `UI_THEMES` in shared-types. Presentation only; every style shows the
+  /// same data and the same actions.
+  ui_theme                  String   @default("CLASSIC")
+  /// The sidebar's colour, beside the style: LIGHT | NAVY — see `UI_SIDEBARS`.
+  ui_sidebar                String   @default("LIGHT")
   default_vat_rate          Decimal? @db.Decimal(5, 2) // e.g. 15.00 for 15% BD VAT
   /// How the shop's prices are entered. True (the default, and how ERP71 has
   /// always worked): prices include VAT and the tax is worked out of them.

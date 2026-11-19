@@ -1223,6 +1223,7 @@ export const coreMessages = {
         compactViewTitle: "संक्षिप्त दृश्य",
         loadingProducts: "उत्पाद लोड हो रहे हैं...",
         stockLeft: "{count} शेष",
+        outOfStockShort: "स्टॉक नहीं",
         notAvailable: 'N/A',
         tabs: {
             checkout: "चेकआउट",

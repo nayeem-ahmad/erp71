@@ -49,6 +49,21 @@ export const settingsExtrasMessages = {
         saveFailed: "برانڈنگ کی ترتیبات محفوظ نہیں ہو سکیں۔",
         saveButton: "برانڈنگ محفوظ کریں",
         saving: "محفوظ ہو رہا ہے…",
+        uiTheme: {
+            label: "انٹرفیس اسٹائل",
+            hint: "اس ورک اسپیس میں سب کے لیے ERP71 کیسا دکھے گا۔ صرف شکل بدلتی ہے: ہر اسٹائل میں وہی صفحات، اعداد اور کام ہیں۔",
+            current: "موجودہ",
+            previewAlt: "{name} اسٹائل کا پیش منظر",
+            classic: { name: "کلاسک", description: "ERP71 کی ہمیشہ والی شکل۔" },
+            polished: { name: "نکھرا", description: "پُرسکون متن اور فاصلے۔ فون پر فہرستیں کارڈ بن جاتی ہیں۔" },
+            colorful: { name: "رنگین", description: "نکھرا، ساتھ رنگین اعداد کارڈ، آئیکن اور سائیڈبار۔" },
+        },
+        uiSidebar: {
+            label: "سائیڈبار",
+            hint: "نیویگیشن پٹی، کسی بھی اسٹائل میں۔",
+            light: { name: "ہلکا", description: "سفید، جیسا ہمیشہ سے ہے۔" },
+            navy: { name: "گہرا نیوی", description: "ایک گہری پٹی جو نیویگیشن کو صفحے سے الگ کرتی ہے۔" },
+        },
         businessName: {
             label: "کاروباری نام کی جگہ متبادل",
             placeholder: "آپ کے کاروبار کا نام",

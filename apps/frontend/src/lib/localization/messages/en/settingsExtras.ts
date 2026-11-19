@@ -49,6 +49,21 @@ export const settingsExtrasMessages = {
         saveFailed: 'Failed to save branding settings.',
         saveButton: 'Save Branding',
         saving: 'Saving…',
+        uiTheme: {
+            label: "Interface style",
+            hint: "How ERP71 looks for everyone in this workspace. Only the look changes: every style has the same pages, figures and actions.",
+            current: "Current",
+            previewAlt: "Preview of the {name} style",
+            classic: { name: "Classic", description: "The look ERP71 has always had." },
+            polished: { name: "Polished", description: "Calmer text and spacing. Lists turn into cards on a phone." },
+            colorful: { name: "Colorful", description: "Polished, plus colorful figure cards, icons and sidebar." },
+        },
+        uiSidebar: {
+            label: "Sidebar",
+            hint: "The navigation rail beside every page, in any style.",
+            light: { name: "Light", description: "White, as it has always been." },
+            navy: { name: "Dark navy", description: "A dark rail that sets the navigation apart from the page." },
+        },
         businessName: {
             label: 'Business Name Override',
             placeholder: 'Your Business Name',

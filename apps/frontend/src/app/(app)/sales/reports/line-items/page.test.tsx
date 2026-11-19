@@ -134,8 +134,8 @@ describe('SalesLineItemsPage', () => {
         expect(tile('Lines')).toBe('3');
         expect(tile('Invoices')).toBe('2');
         expect(tile('Quantity')).toBe('6');
-        expect(tile('Amount')).toBe('৳ 2,060');
-        expect(tile('Returned')).toContain('৳ 180');
+        expect(tile('Amount')).toBe('৳\u00a02,060');
+        expect(tile('Returned')).toContain('৳\u00a0180');
         expect(tile('Returned')).toContain('1 units');
     });
 

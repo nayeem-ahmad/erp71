@@ -21,6 +21,8 @@ import {
     type NewCustomerDraft,
 } from '../components/CustomerSelection';
 import { toast } from '@/lib/toast';
+import { useUiStyle } from '@/lib/ui-theme';
+import { gradientTint } from '@/lib/ui/name-tint';
 import { getAccessToken, getWorkspaceItem } from '@/lib/session-store';
 
 /** POS runs its own rounded field style rather than the entry screens'. */
@@ -73,6 +75,7 @@ function generateId(): string {
 
 export default function POSPage() {
     const { t } = useI18n();
+    const { polished, colorful } = useUiStyle();
     // The till rings up at the workspace store, so that branch's paper is fetched up front.
     const printHeader = usePrintHeader('POS_RECEIPT', { storeId: getWorkspaceItem('store_id') || undefined });
     // The till's roll: 58mm when this browser chose it, 80mm otherwise.
@@ -796,6 +799,53 @@ export default function POSPage() {
                     <div className="flex-1 overflow-y-auto pe-2 pb-20 md:pb-0 custom-scrollbar">
                         {loading ? (
                             <div className="flex items-center justify-center h-full text-gray-400 font-bold uppercase tracking-widest text-xs">{t.pos.loadingProducts}</div>
+                        ) : viewMode === 'gallery' && polished ? (
+                            // No big grey placeholder per product: a monogram, a two-line name and
+                            // the price on one line, so a phone shows six products instead of four.
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5">
+                                {filteredProducts.map((product) => {
+                                    const stock = getStockForSalesWarehouse(product);
+                                    const stockTone = colorful
+                                        ? stock <= 0 ? 'bg-red-100 text-red-700' : stock < 10 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'
+                                        : stock <= 0 ? 'text-red-600' : stock < 10 ? 'text-amber-600' : 'text-gray-500';
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={product.id}
+                                            onClick={() => addToCart(product)}
+                                            className="group flex flex-col rounded-lg border border-gray-200/70 bg-white p-2.5 text-start transition-all hover:border-blue-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 active:scale-[0.98]"
+                                        >
+                                            {product.image_url ? (
+                                                <div className="mb-2 aspect-[4/3] w-full overflow-hidden rounded-md bg-gray-50">
+                                                    <img src={product.image_url} alt="" className="h-full w-full object-cover" />
+                                                </div>
+                                            ) : (
+                                                <div
+                                                    aria-hidden
+                                                    className={`mb-2 flex h-10 w-10 items-center justify-center rounded-lg font-semibold ${
+                                                        colorful
+                                                            ? `bg-gradient-to-br text-base text-white shadow-sm ${gradientTint(product.name ?? '')}`
+                                                            : 'bg-blue-50 text-sm text-blue-600'
+                                                    }`}
+                                                >
+                                                    {product.name?.slice(0, 1)}
+                                                </div>
+                                            )}
+                                            <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-medium leading-5 text-gray-900">{product.name}</h3>
+                                            <p className="mt-0.5 text-xs text-gray-400">{product.sku || t.pos.notAvailable}</p>
+                                            <div className="mt-2 flex items-baseline justify-between gap-2">
+                                                <span className="whitespace-nowrap text-base font-semibold tabular-nums text-gray-950">{formatBDT(parseFloat(product.price))}</span>
+                                                <span
+                                                    title={interpolate(t.pos.stockLeft, { count: stock })}
+                                                    className={`whitespace-nowrap text-xs tabular-nums ${colorful ? 'rounded-full px-1.5 py-0.5 font-medium' : ''} ${stockTone}`}
+                                                >
+                                                    {stock <= 0 ? t.pos.outOfStockShort : stock}
+                                                </span>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         ) : viewMode === 'gallery' ? (
                             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                                 {filteredProducts.map((product) => (

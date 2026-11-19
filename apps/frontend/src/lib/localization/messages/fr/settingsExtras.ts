@@ -49,6 +49,21 @@ export const settingsExtrasMessages = {
         saveFailed: "Impossible d'enregistrer les paramètres d'identité visuelle.",
         saveButton: "Enregistrer l'identité visuelle",
         saving: "Enregistrement…",
+        uiTheme: {
+            label: "Style de l'interface",
+            hint: "L'apparence d'ERP71 pour tout le monde dans cet espace de travail. Seule l'apparence change : chaque style a les mêmes pages, chiffres et actions.",
+            current: "Actuel",
+            previewAlt: "Aperçu du style {name}",
+            classic: { name: "Classique", description: "L'apparence qu'ERP71 a toujours eue." },
+            polished: { name: "Épuré", description: "Texte et espacements plus calmes. Les listes deviennent des cartes sur mobile." },
+            colorful: { name: "Coloré", description: "Épuré, avec des cartes de chiffres, des icônes et une barre latérale en couleur." },
+        },
+        uiSidebar: {
+            label: "Barre latérale",
+            hint: "La barre de navigation, avec n’importe quel style.",
+            light: { name: "Claire", description: "Blanche, comme toujours." },
+            navy: { name: "Bleu marine foncé", description: "Une barre sombre qui distingue la navigation de la page." },
+        },
         businessName: {
             label: "Nom d'entreprise personnalisé",
             placeholder: "Nom de votre entreprise",

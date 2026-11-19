@@ -1223,6 +1223,7 @@ export const coreMessages = {
             compactViewTitle: "কম্প্যাক্ট ভিউ",
             loadingProducts: "পণ্য লোড হচ্ছে...",
             stockLeft: "{count} বাকি",
+            outOfStockShort: "স্টক নেই",
             notAvailable: "প্রযোজ্য নয়",
             tabs: {
                 checkout: "চেকআউট",

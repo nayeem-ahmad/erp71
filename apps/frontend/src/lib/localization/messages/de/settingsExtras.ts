@@ -49,6 +49,21 @@ export const settingsExtrasMessages = {
         saveFailed: "Branding-Einstellungen konnten nicht gespeichert werden.",
         saveButton: "Branding speichern",
         saving: "Wird gespeichert…",
+        uiTheme: {
+            label: "Oberflächenstil",
+            hint: "So sieht ERP71 für alle in diesem Arbeitsbereich aus. Nur das Aussehen ändert sich: Jeder Stil hat dieselben Seiten, Zahlen und Aktionen.",
+            current: "Aktuell",
+            previewAlt: "Vorschau des Stils {name}",
+            classic: { name: "Klassisch", description: "Das Aussehen, das ERP71 schon immer hatte." },
+            polished: { name: "Aufgeräumt", description: "Ruhigere Schrift und Abstände. Listen werden auf dem Handy zu Karten." },
+            colorful: { name: "Farbenfroh", description: "Aufgeräumt, dazu farbige Kennzahlkarten, Symbole und Seitenleiste." },
+        },
+        uiSidebar: {
+            label: "Seitenleiste",
+            hint: "Die Navigationsleiste, in jedem Stil.",
+            light: { name: "Hell", description: "Weiß, wie bisher." },
+            navy: { name: "Dunkles Marineblau", description: "Eine dunkle Leiste, die die Navigation von der Seite abhebt." },
+        },
         businessName: {
             label: "Abweichender Firmenname",
             placeholder: "Ihr Firmenname",

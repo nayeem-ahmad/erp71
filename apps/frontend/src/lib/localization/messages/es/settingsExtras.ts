@@ -49,6 +49,21 @@ export const settingsExtrasMessages = {
         saveFailed: "No se pudieron guardar los ajustes de marca.",
         saveButton: "Guardar marca",
         saving: "Guardando…",
+        uiTheme: {
+            label: "Estilo de la interfaz",
+            hint: "Cómo se ve ERP71 para todos en este espacio de trabajo. Solo cambia el aspecto: todos los estilos tienen las mismas páginas, cifras y acciones.",
+            current: "Actual",
+            previewAlt: "Vista previa del estilo {name}",
+            classic: { name: "Clásico", description: "El aspecto de siempre de ERP71." },
+            polished: { name: "Pulido", description: "Texto y espacios más tranquilos. Las listas se vuelven tarjetas en el móvil." },
+            colorful: { name: "Colorido", description: "Pulido, más tarjetas de cifras, iconos y barra lateral en color." },
+        },
+        uiSidebar: {
+            label: "Barra lateral",
+            hint: "La barra de navegación, con cualquier estilo.",
+            light: { name: "Clara", description: "Blanca, como siempre." },
+            navy: { name: "Azul marino oscuro", description: "Una barra oscura que separa la navegación de la página." },
+        },
         businessName: {
             label: "Nombre de empresa personalizado",
             placeholder: "El nombre de su empresa",

@@ -1224,6 +1224,7 @@ export const coreMessages = {
             compactViewTitle: "Paparan padat",
             loadingProducts: "Memuatkan produk...",
             stockLeft: "{count} baki",
+            outOfStockShort: "Habis",
             notAvailable: "T/A",
             tabs: {
                 checkout: "Checkout",

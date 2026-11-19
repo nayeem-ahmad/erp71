@@ -49,6 +49,21 @@ export const settingsExtrasMessages = {
         saveFailed: "تعذّر حفظ إعدادات الهوية.",
         saveButton: "حفظ الهوية",
         saving: "جارٍ الحفظ…",
+        uiTheme: {
+            label: "نمط الواجهة",
+            hint: "كيف يظهر ERP71 لكل من في مساحة العمل هذه. يتغير المظهر فقط: كل نمط يضم الصفحات والأرقام والإجراءات نفسها.",
+            current: "الحالي",
+            previewAlt: "معاينة نمط {name}",
+            classic: { name: "كلاسيكي", description: "المظهر الذي عُرف به ERP71 دائمًا." },
+            polished: { name: "مصقول", description: "نصوص ومسافات أهدأ، وتتحول القوائم إلى بطاقات على الهاتف." },
+            colorful: { name: "ملوّن", description: "المصقول، مع بطاقات أرقام وأيقونات وشريط جانبي ملوّنة." },
+        },
+        uiSidebar: {
+            label: "الشريط الجانبي",
+            hint: "شريط التنقل الجانبي، مع أي نمط.",
+            light: { name: "فاتح", description: "أبيض كما كان دائمًا." },
+            navy: { name: "كحلي داكن", description: "شريط داكن يميّز التنقل عن الصفحة." },
+        },
         businessName: {
             label: "تجاوز اسم النشاط التجاري",
             placeholder: "اسم نشاطك التجاري",

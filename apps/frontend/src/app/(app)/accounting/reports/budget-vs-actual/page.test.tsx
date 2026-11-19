@@ -3,6 +3,7 @@ import BudgetVsActualPage from './page';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { tenantDateOnly } from '@/lib/created-range';
+import { asRendered } from '@/test-utils/rendered-text';
 
 // A wide screen, so the chips sit in the toolbar rather than the phone's Filters sheet.
 jest.mock('@/hooks/useMediaQuery', () => ({
@@ -42,7 +43,7 @@ const MARCH = {
     totals: { budget: 1000, actual: 900, variance: 100 },
 };
 
-const taka = (value: number) => formatBDT(value, { locale: 'en', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const taka = (value: number) => asRendered(formatBDT(value, { locale: 'en', minimumFractionDigits: 0, maximumFractionDigits: 0 }));
 
 function stat(label: string) {
     const strip = screen.getByRole('region', { name: 'Report figures' });
@@ -122,8 +123,8 @@ describe('Budget vs. actual', () => {
 
         const footer = screen.getByRole('rowheader', { name: 'Totals' }).closest('tr') as HTMLElement;
         const cell = (columnId: string) => footer.querySelector(`[data-column-id="${columnId}"]`) as HTMLElement;
-        expect(cell('budget')).toHaveTextContent(formatBDT(15000, { locale: 'en' }));
-        expect(cell('actual')).toHaveTextContent(formatBDT(16000, { locale: 'en' }));
-        expect(within(cell('variance')).getByText(formatBDT(-1000, { locale: 'en' }))).toHaveClass('text-red-600');
+        expect(cell('budget')).toHaveTextContent(asRendered(formatBDT(15000, { locale: 'en' })));
+        expect(cell('actual')).toHaveTextContent(asRendered(formatBDT(16000, { locale: 'en' })));
+        expect(within(cell('variance')).getByText(asRendered(formatBDT(-1000, { locale: 'en' })))).toHaveClass('text-red-600');
     });
 });

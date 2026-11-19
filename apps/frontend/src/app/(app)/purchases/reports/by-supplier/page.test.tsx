@@ -66,7 +66,7 @@ describe('PurchasesBySupplierPage', () => {
         render(<PurchasesBySupplierPage />);
         await screen.findByText('Rahman Traders');
 
-        expect(tile('Total Spend')).toBe('৳ 17,000');
+        expect(tile('Total Spend')).toBe('৳\u00a017,000');
         expect(tile('Total Orders')).toBe('6');
         expect(tile('Suppliers')).toBe('1');
     });

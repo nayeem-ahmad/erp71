@@ -66,7 +66,7 @@ describe('PurchasesByProductPage', () => {
         await waitFor(() => expect(api().getPurchasesByProduct).toHaveBeenCalled());
         await screen.findByRole('region', { name: 'Report figures' });
 
-        expect(tile('Total Spend')).toBe('৳ 9,000');
+        expect(tile('Total Spend')).toBe('৳\u00a09,000');
         expect(tile('Products')).toBe('2');
         expect(tile('Top product')).toContain('Miniket Rice 5kg');
     });
