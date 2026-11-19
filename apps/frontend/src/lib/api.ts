@@ -888,6 +888,37 @@ export function openAuthedStream(endpoint: string, handlers: StreamHandlers): ()
  * derivable from the employee row, which is why there is no endpoint to read it
  * — it comes back from whichever call last changed it.
  */
+/** Why a login and an employee card look like the same person. Mobile and email are strong; name is a hint. */
+export type EmployeeLinkMatch = 'mobile' | 'email' | 'name';
+
+export interface EmployeeLoginCandidate {
+    userId: string;
+    name: string | null;
+    email: string | null;
+    mobile: string | null;
+    matches: EmployeeLinkMatch[];
+}
+
+export interface EmployeeLinkCandidate {
+    employeeId: string;
+    employeeCode: string;
+    name: string;
+    phone: string;
+    email: string | null;
+    matches: EmployeeLinkMatch[];
+}
+
+export interface EmployeeLinkSuggestion {
+    employee: { id: string; employeeCode: string; name: string; phone: string; email: string | null };
+    user: { id: string; name: string | null; email: string | null; mobile: string | null };
+    matches: EmployeeLinkMatch[];
+}
+
+export interface EmployeeBulkLinkResult {
+    linked: number;
+    results: Array<{ employeeId: string; userId: string; ok: boolean; error?: string }>;
+}
+
 export type EmployeeLoginState = {
     employee_id: string;
     has_login: boolean;
@@ -5780,7 +5811,7 @@ export const api = {
     getTeamInvitations: () => fetchWithAuth('/team/invitations'),
     // `tenantRoleIds` carries the whole set — the invitee's access is the union of
     // every role in it, and the first is their primary role.
-    sendTeamInvitation: (data: { email: string; tenantRoleIds: string[] }) => fetchWithAuth('/team/invitations', {
+    sendTeamInvitation: (data: { email: string; tenantRoleIds: string[]; employeeId?: string }) => fetchWithAuth('/team/invitations', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -6280,6 +6311,23 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     unlinkEmployeeUser: (id: string) => fetchWithAuth(`/employees/${id}/link-user`, { method: 'DELETE' }),
+    /** Logins this employee could be linked to, likeliest first. Needs MANAGE_HR and MANAGE_USERS. */
+    getEmployeeLoginCandidates: (id: string): Promise<EmployeeLoginCandidate[]> =>
+        fetchWithAuth(`/employees/${id}/link-candidates`),
+    /** Unlinked cards, ranked by likeness to a member or to an address being invited. */
+    getEmployeeCandidates: (whom: { userId?: string; email?: string } = {}): Promise<EmployeeLinkCandidate[]> => {
+        const q = new URLSearchParams();
+        if (whom.userId) q.set('userId', whom.userId);
+        if (whom.email) q.set('email', whom.email);
+        return fetchWithAuth(`/employees/link-candidates${q.toString() ? `?${q}` : ''}`);
+    },
+    getEmployeeLinkSuggestions: (): Promise<EmployeeLinkSuggestion[]> => fetchWithAuth('/employees/link-suggestions'),
+    linkEmployeesBulk: (links: Array<{ employeeId: string; userId: string }>): Promise<EmployeeBulkLinkResult> =>
+        fetchWithAuth('/employees/link-bulk', {
+            method: 'POST',
+            body: JSON.stringify({ links }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     // Attendance
     getAttendance: (params?: { employeeId?: string; startDate?: string; endDate?: string; status?: string }) => {
         const q = new URLSearchParams();

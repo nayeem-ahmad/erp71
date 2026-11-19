@@ -10,6 +10,7 @@ import { EmployeeGuard } from './employee.guard';
 import { EmployeesController } from '../employees/employees.controller';
 import { EmployeesService } from '../employees/employees.service';
 import { OrgStructureImportService } from '../employees/org-structure-import.service';
+import { EmployeeLinkService } from '../employees/employee-link.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
@@ -126,6 +127,7 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
                 { provide: EmployeeLoginService, useValue: loginService },
                 { provide: EmployeesService, useValue: employeesService },
                 { provide: OrgStructureImportService, useValue: { import: jest.fn() } },
+                { provide: EmployeeLinkService, useValue: { loginCandidates: jest.fn(), employeeCandidates: jest.fn(), suggestions: jest.fn(), linkMany: jest.fn() } },
                 { provide: DatabaseService, useValue: db },
                 {
                     provide: BranchScopeService,

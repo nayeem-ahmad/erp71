@@ -708,10 +708,15 @@ model UserInvitation {
   expires_at     DateTime
   accepted_at    DateTime?
   created_at     DateTime  @default(now())
+  /// The employee card the invitee will be linked to when they accept, if
+  /// any. Checked when the invite is sent and again on acceptance, which
+  /// links it only if the card is still free.
+  employee_id    String?
 
   tenant     Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   tenantRole TenantRole           @relation(fields: [tenant_role_id], references: [id], onDelete: Restrict)
   invitedBy  User                 @relation("InvitationSender", fields: [invited_by], references: [id])
+  employee   Employee?            @relation(fields: [employee_id], references: [id], onDelete: SetNull)
   roles      UserInvitationRole[]
 
   @@index([tenant_id, email])
@@ -6209,6 +6214,7 @@ model Employee {
   jobPostsManaged         JobPost[]                 @relation("JobPostHiringManager")
   hiredFromApplication    JobApplication?           @relation("JobApplicationHire")
   skills                  PersonSkill[]
+  invitations             UserInvitation[]
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])

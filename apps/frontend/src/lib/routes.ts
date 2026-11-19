@@ -279,6 +279,8 @@ export const routes = {
         root: '/hr',
         employees: '/hr/employees',
         employeeDetail: (id: string) => `/hr/employees/${id}` as const,
+        /** Bulk "which login is which employee" — static, so it wins over `[id]`. */
+        employeeLinkLogins: '/hr/employees/link-logins',
         departments: '/hr/employees/departments',
         designations: '/hr/employees/designations',
         designationLevels: '/hr/employees/designation-levels',

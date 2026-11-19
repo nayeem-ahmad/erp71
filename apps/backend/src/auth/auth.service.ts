@@ -1071,11 +1071,10 @@ export class AuthService {
             // "me the employee" rather than as staff.
             //
             // One card per workspace, but a login can be staff in several.
-            // `employee` stays the single card the client has always read — the
-            // oldest, so the answer is stable — and the client pins the
-            // workspace header to its tenant, which is how `EmployeeGuard`
-            // picks the same card. A switcher between cards is the client's job
-            // when it exists; nothing reads a list yet.
+            // `employees` lists them all, oldest first, for the workspace chooser
+            // to offer each; `employee` stays the oldest, which clients written
+            // before the list read. Entering a card pins the workspace header to
+            // its tenant, which is how `EmployeeGuard` picks the same card.
             this.db.employee.findMany({
                 where: { user_id: userId, portal_access: true, status: 'ACTIVE', deleted_at: null },
                 orderBy: { created_at: 'asc' },
@@ -1132,6 +1131,12 @@ export class AuthService {
                     name: employees[0].name,
                 }
                 : null,
+            employees: employees.map((card) => ({
+                id: card.id,
+                tenant_id: card.tenant_id,
+                employee_code: card.employee_code,
+                name: card.name,
+            })),
             tenants,
         };
     }

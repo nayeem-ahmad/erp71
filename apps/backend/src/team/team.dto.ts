@@ -22,6 +22,14 @@ export class InviteMemberDto {
     @ArrayNotEmpty()
     @IsString({ each: true })
     tenantRoleIds?: string[];
+
+    /**
+     * The employee card the invitee becomes when they accept. Needs MANAGE_HR
+     * as well as MANAGE_USERS, like linking from the employee page.
+     */
+    @IsOptional()
+    @IsUUID()
+    employeeId?: string;
 }
 
 export class UpdateRoleDto {

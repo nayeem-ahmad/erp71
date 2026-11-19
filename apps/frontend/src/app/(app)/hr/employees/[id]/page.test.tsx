@@ -27,6 +27,7 @@ jest.mock('@/lib/api', () => ({
         removePersonSkill: jest.fn(),
         linkEmployeeUser: jest.fn(),
         unlinkEmployeeUser: jest.fn(),
+        getEmployeeLoginCandidates: jest.fn(),
         grantEmployeePortalAccess: jest.fn(),
         revokeEmployeePortalAccess: jest.fn(),
         createEmployeeLogin: jest.fn(),
@@ -35,6 +36,10 @@ jest.mock('@/lib/api', () => ({
         getMe: jest.fn(),
     },
 }));
+
+// Who is looking decides whether "link an existing login" is offered: it lists
+// the workspace's logins, so it needs MANAGE_USERS as well as MANAGE_HR.
+jest.mock('@/hooks/use-me', () => ({ fetchMe: jest.fn() }));
 
 jest.mock('@/lib/format', () => ({
     formatDate: (v: string) => `DATE:${v}`,
@@ -247,16 +252,91 @@ describe('EmployeeDetailPage', () => {
         });
     });
 
-    it('offers linking an existing account behind a disclosure, not as an equal choice', async () => {
+    describe('linking an existing login', () => {
+        const asMember = (role: string, permissions: string[]) => {
+            const { fetchMe } = require('@/hooks/use-me');
+            fetchMe.mockResolvedValue({ tenants: [{ id: 'tenant-1', role, permissions }] });
+        };
+        const candidates = [
+            { userId: 'user-9', name: 'Jane S', email: 'jane@example.com', mobile: '+8801711000001', matches: ['mobile', 'email'] },
+            { userId: 'user-7', name: 'Abdul', email: 'abdul@example.com', mobile: null, matches: [] },
+        ];
+
+        beforeEach(() => {
+            const { api } = require('@/lib/api');
+            api.getEmployeeLoginCandidates.mockResolvedValue(candidates);
+        });
+
+        it('stays behind a disclosure, and fetches the logins only once it opens', async () => {
+            asMember('OWNER', []);
+            const { api } = require('@/lib/api');
+            render(<EmployeeDetailPage />);
+            await waitFor(() => screen.getByRole('button', { name: /create login/i }));
+
+            // Hidden until asked for: creating a login is the answer for nearly
+            // everyone, and two primary-looking options would make it a decision.
+            expect(screen.queryByPlaceholderText(/search by name, email or mobile/i)).not.toBeInTheDocument();
+            expect(api.getEmployeeLoginCandidates).not.toHaveBeenCalled();
+
+            fireEvent.click(screen.getByRole('button', { name: /link an existing user account/i }));
+
+            expect(await screen.findByPlaceholderText(/search by name, email or mobile/i)).toBeInTheDocument();
+            expect(api.getEmployeeLoginCandidates).toHaveBeenCalledWith('emp-1');
+        });
+
+        it('says why each login looks like this employee, and links the one picked', async () => {
+            asMember('OWNER', []);
+            const { api } = require('@/lib/api');
+            render(<EmployeeDetailPage />);
+            await waitFor(() => screen.getByRole('button', { name: /create login/i }));
+            fireEvent.click(screen.getByRole('button', { name: /link an existing user account/i }));
+
+            expect(await screen.findByText('Same mobile')).toBeInTheDocument();
+            expect(screen.getByText('Same email')).toBeInTheDocument();
+
+            fireEvent.click(screen.getAllByRole('button', { name: /^link$/i })[0]);
+
+            await waitFor(() => expect(api.linkEmployeeUser).toHaveBeenCalledWith('emp-1', 'user-9'));
+        });
+
+        it('filters the list by what is typed', async () => {
+            asMember('OWNER', []);
+            render(<EmployeeDetailPage />);
+            await waitFor(() => screen.getByRole('button', { name: /create login/i }));
+            fireEvent.click(screen.getByRole('button', { name: /link an existing user account/i }));
+
+            const search = await screen.findByPlaceholderText(/search by name, email or mobile/i);
+            fireEvent.change(search, { target: { value: 'abdul' } });
+
+            expect(screen.getByText('Abdul')).toBeInTheDocument();
+            expect(screen.queryByText('Jane S')).not.toBeInTheDocument();
+        });
+
+        it('explains, rather than lists, when the viewer lacks Manage users', async () => {
+            asMember('MANAGER', ['MANAGE_HR']);
+            const { api } = require('@/lib/api');
+            render(<EmployeeDetailPage />);
+            await waitFor(() => screen.getByRole('button', { name: /create login/i }));
+            fireEvent.click(screen.getByRole('button', { name: /link an existing user account/i }));
+
+            expect(await screen.findByText(/also needs the manage users permission/i)).toBeInTheDocument();
+            expect(api.getEmployeeLoginCandidates).not.toHaveBeenCalled();
+        });
+    });
+
+    it('reminds HR to turn the portal off for someone who has left', async () => {
+        const { api } = require('@/lib/api');
+        api.getEmployee.mockResolvedValue({
+            ...mockEmployee,
+            status: 'RESIGNED',
+            portal_access: true,
+            user_id: 'user-1',
+            user: { id: 'user-1', email: 'jane@example.com', name: 'Jane' },
+        });
+
         render(<EmployeeDetailPage />);
-        await waitFor(() => screen.getByRole('button', { name: /create login/i }));
 
-        // Hidden until asked for: creating a login is the answer for nearly
-        // everyone, and two primary-looking options would make it a decision.
-        expect(screen.queryByPlaceholderText(/paste user id/i)).not.toBeInTheDocument();
-
-        fireEvent.click(screen.getByRole('button', { name: /link an existing user account/i }));
-        expect(screen.getByPlaceholderText(/paste user id/i)).toBeInTheDocument();
+        expect(await screen.findByText(/jane smith has left/i)).toBeInTheDocument();
     });
 
     it('shows status select with Active option', async () => {

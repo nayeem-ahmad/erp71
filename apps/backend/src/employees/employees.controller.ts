@@ -3,6 +3,7 @@ import {
     UseGuards, UseInterceptors, HttpCode, HttpStatus, Request,
 } from '@nestjs/common';
 import { EmployeesService } from './employees.service';
+import { EmployeeLinkService } from './employee-link.service';
 import {
     CreateEmployeeDto, UpdateEmployeeDto,
     CreateDepartmentDto, UpdateDepartmentDto,
@@ -10,6 +11,8 @@ import {
     CreateDesignationLevelDto, UpdateDesignationLevelDto,
     OrgStructureImportDto,
     LinkUserDto,
+    BulkLinkDto,
+    EmployeeCandidatesQueryDto,
 } from './employee.dto';
 import { OrgStructureImportService } from './org-structure-import.service';
 import { StorePermission } from '@erp71/shared-types';
@@ -40,6 +43,7 @@ import { extractRequestMeta } from '../audit/audit-route.util';
 export class EmployeesController {
     constructor(
         private readonly employeesService: EmployeesService,
+        private readonly employeeLinks: EmployeeLinkService,
         private readonly branchScope: BranchScopeService,
         private readonly orgImport: OrgStructureImportService,
     ) {}
@@ -178,6 +182,53 @@ export class EmployeesController {
         return this.employeesService.importRows(tenant.tenantId, body.rows, body.mode);
     }
 
+    // ── Linking logins ────────────────────────────────────────────────────────
+    //
+    // Linking decides which login reads an employee's payslips through the
+    // portal, and the candidate lists expose the workspace's logins, so every
+    // route here needs both MANAGE_HR and MANAGE_USERS. Declared before `:id`
+    // so `link-suggestions` is not read as an employee id.
+
+    @Get('link-suggestions')
+    @RequireStorePermission(StorePermission.MANAGE_HR, StorePermission.MANAGE_USERS)
+    async linkSuggestions(@Tenant() tenant: TenantContext) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
+            permissions: [StorePermission.MANAGE_HR],
+        });
+        return this.employeeLinks.suggestions(tenant.tenantId, storeId);
+    }
+
+    @Get('link-candidates')
+    @RequireStorePermission(StorePermission.MANAGE_HR, StorePermission.MANAGE_USERS)
+    async employeeCandidates(@Tenant() tenant: TenantContext, @Query() query: EmployeeCandidatesQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
+            permissions: [StorePermission.MANAGE_HR],
+        });
+        return this.employeeLinks.employeeCandidates(tenant.tenantId, query, storeId);
+    }
+
+    @Post('link-bulk')
+    @RequireStorePermission(StorePermission.MANAGE_HR, StorePermission.MANAGE_USERS)
+    @HttpCode(HttpStatus.OK)
+    async linkBulk(@Tenant() tenant: TenantContext, @Body() dto: BulkLinkDto, @Request() req: any) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
+            permissions: [StorePermission.MANAGE_HR],
+        });
+        return this.employeeLinks.linkMany(tenant.tenantId, dto.links, storeId, {
+            userId: tenant.userId,
+            ...extractRequestMeta(req),
+        });
+    }
+
+    @Get(':id/link-candidates')
+    @RequireStorePermission(StorePermission.MANAGE_HR, StorePermission.MANAGE_USERS)
+    async loginCandidates(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
+            permissions: [StorePermission.MANAGE_HR],
+        });
+        return this.employeeLinks.loginCandidates(tenant.tenantId, id, storeId);
+    }
+
     @Get(':id')
     async findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
@@ -212,7 +263,7 @@ export class EmployeesController {
     }
 
     @Post(':id/link-user')
-    @RequireStorePermission(StorePermission.MANAGE_HR)
+    @RequireStorePermission(StorePermission.MANAGE_HR, StorePermission.MANAGE_USERS)
     async linkUser(
         @Tenant() tenant: TenantContext,
         @Param('id') id: string,
@@ -229,7 +280,7 @@ export class EmployeesController {
     }
 
     @Delete(':id/link-user')
-    @RequireStorePermission(StorePermission.MANAGE_HR)
+    @RequireStorePermission(StorePermission.MANAGE_HR, StorePermission.MANAGE_USERS)
     @HttpCode(HttpStatus.OK)
     async unlinkUser(@Tenant() tenant: TenantContext, @Param('id') id: string, @Request() req: any) {
         const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {

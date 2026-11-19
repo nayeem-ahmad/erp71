@@ -339,3 +339,35 @@ export class LinkUserDto {
     @IsUUID()
     user_id: string;
 }
+
+export class LinkPairDto {
+    @IsUUID()
+    employeeId: string;
+
+    @IsUUID()
+    userId: string;
+}
+
+/** Pairs a person confirmed on the bulk matching screen. See `EmployeeLinkService.linkMany`. */
+export class BulkLinkDto {
+    @IsArray()
+    @ArrayMaxSize(200)
+    @ValidateNested({ each: true })
+    @Type(() => LinkPairDto)
+    links: LinkPairDto[];
+}
+
+/**
+ * Whose likeness to rank the cards by: a member (`userId`), or — on the invite
+ * form, before any login exists — the address being invited (`email`). With
+ * neither, the cards come back unranked.
+ */
+export class EmployeeCandidatesQueryDto {
+    @IsOptional()
+    @IsUUID()
+    userId?: string;
+
+    @IsOptional()
+    @IsEmail()
+    email?: string;
+}

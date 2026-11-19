@@ -15,10 +15,11 @@ import {
     applyTenantContext,
     getLoginContexts,
     clearAuthSession,
+    type EmployeeCard,
 } from '@/lib/auth-session';
 
 function SelectAccountContent() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const router = useRouter();
     const searchParams = useSearchParams();
     const [me, setMe] = useState<any>(null);
@@ -88,8 +89,8 @@ function SelectAccountContent() {
         router.replace('/referrals');
     };
 
-    const chooseEmployee = () => {
-        applyEmployeeContext(me?.employee);
+    const chooseEmployee = (card: EmployeeCard) => {
+        applyEmployeeContext(card);
         router.replace('/my');
     };
 
@@ -111,7 +112,14 @@ function SelectAccountContent() {
         );
     }
 
-    const { hasPlatformConsole, isReferee, isEmployee, tenants } = getLoginContexts(me);
+    const { hasPlatformConsole, isReferee, employees, tenants } = getLoginContexts(me);
+    // One entry per card. With several, each names its workspace — "Employee
+    // portal" twice would be a coin toss.
+    const portalLabel = (card: EmployeeCard) => {
+        if (employees.length < 2) return t.employeePortal.workspace.title;
+        const workspace = tenants.find((tenant: any) => tenant.id === card.tenant_id)?.name ?? card.employee_code ?? '';
+        return fmt(t.employees.detail.linking.portalIn, { workspace });
+    };
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-canvas p-4 font-sans text-gray-900">
@@ -139,22 +147,23 @@ function SelectAccountContent() {
                     )}
 
                     <div className="space-y-3">
-                        {isEmployee && (
+                        {employees.map((card) => (
                             <button
+                                key={card.id}
                                 type="button"
-                                onClick={chooseEmployee}
+                                onClick={() => chooseEmployee(card)}
                                 className="w-full flex items-center gap-3 p-4 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all duration-150 text-start group"
                             >
                                 <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
                                     <UserRound className="w-5 h-5" />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                    <p className="font-semibold text-sm tracking-tight">{t.employeePortal.workspace.title}</p>
+                                    <p className="font-semibold text-sm tracking-tight">{portalLabel(card)}</p>
                                     <p className="text-xs text-gray-500">{t.employeePortal.workspace.description}</p>
                                 </div>
                                 <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
                             </button>
-                        )}
+                        ))}
 
                         {isReferee && (
                             <button

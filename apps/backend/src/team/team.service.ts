@@ -169,6 +169,20 @@ export class TeamService {
         return role;
     }
 
+    /** The employee card each login is linked to in this workspace, for the member lists. */
+    private async linkedEmployees(tenantId: string, userIds: string[]) {
+        const map = new Map<string, { id: string; name: string; employeeCode: string }>();
+        if (userIds.length === 0) return map;
+        const rows = await this.db.employee.findMany({
+            where: { tenant_id: tenantId, deleted_at: null, user_id: { in: userIds } },
+            select: { id: true, name: true, employee_code: true, user_id: true },
+        });
+        for (const row of rows) {
+            if (row.user_id) map.set(row.user_id, { id: row.id, name: row.name, employeeCode: row.employee_code });
+        }
+        return map;
+    }
+
     /* -------------------------------- Reads ---------------------------------- */
 
     async listMembers(ctx: TenantContext, page = 1, limit = 100): Promise<PaginatedResult<unknown>> {
@@ -210,6 +224,7 @@ export class TeamService {
         for (const row of permCounts) {
             permCountMap.set(`${row.user_id}:${row.store_id}`, row._count._all);
         }
+        const employeeByUser = await this.linkedEmployees(ctx.tenantId, members.map((member) => member.user_id));
 
         const items = members.map((member) => {
             const held = this.heldRoles(member);
@@ -226,6 +241,7 @@ export class TeamService {
             tenantRoleId: member.tenant_role_id,
             tenantRoleIds: held.map((role) => role.id),
             isSelf: member.user_id === ctx.userId,
+            employee: employeeByUser.get(member.user_id) ?? null,
             stores: accessRows
                 .filter((a) => a.user_id === member.user_id)
                 .map((a) => ({
@@ -300,7 +316,7 @@ export class TeamService {
         await this.assertPermission(ctx, StorePermission.MANAGE_USERS);
         const membership = await this.getMembership(ctx.tenantId, userId);
 
-        const [user, stores, access, perms] = await Promise.all([
+        const [user, stores, access, perms, employeeByUser] = await Promise.all([
             this.db.user.findUnique({ where: { id: userId }, select: { id: true, email: true, name: true } }),
             this.db.store.findMany({
                 where: { tenant_id: ctx.tenantId },
@@ -312,6 +328,7 @@ export class TeamService {
                 where: { tenant_id: ctx.tenantId, user_id: userId },
                 select: { store_id: true, permission: true },
             }),
+            this.linkedEmployees(ctx.tenantId, [userId]),
         ]);
 
         const accessMap = new Map(access.map((a) => [a.store_id, a.access_level]));
@@ -335,6 +352,7 @@ export class TeamService {
             tenantRoleId: membership.tenant_role_id,
             tenantRoleIds: held.map((role) => role.id),
             isSelf: userId === ctx.userId,
+            employee: employeeByUser.get(userId) ?? null,
             stores: stores.map((s) => ({
                 storeId: s.id,
                 storeName: s.name,
@@ -703,9 +721,22 @@ export class TeamService {
             }
         }
 
+        const linked = await this.db.employee.findFirst({
+            where: { tenant_id: ctx.tenantId, user_id: userId },
+            select: { id: true, employee_code: true },
+        });
+
         await this.db.$transaction([
             this.db.userStorePermission.deleteMany({ where: { tenant_id: ctx.tenantId, user_id: userId } }),
             this.db.userStoreAccess.deleteMany({ where: { tenant_id: ctx.tenantId, user_id: userId } }),
+            // A login that has left the workspace is no longer anyone's way into
+            // an employee card here. Left in place it would keep resolving a
+            // card for a member who no longer exists, and block re-linking that
+            // card to the person's next login. Hours already stamped stay stamped.
+            this.db.employee.updateMany({
+                where: { tenant_id: ctx.tenantId, user_id: userId },
+                data: { user_id: null },
+            }),
             this.db.tenantUser.delete({
                 where: { tenant_id_user_id: { tenant_id: ctx.tenantId, user_id: userId } },
             }),
@@ -714,7 +745,10 @@ export class TeamService {
         // after the cached membership expires.
         this.authCache.invalidateMember(userId, ctx.tenantId);
 
-        await this.audit.log('team.member_removed', 'TenantUser', this.auditCtx(ctx), userId, {});
+        await this.audit.log('team.member_removed', 'TenantUser', this.auditCtx(ctx), userId, {
+            unlinked_employee_id: linked?.id ?? null,
+            unlinked_employee_code: linked?.employee_code ?? null,
+        });
         return { message: 'Member removed.' };
     }
 
@@ -728,6 +762,7 @@ export class TeamService {
             include: {
                 tenantRole: { select: { id: true, name: true } },
                 roles: { select: { tenantRole: { select: { id: true, name: true } } } },
+                employee: { select: { id: true, name: true, employee_code: true } },
             },
         });
         return invites.map((i) => {
@@ -739,18 +774,25 @@ export class TeamService {
                 roleNames: held.length > 0 ? held.map((role) => role.name) : [i.tenantRole.name],
                 tenantRoleId: i.tenant_role_id,
                 tenantRoleIds: held.length > 0 ? held.map((role) => role.id) : [i.tenant_role_id],
+                employee: i.employee
+                    ? { id: i.employee.id, name: i.employee.name, employeeCode: i.employee.employee_code }
+                    : null,
                 invitedAt: i.created_at,
                 expiresAt: i.expires_at,
             };
         });
     }
 
-    async invite(ctx: TenantContext, email: string, tenantRoleIds: string[]) {
+    async invite(ctx: TenantContext, email: string, tenantRoleIds: string[], employeeId?: string) {
         await this.assertPermission(ctx, StorePermission.MANAGE_USERS);
-        await this.invitations.invite(ctx.tenantId, ctx.userId, ctx.userRole ?? '', email, tenantRoleIds);
+        // Naming an employee card decides whose payslips the new login can read
+        // through the portal, so it carries the HR half of the linking rule.
+        if (employeeId) await this.assertPermission(ctx, StorePermission.MANAGE_HR);
+        await this.invitations.invite(ctx.tenantId, ctx.userId, ctx.userRole ?? '', email, tenantRoleIds, employeeId);
         await this.audit.log('team.invitation_sent', 'UserInvitation', this.auditCtx(ctx), undefined, {
             email,
             tenantRoleIds,
+            employee_id: employeeId ?? null,
         });
         return { message: 'Invitation sent.' };
     }
