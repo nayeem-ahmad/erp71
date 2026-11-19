@@ -371,3 +371,20 @@ export class EmployeeCandidatesQueryDto {
     @IsEmail()
     email?: string;
 }
+
+/** An hourly cost for an employee, from a date. See `EmployeeCostRate`. */
+export class CreateCostRateDto {
+    @Type(() => Number)
+    @IsNumber({ maxDecimalPlaces: 2 })
+    @Min(0.01)
+    @Max(1_000_000)
+    hourlyCost: number;
+
+    @IsDateString()
+    effectiveFrom: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    note?: string;
+}

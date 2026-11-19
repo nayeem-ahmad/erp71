@@ -1,5 +1,15 @@
 import { placeholderEmailFor } from '@erp71/shared-types';
-import { isStrongMatch, linkMatchReasons, rankByMatch, unambiguousPairs } from './employee-link-match.util';
+import {
+    type MatchableEmployee,
+    type MatchableUser,
+    isStrongMatch,
+    linkMatchReasons,
+    rankByMatch,
+    unambiguousPairs,
+} from './employee-link-match.util';
+
+type Card = MatchableEmployee & { id: string };
+type Login = MatchableUser & { id: string };
 
 const card = (overrides: Partial<{ phone: string | null; email: string | null; name: string }> = {}) => ({
     phone: '01700100057',
@@ -63,20 +73,20 @@ describe('rankByMatch', () => {
 });
 
 describe('unambiguousPairs', () => {
-    const employees = [
+    const employees: Card[] = [
         { id: 'e1', phone: '01700000001', email: null, name: 'One' },
         { id: 'e2', phone: '01700000002', email: null, name: 'Two' },
         { id: 'e3', phone: '01700000009', email: 'shared@x.com', name: 'Three' },
         { id: 'e4', phone: '01700000010', email: 'shared@x.com', name: 'Four' },
         { id: 'e5', phone: '01700000011', email: null, name: 'Same Name' },
     ];
-    const users = [
+    const users: Login[] = [
         { id: 'u1', mobile: '+8801700000001', email: 'one@x.com', name: null },
         { id: 'u3', mobile: null, email: 'shared@x.com', name: null },
         { id: 'u5', mobile: null, email: 'five@x.com', name: 'Same Name' },
     ];
 
-    const pairs = unambiguousPairs(employees, users, linkMatchReasons);
+    const pairs = unambiguousPairs<Card, Login>(employees, users, linkMatchReasons);
 
     it('offers a strong one-to-one pair', () => {
         expect(pairs).toContainEqual(expect.objectContaining({ employee: employees[0], user: users[0], matches: ['mobile'] }));
@@ -96,11 +106,11 @@ describe('unambiguousPairs', () => {
     });
 
     it('leaves out a card that strongly matches two logins', () => {
-        const twoLogins = [
+        const twoLogins: Login[] = [
             { id: 'ua', mobile: '+8801700000001', email: null, name: null },
             { id: 'ub', mobile: null, email: 'one@x.com', name: null },
         ];
-        const oneCard = [{ id: 'e1', phone: '01700000001', email: 'one@x.com', name: 'One' }];
-        expect(unambiguousPairs(oneCard, twoLogins, linkMatchReasons)).toEqual([]);
+        const oneCard: Card[] = [{ id: 'e1', phone: '01700000001', email: 'one@x.com', name: 'One' }];
+        expect(unambiguousPairs<Card, Login>(oneCard, twoLogins, linkMatchReasons)).toEqual([]);
     });
 });

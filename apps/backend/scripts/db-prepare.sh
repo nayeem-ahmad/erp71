@@ -492,6 +492,14 @@ step sync:cancel-entry-permission \
 step sync:adjust-product-cost-permission \
     npm run sync:adjust-product-cost-permission --workspace=@erp71/database
 
+# sync:project-financials-permission is the same reconciler for
+# VIEW_PROJECT_FINANCIALS (Projects -> Financials), which belongs to Tenant
+# Admin alone among the seeded roles because labour cost is priced from pay.
+# Without it an existing workspace's Tenant Admins get a 403 on a project's
+# Financials while the owner sees it. Same ordering constraint as above.
+step sync:project-financials-permission \
+    npm run sync:project-financials-permission --workspace=@erp71/database
+
 # sync:work-schedules gives every tenant a default work schedule and every
 # employee an assignment to it (HRIS Phase 2). Attendance still works without it
 # — resolveScheduleDays falls back to an in-code default — but the tenant would

@@ -29,6 +29,9 @@ import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { formatBDT, formatDate } from '@/lib/format';
+import { fetchMe } from '@/hooks/use-me';
+import { getWorkspaceItem } from '@/lib/session-store';
+import { hasPermission, isOwner } from '@/lib/permissions';
 
 interface Progress {
     taskCount: number;
@@ -111,6 +114,18 @@ export default function ProjectDetailPage() {
     const { t } = useI18n();
     const m = t.projects;
 
+    // Financials price hours from pay, so the way in is shown only to those
+    // who may open it — the route refuses everyone else anyway.
+    const [canViewFinancials, setCanViewFinancials] = useState(false);
+    useEffect(() => {
+        fetchMe()
+            .then((me: any) => {
+                const tenantId = getWorkspaceItem('tenant_id');
+                const tenant = me?.tenants?.find((entry: any) => entry.id === tenantId) || me?.tenants?.[0];
+                setCanViewFinancials(isOwner(tenant?.role) || hasPermission(tenant?.permissions, 'VIEW_PROJECT_FINANCIALS'));
+            })
+            .catch(() => setCanViewFinancials(false));
+    }, []);
 
     const [project, setProject] = useState<Project | null>(null);
     const [tasks, setTasks] = useState<Task[]>([]);
@@ -250,6 +265,13 @@ export default function ProjectDetailPage() {
                                 {m.backlog.open}
                             </Button>
                         </Link>
+                        {canViewFinancials && (
+                            <Link href={routes.projects.financials(projectId)}>
+                                <Button variant="secondary" className="min-h-touch">
+                                    {m.financials.open}
+                                </Button>
+                            </Link>
+                        )}
                         <Link href={routes.projects.edit(projectId)}>
                             <Button variant="secondary" className="min-h-touch">
                                 {m.editProject}

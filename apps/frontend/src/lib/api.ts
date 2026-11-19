@@ -894,6 +894,46 @@ export function openAuthedStream(endpoint: string, handlers: StreamHandlers): ()
  * derivable from the employee row, which is why there is no endpoint to read it
  * — it comes back from whichever call last changed it.
  */
+export interface ProjectCostingSettings {
+    standardMonthlyHours: number;
+    overheadPct: number;
+}
+
+export interface EmployeeCostRates {
+    rates: Array<{ id: string; hourlyCost: number; effectiveFrom: string; note: string | null; createdAt: string }>;
+    current: { hourlyCost: number; source: 'RATE' | 'SALARY' } | null;
+    derivedFromSalary: number | null;
+    settings: ProjectCostingSettings;
+}
+
+export interface ProjectFinancials {
+    project: { id: string; code: string; name: string };
+    settings: ProjectCostingSettings;
+    totals: {
+        hours: number;
+        costedHours: number;
+        uncostedHours: number;
+        labourCost: number;
+        budget: number | null;
+        budgetUsedPct: number | null;
+        budgetRemaining: number | null;
+        averageRate: number | null;
+    };
+    uncosted: { noEmployeeHours: number; noRateHours: number };
+    forecast: { remainingHours: number; estimatedRemainingCost: number | null; estimateAtCompletion: number | null };
+    byPerson: Array<{
+        key: string;
+        employeeId: string | null;
+        userId: string | null;
+        name: string;
+        employeeCode: string | null;
+        hours: number;
+        labourCost: number;
+        uncostedHours: number;
+    }>;
+    byMonth: Array<{ month: string; hours: number; labourCost: number }>;
+}
+
 /** Why a login and an employee card look like the same person. Mobile and email are strong; name is a hint. */
 export type EmployeeLinkMatch = 'mobile' | 'email' | 'name';
 
@@ -6338,6 +6378,28 @@ export const api = {
         return fetchWithAuth(`/employees/link-candidates${q.toString() ? `?${q}` : ''}`);
     },
     getEmployeeLinkSuggestions: (): Promise<EmployeeLinkSuggestion[]> => fetchWithAuth('/employees/link-suggestions'),
+    // Cost rates — VIEW_PAYROLL to read, MANAGE_HR as well to change.
+    getEmployeeCostRates: (id: string): Promise<EmployeeCostRates> => fetchWithAuth(`/employees/${id}/cost-rates`),
+    createEmployeeCostRate: (id: string, data: { hourlyCost: number; effectiveFrom: string; note?: string }) =>
+        fetchWithAuth(`/employees/${id}/cost-rates`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteEmployeeCostRate: (id: string, rateId: string) =>
+        fetchWithAuth(`/employees/${id}/cost-rates/${rateId}`, { method: 'DELETE' }),
+    // Project costing — VIEW_PROJECT_FINANCIALS throughout.
+    getProjectFinancials: (projectId: string): Promise<ProjectFinancials> =>
+        fetchWithAuth(`/project-costing/projects/${projectId}`),
+    priceProjectHours: (projectId: string): Promise<{ priced: number; stillUncosted: number }> =>
+        fetchWithAuth(`/project-costing/projects/${projectId}/price-hours`, { method: 'POST' }),
+    getProjectCostingSettings: (): Promise<ProjectCostingSettings> => fetchWithAuth('/project-costing/settings'),
+    updateProjectCostingSettings: (data: ProjectCostingSettings): Promise<ProjectCostingSettings> =>
+        fetchWithAuth('/project-costing/settings', {
+            method: 'PUT',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     linkEmployeesBulk: (links: Array<{ employeeId: string; userId: string }>): Promise<EmployeeBulkLinkResult> =>
         fetchWithAuth('/employees/link-bulk', {
             method: 'POST',

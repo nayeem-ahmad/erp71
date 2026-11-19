@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { EmployeesService } from './employees.service';
 import { EmployeeLinkService } from './employee-link.service';
+import { EmployeeCostRatesService } from './employee-cost-rates.service';
 import {
     CreateEmployeeDto, UpdateEmployeeDto,
     CreateDepartmentDto, UpdateDepartmentDto,
@@ -13,6 +14,7 @@ import {
     LinkUserDto,
     BulkLinkDto,
     EmployeeCandidatesQueryDto,
+    CreateCostRateDto,
 } from './employee.dto';
 import { OrgStructureImportService } from './org-structure-import.service';
 import { StorePermission } from '@erp71/shared-types';
@@ -44,6 +46,7 @@ export class EmployeesController {
     constructor(
         private readonly employeesService: EmployeesService,
         private readonly employeeLinks: EmployeeLinkService,
+        private readonly costRates: EmployeeCostRatesService,
         private readonly branchScope: BranchScopeService,
         private readonly orgImport: OrgStructureImportService,
     ) {}
@@ -215,6 +218,55 @@ export class EmployeesController {
             permissions: [StorePermission.MANAGE_HR],
         });
         return this.employeeLinks.linkMany(tenant.tenantId, dto.links, storeId, {
+            userId: tenant.userId,
+            ...extractRequestMeta(req),
+        });
+    }
+
+    // ── Cost rates ────────────────────────────────────────────────────────────
+    //
+    // An hourly cost is pay by another name, so reading one needs VIEW_PAYROLL
+    // and changing one needs MANAGE_HR as well.
+
+    @Get(':id/cost-rates')
+    @RequireStorePermission(StorePermission.VIEW_PAYROLL)
+    async listCostRates(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
+            permissions: [StorePermission.VIEW_PAYROLL],
+        });
+        return this.costRates.list(tenant.tenantId, id, storeId);
+    }
+
+    @Post(':id/cost-rates')
+    @RequireStorePermission(StorePermission.MANAGE_HR, StorePermission.VIEW_PAYROLL)
+    async createCostRate(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: CreateCostRateDto,
+        @Request() req: any,
+    ) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
+            permissions: [StorePermission.MANAGE_HR],
+        });
+        return this.costRates.create(tenant.tenantId, id, dto, storeId, {
+            userId: tenant.userId,
+            ...extractRequestMeta(req),
+        });
+    }
+
+    @Delete(':id/cost-rates/:rateId')
+    @RequireStorePermission(StorePermission.MANAGE_HR, StorePermission.VIEW_PAYROLL)
+    @HttpCode(HttpStatus.OK)
+    async removeCostRate(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Param('rateId') rateId: string,
+        @Request() req: any,
+    ) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, undefined, {
+            permissions: [StorePermission.MANAGE_HR],
+        });
+        return this.costRates.remove(tenant.tenantId, id, rateId, storeId, {
             userId: tenant.userId,
             ...extractRequestMeta(req),
         });

@@ -252,6 +252,8 @@ export const routes = {
         columns: (id: string) => `/projects/${id}/columns` as const,
         backlog: (id: string) => `/projects/${id}/backlog` as const,
         edit: (id: string) => `/projects/${id}/edit` as const,
+        /** Labour cost against budget — VIEW_PROJECT_FINANCIALS. */
+        financials: (id: string) => `/projects/${id}/financials` as const,
         tasks: '/projects/tasks',
         // A card is normally a modal opened from a list or a board. This is the
         // same card as a page, so a link to one task can be pasted somewhere.

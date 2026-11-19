@@ -13,6 +13,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AssetsService } from '../assets/assets.service';
 import { BoardsController } from './boards.controller';
 import { BoardsService } from './boards.service';
+import { AuditModule } from '../audit/audit.module';
+import { AuditService } from '../audit/audit.service';
 import { ProjectsModule } from './projects.module';
 import { ProjectsService } from './projects.service';
 
@@ -70,8 +72,10 @@ describe('route registration order (regression guard for /projects/boards)', () 
         // assets, the cron scheduler) is stubbed out; only the routing behavior
         // of BoardsController and ProjectsController is under test here.
         const moduleRef = await Test.createTestingModule({
-            imports: [CommonModule, ProjectsModule],
+            imports: [CommonModule, AuditModule, ProjectsModule],
         })
+            .overrideProvider(AuditService)
+            .useValue({ log: jest.fn().mockResolvedValue(undefined) })
             .overrideProvider(DatabaseService)
             .useValue({ onModuleInit: async () => {}, onModuleDestroy: async () => {} })
             .overrideProvider(NotificationsService)

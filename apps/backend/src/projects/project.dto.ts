@@ -1410,3 +1410,18 @@ export class BulkBacklogTasksDto {
     @MaxLength(80)
     value?: string | null;
 }
+
+/** How a monthly salary becomes an hourly cost. See `ProjectCostingSettings`. */
+export class CostingSettingsDto {
+    @Type(() => Number)
+    @IsNumber({ maxDecimalPlaces: 2 })
+    @Min(1)
+    @Max(744)
+    standardMonthlyHours: number;
+
+    @Type(() => Number)
+    @IsNumber({ maxDecimalPlaces: 2 })
+    @Min(0)
+    @Max(500)
+    overheadPct: number;
+}

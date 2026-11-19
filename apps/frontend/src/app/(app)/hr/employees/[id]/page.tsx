@@ -8,6 +8,7 @@ import {
 } from '@/lib/api';
 import EmployeeSkillsCard from '@/components/hr/EmployeeSkillsCard';
 import LinkCandidatePicker from '@/components/hr/LinkCandidatePicker';
+import EmployeeCostRateCard from '@/components/hr/EmployeeCostRateCard';
 import { hasPermission, isOwner } from '@/lib/permissions';
 import { fetchMe } from '@/hooks/use-me';
 import { displayEmail } from '@erp71/shared-types';
@@ -73,6 +74,8 @@ export default function EmployeeDetailPage() {
     // Linking an existing login lists the workspace's logins, so it needs
     // MANAGE_USERS on top of the MANAGE_HR this page already implies.
     const [canLinkExisting, setCanLinkExisting] = useState(false);
+    // Setting a cost rate is an HR change; seeing one needs the salary anyway.
+    const [canManageHr, setCanManageHr] = useState(false);
     const [candidates, setCandidates] = useState<EmployeeLoginCandidate[] | null>(null);
     const [candidatesError, setCandidatesError] = useState<string | null>(null);
     const [linkingUserId, setLinkingUserId] = useState<string | null>(null);
@@ -126,8 +129,10 @@ export default function EmployeeDetailPage() {
                 isOwner(tenant?.role)
                     || (hasPermission(tenant?.permissions, 'MANAGE_USERS') && hasPermission(tenant?.permissions, 'MANAGE_HR')),
             );
+            setCanManageHr(isOwner(tenant?.role) || hasPermission(tenant?.permissions, 'MANAGE_HR'));
         } catch {
             setCanLinkExisting(false);
+            setCanManageHr(false);
         }
     }
 
@@ -503,6 +508,9 @@ export default function EmployeeDetailPage() {
                     assignments={employee.skills ?? []}
                     onChanged={reloadEmployee}
                 />
+
+                {/* Only where the salary is shown: an hourly cost is pay by another name. */}
+                {canSeeSalary && <EmployeeCostRateCard employeeId={employee.id} canEdit={canManageHr} />}
 
                 {/*
                   * System access.

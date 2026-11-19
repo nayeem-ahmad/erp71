@@ -175,6 +175,9 @@ enum StorePermission {
   LOG_PROJECT_TIME
   MANAGE_SPRINTS
   MANAGE_PROJECT_SETTINGS
+  /// Labour cost, budget use and margin on a project. Hours are priced from
+  /// salaries, so this reveals pay: Tenant Admin only by default.
+  VIEW_PROJECT_FINANCIALS
 
   // Meetings
   VIEW_MEETINGS
@@ -1170,6 +1173,8 @@ model Tenant {
   externalSyncRuns           ExternalSyncRun[]
   externalSyncSnapshots      ExternalSyncSnapshot[]
   projects                   Project[]
+  employeeCostRates          EmployeeCostRate[]
+  projectCostingSettings     ProjectCostingSettings?
   projectTypes               ProjectType[]
   projectMembers             ProjectMember[]
   projectMilestones          ProjectMilestone[]
@@ -6215,6 +6220,7 @@ model Employee {
   hiredFromApplication    JobApplication?           @relation("JobApplicationHire")
   skills                  PersonSkill[]
   invitations             UserInvitation[]
+  costRates               EmployeeCostRate[]
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])
@@ -9064,7 +9070,7 @@ model ProjectTimeEntry {
   /// Denormalised for per-project reporting without joining through tasks.
   project_id  String
   user_id     String?
-  /// Unused in Phase 1 — the hook Phase 2 needs to cost hours against payroll.
+  /// The employee card the hour is costed against, stamped when it is logged.
   employee_id String?
   work_date   DateTime  @db.Date
   /// `hours` stays the stored truth even when a span is present, and every
@@ -9080,8 +9086,19 @@ model ProjectTimeEntry {
   started_at  DateTime?
   ended_at    DateTime?
   note        String?
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @updatedAt
+  /// What one hour of this person cost, **as of when the entry was priced** —
+  /// a snapshot, so a raise next year does not restate last year's margins.
+  /// Null means the hour is uncosted: no employee behind the login, or no
+  /// rate and no salary to derive one from. Never shown in the hours APIs:
+  /// it is pay, read only through project financials.
+  cost_rate   Decimal?          @db.Decimal(12, 2)
+  /// `hours × cost_rate`, rounded to the paisa. Stored rather than derived so
+  /// the totals a report sums are the ones each row was priced at.
+  cost_amount Decimal?          @db.Decimal(14, 2)
+  /// Where `cost_rate` came from: an explicit rate HR set, or the salary.
+  cost_source LabourCostSource?
+  created_at  DateTime          @default(now())
+  updated_at  DateTime          @updatedAt
 
   tenant   Tenant                @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   task     ProjectTask           @relation(fields: [task_id], references: [id], onDelete: Cascade)
@@ -9096,6 +9113,56 @@ model ProjectTimeEntry {
   /// is a scan of every entry the tenant has ever written.
   @@index([tenant_id, user_id, started_at])
   @@map("project_time_entries")
+}
+
+enum LabourCostSource {
+  /// An `EmployeeCostRate` HR set for this person.
+  RATE
+  /// Derived: basic salary ÷ standard monthly hours × (1 + overhead).
+  SALARY
+}
+
+/// What one hour of an employee costs the business, from a date onwards.
+///
+/// Effective-dated rather than a single field so pricing an old hour uses the
+/// rate that applied then. Optional: without one, an hour is priced from the
+/// basic salary (see `ProjectCostingSettings`). An explicit rate is the full
+/// cost — overhead is not added on top, since whoever set it decided that.
+model EmployeeCostRate {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  employee_id    String
+  hourly_cost    Decimal  @db.Decimal(12, 2)
+  effective_from DateTime @db.Date
+  note           String?
+  created_by     String?
+  created_at     DateTime @default(now())
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@unique([employee_id, effective_from])
+  @@index([tenant_id, employee_id])
+  @@map("employee_cost_rates")
+}
+
+/// How a workspace turns a monthly salary into an hourly cost, for employees
+/// with no explicit `EmployeeCostRate`. One row per workspace, created on first
+/// save; no row means the defaults. Changing it prices hours logged from then
+/// on — hours already priced keep the rate they were priced at.
+model ProjectCostingSettings {
+  tenant_id              String   @id
+  /// Working hours in a month, the divisor for a monthly salary. 26 days × 8h.
+  standard_monthly_hours Decimal  @default(208) @db.Decimal(6, 2)
+  /// Added on top of the salary-derived rate for what an hour costs beyond pay
+  /// (office, equipment, benefits). 0 prices hours at bare salary.
+  labour_overhead_pct    Decimal  @default(0) @db.Decimal(5, 2)
+  updated_by             String?
+  updated_at             DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@map("project_costing_settings")
 }
 
 /// A cross-cutting label on an *hour*, not on a task: "Billable", "Support",

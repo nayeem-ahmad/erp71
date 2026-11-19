@@ -21,6 +21,9 @@ import { ProjectBacklogService } from './project-backlog.service';
 import { ProjectTasksService } from './project-tasks.service';
 import { ProjectTimeService } from './project-time.service';
 import { ProjectTimerService } from './project-timer.service';
+import { LabourPricingService } from './labour-pricing.service';
+import { ProjectCostingService } from './project-costing.service';
+import { ProjectCostingController } from './project-costing.controller';
 import { ProjectSettingsService } from './project-settings.service';
 import { RemainingHoursService } from './remaining-hours.service';
 import { SprintsService } from './sprints.service';
@@ -42,6 +45,7 @@ import { ProjectAttachmentsService } from './project-attachments.service';
         ProjectBacklogController,
         ProjectTasksController,
         ProjectTimeController,
+        ProjectCostingController,
         SprintsController,
     ],
     providers: [
@@ -56,6 +60,8 @@ import { ProjectAttachmentsService } from './project-attachments.service';
         ProjectTasksService,
         ProjectTimeService,
         ProjectTimerService,
+        LabourPricingService,
+        ProjectCostingService,
         ProjectSettingsService,
         RemainingHoursService,
         ProjectActivityService,
