@@ -269,6 +269,12 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'crm.reports.cold-customers': { id: 'crm.reports.cold-customers', kind: 'link', icon: 'Clock', labelKey: 'sidebar.items.crmColdCustomers', href: '/crm/reports/cold-customers' },
   'crm.reports.lead-aging': { id: 'crm.reports.lead-aging', kind: 'link', icon: 'Hourglass', labelKey: 'sidebar.items.crmLeadAging', href: '/crm/reports/lead-aging', premiumOnly: true },
   'crm.reports.activity-summary': { id: 'crm.reports.activity-summary', kind: 'link', icon: 'Activity', labelKey: 'sidebar.items.crmActivitySummary', href: '/crm/reports/activity-summary', premiumOnly: true },
+  'crm.reports.campaigns': { id: 'crm.reports.campaigns', kind: 'link', icon: 'Megaphone', labelKey: 'sidebar.items.crmCampaignReport', href: '/crm/reports/campaigns', premiumOnly: true },
+  'crm.reports.lead-funnel': { id: 'crm.reports.lead-funnel', kind: 'link', icon: 'Filter', labelKey: 'sidebar.items.crmLeadFunnel', href: '/crm/reports/lead-funnel', premiumOnly: true },
+  'crm.reports.lost-leads': { id: 'crm.reports.lost-leads', kind: 'link', icon: 'Ban', labelKey: 'sidebar.items.crmLostLeads', href: '/crm/reports/lost-leads', premiumOnly: true },
+  'crm.reports.rfm': { id: 'crm.reports.rfm', kind: 'link', icon: 'Crown', labelKey: 'sidebar.items.crmRfm', href: '/crm/reports/rfm', premiumOnly: true },
+  'crm.reports.contact-coverage': { id: 'crm.reports.contact-coverage', kind: 'link', icon: 'PhoneCall', labelKey: 'sidebar.items.crmContactCoverage', href: '/crm/reports/contact-coverage', premiumOnly: true },
+  'crm.reports.birthdays': { id: 'crm.reports.birthdays', kind: 'link', icon: 'Cake', labelKey: 'sidebar.items.crmBirthdays', href: '/crm/reports/birthdays', premiumOnly: true },
   // Replaces the separate 'crm.lead-taxonomy' and 'crm.custom-fields' nodes — both
   // lists are now tabs of one page. Layouts a tenant customised before this still
   // name the old ids; buildNavModulesFromLayout drops ids missing from this
@@ -558,6 +564,12 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
   'crm.reports.scorecard': ['VIEW_LEADS'],
   'crm.reports.lead-aging': ['VIEW_LEADS'],
   'crm.reports.activity-summary': ['VIEW_CRM_INTERACTIONS'],
+  'crm.reports.campaigns': ['VIEW_CRM_INTERACTIONS'],
+  'crm.reports.lead-funnel': ['VIEW_LEADS'],
+  'crm.reports.lost-leads': ['VIEW_LEADS'],
+  'crm.reports.rfm': ['VIEW_CRM_INTERACTIONS'],
+  'crm.reports.contact-coverage': ['VIEW_CRM_INTERACTIONS'],
+  'crm.reports.birthdays': ['VIEW_CRM_INTERACTIONS'],
   'crm.reports.follow-up-compliance': ['VIEW_CRM_INTERACTIONS'],
   'crm.reports.cold-customers': ['VIEW_CRM_INTERACTIONS'],
 
@@ -802,6 +814,12 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.reports.activity-summary', 'crm.reports', 3),
   layoutNode('crm.reports.follow-up-compliance', 'crm.reports', 4),
   layoutNode('crm.reports.cold-customers', 'crm.reports', 5),
+  layoutNode('crm.reports.campaigns', 'crm.reports', 6),
+  layoutNode('crm.reports.lead-funnel', 'crm.reports', 7),
+  layoutNode('crm.reports.lost-leads', 'crm.reports', 8),
+  layoutNode('crm.reports.rfm', 'crm.reports', 9),
+  layoutNode('crm.reports.contact-coverage', 'crm.reports', 10),
+  layoutNode('crm.reports.birthdays', 'crm.reports', 11),
   layoutNode('crm.setup', 'crm', 8),
 
   layoutNode('projects', null, 10),

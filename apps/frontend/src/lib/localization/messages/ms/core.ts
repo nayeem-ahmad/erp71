@@ -472,6 +472,18 @@ export const coreMessages = {
 
             crmActivitySummary: "Ringkasan aktiviti",
 
+            crmCampaignReport: "Prestasi kempen",
+
+            crmBirthdays: "Hari lahir akan datang",
+
+            crmContactCoverage: "Liputan hubungan",
+
+            crmRfm: "Nilai pelanggan (RFM)",
+
+            crmLeadFunnel: "Funnel petunjuk",
+
+            crmLostLeads: "Petunjuk hilang",
+
             crmReports: "Laporan CRM",
             crmSetup: "Persediaan CRM",
                 salesSettings: "Tetapan Jualan",
