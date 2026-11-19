@@ -58,6 +58,12 @@ export const settingsExtrasMessages = {
             polished: { name: "مصقول", description: "نصوص ومسافات أهدأ، وتتحول القوائم إلى بطاقات على الهاتف." },
             colorful: { name: "ملوّن", description: "المصقول، مع بطاقات أرقام وأيقونات وشريط جانبي ملوّنة." },
         },
+        uiSidebar: {
+            label: "الشريط الجانبي",
+            hint: "شريط التنقل الجانبي، مع أي نمط.",
+            light: { name: "فاتح", description: "أبيض كما كان دائمًا." },
+            navy: { name: "كحلي داكن", description: "شريط داكن يميّز التنقل عن الصفحة." },
+        },
         businessName: {
             label: "تجاوز اسم النشاط التجاري",
             placeholder: "اسم نشاطك التجاري",

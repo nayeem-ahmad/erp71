@@ -58,6 +58,12 @@ export const settingsExtrasMessages = {
                 polished: { name: "পরিপাটি", description: "শান্ত লেখা ও ফাঁকা জায়গা। ফোনে তালিকা কার্ড হয়ে যায়।" },
                 colorful: { name: "রঙিন", description: "পরিপাটি, সঙ্গে রঙিন হিসাবের কার্ড, আইকন ও সাইডবার।" },
             },
+            uiSidebar: {
+                label: "সাইডবার",
+                hint: "প্রতিটি পেজের পাশের নেভিগেশন, যেকোনো স্টাইলে।",
+                light: { name: "হালকা", description: "সাদা, বরাবর যেমন।" },
+                navy: { name: "গাঢ় নেভি", description: "একটি গাঢ় সাইডবার, যা নেভিগেশনকে পেজ থেকে আলাদা করে।" },
+            },
             businessName: {
                 label: "ব্যবসার নাম পরিবর্তন",
                 placeholder: "আপনার ব্যবসার নাম",

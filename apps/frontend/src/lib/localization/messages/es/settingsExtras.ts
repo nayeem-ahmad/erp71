@@ -58,6 +58,12 @@ export const settingsExtrasMessages = {
             polished: { name: "Pulido", description: "Texto y espacios más tranquilos. Las listas se vuelven tarjetas en el móvil." },
             colorful: { name: "Colorido", description: "Pulido, más tarjetas de cifras, iconos y barra lateral en color." },
         },
+        uiSidebar: {
+            label: "Barra lateral",
+            hint: "La barra de navegación, con cualquier estilo.",
+            light: { name: "Clara", description: "Blanca, como siempre." },
+            navy: { name: "Azul marino oscuro", description: "Una barra oscura que separa la navegación de la página." },
+        },
         businessName: {
             label: "Nombre de empresa personalizado",
             placeholder: "El nombre de su empresa",

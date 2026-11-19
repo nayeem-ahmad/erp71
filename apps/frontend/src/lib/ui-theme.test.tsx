@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { BrandingProvider } from './branding';
-import { styleFor, useUiStyle } from './ui-theme';
+import { styleFor, useUiSidebar, useUiStyle } from './ui-theme';
 
 jest.mock('./api', () => ({
     fetchWithAuth: jest.fn(),
@@ -12,7 +12,8 @@ const mockFetchWithAuth = fetchWithAuth as jest.MockedFunction<typeof fetchWithA
 
 function Probe() {
     const { theme, polished, colorful } = useUiStyle();
-    return <p data-testid="probe">{`${theme} polished=${polished} colorful=${colorful}`}</p>;
+    const sidebar = useUiSidebar();
+    return <p data-testid="probe">{`${theme} polished=${polished} colorful=${colorful} sidebar=${sidebar}`}</p>;
 }
 
 beforeEach(() => {
@@ -78,5 +79,23 @@ describe('useUiStyle', () => {
 
         await waitFor(() => expect(document.documentElement.dataset.uiTheme).toBe('classic'));
         expect(screen.getByTestId('probe')).toHaveTextContent('CLASSIC');
+    });
+
+    it('takes the sidebar colour from the branding too, and remembers it', async () => {
+        sessionStorage.setItem('tenant_id', 't1');
+        mockFetchWithAuth.mockResolvedValue({ ui_theme: 'CLASSIC', ui_sidebar: 'NAVY' });
+        render(<BrandingProvider><Probe /></BrandingProvider>);
+
+        await waitFor(() => expect(screen.getByTestId('probe')).toHaveTextContent('sidebar=NAVY'));
+        expect(localStorage.getItem('erp71.ui_sidebar.t1')).toBe('NAVY');
+    });
+
+    it('is a light sidebar outside a provider and when the stored value is unknown', async () => {
+        sessionStorage.setItem('tenant_id', 't1');
+        mockFetchWithAuth.mockResolvedValue({ ui_sidebar: 'PURPLE' });
+        render(<BrandingProvider><Probe /></BrandingProvider>);
+
+        await waitFor(() => expect(localStorage.getItem('erp71.ui_sidebar.t1')).toBe('LIGHT'));
+        expect(screen.getByTestId('probe')).toHaveTextContent('sidebar=LIGHT');
     });
 });

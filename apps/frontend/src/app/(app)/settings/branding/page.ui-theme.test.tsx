@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import BrandingSettingsPage from './page';
-import { SetUiThemeContext } from '@/lib/ui-theme';
+import { SetUiSidebarContext, SetUiThemeContext } from '@/lib/ui-theme';
 
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn() }),
@@ -17,17 +17,20 @@ jest.mock('@/lib/api', () => ({
 import { fetchWithAuth } from '@/lib/api';
 const mockFetchWithAuth = fetchWithAuth as jest.MockedFunction<typeof fetchWithAuth>;
 
-function renderPage(stored?: string) {
+function renderPage(stored?: string, storedSidebar?: string) {
     mockFetchWithAuth.mockImplementation((_url: string, options?: any) =>
-        Promise.resolve(options?.method === 'PATCH' ? {} : { brand_business_name: 'My Shop', ui_theme: stored }),
+        Promise.resolve(options?.method === 'PATCH' ? {} : { brand_business_name: 'My Shop', ui_theme: stored, ui_sidebar: storedSidebar }),
     );
     const applyUiTheme = jest.fn();
+    const applyUiSidebar = jest.fn();
     render(
         <SetUiThemeContext.Provider value={applyUiTheme}>
-            <BrandingSettingsPage />
+            <SetUiSidebarContext.Provider value={applyUiSidebar}>
+                <BrandingSettingsPage />
+            </SetUiSidebarContext.Provider>
         </SetUiThemeContext.Provider>,
     );
-    return { applyUiTheme };
+    return { applyUiTheme, applyUiSidebar };
 }
 
 const patchBody = () => {
@@ -70,5 +73,22 @@ describe('Branding › interface style', () => {
     it('treats an unknown stored value as Classic', async () => {
         renderPage('NEON');
         await waitFor(() => expect(screen.getByRole('radio', { name: 'Classic' })).toBeChecked());
+    });
+
+    it('offers a light or dark navy sidebar, light by default', async () => {
+        renderPage('CLASSIC');
+        expect(await screen.findByRole('radio', { name: 'Light' })).toBeChecked();
+        expect(screen.getByRole('radio', { name: 'Dark navy' })).not.toBeChecked();
+        expect(screen.getByRole('group', { name: 'Sidebar' })).toBeInTheDocument();
+    });
+
+    it('saves the navy sidebar alongside the style and applies both', async () => {
+        const { applyUiTheme, applyUiSidebar } = renderPage('POLISHED', 'LIGHT');
+        fireEvent.click(await screen.findByRole('radio', { name: 'Dark navy' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Save Branding' }));
+
+        await waitFor(() => expect(applyUiSidebar).toHaveBeenCalledWith('NAVY'));
+        expect(applyUiTheme).toHaveBeenCalledWith('POLISHED');
+        expect(patchBody()).toEqual(expect.objectContaining({ ui_theme: 'POLISHED', ui_sidebar: 'NAVY' }));
     });
 });

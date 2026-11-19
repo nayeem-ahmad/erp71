@@ -58,6 +58,12 @@ export const settingsExtrasMessages = {
                 polished: { name: "Kemas", description: "Teks dan jarak yang lebih tenang. Senarai menjadi kad pada telefon." },
                 colorful: { name: "Berwarna", description: "Kemas, serta kad angka, ikon dan bar sisi berwarna." },
             },
+            uiSidebar: {
+                label: "Bar sisi",
+                hint: "Bar navigasi, dalam apa-apa gaya.",
+                light: { name: "Cerah", description: "Putih, seperti biasa." },
+                navy: { name: "Biru laut gelap", description: "Bar gelap yang membezakan navigasi daripada halaman." },
+            },
             businessName: {
                 label: "Ganti Nama Perniagaan",
                 placeholder: "Nama Perniagaan Anda",

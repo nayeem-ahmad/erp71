@@ -1,5 +1,5 @@
 import { IsIn, IsOptional, IsString, IsUrl, MaxLength, Matches } from 'class-validator';
-import { UI_THEMES, type UiTheme } from '@erp71/shared-types';
+import { UI_SIDEBARS, UI_THEMES, type UiSidebar, type UiTheme } from '@erp71/shared-types';
 
 export class UpdateBrandingDto {
     @IsOptional()
@@ -25,4 +25,8 @@ export class UpdateBrandingDto {
     @IsOptional()
     @IsIn(UI_THEMES)
     ui_theme?: UiTheme;
+
+    @IsOptional()
+    @IsIn(UI_SIDEBARS)
+    ui_sidebar?: UiSidebar;
 }

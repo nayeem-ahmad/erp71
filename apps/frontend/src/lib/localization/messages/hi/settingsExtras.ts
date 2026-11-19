@@ -58,6 +58,12 @@ export const settingsExtrasMessages = {
             polished: { name: "निखरा", description: "शांत टेक्स्ट और स्पेसिंग। फ़ोन पर सूचियाँ कार्ड बन जाती हैं।" },
             colorful: { name: "रंगीन", description: "निखरा, साथ में रंगीन आँकड़ा कार्ड, आइकन और साइडबार।" },
         },
+        uiSidebar: {
+            label: "साइडबार",
+            hint: "नेविगेशन पट्टी, किसी भी स्टाइल में।",
+            light: { name: "हल्का", description: "सफ़ेद, जैसा हमेशा से है।" },
+            navy: { name: "गहरा नेवी", description: "एक गहरी पट्टी जो नेविगेशन को पेज से अलग दिखाती है।" },
+        },
         businessName: {
             label: "व्यवसाय नाम ओवरराइड",
             placeholder: "आपके व्यवसाय का नाम",

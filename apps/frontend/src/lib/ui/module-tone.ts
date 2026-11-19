@@ -22,6 +22,26 @@ const MODULE_TONE: Record<string, string> = {
     tools: 'text-indigo-500',
 };
 
-export function moduleIconTone(key: string): string {
-    return MODULE_TONE[key] ?? 'text-gray-500';
+// The same hues a step lighter, so they read on the navy sidebar.
+const MODULE_TONE_ON_NAVY: Record<string, string> = {
+    dashboard: 'text-blue-400',
+    sales: 'text-emerald-400',
+    storefront: 'text-cyan-400',
+    purchase: 'text-orange-400',
+    imports: 'text-amber-400',
+    inventory: 'text-violet-400',
+    manufacturing: 'text-lime-400',
+    accounting: 'text-sky-400',
+    expenses: 'text-red-400',
+    crm: 'text-pink-400',
+    hr: 'text-teal-400',
+    projects: 'text-indigo-300',
+    chat: 'text-fuchsia-400',
+    reports: 'text-purple-400',
+    admin: 'text-slate-300',
+    tools: 'text-indigo-300',
+};
+
+export function moduleIconTone(key: string, onNavy = false): string {
+    return onNavy ? (MODULE_TONE_ON_NAVY[key] ?? 'text-slate-400') : (MODULE_TONE[key] ?? 'text-gray-500');
 }

@@ -1,9 +1,8 @@
 'use client';
 
-import { useId } from 'react';
-import { Check } from 'lucide-react';
 import { UI_THEMES, type UiTheme } from '@erp71/shared-types';
 import { useI18n } from '@/lib/i18n';
+import ChoiceCard from './ChoiceCard';
 
 const COPY_KEY: Record<UiTheme, 'classic' | 'polished' | 'colorful'> = {
     CLASSIC: 'classic',
@@ -28,7 +27,6 @@ export default function UiThemePicker({
 }) {
     const { t, fmt } = useI18n();
     const m = t.settingsExtras.branding.uiTheme;
-    const idBase = useId();
 
     return (
         <fieldset>
@@ -37,41 +35,19 @@ export default function UiThemePicker({
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {UI_THEMES.map((theme) => {
                     const copy = m[COPY_KEY[theme]];
-                    const selected = value === theme;
-                    // Named by the style alone; the description is read after it.
-                    const nameId = `${idBase}-${theme}-name`;
-                    const descriptionId = `${idBase}-${theme}-description`;
                     return (
-                        <label
+                        <ChoiceCard
                             key={theme}
-                            className={`relative flex cursor-pointer flex-col gap-2 rounded-lg border bg-white p-3 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500/40 ${
-                                selected ? 'border-blue-600 ring-1 ring-blue-600' : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                        >
-                            <input
-                                type="radio"
-                                name="ui_theme"
-                                value={theme}
-                                checked={selected}
-                                onChange={() => onChange(theme)}
-                                aria-labelledby={nameId}
-                                aria-describedby={descriptionId}
-                                className="sr-only"
-                            />
-                            <ThemeThumbnail theme={theme} label={fmt(m.previewAlt, { name: copy.name })} />
-                            <span className="flex items-center gap-2">
-                                <span id={nameId} className="text-sm font-semibold text-gray-900">{copy.name}</span>
-                                {saved === theme ? (
-                                    <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-600">{m.current}</span>
-                                ) : null}
-                                {selected ? (
-                                    <span className="ms-auto inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white">
-                                        <Check className="h-3 w-3" aria-hidden />
-                                    </span>
-                                ) : null}
-                            </span>
-                            <span id={descriptionId} className="text-xs text-gray-500">{copy.description}</span>
-                        </label>
+                            group="ui_theme"
+                            value={theme}
+                            name={copy.name}
+                            description={copy.description}
+                            preview={<ThemeThumbnail theme={theme} label={fmt(m.previewAlt, { name: copy.name })} />}
+                            selected={value === theme}
+                            current={saved === theme}
+                            currentLabel={m.current}
+                            onSelect={() => onChange(theme)}
+                        />
                     );
                 })}
             </div>

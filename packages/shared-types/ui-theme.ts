@@ -17,3 +17,17 @@ export const DEFAULT_UI_THEME: UiTheme = 'CLASSIC';
 export function isUiTheme(value: unknown): value is UiTheme {
   return typeof value === 'string' && (UI_THEMES as readonly string[]).includes(value);
 }
+
+/**
+ * The sidebar's colour, chosen beside the style: the usual white rail, or a
+ * dark navy one. Independent of `UiTheme`, so any style can have either.
+ */
+export const UI_SIDEBARS = ['LIGHT', 'NAVY'] as const;
+
+export type UiSidebar = (typeof UI_SIDEBARS)[number];
+
+export const DEFAULT_UI_SIDEBAR: UiSidebar = 'LIGHT';
+
+export function isUiSidebar(value: unknown): value is UiSidebar {
+  return typeof value === 'string' && (UI_SIDEBARS as readonly string[]).includes(value);
+}

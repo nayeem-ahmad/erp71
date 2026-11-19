@@ -73,4 +73,20 @@ describe('Branding — UI style', () => {
         const errors = await validate(plainToInstance(UpdateBrandingDto, { ui_theme }));
         expect(errors.map((e) => e.property)).toContain('ui_theme');
     });
+
+    it('saves the sidebar colour on its own', async () => {
+        db.tenant.update.mockResolvedValue({ ui_sidebar: 'NAVY' });
+        await service.updateBranding('tenant-1', { ui_sidebar: 'NAVY' });
+        expect(db.tenant.update.mock.calls[0][0].data).toEqual({ ui_sidebar: 'NAVY' });
+    });
+
+    it.each(['LIGHT', 'NAVY'])('accepts sidebar %s', async (ui_sidebar) => {
+        const errors = await validate(plainToInstance(UpdateBrandingDto, { ui_sidebar }));
+        expect(errors).toHaveLength(0);
+    });
+
+    it.each(['DARK', 'navy', ''])('rejects sidebar %p', async (ui_sidebar) => {
+        const errors = await validate(plainToInstance(UpdateBrandingDto, { ui_sidebar }));
+        expect(errors.map((e) => e.property)).toContain('ui_sidebar');
+    });
 });

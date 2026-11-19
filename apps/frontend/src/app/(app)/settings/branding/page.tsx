@@ -8,9 +8,10 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { toast } from '@/lib/toast';
 import { Button, Field, Input, PageShell } from '@/components/ui';
-import { DEFAULT_UI_THEME, isUiTheme, type UiTheme } from '@erp71/shared-types';
-import { useSetUiTheme } from '@/lib/ui-theme';
+import { DEFAULT_UI_SIDEBAR, DEFAULT_UI_THEME, isUiSidebar, isUiTheme, type UiSidebar, type UiTheme } from '@erp71/shared-types';
+import { useSetUiSidebar, useSetUiTheme } from '@/lib/ui-theme';
 import UiThemePicker from './UiThemePicker';
+import UiSidebarPicker from './UiSidebarPicker';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -22,6 +23,7 @@ interface BrandingForm {
     brand_logo_url: string;
     brand_favicon_url: string;
     ui_theme: UiTheme;
+    ui_sidebar: UiSidebar;
 }
 
 /* ------------------------------------------------------------------ */
@@ -39,10 +41,13 @@ export default function BrandingSettingsPage() {
         brand_logo_url: '',
         brand_favicon_url: '',
         ui_theme: DEFAULT_UI_THEME,
+        ui_sidebar: DEFAULT_UI_SIDEBAR,
     });
     // The style in force right now, as opposed to the one picked but not yet saved.
     const [savedTheme, setSavedTheme] = useState<UiTheme>(DEFAULT_UI_THEME);
+    const [savedSidebar, setSavedSidebar] = useState<UiSidebar>(DEFAULT_UI_SIDEBAR);
     const applyUiTheme = useSetUiTheme();
+    const applyUiSidebar = useSetUiSidebar();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -56,7 +61,9 @@ export default function BrandingSettingsPage() {
                     brand_logo_url: data?.brand_logo_url ?? '',
                     brand_favicon_url: data?.brand_favicon_url ?? '',
                     ui_theme: isUiTheme(data?.ui_theme) ? data.ui_theme : DEFAULT_UI_THEME,
+                    ui_sidebar: isUiSidebar(data?.ui_sidebar) ? data.ui_sidebar : DEFAULT_UI_SIDEBAR,
                 });
+                setSavedSidebar(isUiSidebar(data?.ui_sidebar) ? data.ui_sidebar : DEFAULT_UI_SIDEBAR);
                 setSavedTheme(isUiTheme(data?.ui_theme) ? data.ui_theme : DEFAULT_UI_THEME);
             })
             .catch(() => {
@@ -97,6 +104,7 @@ export default function BrandingSettingsPage() {
                 payload.brand_favicon_url = form.brand_favicon_url.trim();
             }
             payload.ui_theme = form.ui_theme;
+            payload.ui_sidebar = form.ui_sidebar;
 
             await fetchWithAuth('/tenants/branding', {
                 method: 'PATCH',
@@ -108,6 +116,8 @@ export default function BrandingSettingsPage() {
             // The whole app switches style now, not on the next reload.
             setSavedTheme(form.ui_theme);
             applyUiTheme(form.ui_theme);
+            setSavedSidebar(form.ui_sidebar);
+            applyUiSidebar(form.ui_sidebar);
 
             // Apply primary color change immediately
             if (payload.brand_primary_color) {
@@ -150,6 +160,11 @@ export default function BrandingSettingsPage() {
                             value={form.ui_theme}
                             saved={savedTheme}
                             onChange={(ui_theme) => setForm((p) => ({ ...p, ui_theme }))}
+                        />
+                        <UiSidebarPicker
+                            value={form.ui_sidebar}
+                            saved={savedSidebar}
+                            onChange={(ui_sidebar) => setForm((p) => ({ ...p, ui_sidebar }))}
                         />
 
                         {/* Business Name */}

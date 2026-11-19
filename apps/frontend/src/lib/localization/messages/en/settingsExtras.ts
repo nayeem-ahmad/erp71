@@ -58,6 +58,12 @@ export const settingsExtrasMessages = {
             polished: { name: "Polished", description: "Calmer text and spacing. Lists turn into cards on a phone." },
             colorful: { name: "Colorful", description: "Polished, plus colorful figure cards, icons and sidebar." },
         },
+        uiSidebar: {
+            label: "Sidebar",
+            hint: "The navigation rail beside every page, in any style.",
+            light: { name: "Light", description: "White, as it has always been." },
+            navy: { name: "Dark navy", description: "A dark rail that sets the navigation apart from the page." },
+        },
         businessName: {
             label: 'Business Name Override',
             placeholder: 'Your Business Name',

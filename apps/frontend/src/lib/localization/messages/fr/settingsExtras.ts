@@ -58,6 +58,12 @@ export const settingsExtrasMessages = {
             polished: { name: "Épuré", description: "Texte et espacements plus calmes. Les listes deviennent des cartes sur mobile." },
             colorful: { name: "Coloré", description: "Épuré, avec des cartes de chiffres, des icônes et une barre latérale en couleur." },
         },
+        uiSidebar: {
+            label: "Barre latérale",
+            hint: "La barre de navigation, avec n’importe quel style.",
+            light: { name: "Claire", description: "Blanche, comme toujours." },
+            navy: { name: "Bleu marine foncé", description: "Une barre sombre qui distingue la navigation de la page." },
+        },
         businessName: {
             label: "Nom d'entreprise personnalisé",
             placeholder: "Nom de votre entreprise",

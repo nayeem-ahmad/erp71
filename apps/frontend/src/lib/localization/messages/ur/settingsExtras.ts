@@ -58,6 +58,12 @@ export const settingsExtrasMessages = {
             polished: { name: "نکھرا", description: "پُرسکون متن اور فاصلے۔ فون پر فہرستیں کارڈ بن جاتی ہیں۔" },
             colorful: { name: "رنگین", description: "نکھرا، ساتھ رنگین اعداد کارڈ، آئیکن اور سائیڈبار۔" },
         },
+        uiSidebar: {
+            label: "سائیڈبار",
+            hint: "نیویگیشن پٹی، کسی بھی اسٹائل میں۔",
+            light: { name: "ہلکا", description: "سفید، جیسا ہمیشہ سے ہے۔" },
+            navy: { name: "گہرا نیوی", description: "ایک گہری پٹی جو نیویگیشن کو صفحے سے الگ کرتی ہے۔" },
+        },
         businessName: {
             label: "کاروباری نام کی جگہ متبادل",
             placeholder: "آپ کے کاروبار کا نام",
