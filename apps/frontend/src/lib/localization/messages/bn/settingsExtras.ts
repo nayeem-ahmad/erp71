@@ -49,6 +49,15 @@ export const settingsExtrasMessages = {
             saveFailed: "ব্র্যান্ডিং সেটিংস সংরক্ষণ ব্যর্থ।",
             saveButton: "ব্র্যান্ডিং সংরক্ষণ",
             saving: "সংরক্ষণ হচ্ছে…",
+            uiTheme: {
+                label: "ইন্টারফেস স্টাইল",
+                hint: "এই ওয়ার্কস্পেসের সবার জন্য ERP71 দেখতে কেমন হবে। শুধু চেহারা বদলায়: প্রতিটি স্টাইলে একই পেজ, হিসাব ও কাজ থাকে।",
+                current: "বর্তমান",
+                previewAlt: "{name} স্টাইলের প্রিভিউ",
+                classic: { name: "ক্লাসিক", description: "ERP71 বরাবর যেমন দেখতে।" },
+                polished: { name: "পরিপাটি", description: "শান্ত লেখা ও ফাঁকা জায়গা। ফোনে তালিকা কার্ড হয়ে যায়।" },
+                colorful: { name: "রঙিন", description: "পরিপাটি, সঙ্গে রঙিন হিসাবের কার্ড, আইকন ও সাইডবার।" },
+            },
             businessName: {
                 label: "ব্যবসার নাম পরিবর্তন",
                 placeholder: "আপনার ব্যবসার নাম",

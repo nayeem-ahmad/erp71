@@ -1221,6 +1221,7 @@ export const coreMessages = {
         compactViewTitle: 'عرض مضغوط',
         loadingProducts: 'جارٍ تحميل المنتجات...',
         stockLeft: '{count} متبقٍ',
+        outOfStockShort: 'نفد',
         notAvailable: 'غير متاح',
         tabs: {
             checkout: 'إتمام البيع',

@@ -49,6 +49,15 @@ export const settingsExtrasMessages = {
             saveFailed: "Gagal menyimpan tetapan penjenamaan.",
             saveButton: "Simpan Penjenamaan",
             saving: "Menyimpan…",
+            uiTheme: {
+                label: "Gaya antara muka",
+                hint: "Rupa ERP71 untuk semua orang dalam ruang kerja ini. Hanya rupa yang berubah: setiap gaya mempunyai halaman, angka dan tindakan yang sama.",
+                current: "Semasa",
+                previewAlt: "Pratonton gaya {name}",
+                classic: { name: "Klasik", description: "Rupa ERP71 seperti selalu." },
+                polished: { name: "Kemas", description: "Teks dan jarak yang lebih tenang. Senarai menjadi kad pada telefon." },
+                colorful: { name: "Berwarna", description: "Kemas, serta kad angka, ikon dan bar sisi berwarna." },
+            },
             businessName: {
                 label: "Ganti Nama Perniagaan",
                 placeholder: "Nama Perniagaan Anda",

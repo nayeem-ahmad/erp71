@@ -1,0 +1,27 @@
+/**
+ * COLORFUL style: one hue per sidebar module, so a module is recognisable at
+ * a glance. Keys are the nav module keys from `nav-resolver`; anything not
+ * listed stays grey.
+ */
+const MODULE_TONE: Record<string, string> = {
+    dashboard: 'text-blue-600',
+    sales: 'text-emerald-600',
+    storefront: 'text-cyan-600',
+    purchase: 'text-orange-500',
+    imports: 'text-amber-600',
+    inventory: 'text-violet-600',
+    manufacturing: 'text-lime-600',
+    accounting: 'text-sky-600',
+    expenses: 'text-red-500',
+    crm: 'text-pink-600',
+    hr: 'text-teal-600',
+    projects: 'text-indigo-500',
+    chat: 'text-fuchsia-600',
+    reports: 'text-purple-600',
+    admin: 'text-slate-600',
+    tools: 'text-indigo-500',
+};
+
+export function moduleIconTone(key: string): string {
+    return MODULE_TONE[key] ?? 'text-gray-500';
+}

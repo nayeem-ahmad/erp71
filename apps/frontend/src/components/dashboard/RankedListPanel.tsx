@@ -1,5 +1,8 @@
 'use client';
 
+import type { LucideIcon } from 'lucide-react';
+import { CardTitle, useDashboardCardClass, type CardTone } from './DashboardCard';
+
 export type RankedItem = {
     id: string;
     name: string;
@@ -15,6 +18,8 @@ export function RankedListPanel({
     items,
     emptyLabel,
     loading = false,
+    icon,
+    tone = 'blue',
 }: {
     title: string;
     items: RankedItem[];
@@ -24,10 +29,14 @@ export function RankedListPanel({
      * found" for as long as the request takes, which is a claim, not a wait.
      */
     loading?: boolean;
+    /** COLORFUL heading chip. */
+    icon?: LucideIcon;
+    tone?: CardTone;
 }) {
+    const cardClass = useDashboardCardClass();
     return (
-        <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-            <h3 className="mb-2 text-xs font-bold text-gray-900">{title}</h3>
+        <div className={cardClass}>
+            <CardTitle icon={icon} tone={tone}>{title}</CardTitle>
             {loading ? (
                 <div data-testid="ranked-list-skeleton" className="animate-pulse space-y-2 py-1">
                     {Array.from({ length: 4 }).map((_, index) => (

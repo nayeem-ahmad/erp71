@@ -57,8 +57,8 @@ describe('PurchaseSummaryPage', () => {
         await screen.findByText('2026-06-02');
 
         expect(tile('Orders')).toBe('10');
-        expect(tile('Net Purchases')).toBe('৳ 48,000');
-        expect(tile('Returns')).toBe('৳ 2,000');
-        expect(tile('Avg Order Value')).toBe('৳ 5,000');
+        expect(tile('Net Purchases')).toBe('৳\u00a048,000');
+        expect(tile('Returns')).toBe('৳\u00a02,000');
+        expect(tile('Avg Order Value')).toBe('৳\u00a05,000');
     });
 });

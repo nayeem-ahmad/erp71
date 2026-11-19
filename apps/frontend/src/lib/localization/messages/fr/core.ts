@@ -1221,6 +1221,7 @@ export const coreMessages = {
         compactViewTitle: "Vue compacte",
         loadingProducts: "Chargement des produits...",
         stockLeft: "{count} restant(s)",
+        outOfStockShort: "Épuisé",
         notAvailable: 'N/A',
         tabs: {
             checkout: "Encaissement",

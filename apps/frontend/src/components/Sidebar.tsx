@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useUiStyle } from '@/lib/ui-theme';
+import { moduleIconTone } from '@/lib/ui/module-tone';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Banknote,
@@ -152,6 +154,9 @@ export default function Sidebar({
     const isMdUp = useIsMdUp();
     const { logoUrl, businessName, primaryColor } = useBranding();
     const { t, fmt } = useI18n();
+    const { colorful } = useUiStyle();
+    // COLORFUL gives each module's icon its own hue; the active item stays solid blue.
+    const toneFor = (key: string) => (colorful ? moduleIconTone(key) : '');
     const { tenantLayout, platformAdminLayout } = useNavLayouts();
     const defaultWidth = compactNav ? SIDEBAR_DEFAULT_WIDTH.compact : SIDEBAR_DEFAULT_WIDTH.normal;
     const [collapsed, setCollapsed] = useState(false);
@@ -683,7 +688,7 @@ export default function Sidebar({
                                     title={collapsed ? [mod.label, unreadLabel].filter(Boolean).join(' · ') : undefined}
                                     className={linkCls(active)}
                                 >
-                                    <Icon className={`flex-shrink-0 w-5 h-5 ${active ? 'text-white' : 'group-hover:scale-110 transition-transform'}`} />
+                                    <Icon className={`flex-shrink-0 w-5 h-5 ${active ? 'text-white' : `${toneFor(mod.key)} group-hover:scale-110 transition-transform`}`} />
                                     {!collapsed && <span className={navLabelCls}>{mod.label}</span>}
                                     {!collapsed && <NavCountBadge count={unread} title={unreadLabel} tone="blue" />}
                                     {collapsed && unread > 0 ? (
@@ -734,7 +739,7 @@ export default function Sidebar({
                                         title={mod.label}
                                         className={linkCls(groupActive)}
                                     >
-                                        <Icon className={`flex-shrink-0 w-5 h-5 ${groupActive ? 'text-white' : 'group-hover:scale-110 transition-transform'}`} />
+                                        <Icon className={`flex-shrink-0 w-5 h-5 ${groupActive ? 'text-white' : `${toneFor(mod.key)} group-hover:scale-110 transition-transform`}`} />
                                     </Link>
                                 ) : (
                                     <button
@@ -750,7 +755,7 @@ export default function Sidebar({
                                                 : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
                                         }`}
                                     >
-                                        <Icon className={`flex-shrink-0 w-5 h-5 ${groupActive ? 'text-blue-600' : ''}`} />
+                                        <Icon className={`flex-shrink-0 w-5 h-5 ${toneFor(mod.key) || (groupActive ? 'text-blue-600' : '')}`} />
                                         <span className={navLabelCls}>{mod.label}</span>
                                         <ChevronDown
                                             className={`ms-auto w-4 h-4 transition-transform duration-200 ${

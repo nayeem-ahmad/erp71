@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { formatBDT } from '@/lib/format';
 import BankReconciliationPage from './page';
 import { api } from '@/lib/api';
+import { asRendered } from '@/test-utils/rendered-text';
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -44,7 +45,7 @@ jest.mock('@/components/accounting/AccountSelect', () => ({
     ),
 }));
 
-const money = (value: number) => formatBDT(value, { locale: 'en', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const money = (value: number) => asRendered(formatBDT(value, { locale: 'en', minimumFractionDigits: 0, maximumFractionDigits: 0 }));
 
 const ENTRIES = {
     salary: { id: 'e1', entry_date: '2026-06-01', description: 'Salary payment', amount: 50000, entry_type: 'DEBIT' },

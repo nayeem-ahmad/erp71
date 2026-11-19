@@ -9,6 +9,7 @@ import { naturalColumnWidth } from './column-autofit';
 import { printTable } from './export-utils';
 import type { ListFilter } from './FilterBar';
 import type { ListStat } from './ListStats';
+import { UiThemeContext } from '@/lib/ui-theme';
 
 // ── Mocks (as DataTable.view-options.test.tsx, with the real preferences store) ──
 
@@ -256,5 +257,45 @@ describe('DataTable totals row', () => {
     it('draws no totals row when no column has a footer', () => {
         render(<DataTable {...props} footerLabel="Totals" />);
         expect(document.querySelector('tfoot')).toBeNull();
+    });
+});
+
+describe('DataTable — phone cards by style', () => {
+    afterEach(() => {
+        mockMdUp = true;
+    });
+
+    it('turns rows into cards on a phone outside CLASSIC', () => {
+        mockMdUp = false;
+        render(
+            <UiThemeContext.Provider value="POLISHED">
+                <DataTable {...props} />
+            </UiThemeContext.Provider>,
+        );
+        const cards = screen.getByTestId('data-table-cards');
+        const first = within(cards).getAllByRole('listitem')[0];
+        expect(within(first).getByText('Alpha')).toBeInTheDocument();
+        // Every other column becomes a labelled value under the title.
+        expect(within(first).getByText('Amount')).toBeInTheDocument();
+        expect(within(first).getByText('100')).toBeInTheDocument();
+        expect(within(first).getByRole('button', { name: 'Go' })).toBeInTheDocument();
+        expect(document.querySelector('table')).toBeNull();
+    });
+
+    it('keeps the table on a phone in CLASSIC', () => {
+        mockMdUp = false;
+        render(<DataTable {...props} />);
+        expect(screen.queryByTestId('data-table-cards')).toBeNull();
+        expect(document.querySelector('table')).not.toBeNull();
+    });
+
+    it('keeps the table on a wide screen in every style', () => {
+        render(
+            <UiThemeContext.Provider value="COLORFUL">
+                <DataTable {...props} />
+            </UiThemeContext.Provider>,
+        );
+        expect(screen.queryByTestId('data-table-cards')).toBeNull();
+        expect(document.querySelector('table')).not.toBeNull();
     });
 });

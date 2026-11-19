@@ -49,6 +49,15 @@ export const settingsExtrasMessages = {
         saveFailed: "ब्रांडिंग सेटिंग्स सहेजी नहीं जा सकीं।",
         saveButton: "ब्रांडिंग सहेजें",
         saving: "सहेजा जा रहा है…",
+        uiTheme: {
+            label: "इंटरफ़ेस स्टाइल",
+            hint: "इस वर्कस्पेस में सबके लिए ERP71 कैसा दिखेगा। सिर्फ़ रूप बदलता है: हर स्टाइल में वही पेज, आँकड़े और काम हैं।",
+            current: "मौजूदा",
+            previewAlt: "{name} स्टाइल का प्रीव्यू",
+            classic: { name: "क्लासिक", description: "ERP71 का हमेशा वाला रूप।" },
+            polished: { name: "निखरा", description: "शांत टेक्स्ट और स्पेसिंग। फ़ोन पर सूचियाँ कार्ड बन जाती हैं।" },
+            colorful: { name: "रंगीन", description: "निखरा, साथ में रंगीन आँकड़ा कार्ड, आइकन और साइडबार।" },
+        },
         businessName: {
             label: "व्यवसाय नाम ओवरराइड",
             placeholder: "आपके व्यवसाय का नाम",

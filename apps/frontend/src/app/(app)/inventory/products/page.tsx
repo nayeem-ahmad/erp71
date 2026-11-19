@@ -20,6 +20,8 @@ import { Button, ConfirmDialog, StatusBadge, type StatusBadgeTone } from '@/comp
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useServerList } from '@/hooks/useServerList';
 import { toast } from '@/lib/toast';
+import { useUiStyle } from '@/lib/ui-theme';
+import { softTint } from '@/lib/ui/name-tint';
 
 interface Product {
     id: string;
@@ -53,6 +55,7 @@ const stockTones: Record<StockStatus, StatusBadgeTone> = {
 
 export default function InventoryPage() {
     const { t, locale, fmt } = useI18n();
+    const { colorful } = useUiStyle();
     const { role, permissions } = useTenantPlanFeatures();
     const canMerge = isOwner(role) || hasPermission(permissions, 'MANAGE_USERS');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -212,7 +215,7 @@ export default function InventoryPage() {
                     const product = info.row.original;
                     return (
                         <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 shrink-0 rounded-md bg-gray-100 relative overflow-hidden flex items-center justify-center text-[10px] font-semibold text-gray-500 uppercase">
+                            <div className={`w-8 h-8 shrink-0 rounded-md relative overflow-hidden flex items-center justify-center text-[10px] font-semibold uppercase ${colorful && !product.image_url ? softTint(product.name) : 'bg-gray-100 text-gray-500'}`}>
                                 {product.image_url ? (
                                     <ProductImage src={product.image_url} alt={product.name} fallbackClassName="w-full h-full flex items-center justify-center" />
                                 ) : (
@@ -328,7 +331,7 @@ export default function InventoryPage() {
                 size: 170,
             }),
         ],
-        [t, locale, canMerge],
+        [t, locale, canMerge, colorful],
     );
 
     // Server-side equivalents of the old client-side filter presets. They must be sent to

@@ -1208,6 +1208,7 @@ export const coreMessages = {
         compactViewTitle: 'Compact view',
         loadingProducts: 'Loading Products...',
         stockLeft: '{count} left',
+        outOfStockShort: 'Out',
         notAvailable: 'N/A',
         tabs: {
             checkout: 'Checkout',
