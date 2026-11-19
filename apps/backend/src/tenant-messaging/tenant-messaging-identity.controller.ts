@@ -4,6 +4,7 @@ import { PlatformAdminGuard } from '../auth/platform-admin.guard';
 import { EmailService } from '../email/email.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { TenantMessagingIdentityService } from './tenant-messaging-identity.service';
+import { TenantSmtpService } from './tenant-smtp.service';
 import {
     TestTenantMessagingIdentityDto,
     UpdateTenantMessagingIdentityDto,
@@ -22,6 +23,7 @@ export class TenantMessagingIdentityController {
         private readonly service: TenantMessagingIdentityService,
         private readonly email: EmailService,
         private readonly whatsapp: WhatsAppService,
+        private readonly smtp: TenantSmtpService,
     ) {}
 
     @Get()
@@ -50,6 +52,12 @@ export class TenantMessagingIdentityController {
         @Body() dto: TestTenantMessagingIdentityDto,
     ) {
         await this.email.sendTestEmail(dto.to, { tenantId });
+        // The shop's own mail server, when switched on, outranks the identity
+        // configured here — say so rather than reporting a sender not used.
+        const ownServer = await this.smtp.resolve(tenantId);
+        if (ownServer) {
+            return { sender: 'tenant-server', from: ownServer.fromEmail };
+        }
         const identity = await this.service.resolveEmailIdentity(tenantId);
         return {
             sender: identity ? 'tenant' : 'platform',
