@@ -960,8 +960,27 @@ export interface ProjectFinancials {
         averageRate: number | null;
     };
     uncosted: { noEmployeeHours: number; noRateHours: number; materialLines: number };
-    byCategory: Array<{ category: ProjectCostCategoryKey; amount: number }>;
-    forecast: { remainingHours: number; estimatedRemainingCost: number | null; estimateAtCompletion: number | null };
+    /** Phase D: true once the budget is split by category — the project form then leaves it alone. */
+    budgetByCategory: boolean;
+    /** Budget vs actual: every category with a cost or a budget line. */
+    byCategory: Array<{
+        category: ProjectCostCategoryKey;
+        amount: number;
+        budget: number | null;
+        remaining: number | null;
+        usedPct: number | null;
+    }>;
+    forecast: {
+        remainingHours: number;
+        /** Labour still to come, at each assignee's rate (or the project average). */
+        estimatedRemainingCost: number;
+        /** Remaining hours nothing can price yet — counted apart, never as free. */
+        unratedHours: number;
+        /** What each budgeted non-labour category has left. */
+        remainingDirectCost: number;
+        estimateAtCompletion: number;
+        byPerson: ProjectForecastPerson[];
+    };
     byPerson: Array<{
         key: string;
         employeeId: string | null;
@@ -988,7 +1007,58 @@ export interface ProjectFinancials {
         expectedRevenue: number | null;
         expectedCost: number;
         expectedMargin: number | null;
+        /** Phase D, fixed price only: cost so far ÷ cost at completion. */
+        percentComplete: number | null;
+        earnedRevenue: number | null;
+        earnedMargin: number | null;
+        /** Positive: invoiced ahead of the work; negative: work not yet invoiced. */
+        billedAheadOfWork: number | null;
     };
+}
+
+export interface ProjectForecastPerson {
+    key: string;
+    name: string;
+    employeeId: string | null;
+    remainingHours: number;
+    rate: number | null;
+    rateSource: 'PERSON' | 'AVERAGE' | null;
+    cost: number | null;
+}
+
+export interface ProjectProfitabilityRow {
+    id: string;
+    code: string;
+    name: string;
+    status: string;
+    billingType: ProjectBillingType;
+    customer: string | null;
+    budget: number | null;
+    labourCost: number;
+    directCost: number;
+    cost: number;
+    budgetUsedPct: number | null;
+    contractValue: number | null;
+    revenue: number;
+    /** Null on an internal project, which bills nothing. */
+    margin: number | null;
+    marginPct: number | null;
+    uncostedHours: number;
+}
+
+export interface ProjectProfitability {
+    rows: ProjectProfitabilityRow[];
+    totals: {
+        projects: number;
+        cost: number;
+        internalCost: number;
+        revenue: number;
+        billedCost: number;
+        margin: number;
+        marginPct: number | null;
+        uncostedHours: number;
+    };
+    truncated: boolean;
 }
 
 export type ProjectCostCategoryKey = 'LABOUR' | 'MATERIAL' | 'SERVICES' | 'EXPENSE' | 'OVERHEAD' | 'OTHER';
@@ -6472,6 +6542,18 @@ export const api = {
     // Project costing — VIEW_PROJECT_FINANCIALS throughout.
     getProjectFinancials: (projectId: string): Promise<ProjectFinancials> =>
         fetchWithAuth(`/project-costing/projects/${projectId}`),
+    setProjectBudget: (
+        projectId: string,
+        lines: Array<{ category: ProjectCostCategoryKey; amount: number }>,
+    ): Promise<{ lines: Array<{ category: ProjectCostCategoryKey; amount: number }>; total: number | null }> =>
+        fetchWithAuth(`/project-costing/projects/${projectId}/budget`, { method: 'PUT', body: JSON.stringify({ lines }) }),
+    getProjectProfitability: (params: { status?: string; billingType?: string } = {}): Promise<ProjectProfitability> => {
+        const query = new URLSearchParams();
+        if (params.status) query.set('status', params.status);
+        if (params.billingType) query.set('billingType', params.billingType);
+        const qs = query.toString();
+        return fetchWithAuth(`/project-costing/report${qs ? `?${qs}` : ''}`);
+    },
     priceProjectHours: (projectId: string): Promise<{ priced: number; stillUncosted: number }> =>
         fetchWithAuth(`/project-costing/projects/${projectId}/price-hours`, { method: 'POST' }),
     getProjectCostingSettings: (): Promise<ProjectCostingSettings> => fetchWithAuth('/project-costing/settings'),

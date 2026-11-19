@@ -241,6 +241,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   // `exact` because the report sits under /projects/hour-logs; without it both entries light up at once.
   'projects.hour-logs': { id: 'projects.hour-logs', kind: 'link', icon: 'Clock', labelKey: 'sidebar.items.projectsHourLogs', href: '/projects/hour-logs', exact: true },
   'projects.hour-log-report': { id: 'projects.hour-log-report', kind: 'link', icon: 'BarChart3', labelKey: 'sidebar.items.projectsHourLogReport', href: '/projects/hour-logs/report' },
+  'projects.profitability': { id: 'projects.profitability', kind: 'link', icon: 'TrendingUp', labelKey: 'sidebar.items.projectsProfitability', href: '/projects/profitability' },
   'projects.setup': { id: 'projects.setup', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.projectsSetup', href: '/projects/settings' },
 
   crm: { id: 'crm', kind: 'module', icon: 'Users', labelKey: 'sidebar.modules.crm', moduleKey: 'crm' },
@@ -550,6 +551,9 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
   // Every Projects read is `VIEW_PROJECTS` on the API, so only the screen that
   // is useless without its own management permission carries a tag.
   'projects.setup': ['MANAGE_PROJECT_SETTINGS'],
+  // Cost and margin are labour priced from pay, so the report is as narrow
+  // as each project's Financials.
+  'projects.profitability': ['VIEW_PROJECT_FINANCIALS'],
 
   // Meetings used to be a root module, so APP_REGISTRY's `VIEW_MEETINGS` gate
   // covered it. Under Tools there is no app gate any more, so the subgroup
@@ -628,6 +632,10 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
  * `npx tsx prisma/sync-nav-layout.ts --nodes=projects.epics`.
  *
  * `npx tsx prisma/sync-nav-layout.ts --nodes=projects.staffing`.
+ *
+ * The 2026-11-20 project profitability report added `projects.profitability`
+ * the same way, no reset needed:
+ * `npx tsx prisma/sync-nav-layout.ts --nodes=projects.profitability`.
  *
  * The 2026-09-26 line-item searches added one leaf to each of the two report
  * subgroups, again with no reset needed:
@@ -832,7 +840,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('projects.sprints', 'projects', 6),
   layoutNode('projects.hour-logs', 'projects', 7),
   layoutNode('projects.hour-log-report', 'projects', 8),
-  layoutNode('projects.setup', 'projects', 9),
+  layoutNode('projects.profitability', 'projects', 9),
+  layoutNode('projects.setup', 'projects', 10),
 
   layoutNode('manufacturing', null, 11),
   layoutNode('manufacturing.boms', 'manufacturing', 0),
@@ -1002,7 +1011,8 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('projects.sprints', 'projects', 6),
   layoutNode('projects.hour-logs', 'projects', 7),
   layoutNode('projects.hour-log-report', 'projects', 8),
-  layoutNode('projects.setup', 'projects', 9),
+  layoutNode('projects.profitability', 'projects', 9),
+  layoutNode('projects.setup', 'projects', 10),
 
   layoutNode('whats-new', null, 2),
   layoutNode('help', null, 3),

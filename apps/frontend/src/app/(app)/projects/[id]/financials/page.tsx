@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, PackageMinus, Plus, Trash2, Undo2 } from 'lucide-react';
+import { Loader2, PackageMinus, PieChart, Plus, Trash2, Undo2 } from 'lucide-react';
 import { api, type ProjectDirectCost, type ProjectFinancials } from '@/lib/api';
 import { fetchMe } from '@/hooks/use-me';
 import { getWorkspaceItem } from '@/lib/session-store';
@@ -11,6 +11,7 @@ import { hasPermission, isOwner } from '@/lib/permissions';
 import AddProjectCostModal from '@/components/projects/costing/AddProjectCostModal';
 import IssueMaterialsModal from '@/components/projects/costing/IssueMaterialsModal';
 import ProjectBillingSection from '@/components/projects/costing/ProjectBillingSection';
+import ProjectBudgetModal from '@/components/projects/costing/ProjectBudgetModal';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
@@ -40,10 +41,12 @@ export default function ProjectFinancialsPage() {
     const [costs, setCosts] = useState<ProjectDirectCost[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [pricing, setPricing] = useState(false);
-    const [modal, setModal] = useState<'cost' | 'issue' | null>(null);
+    const [modal, setModal] = useState<'cost' | 'issue' | 'budget' | null>(null);
     const [busyId, setBusyId] = useState<string | null>(null);
     // Issuing moves stock, so it needs what a stock write-off needs too.
     const [canMoveStock, setCanMoveStock] = useState(false);
+    // The budget is the project's, so splitting it needs what the project form needs.
+    const [canManageProject, setCanManageProject] = useState(false);
 
     const load = useCallback(async () => {
         try {
@@ -71,8 +74,12 @@ export default function ProjectFinancialsPage() {
                         || hasPermission(tenant?.permissions, 'CREATE_INVENTORY_MOVEMENTS')
                         || hasPermission(tenant?.permissions, 'STOCK_TAKE'),
                 );
+                setCanManageProject(isOwner(tenant?.role) || hasPermission(tenant?.permissions, 'MANAGE_PROJECTS'));
             })
-            .catch(() => setCanMoveStock(false));
+            .catch(() => {
+                setCanMoveStock(false);
+                setCanManageProject(false);
+            });
     }, []);
 
     const removeCost = async (row: ProjectDirectCost) => {
@@ -212,6 +219,31 @@ export default function ProjectFinancialsPage() {
                                             </dd>
                                         </div>
                                     </dl>
+                                    {data.revenue.percentComplete !== null && data.revenue.earnedRevenue !== null && (
+                                        <dl className="mt-3 grid grid-cols-1 gap-2 border-t border-gray-100 pt-3 text-sm md:grid-cols-3">
+                                            <div>
+                                                <dt className="text-xs text-gray-500">{f.percentComplete}</dt>
+                                                <dd className="font-medium text-gray-900">{data.revenue.percentComplete}%</dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-xs text-gray-500">{f.earnedRevenue}</dt>
+                                                <dd className="font-medium text-gray-900">{formatBDT(data.revenue.earnedRevenue)}</dd>
+                                            </div>
+                                            {data.revenue.billedAheadOfWork !== null && (
+                                                <div>
+                                                    <dt className="text-xs text-gray-500">
+                                                        {data.revenue.billedAheadOfWork >= 0 ? f.billedAhead : f.earnedNotBilled}
+                                                    </dt>
+                                                    <dd className={`font-medium ${data.revenue.billedAheadOfWork < 0 ? 'text-amber-700' : 'text-gray-900'}`}>
+                                                        {formatBDT(Math.abs(data.revenue.billedAheadOfWork))}
+                                                    </dd>
+                                                </div>
+                                            )}
+                                        </dl>
+                                    )}
+                                    {data.revenue.percentComplete !== null && (
+                                        <p className="mt-2 text-xs text-gray-500">{f.percentCompleteHint}</p>
+                                    )}
                                 </section>
                             )}
                         </>
@@ -246,22 +278,53 @@ export default function ProjectFinancialsPage() {
                         <Alert tone="warning">{fmt(f.uncostedMaterial, { count: data.uncosted.materialLines })}</Alert>
                     )}
 
-                    {data.byCategory.length > 0 && (
+                    {(data.byCategory.length > 0 || canManageProject) && (
                         <section className="overflow-hidden rounded-lg border border-gray-100 bg-white">
-                            <h2 className="border-b border-gray-100 px-3 py-2 text-sm font-semibold text-gray-900">{f.byCategory}</h2>
-                            <table className="w-full text-sm">
-                                <tbody className="divide-y divide-gray-100">
-                                    {data.byCategory.map((row) => (
-                                        <tr key={row.category}>
-                                            <td className="px-3 py-2">{f.categories[row.category]}</td>
-                                            <td className="px-3 py-2 text-end">{formatBDT(row.amount)}</td>
-                                            <td className="hidden w-24 px-3 py-2 text-end text-xs text-gray-500 md:table-cell">
-                                                {totals.totalCost > 0 ? `${Math.round((row.amount / totals.totalCost) * 100)}%` : ''}
-                                            </td>
+                            <div className="flex flex-wrap items-start justify-between gap-2 border-b border-gray-100 px-3 py-2">
+                                <div>
+                                    <h2 className="text-sm font-semibold text-gray-900">{f.budgetVsActual}</h2>
+                                    {!data.budgetByCategory && <p className="text-xs text-gray-500">{f.budgetSplitHint}</p>}
+                                </div>
+                                {canManageProject && (
+                                    <Button type="button" variant="secondary" icon={<PieChart className="h-4 w-4" />} onClick={() => setModal('budget')}>
+                                        {f.setBudget}
+                                    </Button>
+                                )}
+                            </div>
+                            {data.byCategory.length > 0 && (
+                                <table className="w-full text-sm">
+                                    <thead className="bg-gray-50 text-xs text-gray-500">
+                                        <tr>
+                                            <th className="px-3 py-2 text-start font-medium">{f.category}</th>
+                                            <th className="hidden px-3 py-2 text-end font-medium md:table-cell">{f.budget}</th>
+                                            <th className="px-3 py-2 text-end font-medium">{f.actual}</th>
+                                            <th className="px-3 py-2 text-end font-medium">{f.left}</th>
+                                            <th className="hidden w-20 px-3 py-2 text-end font-medium md:table-cell">{f.used}</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {data.byCategory.map((row) => (
+                                            <tr key={row.category}>
+                                                <td className="px-3 py-2">{f.categories[row.category]}</td>
+                                                <td className="hidden px-3 py-2 text-end text-gray-600 md:table-cell">
+                                                    {row.budget === null ? '—' : formatBDT(row.budget)}
+                                                </td>
+                                                <td className="px-3 py-2 text-end">{formatBDT(row.amount)}</td>
+                                                <td className={`px-3 py-2 text-end ${row.remaining !== null && row.remaining < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                                                    {row.remaining === null
+                                                        ? '—'
+                                                        : row.remaining < 0
+                                                            ? fmt(f.overBy, { amount: formatBDT(-row.remaining) })
+                                                            : formatBDT(row.remaining)}
+                                                </td>
+                                                <td className="hidden px-3 py-2 text-end text-xs text-gray-500 md:table-cell">
+                                                    {row.usedPct === null ? '' : `${Math.round(row.usedPct)}%`}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
                         </section>
                     )}
 
@@ -341,33 +404,73 @@ export default function ProjectFinancialsPage() {
                         )}
                     </section>
 
-                    {totals.hours === 0 ? (
-                        <p className="rounded-lg border border-gray-100 bg-white p-4 text-sm text-gray-500">{f.empty}</p>
-                    ) : (
-                        <>
-                            <section className="rounded-lg border border-gray-100 bg-white p-3 md:p-4">
+                    {(totals.hours > 0 || data.forecast.remainingHours > 0) && (
+                        <section className="overflow-hidden rounded-lg border border-gray-100 bg-white">
+                            <div className="p-3 md:p-4">
                                 <h2 className="text-sm font-semibold text-gray-900">{f.forecastTitle}</h2>
-                                <p className="mt-0.5 text-xs text-gray-500">{f.forecastHint}</p>
-                                <dl className="mt-3 grid grid-cols-1 gap-2 text-sm md:grid-cols-3">
+                                <p className="mt-0.5 text-xs text-gray-500">{f.forecastByAssigneeHint}</p>
+                                <dl className="mt-3 grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
                                     <div>
                                         <dt className="text-xs text-gray-500">{f.remainingHours}</dt>
                                         <dd className="font-medium text-gray-900">{hoursText(data.forecast.remainingHours)}</dd>
                                     </div>
                                     <div>
-                                        <dt className="text-xs text-gray-500">{f.estimatedRemaining}</dt>
+                                        <dt className="text-xs text-gray-500">{f.labourToCome}</dt>
+                                        <dd className="font-medium text-gray-900">{formatBDT(data.forecast.estimatedRemainingCost)}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-gray-500">{f.otherCostsToCome}</dt>
                                         <dd className="font-medium text-gray-900">
-                                            {data.forecast.estimatedRemainingCost === null ? '—' : formatBDT(data.forecast.estimatedRemainingCost)}
+                                            {data.budgetByCategory ? formatBDT(data.forecast.remainingDirectCost) : '—'}
                                         </dd>
                                     </div>
                                     <div>
                                         <dt className="text-xs text-gray-500">{f.estimateAtCompletion}</dt>
-                                        <dd className="font-medium text-gray-900">
-                                            {data.forecast.estimateAtCompletion === null ? '—' : formatBDT(data.forecast.estimateAtCompletion)}
-                                        </dd>
+                                        <dd className="font-medium text-gray-900">{formatBDT(data.forecast.estimateAtCompletion)}</dd>
                                     </div>
                                 </dl>
-                            </section>
+                                {data.forecast.unratedHours > 0 && (
+                                    <p className="mt-2 text-xs text-amber-700">
+                                        {fmt(f.unratedRemaining, { hours: hoursText(data.forecast.unratedHours) })}
+                                    </p>
+                                )}
+                            </div>
+                            {data.forecast.byPerson.length > 0 && (
+                                <table className="w-full border-t border-gray-100 text-sm">
+                                    <thead className="bg-gray-50 text-xs text-gray-500">
+                                        <tr>
+                                            <th className="px-3 py-2 text-start font-medium">{f.person}</th>
+                                            <th className="px-3 py-2 text-end font-medium">{f.remainingHours}</th>
+                                            <th className="hidden px-3 py-2 text-end font-medium md:table-cell">{f.rate}</th>
+                                            <th className="px-3 py-2 text-end font-medium">{f.labourToCome}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {data.forecast.byPerson.map((row) => (
+                                            <tr key={row.key}>
+                                                <td className="px-3 py-2">
+                                                    {row.key === 'unassigned' ? <span className="text-gray-500">{f.unassigned}</span> : row.name || '—'}
+                                                </td>
+                                                <td className="px-3 py-2 text-end">{hoursText(row.remainingHours)}</td>
+                                                <td className="hidden px-3 py-2 text-end md:table-cell">
+                                                    {row.rate === null ? '—' : formatBDT(row.rate)}
+                                                    {row.rateSource === 'AVERAGE' && <span className="block text-xs text-gray-500">{f.rateAverage}</span>}
+                                                </td>
+                                                <td className="px-3 py-2 text-end">
+                                                    {row.cost === null ? <span className="text-amber-700">{f.uncostedShort}</span> : formatBDT(row.cost)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </section>
+                    )}
 
+                    {totals.hours === 0 ? (
+                        <p className="rounded-lg border border-gray-100 bg-white p-4 text-sm text-gray-500">{f.empty}</p>
+                    ) : (
+                        <>
                             <section className="overflow-hidden rounded-lg border border-gray-100 bg-white">
                                 <h2 className="border-b border-gray-100 px-3 py-2 text-sm font-semibold text-gray-900">{f.byPerson}</h2>
                                 <table className="w-full text-sm">
@@ -439,6 +542,16 @@ export default function ProjectFinancialsPage() {
 
             {modal === 'cost' && <AddProjectCostModal projectId={projectId} onClose={() => setModal(null)} onSaved={saved} />}
             {modal === 'issue' && <IssueMaterialsModal projectId={projectId} onClose={() => setModal(null)} onSaved={saved} />}
+            {modal === 'budget' && data && (
+                <ProjectBudgetModal
+                    projectId={projectId}
+                    current={data.budgetByCategory
+                        ? Object.fromEntries(data.byCategory.filter((row) => row.budget !== null).map((row) => [row.category, row.budget as number]))
+                        : {}}
+                    onClose={() => setModal(null)}
+                    onSaved={saved}
+                />
+            )}
         </PageShell>
     );
 }

@@ -21,6 +21,7 @@ jest.mock('@/lib/api', () => ({
         reverseProjectMaterialIssue: jest.fn(),
         getProjectCostSources: jest.fn().mockResolvedValue([]),
         addProjectCost: jest.fn(),
+        setProjectBudget: jest.fn(),
     },
 }));
 
@@ -39,8 +40,10 @@ const { api } = jest.requireMock('@/lib/api') as {
         reverseProjectMaterialIssue: jest.Mock;
         getProjectCostSources: jest.Mock;
         addProjectCost: jest.Mock;
+        setProjectBudget: jest.Mock;
     };
 };
+const { fetchMe } = jest.requireMock('@/hooks/use-me') as { fetchMe: jest.Mock };
 const { toast } = jest.requireMock('@/lib/toast') as { toast: { success: jest.Mock; error: jest.Mock } };
 
 const financials = (overrides: Record<string, any> = {}) => ({
@@ -59,8 +62,19 @@ const financials = (overrides: Record<string, any> = {}) => ({
         averageRate: 250,
     },
     uncosted: { noEmployeeHours: 4, noRateHours: 1, materialLines: 0 },
-    byCategory: [{ category: 'LABOUR', amount: 3500 }],
-    forecast: { remainingHours: 10, estimatedRemainingCost: 2500, estimateAtCompletion: 6000 },
+    budgetByCategory: false,
+    byCategory: [{ category: 'LABOUR', amount: 3500, budget: null, remaining: null, usedPct: null }],
+    forecast: {
+        remainingHours: 10,
+        estimatedRemainingCost: 2500,
+        unratedHours: 0,
+        remainingDirectCost: 0,
+        estimateAtCompletion: 6000,
+        byPerson: [
+            { key: 'unassigned', name: '', employeeId: null, remainingHours: 6, rate: 250, rateSource: 'AVERAGE', cost: 1500 },
+            { key: 'employee:e1', name: 'Karim', employeeId: 'e1', remainingHours: 4, rate: 250, rateSource: 'PERSON', cost: 1000 },
+        ],
+    },
     byPerson: [
         { key: 'employee:e1', employeeId: 'e1', userId: null, name: 'Karim', employeeCode: 'EMP-1', hours: 10, labourCost: 2000, uncostedHours: 0 },
         { key: 'user:u3', employeeId: null, userId: 'u3', name: 'Temp', employeeCode: null, hours: 4, labourCost: 0, uncostedHours: 4 },
@@ -75,6 +89,8 @@ describe('ProjectFinancialsPage', () => {
         api.getProjectFinancials.mockResolvedValue(financials());
         api.priceProjectHours.mockResolvedValue({ priced: 3, stillUncosted: 0 });
         api.getProjectDirectCosts.mockResolvedValue([]);
+        api.setProjectBudget.mockResolvedValue({ lines: [], total: null });
+        fetchMe.mockResolvedValue({ tenants: [{ id: 't1', role: 'OWNER', permissions: [] }] });
     });
 
     it('shows labour cost against the budget, and the forecast', async () => {
@@ -83,7 +99,7 @@ describe('ProjectFinancialsPage', () => {
         expect(await screen.findByText('Total cost', { selector: 'p' })).toBeInTheDocument();
         expect(screen.getByText('Labour cost', { selector: 'p' })).toBeInTheDocument();
         expect(screen.getByText('35%')).toBeInTheDocument();
-        expect(screen.getByText('Estimated labour cost at completion')).toBeInTheDocument();
+        expect(screen.getByText('Estimated cost at completion')).toBeInTheDocument();
         expect(api.getProjectFinancials).toHaveBeenCalledWith('p1');
     });
 
@@ -184,6 +200,98 @@ describe('ProjectFinancialsPage', () => {
                     category: 'OVERHEAD', amount: 750, description: 'Site office share',
                 })),
             );
+        });
+    });
+    describe('Phase D', () => {
+        it('prices the rest of the work by who is on it, naming unassigned work and the average fallback', async () => {
+            render(<ProjectFinancialsPage />);
+
+            expect(await screen.findByText('Unassigned')).toBeInTheDocument();
+            expect(screen.getAllByText('Karim').length).toBeGreaterThan(0);
+            expect(screen.getByText('project average')).toBeInTheDocument();
+            expect(screen.getAllByText('Labour to come').length).toBeGreaterThan(0);
+        });
+
+        it('warns about remaining hours no rate can price', async () => {
+            api.getProjectFinancials.mockResolvedValue(financials({
+                forecast: { ...financials().forecast, unratedHours: 3 },
+            }));
+            render(<ProjectFinancialsPage />);
+
+            expect(await screen.findByText(/3 h of remaining work have no rate yet/)).toBeInTheDocument();
+        });
+
+        it('compares each category with its budget line, calling an overspend what it is', async () => {
+            api.getProjectFinancials.mockResolvedValue(financials({
+                budgetByCategory: true,
+                byCategory: [
+                    { category: 'LABOUR', amount: 3500, budget: 5000, remaining: 1500, usedPct: 70 },
+                    { category: 'MATERIAL', amount: 2500, budget: 2000, remaining: -500, usedPct: 125 },
+                    { category: 'SERVICES', amount: 1000, budget: null, remaining: null, usedPct: null },
+                ],
+            }));
+            render(<ProjectFinancialsPage />);
+
+            expect(await screen.findByText('Budget vs actual')).toBeInTheDocument();
+            expect(screen.getByText(/500\.00 over/)).toHaveClass('text-red-600');
+            expect(screen.getByText('125%')).toBeInTheDocument();
+            // Split already: the "split it" hint is gone.
+            expect(screen.queryByText(/Split the budget by category/)).not.toBeInTheDocument();
+        });
+
+        it('splits the budget by category, sending only the categories given an amount', async () => {
+            render(<ProjectFinancialsPage />);
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Budget by category' }));
+            fireEvent.change(await screen.findByLabelText('Labour'), { target: { value: '5000' } });
+            fireEvent.change(screen.getByLabelText('Materials'), { target: { value: '2000' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+            await waitFor(() =>
+                expect(api.setProjectBudget).toHaveBeenCalledWith('p1', [
+                    { category: 'LABOUR', amount: 5000 },
+                    { category: 'MATERIAL', amount: 2000 },
+                ]),
+            );
+            expect(toast.success).toHaveBeenCalledWith('Budget saved.');
+            await waitFor(() => expect(api.getProjectFinancials).toHaveBeenCalledTimes(2));
+        });
+
+        it('opens the split with the lines as they stand', async () => {
+            api.getProjectFinancials.mockResolvedValue(financials({
+                budgetByCategory: true,
+                byCategory: [{ category: 'LABOUR', amount: 3500, budget: 5000, remaining: 1500, usedPct: 70 }],
+            }));
+            render(<ProjectFinancialsPage />);
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Budget by category' }));
+
+            expect(await screen.findByLabelText('Labour')).toHaveValue(5000);
+            expect(screen.getByLabelText('Materials')).toHaveValue(null);
+        });
+
+        it('offers no budget split without the right to manage the project', async () => {
+            fetchMe.mockResolvedValue({ tenants: [{ id: 't1', role: 'MEMBER', permissions: ['VIEW_PROJECT_FINANCIALS'] }] });
+            render(<ProjectFinancialsPage />);
+
+            expect(await screen.findByText('Unassigned')).toBeInTheDocument();
+            expect(screen.queryByRole('button', { name: 'Budget by category' })).not.toBeInTheDocument();
+        });
+
+        it('shows how far a fixed-price job is by cost, and what it has earned against what it billed', async () => {
+            api.getProjectFinancials.mockResolvedValue(financials({
+                revenue: {
+                    billingType: 'FIXED_PRICE', contractValue: 12000, invoiced: 5750, revenue: 5000, margin: 1500, marginPct: 30,
+                    leftToInvoice: 7000, unbilledHours: null, unbilledAmount: null, unratedHours: null,
+                    expectedRevenue: 12000, expectedCost: 6000, expectedMargin: 6000,
+                    percentComplete: 58.33, earnedRevenue: 7000, earnedMargin: 3500, billedAheadOfWork: -2000,
+                },
+            }));
+            render(<ProjectFinancialsPage />);
+
+            expect(await screen.findByText('58.33%')).toBeInTheDocument();
+            expect(screen.getByText('Earned to date')).toBeInTheDocument();
+            expect(screen.getByText('Earned, not yet billed')).toBeInTheDocument();
         });
     });
 });

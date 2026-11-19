@@ -1555,3 +1555,36 @@ export class BillingQueryDto {
     @IsOptional() @IsDateString()
     upTo?: string;
 }
+
+// ── Project costing, Phase D ────────────────────────────────────────────────
+
+export const PROJECT_BUDGET_CATEGORIES = ['LABOUR', 'MATERIAL', 'SERVICES', 'EXPENSE', 'OVERHEAD', 'OTHER'] as const;
+
+export class ProjectBudgetLineDto {
+    @IsIn(PROJECT_BUDGET_CATEGORIES as unknown as string[])
+    category: (typeof PROJECT_BUDGET_CATEGORIES)[number];
+
+    @Type(() => Number)
+    @IsNumber({ maxDecimalPlaces: 2 })
+    @Min(0)
+    @Max(1_000_000_000_000)
+    amount: number;
+}
+
+export class SetProjectBudgetDto {
+    @IsArray()
+    @ArrayMaxSize(PROJECT_BUDGET_CATEGORIES.length)
+    @ValidateNested({ each: true })
+    @Type(() => ProjectBudgetLineDto)
+    lines: ProjectBudgetLineDto[];
+}
+
+/** Query for the cross-project profitability report. */
+export class ProfitabilityQueryDto {
+    /** Comma-separated statuses; empty means every status but CANCELLED. */
+    @IsOptional() @IsString() @MaxLength(100)
+    status?: string;
+
+    @IsOptional() @IsIn(['FIXED_PRICE', 'TIME_AND_MATERIALS', 'INTERNAL'])
+    billingType?: 'FIXED_PRICE' | 'TIME_AND_MATERIALS' | 'INTERNAL';
+}

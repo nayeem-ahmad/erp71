@@ -235,6 +235,7 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'EmployeeCostRate', exempt: 'Hourly cost rate (config) used to price project hours; same category as Employee.basic_salary.' },
     { model: 'ProjectCostingSettings', exempt: 'Costing configuration (standard hours, overhead %); moves no money.' },
     { model: 'ProjectCostEntry', exempt: 'A project cost for management accounting — a share of a bill that already posted, or a cost recorded only to price the project. Posting it would count the money twice.' },
+    { model: 'ProjectBudgetLine', exempt: 'A planned amount for one cost category of a project (config): budget vs actual compares it with costs that posted elsewhere.' },
     { model: 'ProjectMilestone', exempt: 'A milestone\'s amount is what reaching it will bill (config); the invoice it raises is a Sale, which posts.' },
     { model: 'ProjectMember', exempt: 'A member\'s bill rate (config); hours billed at it are invoiced as a Sale, which posts.' },
     { model: 'ProjectMaterialIssueLine', exempt: 'Stock issued to a project at its average cost. Under periodic inventory stock was expensed at purchase, so an issue — like a transfer or a write-off — posts nothing.' },

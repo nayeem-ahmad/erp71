@@ -26,6 +26,7 @@ import { ProjectCostingService } from './project-costing.service';
 import { ProjectCostingController } from './project-costing.controller';
 import { ProjectDirectCostsService } from './project-direct-costs.service';
 import { ProjectUnbilledService } from './project-unbilled.service';
+import { ProjectProfitabilityService } from './project-profitability.service';
 import { ProjectSettingsService } from './project-settings.service';
 import { RemainingHoursService } from './remaining-hours.service';
 import { SprintsService } from './sprints.service';
@@ -66,6 +67,7 @@ import { ProjectAttachmentsService } from './project-attachments.service';
         ProjectCostingService,
         ProjectDirectCostsService,
         ProjectUnbilledService,
+        ProjectProfitabilityService,
         ProjectSettingsService,
         RemainingHoursService,
         ProjectActivityService,

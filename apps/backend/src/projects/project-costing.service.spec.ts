@@ -20,6 +20,12 @@ describe('ProjectCostingService', () => {
                     id: 'p1', code: 'BS23', name: 'Fit-out', budget_amount: new Prisma.Decimal(10000),
                     billing_type: 'INTERNAL', contract_value: null, bill_rate: null,
                 }),
+                update: jest.fn().mockResolvedValue({}),
+            },
+            projectBudgetLine: {
+                findMany: jest.fn().mockResolvedValue([]),
+                deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+                createMany: jest.fn().mockResolvedValue({ count: 0 }),
             },
             sale: { findMany: jest.fn().mockResolvedValue([]) },
             salesReturn: { findMany: jest.fn().mockResolvedValue([]) },
@@ -28,7 +34,11 @@ describe('ProjectCostingService', () => {
                 findMany: jest.fn().mockResolvedValue([]),
                 updateMany: jest.fn().mockResolvedValue({ count: 1 }),
             },
-            projectTask: { aggregate: jest.fn().mockResolvedValue({ _sum: { remaining_hours: new Prisma.Decimal(10) } }) },
+            projectTask: {
+                groupBy: jest.fn().mockResolvedValue([
+                    { assignee_id: null, assignee_employee_id: null, _sum: { remaining_hours: new Prisma.Decimal(10) } },
+                ]),
+            },
             projectCostEntry: { findMany: jest.fn().mockResolvedValue([]) },
             projectMaterialIssue: { findMany: jest.fn().mockResolvedValue([]) },
             expenseEntry: { findMany: jest.fn().mockResolvedValue([]) },
@@ -36,7 +46,7 @@ describe('ProjectCostingService', () => {
             employee: { findMany: jest.fn(), findFirst: jest.fn() },
             employeeCostRate: { findMany: jest.fn().mockResolvedValue([]) },
             user: { findMany: jest.fn().mockResolvedValue([]) },
-            $transaction: jest.fn(async (ops: any[]) => Promise.all(ops)),
+            $transaction: jest.fn(async (arg: any) => (typeof arg === 'function' ? arg(db) : Promise.all(arg))),
         };
         access = { assertProjectVisible: jest.fn().mockResolvedValue({ id: 'p1' }) };
         audit = { log: jest.fn().mockResolvedValue(undefined) };
@@ -95,13 +105,132 @@ describe('ProjectCostingService', () => {
             expect(result.forecast).toEqual({
                 remainingHours: 10,
                 estimatedRemainingCost: 2500,
+                unratedHours: 0,
+                remainingDirectCost: 0,
                 estimateAtCompletion: 6000,
+                byPerson: [
+                    { key: 'unassigned', name: '', employeeId: null, remainingHours: 10, rate: 250, rateSource: 'AVERAGE', cost: 2500 },
+                ],
             });
-            expect(db.projectTask.aggregate).toHaveBeenCalledWith(
+            expect(db.projectTask.groupBy).toHaveBeenCalledWith(
                 expect.objectContaining({
+                    by: ['assignee_id', 'assignee_employee_id'],
                     where: expect.objectContaining({ deleted_at: null, status: { category: { not: 'DONE' } } }),
                 }),
             );
+        });
+
+        it('prices the rest of the work at each assignee\'s own rate today, falling back to the project average', async () => {
+            const people = [
+                { id: 'e1', name: 'Karim', employee_code: 'EMP-1', user_id: 'u1', basic_salary: null },
+                { id: 'e2', name: 'Abdul', employee_code: 'EMP-2', user_id: 'u2', basic_salary: new Prisma.Decimal(41600) },
+                { id: 'e3', name: 'Rina', employee_code: 'EMP-3', user_id: 'u9', basic_salary: null },
+            ];
+            db.employee.findMany.mockImplementation(async ({ where }: any) =>
+                people.filter((row) => (where.id ? where.id.in.includes(row.id) : where.user_id.in.includes(row.user_id))),
+            );
+            db.user.findMany.mockImplementation(async ({ where }: any) =>
+                [{ id: 'u3', name: null, email: 'temp@example.com' }, { id: 'u7', name: 'Shopfloor tablet', email: 'tab@example.com' }]
+                    .filter((row) => where.id.in.includes(row.id)),
+            );
+            db.employeeCostRate.findMany.mockResolvedValue([
+                { employee_id: 'e1', hourly_cost: new Prisma.Decimal(300), effective_from: day('2026-01-01') },
+            ]);
+            db.projectTask.groupBy.mockResolvedValue([
+                // Assigned to Karim's card: his explicit rate.
+                { assignee_id: null, assignee_employee_id: 'e1', _sum: { remaining_hours: new Prisma.Decimal(4) } },
+                // Assigned to Abdul's login: priced as his card, salary ÷ 208 h.
+                { assignee_id: 'u2', assignee_employee_id: null, _sum: { remaining_hours: new Prisma.Decimal(3) } },
+                // Rina has a card but nothing prices it; the tablet login has no card.
+                { assignee_id: 'u9', assignee_employee_id: null, _sum: { remaining_hours: new Prisma.Decimal(2) } },
+                { assignee_id: 'u7', assignee_employee_id: null, _sum: { remaining_hours: new Prisma.Decimal(1) } },
+                { assignee_id: null, assignee_employee_id: null, _sum: { remaining_hours: new Prisma.Decimal(5) } },
+                // An open task with nothing left adds nobody.
+                { assignee_id: 'u3', assignee_employee_id: null, _sum: { remaining_hours: null } },
+            ]);
+
+            const result = await service.financials(OWNER, 'p1');
+
+            expect(result.forecast.byPerson.map((row) => [row.key, row.name, row.remainingHours, row.rate, row.rateSource, row.cost])).toEqual([
+                ['unassigned', '', 5, 250, 'AVERAGE', 1250],
+                ['employee:e1', 'Karim', 4, 300, 'PERSON', 1200],
+                ['employee:e2', 'Abdul', 3, 200, 'PERSON', 600],
+                ['employee:e3', 'Rina', 2, 250, 'AVERAGE', 500],
+                ['user:u7', 'Shopfloor tablet', 1, 250, 'AVERAGE', 250],
+            ]);
+            expect(result.forecast).toEqual(expect.objectContaining({
+                remainingHours: 15,
+                estimatedRemainingCost: 3800,
+                unratedHours: 0,
+                estimateAtCompletion: 7300,
+            }));
+        });
+
+        it('counts the rest apart, never as free, while there is no rate to price it at', async () => {
+            db.projectTimeEntry.groupBy.mockReset()
+                .mockResolvedValueOnce([{ employee_id: null, user_id: 'u3', _sum: { hours: 4, cost_amount: null } }])
+                .mockResolvedValueOnce([{ employee_id: null, user_id: 'u3', _sum: { hours: 4 } }])
+                .mockResolvedValueOnce([]);
+
+            const result = await service.financials(OWNER, 'p1');
+
+            expect(result.totals.averageRate).toBeNull();
+            expect(result.forecast).toEqual(expect.objectContaining({
+                remainingHours: 10,
+                estimatedRemainingCost: 0,
+                unratedHours: 10,
+                estimateAtCompletion: 0,
+            }));
+            expect(result.forecast.byPerson[0]).toEqual(expect.objectContaining({ rate: null, rateSource: null, cost: null }));
+        });
+
+        it('compares each category with its budget line, and forecasts what each budgeted category has left', async () => {
+            db.projectBudgetLine.findMany.mockResolvedValue([
+                { category: 'LABOUR', amount: new Prisma.Decimal(5000) },
+                { category: 'MATERIAL', amount: new Prisma.Decimal(2000) },
+                { category: 'OVERHEAD', amount: new Prisma.Decimal(1000) },
+            ]);
+            db.projectCostEntry.findMany.mockResolvedValue([
+                { category: 'SERVICES', amount: new Prisma.Decimal(1000), cost_date: day('2026-08-10') },
+            ]);
+            db.projectMaterialIssue.findMany.mockResolvedValue([
+                { issue_date: day('2026-09-02'), lines: [{ line_cost: new Prisma.Decimal(500) }] },
+            ]);
+
+            const result = await service.financials(OWNER, 'p1');
+
+            expect(result.budgetByCategory).toBe(true);
+            // The lines' sum, not the project's stored 10,000.
+            expect(result.totals).toEqual(expect.objectContaining({ budget: 8000, totalCost: 5000, budgetUsedPct: 62.5, budgetRemaining: 3000 }));
+            expect(result.byCategory).toEqual([
+                { category: 'LABOUR', amount: 3500, budget: 5000, remaining: 1500, usedPct: 70 },
+                { category: 'MATERIAL', amount: 500, budget: 2000, remaining: 1500, usedPct: 25 },
+                // Spent with no budget line: shown, with nothing to compare.
+                { category: 'SERVICES', amount: 1000, budget: null, remaining: null, usedPct: null },
+                // Budgeted, nothing spent yet.
+                { category: 'OVERHEAD', amount: 0, budget: 1000, remaining: 1000, usedPct: 0 },
+            ]);
+            // Labour to come is priced from hours, not the labour line; the
+            // other budgeted categories forecast what they have left.
+            expect(result.forecast).toEqual(expect.objectContaining({
+                estimatedRemainingCost: 2500,
+                remainingDirectCost: 2500,
+                estimateAtCompletion: 10000,
+            }));
+        });
+
+        it('never forecasts a saving from an overspent category', async () => {
+            db.projectBudgetLine.findMany.mockResolvedValue([{ category: 'MATERIAL', amount: new Prisma.Decimal(100) }]);
+            db.projectMaterialIssue.findMany.mockResolvedValue([
+                { issue_date: day('2026-09-02'), lines: [{ line_cost: new Prisma.Decimal(500) }] },
+            ]);
+
+            const result = await service.financials(OWNER, 'p1');
+
+            expect(result.byCategory.find((row) => row.category === 'MATERIAL')).toEqual(
+                { category: 'MATERIAL', amount: 500, budget: 100, remaining: -400, usedPct: 500 },
+            );
+            expect(result.forecast.remainingDirectCost).toBe(0);
         });
 
         it('lists people by cost, named from their card or else their login', async () => {
@@ -152,6 +281,13 @@ describe('ProjectCostingService', () => {
                     expectedRevenue: 12000,
                     expectedCost: 6000,    // 3,500 so far + 2,500 forecast labour
                     expectedMargin: 6000,
+                    // By cost: 3,500 of an expected 6,000 is 58.33% of the job,
+                    // which has earned that share of the 12,000 contract — so
+                    // the 5,000 billed is 2,000 behind the work.
+                    percentComplete: 58.33,
+                    earnedRevenue: 7000,
+                    earnedMargin: 3500,
+                    billedAheadOfWork: -2000,
                 }));
                 expect(result.byMonth.find((row) => row.month === '2026-08')!.revenue).toBe(5000);
                 expect(result.byMonth.find((row) => row.month === '2026-09')!.revenue).toBe(0);
@@ -173,6 +309,9 @@ describe('ProjectCostingService', () => {
                     unbilledAmount: 3000,
                     expectedRevenue: 7000,
                     leftToInvoice: null,
+                    // Percent complete is a fixed-price measure.
+                    percentComplete: null,
+                    earnedRevenue: null,
                 }));
             });
 
@@ -205,11 +344,15 @@ describe('ProjectCostingService', () => {
                 budgetRemaining: 4800,
             }));
             expect(result.byCategory).toEqual([
-                { category: 'LABOUR', amount: 3500 },
-                { category: 'MATERIAL', amount: 500 },
-                { category: 'SERVICES', amount: 1000 },
-                { category: 'EXPENSE', amount: 200 },
+                { category: 'LABOUR', amount: 3500, budget: null, remaining: null, usedPct: null },
+                { category: 'MATERIAL', amount: 500, budget: null, remaining: null, usedPct: null },
+                { category: 'SERVICES', amount: 1000, budget: null, remaining: null, usedPct: null },
+                { category: 'EXPENSE', amount: 200, budget: null, remaining: null, usedPct: null },
             ]);
+            expect(result.budgetByCategory).toBe(false);
+            // With no budget by category, other costs forecast nothing further.
+            expect(result.forecast.remainingDirectCost).toBe(0);
+            expect(result.forecast.estimateAtCompletion).toBe(7700); // 5,200 so far + 2,500 labour to come
             // The uncosted issue line is reported, never counted as free.
             expect(result.uncosted.materialLines).toBe(1);
             expect(result.byMonth).toEqual([
@@ -244,6 +387,60 @@ describe('ProjectCostingService', () => {
 
             await expect(service.financials(OWNER, 'p-private')).rejects.toThrow(NotFoundException);
             expect(db.projectTimeEntry.groupBy).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('setBudget', () => {
+        it('replaces the lines, drops zero ones, and writes their sum to the project in one transaction', async () => {
+            db.projectBudgetLine.findMany.mockResolvedValue([{ category: 'LABOUR', amount: new Prisma.Decimal(4000) }]);
+
+            const result = await service.setBudget(OWNER, 'p1', [
+                { category: 'LABOUR', amount: 5000 },
+                { category: 'MATERIAL', amount: 2500.5 },
+                { category: 'OTHER', amount: 0 },
+            ], { userId: 'owner' });
+
+            expect(result).toEqual({
+                lines: [{ category: 'LABOUR', amount: 5000 }, { category: 'MATERIAL', amount: 2500.5 }],
+                total: 7500.5,
+            });
+            expect(db.$transaction).toHaveBeenCalledTimes(1);
+            expect(db.projectBudgetLine.deleteMany).toHaveBeenCalledWith({ where: { tenant_id: 'tenant-1', project_id: 'p1' } });
+            expect(db.projectBudgetLine.createMany).toHaveBeenCalledWith({
+                data: [
+                    { tenant_id: 'tenant-1', project_id: 'p1', category: 'LABOUR', amount: 5000, updated_by: 'owner' },
+                    { tenant_id: 'tenant-1', project_id: 'p1', category: 'MATERIAL', amount: 2500.5, updated_by: 'owner' },
+                ],
+            });
+            expect(db.project.update).toHaveBeenCalledWith({ where: { id: 'p1' }, data: { budget_amount: 7500.5 } });
+            expect(audit.log).toHaveBeenCalledWith('PROJECT_BUDGET_UPDATED', 'Project', expect.anything(), 'p1', {
+                before: [{ category: 'LABOUR', amount: 4000 }],
+                after: result.lines,
+            });
+        });
+
+        it('clearing every line leaves the project\'s single budget figure alone', async () => {
+            const result = await service.setBudget(OWNER, 'p1', [], { userId: 'owner' });
+
+            expect(result).toEqual({ lines: [], total: null });
+            expect(db.projectBudgetLine.deleteMany).toHaveBeenCalled();
+            expect(db.project.update).not.toHaveBeenCalled();
+        });
+
+        it('refuses a category twice, an unknown one, or a negative amount', async () => {
+            await expect(service.setBudget(OWNER, 'p1', [
+                { category: 'LABOUR', amount: 1 }, { category: 'LABOUR', amount: 2 },
+            ], {})).rejects.toThrow(BadRequestException);
+            await expect(service.setBudget(OWNER, 'p1', [{ category: 'TRAVEL' as any, amount: 1 }], {})).rejects.toThrow(BadRequestException);
+            await expect(service.setBudget(OWNER, 'p1', [{ category: 'OTHER', amount: -1 }], {})).rejects.toThrow(BadRequestException);
+            expect(db.$transaction).not.toHaveBeenCalled();
+        });
+
+        it('is no wider than the project', async () => {
+            access.assertProjectVisible.mockRejectedValue(new NotFoundException('Project not found'));
+
+            await expect(service.setBudget(OWNER, 'p-private', [], {})).rejects.toThrow(NotFoundException);
+            expect(db.projectBudgetLine.deleteMany).not.toHaveBeenCalled();
         });
     });
 

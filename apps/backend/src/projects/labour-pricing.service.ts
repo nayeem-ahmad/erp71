@@ -52,6 +52,38 @@ export class LabourPricingService {
     }
 
     /**
+     * What an hour of each of these employees costs on one day — the
+     * forecast's "who does the rest, at what" — in one read. An employee that
+     * nothing prices is left out of the map.
+     */
+    async ratesOn(tenantId: string, employeeIds: readonly string[], date: Date): Promise<Map<string, HourlyCost>> {
+        const ids = [...new Set(employeeIds)];
+        const result = new Map<string, HourlyCost>();
+        if (ids.length === 0) return result;
+        const [employees, rates, settings] = await Promise.all([
+            this.db.employee.findMany({
+                where: { tenant_id: tenantId, id: { in: ids } },
+                select: { id: true, basic_salary: true },
+            }),
+            this.db.employeeCostRate.findMany({
+                where: { tenant_id: tenantId, employee_id: { in: ids }, effective_from: { lte: date } },
+                select: { employee_id: true, hourly_cost: true, effective_from: true },
+            }),
+            this.settings(tenantId),
+        ]);
+        for (const employee of employees) {
+            const cost = resolveHourlyCost(
+                date,
+                rates.filter((row) => row.employee_id === employee.id),
+                employee.basic_salary,
+                settings,
+            );
+            if (cost) result.set(employee.id, cost);
+        }
+        return result;
+    }
+
+    /**
      * Price many entries at once — the "price these hours" action on a
      * project's financials. One read of each person's salary and rates, not
      * one per entry.

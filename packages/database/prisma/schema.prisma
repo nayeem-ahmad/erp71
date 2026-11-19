@@ -1176,6 +1176,7 @@ model Tenant {
   employeeCostRates          EmployeeCostRate[]
   projectCostingSettings     ProjectCostingSettings?
   projectCostEntries         ProjectCostEntry[]
+  projectBudgetLines         ProjectBudgetLine[]
   projectMaterialIssues      ProjectMaterialIssue[]
   projectTypes               ProjectType[]
   projectMembers             ProjectMember[]
@@ -8471,6 +8472,7 @@ model Project {
   expenses       ExpenseEntry[]
   sales          Sale[]
   skills         ProjectSkill[]
+  budgetLines    ProjectBudgetLine[]
 
   codeHistory ProjectCodeHistory[]
 
@@ -9236,6 +9238,41 @@ enum ProjectCostCategory {
   EXPENSE
   OVERHEAD
   OTHER
+}
+
+/// What a project's budget is split by: its labour, plus the categories its
+/// other costs are recorded under (`ProjectCostCategory`).
+enum ProjectBudgetCategory {
+  LABOUR
+  MATERIAL
+  SERVICES
+  EXPENSE
+  OVERHEAD
+  OTHER
+}
+
+/// One category's share of a project's budget — budget vs actual by category.
+///
+/// While a project has any lines, its budget **is** their sum: saving lines
+/// writes that sum to `Project.budget_amount`, and the project form will not
+/// set a different figure. A category with no line has no budget of its own.
+/// Plain management accounting: nothing posts.
+model ProjectBudgetLine {
+  id         String                @id @default(uuid())
+  tenant_id  String
+  project_id String
+  category   ProjectBudgetCategory
+  amount     Decimal               @db.Decimal(14, 2)
+  updated_by String?
+  created_at DateTime              @default(now())
+  updated_at DateTime              @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@unique([project_id, category])
+  @@index([tenant_id, project_id])
+  @@map("project_budget_lines")
 }
 
 /// A project cost with no document of its own elsewhere — a subcontractor's

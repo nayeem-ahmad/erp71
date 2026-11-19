@@ -6,9 +6,7 @@ import { ProjectAccessService, type ProjectViewer } from './project-access.servi
 import { LabourPricingService } from './labour-pricing.service';
 import { LIVE_COST_ENTRY } from './project-direct-costs.service';
 import { ProjectUnbilledService } from './project-unbilled.service';
-
-const num = (value: Prisma.Decimal | number | null | undefined) => Number(value ?? 0);
-const round2 = (value: number) => Math.round(value * 100) / 100;
+import { BUDGET_CATEGORIES, type BudgetCategory, marginPct, num, refundNet, round2, saleNet } from './project-money.util';
 
 /** Writes per transaction when pricing a backlog of hours: keeps each one short. */
 const PRICE_BATCH = 200;
@@ -22,6 +20,19 @@ export interface FinancialsPerson {
     hours: number;
     labourCost: number;
     uncostedHours: number;
+}
+
+/** One person's share of the work still to do, and what it should cost. */
+export interface ForecastPerson {
+    key: string;
+    name: string;
+    employeeId: string | null;
+    remainingHours: number;
+    rate: number | null;
+    /** PERSON: their own rate today. AVERAGE: the project's average so far, for
+     *  unassigned work or a person nothing prices. Null: no rate at all. */
+    rateSource: 'PERSON' | 'AVERAGE' | null;
+    cost: number | null;
 }
 
 /**
@@ -51,7 +62,7 @@ export class ProjectCostingService {
         await this.access.assertProjectVisible(viewer, projectId);
         const where = { tenant_id: tenantId, project_id: projectId };
 
-        const [project, byPerson, uncostedByPerson, byDay, remaining, settings, costEntries, issues, expenses, sales] = await Promise.all([
+        const [project, byPerson, uncostedByPerson, byDay, remaining, settings, costEntries, issues, expenses, sales, budgetLines] = await Promise.all([
             this.db.project.findFirst({
                 where: { id: projectId, tenant_id: tenantId },
                 select: {
@@ -79,7 +90,10 @@ export class ProjectCostingService {
                 where,
                 _sum: { hours: true, cost_amount: true },
             }),
-            this.db.projectTask.aggregate({
+            // Phase D: the work still open, by who is on it — so the rest is
+            // priced at each assignee's own rate, not the project's average.
+            this.db.projectTask.groupBy({
+                by: ['assignee_id', 'assignee_employee_id'],
                 where: { tenant_id: tenantId, project_id: projectId, deleted_at: null, status: { category: { not: 'DONE' } } },
                 _sum: { remaining_hours: true },
             }),
@@ -102,6 +116,11 @@ export class ProjectCostingService {
                 where: { ...where, status: { not: 'CANCELLED' } },
                 select: { id: true, total_amount: true, vat_amount: true, sd_amount: true, sale_date: true },
             }),
+            // Phase D: the budget split by category, when it has been.
+            this.db.projectBudgetLine.findMany({
+                where,
+                select: { category: true, amount: true },
+            }),
         ]);
         if (!project) throw new NotFoundException('Project not found');
 
@@ -118,10 +137,18 @@ export class ProjectCostingService {
             .reduce((sum, row) => sum + row.uncostedHours, 0);
         const totalCost = round2(labourCost + direct.total);
         const revenue = await this.revenue(tenantId, sales);
-        const budget = project.budget_amount === null ? null : num(project.budget_amount);
+        // Split by category, the budget is the lines' sum (saving them writes
+        // that sum to the project too, so the two only differ mid-save).
+        const budgetOf = new Map<string, number>(budgetLines.map((line) => [line.category, num(line.amount)]));
+        const budget = budgetLines.length > 0
+            ? round2([...budgetOf.values()].reduce((sum, value) => sum + value, 0))
+            : project.budget_amount === null ? null : num(project.budget_amount);
         const averageRate = costedHours > 0 ? round2(labourCost / costedHours) : null;
-        const remainingHours = num(remaining._sum.remaining_hours);
-        const estimatedRemainingCost = averageRate === null ? null : round2(remainingHours * averageRate);
+        const actualOf = new Map<string, number>([
+            ['LABOUR', labourCost],
+            ...direct.byCategory.map((row) => [row.category, row.amount] as [string, number]),
+        ]);
+        const forecast = await this.forecast(tenantId, remaining, averageRate, budgetOf, actualOf, totalCost);
 
         return {
             project: { id: project.id, code: project.code, name: project.name },
@@ -139,10 +166,21 @@ export class ProjectCostingService {
                 budgetRemaining: budget === null ? null : round2(budget - totalCost),
                 averageRate,
             },
-            byCategory: [
-                { category: 'LABOUR', amount: labourCost },
-                ...direct.byCategory,
-            ].filter((row) => row.amount > 0),
+            budgetByCategory: budgetLines.length > 0,
+            // Budget vs actual: every category that has either.
+            byCategory: BUDGET_CATEGORIES
+                .filter((category) => (actualOf.get(category) ?? 0) > 0 || budgetOf.has(category))
+                .map((category) => {
+                    const amount = round2(actualOf.get(category) ?? 0);
+                    const lineBudget = budgetOf.has(category) ? round2(budgetOf.get(category)!) : null;
+                    return {
+                        category,
+                        amount,
+                        budget: lineBudget,
+                        remaining: lineBudget === null ? null : round2(lineBudget - amount),
+                        usedPct: lineBudget && lineBudget > 0 ? round2((amount / lineBudget) * 100) : null,
+                    };
+                }),
             uncosted: {
                 // No employee behind the login: link it on the Team page.
                 noEmployeeHours: round2(noEmployeeHours),
@@ -151,14 +189,9 @@ export class ProjectCostingService {
                 // Issue lines the stock pool had no cost for when they left.
                 materialLines: direct.uncostedMaterialLines,
             },
-            forecast: {
-                remainingHours: round2(remainingHours),
-                // At this project's own average so far: who does the rest is not known yet.
-                estimatedRemainingCost,
-                estimateAtCompletion: estimatedRemainingCost === null ? null : round2(labourCost + estimatedRemainingCost),
-            },
+            forecast,
             byPerson: people.sort((a, b) => b.labourCost - a.labourCost || b.hours - a.hours),
-            revenue: await this.revenueSummary(tenantId, project, revenue, totalCost, estimatedRemainingCost),
+            revenue: await this.revenueSummary(tenantId, project, revenue, totalCost, forecast.estimateAtCompletion),
             byMonth: this.months(byDay, direct.byMonth, revenue.byMonth),
         };
     }
@@ -175,15 +208,13 @@ export class ProjectCostingService {
         const byMonth = new Map<string, number>();
         let invoiced = 0;
         let net = 0;
-        const netShare = new Map<string, number>();
+        const saleById = new Map(sales.map((sale) => [sale.id, sale]));
         for (const sale of sales) {
-            const total = num(sale.total_amount);
-            const saleNet = total - num(sale.vat_amount) - num(sale.sd_amount);
-            invoiced += total;
-            net += saleNet;
-            netShare.set(sale.id, total > 0 ? saleNet / total : 0);
+            const value = saleNet(sale);
+            invoiced += num(sale.total_amount);
+            net += value;
             const month = sale.sale_date.toISOString().slice(0, 7);
-            byMonth.set(month, (byMonth.get(month) ?? 0) + saleNet);
+            byMonth.set(month, (byMonth.get(month) ?? 0) + value);
         }
         if (sales.length > 0) {
             const returns = await this.db.salesReturn.findMany({
@@ -191,11 +222,10 @@ export class ProjectCostingService {
                 select: { sale_id: true, total_refund: true, created_at: true },
             });
             for (const ret of returns) {
-                const share = netShare.get(ret.sale_id ?? '') ?? 0;
-                const refundNet = num(ret.total_refund) * share;
-                net -= refundNet;
+                const value = refundNet(ret.total_refund, saleById.get(ret.sale_id ?? ''));
+                net -= value;
                 const month = ret.created_at.toISOString().slice(0, 7);
-                byMonth.set(month, (byMonth.get(month) ?? 0) - refundNet);
+                byMonth.set(month, (byMonth.get(month) ?? 0) - value);
             }
         }
         return { invoiced: round2(invoiced), net: round2(net), byMonth };
@@ -207,7 +237,7 @@ export class ProjectCostingService {
         project: { id: string; billing_type: string; contract_value: any; bill_rate: any },
         revenue: { invoiced: number; net: number },
         totalCost: number,
-        estimatedRemainingLabour: number | null,
+        estimateAtCompletion: number,
     ) {
         const billingType = project.billing_type;
         const contractValue = project.contract_value === null ? null : num(project.contract_value);
@@ -223,7 +253,17 @@ export class ProjectCostingService {
             : billingType === 'TIME_AND_MATERIALS'
                 ? round2(revenue.net + (unbilled?.amount ?? 0))
                 : null;
-        const expectedCost = round2(totalCost + (estimatedRemainingLabour ?? 0));
+        const expectedCost = estimateAtCompletion;
+        // Fixed price, by cost: how far along the job is (cost so far ÷ cost at
+        // completion), what that share of the contract has earned, and whether
+        // the invoices are ahead of it (billed in advance) or behind (earned,
+        // not yet billed). Margin on invoices alone swings with the billing
+        // plan; this does not.
+        const completion = billingType === 'FIXED_PRICE' && contractValue !== null && expectedCost > 0
+            ? Math.min(totalCost / expectedCost, 1)
+            : null;
+        const percentComplete = completion === null ? null : round2(completion * 100);
+        const earnedRevenue = completion === null ? null : round2((contractValue ?? 0) * completion);
 
         return {
             billingType,
@@ -231,7 +271,7 @@ export class ProjectCostingService {
             invoiced: revenue.invoiced,
             revenue: revenue.net,
             margin,
-            marginPct: revenue.net > 0 ? round2((margin / revenue.net) * 100) : null,
+            marginPct: marginPct(margin, revenue.net),
             // Fixed price: the contract less what has been billed so far.
             leftToInvoice: billingType === 'FIXED_PRICE' && contractValue !== null ? round2(contractValue - revenue.net) : null,
             // Time and materials: billable hours not yet on an invoice, at bill rates.
@@ -241,7 +281,166 @@ export class ProjectCostingService {
             expectedRevenue,
             expectedCost,
             expectedMargin: expectedRevenue === null ? null : round2(expectedRevenue - expectedCost),
+            percentComplete,
+            earnedRevenue,
+            earnedMargin: earnedRevenue === null ? null : round2(earnedRevenue - totalCost),
+            // Positive: invoiced ahead of the work. Negative: work not yet invoiced.
+            billedAheadOfWork: earnedRevenue === null ? null : round2(revenue.net - earnedRevenue),
         };
+    }
+
+    /**
+     * How the project should finish, cost-wise.
+     *
+     * Labour still to come is each open task's remaining hours at its
+     * assignee's rate **today** — a raise next month is not known yet — or at
+     * the project's own average so far for work nobody is on, or someone
+     * nothing prices. Hours neither can price are counted apart, never as free.
+     *
+     * Other costs still to come are what each budgeted category has left
+     * (never less than nothing: an overspent category is not a saving). A
+     * category with no budget line forecasts nothing further.
+     */
+    private async forecast(
+        tenantId: string,
+        remaining: Array<{ assignee_id: string | null; assignee_employee_id: string | null; _sum: { remaining_hours: any } }>,
+        averageRate: number | null,
+        budgetOf: Map<string, number>,
+        actualOf: Map<string, number>,
+        totalCost: number,
+    ) {
+        const open = remaining.filter((row) => num(row._sum.remaining_hours) > 0);
+        const userIds = [...new Set(open.map((row) => row.assignee_id).filter((id): id is string => !!id))];
+        const assignedEmployeeIds = open.map((row) => row.assignee_employee_id).filter((id): id is string => !!id);
+
+        // A login assignee is priced as the employee behind it, if there is one.
+        const [linked, users] = await Promise.all([
+            userIds.length
+                ? this.db.employee.findMany({
+                      where: { tenant_id: tenantId, user_id: { in: userIds }, deleted_at: null },
+                      select: { id: true, user_id: true },
+                  })
+                : Promise.resolve([]),
+            userIds.length
+                ? this.db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, email: true } })
+                : Promise.resolve([]),
+        ]);
+        const employeeOfUser = new Map(linked.map((row) => [row.user_id as string, row.id]));
+        const employeeIds = [...new Set([...assignedEmployeeIds, ...employeeOfUser.values()])];
+        const [rates, employees] = await Promise.all([
+            this.pricing.ratesOn(tenantId, employeeIds, new Date()),
+            employeeIds.length
+                ? this.db.employee.findMany({
+                      where: { tenant_id: tenantId, id: { in: employeeIds } },
+                      select: { id: true, name: true },
+                  })
+                : Promise.resolve([]),
+        ]);
+        const employeeName = new Map(employees.map((row) => [row.id, row.name]));
+        const userName = new Map(users.map((row) => [row.id, row.name || row.email || '']));
+
+        const people = new Map<string, ForecastPerson>();
+        for (const row of open) {
+            const employeeId = row.assignee_employee_id ?? (row.assignee_id ? employeeOfUser.get(row.assignee_id) ?? null : null);
+            const key = employeeId ? `employee:${employeeId}` : row.assignee_id ? `user:${row.assignee_id}` : 'unassigned';
+            const person = people.get(key) ?? {
+                key,
+                name: employeeId ? employeeName.get(employeeId) ?? '' : row.assignee_id ? userName.get(row.assignee_id) ?? '' : '',
+                employeeId,
+                remainingHours: 0,
+                rate: null,
+                rateSource: null,
+                cost: null,
+            };
+            person.remainingHours += num(row._sum.remaining_hours);
+            people.set(key, person);
+        }
+        for (const person of people.values()) {
+            const own = person.employeeId ? rates.get(person.employeeId) : undefined;
+            if (own) {
+                person.rate = round2(Number(own.rate));
+                person.rateSource = 'PERSON';
+            } else if (averageRate !== null) {
+                person.rate = averageRate;
+                person.rateSource = 'AVERAGE';
+            }
+            person.remainingHours = round2(person.remainingHours);
+            person.cost = person.rate === null ? null : round2(person.remainingHours * person.rate);
+        }
+
+        const byPerson = [...people.values()].sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0) || b.remainingHours - a.remainingHours);
+        const remainingHours = round2(byPerson.reduce((sum, row) => sum + row.remainingHours, 0));
+        const unratedHours = round2(byPerson.filter((row) => row.cost === null).reduce((sum, row) => sum + row.remainingHours, 0));
+        const estimatedRemainingCost = round2(byPerson.reduce((sum, row) => sum + (row.cost ?? 0), 0));
+        const remainingDirectCost = round2(
+            [...budgetOf.entries()]
+                .filter(([category]) => category !== 'LABOUR')
+                .reduce((sum, [category, budget]) => sum + Math.max(budget - (actualOf.get(category) ?? 0), 0), 0),
+        );
+
+        return {
+            remainingHours,
+            estimatedRemainingCost,
+            unratedHours,
+            remainingDirectCost,
+            estimateAtCompletion: round2(totalCost + estimatedRemainingCost + remainingDirectCost),
+            byPerson,
+        };
+    }
+
+    /**
+     * Split the project's budget by category. Replaces every line; categories
+     * left out (or at zero) have no budget of their own. While any line
+     * exists the project's budget is their sum, written to the project in the
+     * same transaction so lists and the project page agree. Saving no lines
+     * leaves the project's single budget figure as it was.
+     */
+    async setBudget(
+        viewer: ProjectViewer,
+        projectId: string,
+        lines: ReadonlyArray<{ category: BudgetCategory; amount: number }>,
+        ctx: AuditContext,
+    ) {
+        const tenantId = viewer.tenantId;
+        await this.access.assertProjectVisible(viewer, projectId);
+
+        const seen = new Set<string>();
+        for (const line of lines) {
+            if (!BUDGET_CATEGORIES.includes(line.category)) throw new BadRequestException('Unknown budget category.');
+            if (seen.has(line.category)) throw new BadRequestException('Each category can be budgeted once.');
+            seen.add(line.category);
+            if (!(line.amount >= 0 && line.amount <= 1e12)) throw new BadRequestException('A budget amount must be zero or more.');
+        }
+        const kept = lines.filter((line) => line.amount > 0).map((line) => ({ ...line, amount: round2(line.amount) }));
+        const total = round2(kept.reduce((sum, line) => sum + line.amount, 0));
+
+        const before = await this.db.projectBudgetLine.findMany({
+            where: { tenant_id: tenantId, project_id: projectId },
+            select: { category: true, amount: true },
+        });
+        await this.db.$transaction(async (tx) => {
+            await tx.projectBudgetLine.deleteMany({ where: { tenant_id: tenantId, project_id: projectId } });
+            if (kept.length === 0) return;
+            await tx.projectBudgetLine.createMany({
+                data: kept.map((line) => ({
+                    tenant_id: tenantId,
+                    project_id: projectId,
+                    category: line.category,
+                    amount: line.amount,
+                    updated_by: ctx.userId ?? null,
+                })),
+            });
+            await tx.project.update({ where: { id: projectId }, data: { budget_amount: total } });
+        });
+
+        await this.audit
+            .log('PROJECT_BUDGET_UPDATED', 'Project', { ...ctx, tenantId }, projectId, {
+                before: before.map((line) => ({ category: line.category, amount: num(line.amount) })),
+                after: kept,
+            })
+            .catch(() => {});
+
+        return { lines: kept, total: kept.length > 0 ? total : null };
     }
 
     /** Expenses, cost entries and material issues, by category and by month. */
@@ -268,7 +467,7 @@ export class ProjectCostingService {
         }
         for (const expense of expenses) add('EXPENSE', expense.expense_date, num(expense.amount));
 
-        const order = ['MATERIAL', 'SERVICES', 'EXPENSE', 'OVERHEAD', 'OTHER'];
+        const order = BUDGET_CATEGORIES.filter((category) => category !== 'LABOUR');
         return {
             total: round2([...byCategory.values()].reduce((sum, value) => sum + value, 0)),
             byCategory: order

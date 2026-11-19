@@ -11,7 +11,10 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { extractRequestMeta } from '../audit/audit-route.util';
 import { ProjectCostingService } from './project-costing.service';
 import { ProjectDirectCostsService } from './project-direct-costs.service';
-import { CostingSettingsDto, CostSourcesQueryDto, CreateProjectCostDto, IssueMaterialsDto } from './project.dto';
+import { ProjectProfitabilityService } from './project-profitability.service';
+import {
+    CostingSettingsDto, CostSourcesQueryDto, CreateProjectCostDto, IssueMaterialsDto, ProfitabilityQueryDto, SetProjectBudgetDto,
+} from './project.dto';
 
 /**
  * Project costing, Phase A. Its own prefix rather than routes under
@@ -26,6 +29,7 @@ export class ProjectCostingController {
     constructor(
         private readonly costing: ProjectCostingService,
         private readonly direct: ProjectDirectCostsService,
+        private readonly profitability: ProjectProfitabilityService,
     ) {}
 
     /**
@@ -98,6 +102,32 @@ export class ProjectCostingController {
         @Request() req: any,
     ) {
         return this.direct.reverseIssue(tenant, projectId, issueId, { userId: tenant.userId, ...extractRequestMeta(req) });
+    }
+
+    /** Phase D: every visible project's cost, revenue and margin. */
+    @Get('report')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS, StorePermission.VIEW_PROJECT_FINANCIALS)
+    report(@Tenant() tenant: TenantContext, @Query() query: ProfitabilityQueryDto) {
+        return this.profitability.report(tenant, query);
+    }
+
+    /**
+     * Phase D: the budget split by category. Changing a project's budget is
+     * MANAGE_PROJECTS on the project form, so it is here too.
+     */
+    @Put('projects/:projectId/budget')
+    @RequireStorePermission(
+        StorePermission.VIEW_PROJECTS,
+        StorePermission.VIEW_PROJECT_FINANCIALS,
+        StorePermission.MANAGE_PROJECTS,
+    )
+    setBudget(
+        @Tenant() tenant: TenantContext,
+        @Param('projectId') projectId: string,
+        @Body() dto: SetProjectBudgetDto,
+        @Request() req: any,
+    ) {
+        return this.costing.setBudget(tenant, projectId, dto.lines, { userId: tenant.userId, ...extractRequestMeta(req) });
     }
 
     @Get('settings')

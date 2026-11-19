@@ -22,6 +22,8 @@ export interface ProjectFormValues {
     startDate: string;
     targetEndDate: string;
     budgetAmount: string;
+    /** Split by category on Financials: the budget is set there, read-only here. */
+    budgetByCategory?: boolean;
     billingType: string;
     contractValue: string;
     billRate: string;
@@ -69,6 +71,7 @@ export function toFormValues(project: Record<string, unknown> | null): ProjectFo
         startDate: toDateInput(project.start_date as string),
         targetEndDate: toDateInput(project.target_end_date as string),
         budgetAmount: project.budget_amount == null ? '' : String(project.budget_amount),
+        budgetByCategory: Boolean(project.budget_by_category),
         billingType: (project.billing_type as string) ?? 'INTERNAL',
         contractValue: project.contract_value == null ? '' : String(project.contract_value),
         billRate: project.bill_rate == null ? '' : String(project.bill_rate),
@@ -196,11 +199,14 @@ export default function ProjectForm({
             // `null`, not `undefined`, on edit: undefined is "leave alone", so
             // clearing the field would otherwise leave the old budget in place.
             // `@IsOptional()` skips null, and the service writes it as null.
-            budgetAmount: form.budgetAmount
-                ? Number(form.budgetAmount)
-                : mode === 'edit'
-                  ? null
-                  : undefined,
+            // Split by category, the budget belongs to Financials: leave it alone.
+            budgetAmount: form.budgetByCategory
+                ? undefined
+                : form.budgetAmount
+                  ? Number(form.budgetAmount)
+                  : mode === 'edit'
+                    ? null
+                    : undefined,
             billingType: form.billingType,
             // Each figure only means something under its own billing type; the
             // other is cleared rather than left behind to confuse a report.
@@ -314,12 +320,18 @@ export default function ProjectForm({
                         ))}
                     </Select>
                 </Field>
-                <Field label={m.fields.budget}>
+                <Field
+                    label={m.fields.budget}
+                    htmlFor="project-budget"
+                    hint={form.budgetByCategory ? m.financials.budgetSetByCategory : undefined}
+                >
                     <Input
+                        id="project-budget"
                         type="number"
                         min="0"
                         step="0.01"
                         value={form.budgetAmount}
+                        disabled={form.budgetByCategory}
                         onChange={set('budgetAmount')}
                     />
                 </Field>

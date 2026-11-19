@@ -279,6 +279,8 @@ export const routes = {
         sprintDetail: (id: string) => `/projects/sprints/${id}` as const,
         hourLogs: '/projects/hour-logs',
         hourLogReport: '/projects/hour-logs/report',
+        /** Every project's cost, revenue and margin — VIEW_PROJECT_FINANCIALS. */
+        profitability: '/projects/profitability',
         staffing: '/projects/staffing',
         settings: '/projects/settings',
     },
