@@ -57,6 +57,12 @@ type LeadWorkspaceProps = {
     onConvertResult: (result: { customerId: string; existing: boolean }) => void;
     /** The lead is gone; the host decides where that leaves the person. */
     onDeleted: () => void;
+    /**
+     * `details` drops the activity timeline and lays the rest out in one
+     * column. For the activities list's side panel, whose Activities tab
+     * already is that timeline — the Details tab beside it is everything else.
+     */
+    variant?: 'full' | 'details';
 };
 
 /**
@@ -67,7 +73,14 @@ type LeadWorkspaceProps = {
  * lead page, and the leads board, which opens it in a drawer so a card can be
  * worked without losing the board behind it.
  */
-export default function LeadWorkspace({ leadId, onLoaded, onChanged, onConvertResult, onDeleted }: Readonly<LeadWorkspaceProps>) {
+export default function LeadWorkspace({
+    leadId,
+    onLoaded,
+    onChanged,
+    onConvertResult,
+    onDeleted,
+    variant = 'full',
+}: Readonly<LeadWorkspaceProps>) {
     const { t } = useI18n();
     const m = t.crm.leads;
 
@@ -249,6 +262,87 @@ export default function LeadWorkspace({ leadId, onLoaded, onChanged, onConvertRe
         (def) => (lead.custom_fields as Record<string, string> | null)?.[def.key],
     );
 
+    // Who the lead is: the contact card and any custom fields. Shared by both
+    // layouts — beside the timeline on the lead page, alone in the side panel.
+    const detailCards = (
+        <>
+            <div className="rounded-lg border border-gray-100 bg-white p-4">
+                <p className="text-xs font-semibold uppercase text-gray-500 mb-3">{m.detail.contactSection}</p>
+                <dl className="space-y-3">
+                    <DetailRow icon={<Phone className="w-3.5 h-3.5" />} label={m.fields.mobile}>
+                        {lead.mobile ?? lead.phone}
+                    </DetailRow>
+                    {lead.email && (
+                        <DetailRow icon={<Mail className="w-3.5 h-3.5" />} label={m.fields.email}>
+                            {lead.email}
+                        </DetailRow>
+                    )}
+                    {lead.contact && (
+                        <DetailRow icon={<User className="w-3.5 h-3.5" />} label={m.detail.linkedContact}>
+                            <Link href={routes.crm.contactDetail(lead.contact.id)} className="text-blue-600 hover:underline">
+                                {lead.contact.name}
+                            </Link>
+                        </DetailRow>
+                    )}
+                    {lead.organization?.name && (
+                        <DetailRow icon={<Building2 className="w-3.5 h-3.5" />} label={m.detail.organization}>
+                            {lead.organization.name}
+                        </DetailRow>
+                    )}
+                    {lead.address && (
+                        <DetailRow icon={<MapPin className="w-3.5 h-3.5" />} label={m.fields.address}>
+                            {lead.address}
+                        </DetailRow>
+                    )}
+                    {/* The owner belongs in the record itself, the way every CRM
+                        surfaces it — not only inside the edit form, where you would
+                        have to open the editor to learn who the lead belongs to. */}
+                    <DetailRow icon={<User className="w-3.5 h-3.5" />} label={m.fields.owner}>
+                        {lead.assignee?.name ?? m.fields.unassigned}
+                    </DetailRow>
+                    {(lead.remarks ?? lead.notes) && (
+                        <DetailRow icon={<MessageSquare className="w-3.5 h-3.5" />} label={m.fields.remarks}>
+                            {lead.remarks ?? lead.notes}
+                        </DetailRow>
+                    )}
+                </dl>
+                {socialLinks.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                        <p className="text-xs text-gray-500 mb-2">{m.fields.socialLinks}</p>
+                        <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+                            {socialLinks.map((link) => (
+                                <a key={link.label} href={link.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold">
+                                    <ExternalLink className="w-3 h-3" /> {link.label}
+                                </a>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/*
+              * No Next Step card. The three `next_step*` fields are a read-only
+              * rollup of the earliest PLANNED CrmActivity, and CrmActivityPanel
+              * below renders that same activity — with the Complete, Edit and
+              * Cancel actions the card never had. Showing both printed one task
+              * twice on one screen, the second copy uneditable.
+              */}
+            {filledCustomFields.length > 0 && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+                    <p className="text-xs font-semibold uppercase text-gray-500 mb-3">{m.fields.customFields}</p>
+                    <dl className="space-y-2">
+                        {filledCustomFields.map((def) => (
+                            <div key={def.key} className="flex justify-between gap-3 text-sm">
+                                <dt className="text-gray-500">{def.label}</dt>
+                                <dd className="text-gray-900 font-medium text-end">{(lead.custom_fields as Record<string, string>)[def.key]}</dd>
+                            </div>
+                        ))}
+                    </dl>
+                </div>
+            )}
+        </>
+    );
+
     return (
         <div className="space-y-4">
             {/* Identity bar. Stays full width above the split: the name, how the lead
@@ -307,138 +401,71 @@ export default function LeadWorkspace({ leadId, onLoaded, onChanged, onConvertRe
                 label-and-value pairs, while the right one carries activity prose and
                 the log and plan forms. `items-start` is what lets the left column
                 stick — a stretched grid item has no room to move. */}
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
-                <div className="space-y-4 lg:sticky lg:top-4">
-                    <div className="rounded-lg border border-gray-100 bg-white p-4">
-                        <p className="text-xs font-semibold uppercase text-gray-500 mb-3">{m.detail.contactSection}</p>
-                        <dl className="space-y-3">
-                            <DetailRow icon={<Phone className="w-3.5 h-3.5" />} label={m.fields.mobile}>
-                                {lead.mobile ?? lead.phone}
-                            </DetailRow>
-                            {lead.email && (
-                                <DetailRow icon={<Mail className="w-3.5 h-3.5" />} label={m.fields.email}>
-                                    {lead.email}
-                                </DetailRow>
-                            )}
-                            {lead.contact && (
-                                <DetailRow icon={<User className="w-3.5 h-3.5" />} label={m.detail.linkedContact}>
-                                    <Link href={routes.crm.contactDetail(lead.contact.id)} className="text-blue-600 hover:underline">
-                                        {lead.contact.name}
-                                    </Link>
-                                </DetailRow>
-                            )}
-                            {lead.organization?.name && (
-                                <DetailRow icon={<Building2 className="w-3.5 h-3.5" />} label={m.detail.organization}>
-                                    {lead.organization.name}
-                                </DetailRow>
-                            )}
-                            {lead.address && (
-                                <DetailRow icon={<MapPin className="w-3.5 h-3.5" />} label={m.fields.address}>
-                                    {lead.address}
-                                </DetailRow>
-                            )}
-                            {/* The owner belongs in the record itself, the way every CRM
-                                surfaces it — not only inside the edit form, where you would
-                                have to open the editor to learn who the lead belongs to. */}
-                            <DetailRow icon={<User className="w-3.5 h-3.5" />} label={m.fields.owner}>
-                                {lead.assignee?.name ?? m.fields.unassigned}
-                            </DetailRow>
-                            {(lead.remarks ?? lead.notes) && (
-                                <DetailRow icon={<MessageSquare className="w-3.5 h-3.5" />} label={m.fields.remarks}>
-                                    {lead.remarks ?? lead.notes}
-                                </DetailRow>
-                            )}
-                        </dl>
-                        {socialLinks.length > 0 && (
-                            <div className="mt-3 pt-3 border-t border-gray-100">
-                                <p className="text-xs text-gray-500 mb-2">{m.fields.socialLinks}</p>
-                                <div className="flex flex-wrap gap-x-3 gap-y-1.5">
-                                    {socialLinks.map((link) => (
-                                        <a key={link.label} href={link.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold">
-                                            <ExternalLink className="w-3 h-3" /> {link.label}
-                                        </a>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
+            {variant === 'details' ? (
+                <div className="space-y-4">
+                    {detailCards}
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
+                    <div className="space-y-4 lg:sticky lg:top-4">
+                        {detailCards}
                     </div>
 
-                    {/*
-                      * No Next Step card. The three `next_step*` fields are a read-only
-                      * rollup of the earliest PLANNED CrmActivity, and CrmActivityPanel
-                      * below renders that same activity — with the Complete, Edit and
-                      * Cancel actions the card never had. Showing both printed one task
-                      * twice on one screen, the second copy uneditable.
-                      */}
-                    {filledCustomFields.length > 0 && (
-                        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
-                            <p className="text-xs font-semibold uppercase text-gray-500 mb-3">{m.fields.customFields}</p>
-                            <dl className="space-y-2">
-                                {filledCustomFields.map((def) => (
-                                    <div key={def.key} className="flex justify-between gap-3 text-sm">
-                                        <dt className="text-gray-500">{def.label}</dt>
-                                        <dd className="text-gray-900 font-medium text-end">{(lead.custom_fields as Record<string, string>)[def.key]}</dd>
+                    {/* One panel where there used to be two: a conversations list and a
+                        follow-ups list, over two tables that could not refer to each other.
+                        Planning a call and recording it are one loop now. */}
+                    <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">
+                            <div className="flex items-center gap-2">
+                                <MessageSquare className="w-5 h-5 text-primary" />
+                                <h2 className="text-sm font-semibold text-gray-900">{t.crm.activities.title}</h2>
+                            </div>
+                            {!isConverted && (
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => setShowDraftPanel((v) => !v)}
+                                    leftIcon={<Sparkles className="w-4 h-4" />}
+                                >
+                                    {m.detail.aiDraft}
+                                </Button>
+                            )}
+                        </div>
+
+                        <div className="p-4 space-y-4">
+                            {showDraftPanel && !isConverted && (
+                                <div className="bg-primary-light rounded-lg p-4 space-y-3 border border-primary-border">
+                                    <p className="text-xs font-semibold text-blue-700">{m.detail.aiDrafter}</p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <Select value={draftChannel} onChange={(e) => setDraftChannel(e.target.value)}>
+                                            {channels.map((c) => <option key={c.id} value={c.code}>{c.name}</option>)}
+                                        </Select>
+                                        <Select value={draftPurpose} onChange={(e) => setDraftPurpose(e.target.value)}>
+                                            <option value="follow_up">{m.detail.draftPurposeFollowUp}</option>
+                                            <option value="collection">{m.detail.draftPurposeCollection}</option>
+                                        </Select>
                                     </div>
-                                ))}
-                            </dl>
-                        </div>
-                    )}
-                </div>
-
-                {/* One panel where there used to be two: a conversations list and a
-                    follow-ups list, over two tables that could not refer to each other.
-                    Planning a call and recording it are one loop now. */}
-                <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">
-                        <div className="flex items-center gap-2">
-                            <MessageSquare className="w-5 h-5 text-primary" />
-                            <h2 className="text-sm font-semibold text-gray-900">{t.crm.activities.title}</h2>
-                        </div>
-                        {!isConverted && (
-                            <Button
-                                variant="secondary"
-                                onClick={() => setShowDraftPanel((v) => !v)}
-                                leftIcon={<Sparkles className="w-4 h-4" />}
-                            >
-                                {m.detail.aiDraft}
-                            </Button>
-                        )}
-                    </div>
-
-                    <div className="p-4 space-y-4">
-                        {showDraftPanel && !isConverted && (
-                            <div className="bg-primary-light rounded-lg p-4 space-y-3 border border-primary-border">
-                                <p className="text-xs font-semibold text-blue-700">{m.detail.aiDrafter}</p>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <Select value={draftChannel} onChange={(e) => setDraftChannel(e.target.value)}>
-                                        {channels.map((c) => <option key={c.id} value={c.code}>{c.name}</option>)}
-                                    </Select>
-                                    <Select value={draftPurpose} onChange={(e) => setDraftPurpose(e.target.value)}>
-                                        <option value="follow_up">{m.detail.draftPurposeFollowUp}</option>
-                                        <option value="collection">{m.detail.draftPurposeCollection}</option>
-                                    </Select>
+                                    <div className="flex gap-2">
+                                        <Button onClick={draftMessage} loading={draftingMessage} leftIcon={<Sparkles className="w-4 h-4" />}>
+                                            {m.detail.generateDraft}
+                                        </Button>
+                                        <Button variant="secondary" onClick={() => setShowDraftPanel(false)}>
+                                            {t.common.cancel}
+                                        </Button>
+                                    </div>
                                 </div>
-                                <div className="flex gap-2">
-                                    <Button onClick={draftMessage} loading={draftingMessage} leftIcon={<Sparkles className="w-4 h-4" />}>
-                                        {m.detail.generateDraft}
-                                    </Button>
-                                    <Button variant="secondary" onClick={() => setShowDraftPanel(false)}>
-                                        {t.common.cancel}
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
+                            )}
 
-                        <CrmActivityPanel
-                            leadId={leadId}
-                            targetLabel={{ name: lead.name, phone: lead.mobile ?? lead.phone }}
-                            draft={activityDraft}
-                            onDraftConsumed={clearActivityDraft}
-                            onChanged={onChanged}
-                        />
+                            <CrmActivityPanel
+                                leadId={leadId}
+                                targetLabel={{ name: lead.name, phone: lead.mobile ?? lead.phone }}
+                                draft={activityDraft}
+                                onDraftConsumed={clearActivityDraft}
+                                onChanged={onChanged}
+                            />
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* A dialog rather than a card in the flow: the two-column form does not
                 fit either column, and inline it used to shove the activity history
