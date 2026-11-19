@@ -24,6 +24,24 @@ describe('ModalShell', () => {
         expect(backdrop.className).toContain('z-modal');
     });
 
+    /**
+     * A shell rendered inside a `space-y-*` stack (the page wrapper is one)
+     * would otherwise take the stack's top margin and open that far down the
+     * window, leaving a strip of undimmed page above it. jsdom has no
+     * Tailwind, so this pins the class that prevents it.
+     */
+    it('refuses a margin from the stack it is rendered in', () => {
+        render(
+            <div className="space-y-4">
+                <p>above</p>
+                <ModalShell variant="drawer">
+                    <div>content</div>
+                </ModalShell>
+            </div>
+        );
+        expect(screen.getByRole('presentation').className.split(/\s+/)).toContain('!m-0');
+    });
+
     it('applies the updated panel radius and shadow', () => {
         render(
             <ModalShell>
