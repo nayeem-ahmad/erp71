@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { PageShell, PageHeader, Button, Input, Select, StatusBadge } from '@/components/ui';
+import { PageShell, PageHeader, Button, Checkbox, Input, Select, StatusBadge } from '@/components/ui';
 import {
     LABEL_COLORS,
     labelClass,
@@ -340,6 +340,17 @@ export default function ProjectSettingsPage() {
                                         </option>
                                     ))}
                                 </Select>
+                                {/* An hour carrying a tag that is not billable is never invoiced. */}
+                                <label className="flex min-h-touch items-center gap-1.5 text-xs text-gray-600">
+                                    <Checkbox
+                                        checked={(item as { billable?: boolean }).billable !== false}
+                                        disabled={busy}
+                                        onChange={(e) =>
+                                            run(() => api.updateProjectTimeTag(item.id, { billable: e.target.checked }))
+                                        }
+                                    />
+                                    {m.financials.billable}
+                                </label>
                                 <span className="flex-1" />
                                 <button
                                     type="button"

@@ -8,5 +8,7 @@ import { CrmCampaignsModule } from '../crm-campaigns/crm-campaigns.module';
     imports: [DatabaseModule, CrmCampaignsModule],
     controllers: [SalesController],
     providers: [SalesService],
+    // Project invoicing raises its credit sales through the same path.
+    exports: [SalesService],
 })
 export class SalesModule { }

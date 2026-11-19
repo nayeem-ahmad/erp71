@@ -897,6 +897,43 @@ export function openAuthedStream(endpoint: string, handlers: StreamHandlers): ()
 export interface ProjectCostingSettings {
     standardMonthlyHours: number;
     overheadPct: number;
+    /** The service product project invoices bill as. */
+    billingProductId?: string | null;
+}
+
+export type ProjectBillingType = 'FIXED_PRICE' | 'TIME_AND_MATERIALS' | 'INTERNAL';
+
+export interface ProjectBilling {
+    project: {
+        billingType: ProjectBillingType;
+        contractValue: number | null;
+        billRate: number | null;
+        customer: { id: string; name: string } | null;
+    };
+    billingProductId: string | null;
+    invoices: Array<{ id: string; serialNumber: string; date: string; totalAmount: number; amountPaid: number; status: string; note: string | null }>;
+    milestones: Array<{
+        id: string;
+        name: string;
+        targetDate: string | null;
+        completed: boolean;
+        amount: number | null;
+        invoice: { id: string; serialNumber: string } | null;
+    }>;
+    unbilledHours: {
+        hours: number;
+        amount: number;
+        unratedHours: number;
+        people: Array<{
+            key: string;
+            name: string;
+            memberId: string | null;
+            hours: number;
+            rate: number | null;
+            rateSource: 'MEMBER' | 'PROJECT' | null;
+            amount: number;
+        }>;
+    };
 }
 
 export interface EmployeeCostRates {
@@ -935,7 +972,23 @@ export interface ProjectFinancials {
         labourCost: number;
         uncostedHours: number;
     }>;
-    byMonth: Array<{ month: string; hours: number; labourCost: number; directCost: number; totalCost: number }>;
+    byMonth: Array<{ month: string; hours: number; labourCost: number; directCost: number; totalCost: number; revenue: number }>;
+    /** Phase C: what the project billed, and how it should finish. */
+    revenue: {
+        billingType: ProjectBillingType;
+        contractValue: number | null;
+        invoiced: number;
+        revenue: number;
+        margin: number;
+        marginPct: number | null;
+        leftToInvoice: number | null;
+        unbilledHours: number | null;
+        unbilledAmount: number | null;
+        unratedHours: number | null;
+        expectedRevenue: number | null;
+        expectedCost: number;
+        expectedMargin: number | null;
+    };
 }
 
 export type ProjectCostCategoryKey = 'LABOUR' | 'MATERIAL' | 'SERVICES' | 'EXPENSE' | 'OVERHEAD' | 'OTHER';
@@ -6423,6 +6476,34 @@ export const api = {
         fetchWithAuth(`/project-costing/projects/${projectId}/price-hours`, { method: 'POST' }),
     getProjectCostingSettings: (): Promise<ProjectCostingSettings> => fetchWithAuth('/project-costing/settings'),
     /** Projects an expense can be tagged with — visible, live ones. */
+    getProjectBilling: (projectId: string, upTo?: string): Promise<ProjectBilling> =>
+        fetchWithAuth(`/project-costing/projects/${projectId}/billing${upTo ? `?upTo=${upTo}` : ''}`),
+    getProjectBillingProducts: (): Promise<Array<{ id: string; name: string; vatRate: number | null }>> =>
+        fetchWithAuth('/project-costing/billing-products'),
+    createProjectInvoice: (
+        projectId: string,
+        data: {
+            kind: 'MILESTONE' | 'HOURS' | 'AMOUNT';
+            milestoneId?: string;
+            upTo?: string;
+            amount?: number;
+            description?: string;
+            productId?: string;
+            amountIncludesVat?: boolean;
+            saleDate?: string;
+        },
+    ): Promise<{ saleId: string; serialNumber: string; totalAmount: number }> =>
+        fetchWithAuth(`/project-costing/projects/${projectId}/invoices`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    setProjectMemberBillRate: (projectId: string, memberId: string, billRate: number | null) =>
+        fetchWithAuth(`/project-costing/projects/${projectId}/members/${memberId}/bill-rate`, {
+            method: 'PATCH',
+            body: JSON.stringify({ billRate }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     getProjectOptions: (): Promise<Array<{ id: string; code: string; name: string }>> =>
         fetchWithAuth('/project-costing/project-options'),
     getProjectDirectCosts: (projectId: string): Promise<ProjectDirectCost[]> =>
@@ -7890,7 +7971,7 @@ export const api = {
         }),
     updateProjectTimeTag: (
         id: string,
-        data: { name?: string; color?: string; sortOrder?: number },
+        data: { name?: string; color?: string; sortOrder?: number; billable?: boolean },
     ) =>
         fetchWithAuth(`/projects/time-tags/${id}`, {
             method: 'PATCH',

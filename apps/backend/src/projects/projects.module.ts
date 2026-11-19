@@ -25,6 +25,7 @@ import { LabourPricingService } from './labour-pricing.service';
 import { ProjectCostingService } from './project-costing.service';
 import { ProjectCostingController } from './project-costing.controller';
 import { ProjectDirectCostsService } from './project-direct-costs.service';
+import { ProjectUnbilledService } from './project-unbilled.service';
 import { ProjectSettingsService } from './project-settings.service';
 import { RemainingHoursService } from './remaining-hours.service';
 import { SprintsService } from './sprints.service';
@@ -64,6 +65,7 @@ import { ProjectAttachmentsService } from './project-attachments.service';
         LabourPricingService,
         ProjectCostingService,
         ProjectDirectCostsService,
+        ProjectUnbilledService,
         ProjectSettingsService,
         RemainingHoursService,
         ProjectActivityService,
@@ -73,6 +75,6 @@ import { ProjectAttachmentsService } from './project-attachments.service';
         BurndownRecorder,
         SprintMembershipService,
     ],
-    exports: [ProjectsService, RemainingHoursService, ProjectAccessService],
+    exports: [ProjectsService, RemainingHoursService, ProjectAccessService, ProjectUnbilledService],
 })
 export class ProjectsModule {}

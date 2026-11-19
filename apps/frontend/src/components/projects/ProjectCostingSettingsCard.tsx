@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
-import { Button, Field, Input } from '@/components/ui';
+import { Button, Field, Input, Select } from '@/components/ui';
 
 /**
  * How a monthly salary becomes an hourly cost, for employees with no cost rate
@@ -16,6 +16,9 @@ export default function ProjectCostingSettingsCard({ canEdit }: { canEdit: boole
     const f = t.projects.financials;
     const [hours, setHours] = useState('');
     const [overhead, setOverhead] = useState('');
+    // The service product project invoices bill as (Phase C).
+    const [billingProductId, setBillingProductId] = useState('');
+    const [products, setProducts] = useState<Array<{ id: string; name: string }>>([]);
     const [loaded, setLoaded] = useState(false);
     const [saving, setSaving] = useState(false);
 
@@ -24,9 +27,11 @@ export default function ProjectCostingSettingsCard({ canEdit }: { canEdit: boole
             .then((settings) => {
                 setHours(String(settings.standardMonthlyHours));
                 setOverhead(String(settings.overheadPct));
+                setBillingProductId(settings.billingProductId ?? '');
                 setLoaded(true);
             })
             .catch(() => setLoaded(false));
+        api.getProjectBillingProducts().then((rows) => setProducts(rows ?? [])).catch(() => setProducts([]));
     }, []);
 
     const hoursValue = Number(hours);
@@ -41,9 +46,11 @@ export default function ProjectCostingSettingsCard({ canEdit }: { canEdit: boole
             const saved = await api.updateProjectCostingSettings({
                 standardMonthlyHours: hoursValue,
                 overheadPct: overheadValue,
+                billingProductId: billingProductId || null,
             });
             setHours(String(saved.standardMonthlyHours));
             setOverhead(String(saved.overheadPct));
+            setBillingProductId(saved.billingProductId ?? '');
             toast.success(f.settingsSaved);
         } catch (err: any) {
             toast.error(err?.message || f.settingsFailed);
@@ -87,6 +94,20 @@ export default function ProjectCostingSettingsCard({ canEdit }: { canEdit: boole
                             disabled={!canEdit}
                             onChange={(e) => setOverhead(e.target.value)}
                         />
+                    </Field>
+                    <Field label={f.billingProduct} htmlFor="costing-billing-product" hint={f.billingProductHint}>
+                        <Select
+                            id="costing-billing-product"
+                            value={billingProductId}
+                            disabled={!canEdit}
+                            onChange={(e) => setBillingProductId(e.target.value)}
+                            className="w-full"
+                        >
+                            <option value="">—</option>
+                            {products.map((product) => (
+                                <option key={product.id} value={product.id}>{product.name}</option>
+                            ))}
+                        </Select>
                     </Field>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2">

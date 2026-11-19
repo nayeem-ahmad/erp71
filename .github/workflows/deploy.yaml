@@ -77,7 +77,7 @@ jobs:
       # it.
       - run: npm run db:seed:platform --workspace=packages/database
       - name: Run backend unit tests with coverage
-        run: npx jest --testPathPatterns="src/" --passWithNoTests --coverage --forceExit
+        run: npx jest --testPathPatterns="src/" --passWithNoTests --coverage --workerIdleMemoryLimit=1536MB --forceExit
         working-directory: apps/backend
       # Serial, and in their own step: these suites TRUNCATE a shared set of tables,
       # so run in parallel workers they wipe each other's fixtures mid-test. The

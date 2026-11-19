@@ -422,6 +422,9 @@ export class ProjectsService {
                         start_date: this.toDate(dto.startDate) ?? null,
                         target_end_date: this.toDate(dto.targetEndDate) ?? null,
                         budget_amount: dto.budgetAmount ?? null,
+                        billing_type: dto.billingType ?? 'INTERNAL',
+                        contract_value: dto.contractValue ?? null,
+                        bill_rate: dto.billRate ?? null,
                         created_by: userId,
                     },
                 });
@@ -496,6 +499,9 @@ export class ProjectsService {
                     ? { actual_end_date: this.toDate(dto.actualEndDate) ?? null }
                     : {}),
                 ...(dto.budgetAmount !== undefined ? { budget_amount: dto.budgetAmount ?? null } : {}),
+                ...(dto.billingType !== undefined ? { billing_type: dto.billingType } : {}),
+                ...(dto.contractValue !== undefined ? { contract_value: dto.contractValue } : {}),
+                ...(dto.billRate !== undefined ? { bill_rate: dto.billRate } : {}),
             },
         });
 
@@ -754,6 +760,7 @@ export class ProjectsService {
                 name: dto.name.trim(),
                 target_date: this.toDate(dto.targetDate) ?? null,
                 sort_order: dto.sortOrder ?? 0,
+                amount: dto.amount ?? null,
             },
         });
     }
@@ -772,6 +779,7 @@ export class ProjectsService {
                     ? { completed_at: dto.isCompleted ? (milestone.completed_at ?? new Date()) : null }
                     : {}),
                 ...(dto.sortOrder !== undefined ? { sort_order: dto.sortOrder } : {}),
+                ...(dto.amount !== undefined ? { amount: dto.amount } : {}),
             },
         });
     }

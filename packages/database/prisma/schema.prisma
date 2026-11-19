@@ -2075,6 +2075,7 @@ model Product {
   productionWastages     ProductionWastage[]      @relation("ProductionWastage")
   importShipmentItems    ImportShipmentItem[]
   projectMaterialLines   ProjectMaterialIssueLine[]
+  projectBillingSettings ProjectCostingSettings[] @relation("ProjectBillingProduct")
 
   @@unique([tenant_id, sku])
   @@index([tenant_id, brand_id])
@@ -3242,6 +3243,10 @@ model Sale {
   /// document. Both stay null on an ordinary counter sale.
   quotation_id   String?
   sales_order_id String?
+  /// The project this invoice bills — set when it is raised from the
+  /// project's Financials. Revenue on the project is what these invoice,
+  /// net of VAT and of returns, unless cancelled.
+  project_id     String?
 
   /// Which warehouse the goods left, captured when the entry is posted rather
   /// than re-derived later. Before this column existed an edit or a delete
@@ -3325,10 +3330,14 @@ model Sale {
   exchanges      SalesExchange[]
   warrantyClaims WarrantyClaim[]
   deliveryOrders DeliveryOrder[]
+  project            Project?           @relation(fields: [project_id], references: [id], onDelete: SetNull)
+  billedMilestones   ProjectMilestone[] @relation("ProjectMilestoneSale")
+  billedTimeEntries  ProjectTimeEntry[] @relation("ProjectTimeEntryBilledSale")
 
   @@unique([tenant_id, serial_number])
   @@unique([tenant_id, reference_number])
   @@index([tenant_id, created_at])
+  @@index([tenant_id, project_id])
   @@index([tenant_id, sale_date])
   @@index([tenant_id, store_id])
   @@index([tenant_id, session_id])
@@ -8422,6 +8431,16 @@ model Project {
   actual_end_date DateTime?         @db.Date
   /// Plain number in Phase 1 — nothing rolls up into it until costing lands.
   budget_amount   Decimal?          @db.Decimal(14, 2)
+  /// How the customer pays for the work. INTERNAL bills nothing; FIXED_PRICE
+  /// bills `contract_value` (by milestone or by amount); TIME_AND_MATERIALS
+  /// bills billable hours at `bill_rate` (or a member's own rate).
+  billing_type    ProjectBillingType @default(INTERNAL)
+  /// The agreed price of a fixed-price project — what is left to invoice is
+  /// this less what has been invoiced.
+  contract_value  Decimal?          @db.Decimal(14, 2)
+  /// What one billable hour is charged at on a time-and-materials project,
+  /// unless the member has their own `ProjectMember.bill_rate`.
+  bill_rate       Decimal?          @db.Decimal(12, 2)
   created_by      String?
   created_at      DateTime          @default(now())
   updated_at      DateTime          @updatedAt
@@ -8450,6 +8469,7 @@ model Project {
   costEntries    ProjectCostEntry[]
   materialIssues ProjectMaterialIssue[]
   expenses       ExpenseEntry[]
+  sales          Sale[]
   skills         ProjectSkill[]
 
   codeHistory ProjectCodeHistory[]
@@ -8490,6 +8510,9 @@ model ProjectMember {
   user_id     String?
   employee_id String?
   role        ProjectMemberRole @default(MEMBER)
+  /// This person's hourly charge on this project, over the project's own
+  /// `bill_rate`. A senior's hour is billed dearer than a junior's.
+  bill_rate   Decimal?          @db.Decimal(12, 2)
   created_at  DateTime          @default(now())
 
   tenant   Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -8512,11 +8535,17 @@ model ProjectMilestone {
   target_date  DateTime? @db.Date
   completed_at DateTime?
   sort_order   Int       @default(0)
+  /// What reaching this milestone bills, on a fixed-price project.
+  amount       Decimal?  @db.Decimal(14, 2)
+  /// The invoice that billed it. A cancelled invoice frees the milestone to
+  /// be billed again.
+  sale_id      String?
   created_at   DateTime  @default(now())
   updated_at   DateTime  @updatedAt
 
   tenant  Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   project Project       @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  sale    Sale?         @relation("ProjectMilestoneSale", fields: [sale_id], references: [id], onDelete: SetNull)
   tasks   ProjectTask[]
 
   @@index([tenant_id, project_id])
@@ -9113,6 +9142,9 @@ model ProjectTimeEntry {
   cost_amount Decimal?          @db.Decimal(14, 2)
   /// Where `cost_rate` came from: an explicit rate HR set, or the salary.
   cost_source LabourCostSource?
+  /// The invoice that billed this hour, on a time-and-materials project. An
+  /// hour on a cancelled invoice counts as unbilled again.
+  billed_sale_id String?
   created_at  DateTime          @default(now())
   updated_at  DateTime          @updatedAt
 
@@ -9121,6 +9153,7 @@ model ProjectTimeEntry {
   project  Project               @relation(fields: [project_id], references: [id], onDelete: Cascade)
   user     User?                 @relation("ProjectTimeEntryUser", fields: [user_id], references: [id])
   employee Employee?             @relation(fields: [employee_id], references: [id])
+  billedSale Sale?              @relation("ProjectTimeEntryBilledSale", fields: [billed_sale_id], references: [id], onDelete: SetNull)
   tags     ProjectTimeEntryTag[]
 
   @@index([tenant_id, project_id, work_date])
@@ -9173,16 +9206,27 @@ model ProjectCostingSettings {
   /// Added on top of the salary-derived rate for what an hour costs beyond pay
   /// (office, equipment, benefits). 0 prices hours at bare salary.
   labour_overhead_pct    Decimal  @default(0) @db.Decimal(5, 2)
+  /// The service product project invoices bill as. Without one, invoicing
+  /// asks for it.
+  billing_product_id     String?
   updated_by             String?
   updated_at             DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tenant         Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  billingProduct Product? @relation("ProjectBillingProduct", fields: [billing_product_id], references: [id], onDelete: SetNull)
 
   @@map("project_costing_settings")
 }
 
 /// What a non-labour project cost was for. Labour is not here: it comes from
 /// priced hours (`ProjectTimeEntry.cost_amount`), never from a cost entry.
+enum ProjectBillingType {
+  FIXED_PRICE
+  TIME_AND_MATERIALS
+  /// Not billed to anyone: internal work, or billed outside the system.
+  INTERNAL
+}
+
 enum ProjectCostCategory {
   /// Goods consumed — normally a `ProjectMaterialIssue`, entered here only for
   /// material that never passed through stock.
@@ -9282,6 +9326,9 @@ model ProjectTimeTag {
   name       String
   color      ProjectLabelColor @default(GRAY)
   sort_order Int               @default(0)
+  /// False makes every hour carrying this tag non-billable — "Rework",
+  /// "Internal meeting". An hour is billable unless one of its tags says not.
+  billable   Boolean           @default(true)
   created_at DateTime          @default(now())
   updated_at DateTime          @updatedAt
 

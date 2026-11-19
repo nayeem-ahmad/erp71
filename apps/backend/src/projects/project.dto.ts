@@ -197,6 +197,18 @@ export class CreateProjectDto {
 
     @IsOptional() @Type(() => Number) @IsNumber() @Min(0)
     budgetAmount?: number;
+
+    /** How the customer pays for the work. See `Project.billing_type`. */
+    @IsOptional() @IsIn(['FIXED_PRICE', 'TIME_AND_MATERIALS', 'INTERNAL'])
+    billingType?: 'FIXED_PRICE' | 'TIME_AND_MATERIALS' | 'INTERNAL';
+
+    /** Fixed price: the agreed price, before VAT. Null clears it. */
+    @IsOptional() @ValidateIf((_, value) => value !== null) @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0)
+    contractValue?: number | null;
+
+    /** Time and materials: what an hour is charged at, before VAT. Null clears it. */
+    @IsOptional() @ValidateIf((_, value) => value !== null) @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0)
+    billRate?: number | null;
 }
 
 export class UpdateProjectDto extends CreateProjectDto {
@@ -228,6 +240,10 @@ export class CreateMilestoneDto {
 
     @IsOptional() @Type(() => Number) @IsInt() @Min(0)
     sortOrder?: number;
+
+    /** What reaching it bills, on a fixed-price project. Null clears it. */
+    @IsOptional() @ValidateIf((_, value) => value !== null) @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0)
+    amount?: number | null;
 }
 
 export class UpdateMilestoneDto extends CreateMilestoneDto {
@@ -1126,6 +1142,10 @@ export class TimeTagDto {
 
     @IsOptional() @Type(() => Number) @IsInt() @Min(0)
     sortOrder?: number;
+
+    /** False makes the hours carrying this tag non-billable. */
+    @IsOptional() @IsBoolean()
+    billable?: boolean;
 }
 
 export class CreateSprintDto {
@@ -1424,6 +1444,12 @@ export class CostingSettingsDto {
     @Min(0)
     @Max(500)
     overheadPct: number;
+
+    /** The service product project invoices bill as. Null clears it; omitted leaves it. */
+    @IsOptional()
+    @ValidateIf((_, value) => value !== null)
+    @IsUUID()
+    billingProductId?: string | null;
 }
 
 /** A cost on a project beyond its hours. See `ProjectCostEntry`. */
@@ -1487,4 +1513,45 @@ export class CostSourcesQueryDto {
     @IsString()
     @MaxLength(100)
     search?: string;
+}
+
+/** Raise an invoice for a project. See `ProjectBillingService.invoice`. */
+export class CreateProjectInvoiceDto {
+    @IsIn(['MILESTONE', 'HOURS', 'AMOUNT'])
+    kind: 'MILESTONE' | 'HOURS' | 'AMOUNT';
+
+    @IsOptional() @IsUUID()
+    milestoneId?: string;
+
+    /** Hours: bill those worked up to and including this day. */
+    @IsOptional() @IsDateString()
+    upTo?: string;
+
+    @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0.01) @Max(1_000_000_000)
+    amount?: number;
+
+    @IsOptional() @IsString() @MaxLength(200)
+    description?: string;
+
+    /** The service product to bill as; defaults to the workspace's billing product. */
+    @IsOptional() @IsUUID()
+    productId?: string;
+
+    /** False grosses the amount up by the product's VAT. Defaults to true. */
+    @IsOptional() @IsBoolean()
+    amountIncludesVat?: boolean;
+
+    @IsOptional() @IsDateString()
+    saleDate?: string;
+}
+
+export class BillRateDto {
+    /** Null falls back to the project's bill rate. */
+    @ValidateIf((_, value) => value !== null) @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0)
+    billRate: number | null;
+}
+
+export class BillingQueryDto {
+    @IsOptional() @IsDateString()
+    upTo?: string;
 }

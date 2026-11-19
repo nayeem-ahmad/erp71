@@ -10,6 +10,7 @@ import { getWorkspaceItem } from '@/lib/session-store';
 import { hasPermission, isOwner } from '@/lib/permissions';
 import AddProjectCostModal from '@/components/projects/costing/AddProjectCostModal';
 import IssueMaterialsModal from '@/components/projects/costing/IssueMaterialsModal';
+import ProjectBillingSection from '@/components/projects/costing/ProjectBillingSection';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
@@ -163,6 +164,60 @@ export default function ProjectFinancialsPage() {
                             value={totals.averageRate === null ? '—' : formatBDT(totals.averageRate)}
                         />
                     </div>
+
+                    {data.revenue && data.revenue.billingType !== 'INTERNAL' && (
+                        <>
+                            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                                <CompactStat label={f.revenue} value={formatBDT(data.revenue.revenue)} />
+                                <CompactStat
+                                    label={f.margin}
+                                    value={formatBDT(data.revenue.margin)}
+                                    tone={data.revenue.margin < 0 ? 'negative' : data.revenue.revenue > 0 ? 'positive' : 'default'}
+                                />
+                                <CompactStat
+                                    label={f.marginPct}
+                                    value={data.revenue.marginPct === null ? '—' : `${data.revenue.marginPct}%`}
+                                    tone={data.revenue.marginPct !== null && data.revenue.marginPct < 0 ? 'negative' : 'default'}
+                                />
+                                {data.revenue.billingType === 'FIXED_PRICE' ? (
+                                    <CompactStat
+                                        label={f.leftToInvoice}
+                                        value={data.revenue.leftToInvoice === null ? '—' : formatBDT(data.revenue.leftToInvoice)}
+                                    />
+                                ) : (
+                                    <CompactStat
+                                        label={f.unbilled}
+                                        value={data.revenue.unbilledAmount === null ? '—' : formatBDT(data.revenue.unbilledAmount)}
+                                        tone={data.revenue.unbilledAmount ? 'warning' : 'default'}
+                                    />
+                                )}
+                            </div>
+                            {data.revenue.expectedRevenue !== null && (
+                                <section className="rounded-lg border border-gray-100 bg-white p-3 md:p-4">
+                                    <h2 className="text-sm font-semibold text-gray-900">{f.outlookTitle}</h2>
+                                    <p className="mt-0.5 text-xs text-gray-500">{f.outlookHint}</p>
+                                    <dl className="mt-3 grid grid-cols-1 gap-2 text-sm md:grid-cols-3">
+                                        <div>
+                                            <dt className="text-xs text-gray-500">{f.expectedRevenue}</dt>
+                                            <dd className="font-medium text-gray-900">{formatBDT(data.revenue.expectedRevenue)}</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-xs text-gray-500">{f.expectedCost}</dt>
+                                            <dd className="font-medium text-gray-900">{formatBDT(data.revenue.expectedCost)}</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-xs text-gray-500">{f.expectedMargin}</dt>
+                                            <dd className={`font-medium ${data.revenue.expectedMargin !== null && data.revenue.expectedMargin < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                                {data.revenue.expectedMargin === null ? '—' : formatBDT(data.revenue.expectedMargin)}
+                                            </dd>
+                                        </div>
+                                    </dl>
+                                </section>
+                            )}
+                        </>
+                    )}
+
+                    <ProjectBillingSection projectId={projectId} onChanged={() => void load()} />
 
                     {totals.uncostedHours > 0 && (
                         <Alert tone="warning" title={fmt(f.uncostedTitle, { hours: hoursText(totals.uncostedHours) })}>
@@ -358,6 +413,7 @@ export default function ProjectFinancialsPage() {
                                             <th className="hidden px-3 py-2 text-end font-medium md:table-cell">{f.labourCost}</th>
                                             <th className="hidden px-3 py-2 text-end font-medium md:table-cell">{f.directCost}</th>
                                             <th className="px-3 py-2 text-end font-medium">{f.totalCost}</th>
+                                            <th className="px-3 py-2 text-end font-medium">{f.revenue}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -368,6 +424,7 @@ export default function ProjectFinancialsPage() {
                                                 <td className="hidden px-3 py-2 text-end md:table-cell">{formatBDT(row.labourCost)}</td>
                                                 <td className="hidden px-3 py-2 text-end md:table-cell">{formatBDT(row.directCost)}</td>
                                                 <td className="px-3 py-2 text-end">{formatBDT(row.totalCost)}</td>
+                                                <td className="px-3 py-2 text-end">{formatBDT(row.revenue ?? 0)}</td>
                                             </tr>
                                         ))}
                                     </tbody>
