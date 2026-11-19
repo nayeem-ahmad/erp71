@@ -21,6 +21,9 @@ describe('ProjectCostingService', () => {
                 updateMany: jest.fn().mockResolvedValue({ count: 1 }),
             },
             projectTask: { aggregate: jest.fn().mockResolvedValue({ _sum: { remaining_hours: new Prisma.Decimal(10) } }) },
+            projectCostEntry: { findMany: jest.fn().mockResolvedValue([]) },
+            projectMaterialIssue: { findMany: jest.fn().mockResolvedValue([]) },
+            expenseEntry: { findMany: jest.fn().mockResolvedValue([]) },
             projectCostingSettings: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn() },
             employee: { findMany: jest.fn(), findFirst: jest.fn() },
             employeeCostRate: { findMany: jest.fn().mockResolvedValue([]) },
@@ -67,12 +70,14 @@ describe('ProjectCostingService', () => {
                 costedHours: 14,
                 uncostedHours: 5,
                 labourCost: 3500,
+                directCost: 0,
+                totalCost: 3500,
                 budget: 10000,
                 budgetUsedPct: 35,
                 budgetRemaining: 6500,
                 averageRate: 250,
             });
-            expect(result.uncosted).toEqual({ noEmployeeHours: 4, noRateHours: 1 });
+            expect(result.uncosted).toEqual({ noEmployeeHours: 4, noRateHours: 1, materialLines: 0 });
         });
 
         it('forecasts the rest of the work at the project\'s own average rate', async () => {
@@ -104,9 +109,52 @@ describe('ProjectCostingService', () => {
             const result = await service.financials(OWNER, 'p1');
 
             expect(result.byMonth).toEqual([
-                { month: '2026-08', hours: 15, labourCost: 3000 },
-                { month: '2026-09', hours: 4, labourCost: 500 },
+                { month: '2026-08', hours: 15, labourCost: 3000, directCost: 0, totalCost: 3000 },
+                { month: '2026-09', hours: 4, labourCost: 500, directCost: 0, totalCost: 500 },
             ]);
+        });
+
+        it('adds expenses, cost entries and issued materials, and measures the budget against all of it', async () => {
+            db.projectCostEntry.findMany.mockResolvedValue([
+                { category: 'SERVICES', amount: new Prisma.Decimal(1000), cost_date: day('2026-08-10') },
+            ]);
+            db.projectMaterialIssue.findMany.mockResolvedValue([
+                { issue_date: day('2026-09-02'), lines: [{ line_cost: new Prisma.Decimal(500) }, { line_cost: null }] },
+            ]);
+            db.expenseEntry.findMany.mockResolvedValue([{ amount: new Prisma.Decimal(200), expense_date: day('2026-08-15') }]);
+
+            const result = await service.financials(OWNER, 'p1');
+
+            expect(result.totals).toEqual(expect.objectContaining({
+                labourCost: 3500,
+                directCost: 1700,
+                totalCost: 5200,
+                budgetUsedPct: 52,
+                budgetRemaining: 4800,
+            }));
+            expect(result.byCategory).toEqual([
+                { category: 'LABOUR', amount: 3500 },
+                { category: 'MATERIAL', amount: 500 },
+                { category: 'SERVICES', amount: 1000 },
+                { category: 'EXPENSE', amount: 200 },
+            ]);
+            // The uncosted issue line is reported, never counted as free.
+            expect(result.uncosted.materialLines).toBe(1);
+            expect(result.byMonth).toEqual([
+                { month: '2026-08', hours: 15, labourCost: 3000, directCost: 1200, totalCost: 4200 },
+                { month: '2026-09', hours: 4, labourCost: 500, directCost: 500, totalCost: 1000 },
+            ]);
+            // A share of a cancelled bill no longer counts.
+            expect(db.projectCostEntry.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        OR: [
+                            { source_purchase_item_id: null },
+                            { sourcePurchaseItem: { purchase: { status: { not: 'CANCELLED' } } } },
+                        ],
+                    }),
+                }),
+            );
         });
 
         it('says nothing about budget use for a project with no budget', async () => {

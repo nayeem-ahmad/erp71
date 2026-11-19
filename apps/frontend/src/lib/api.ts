@@ -914,12 +914,16 @@ export interface ProjectFinancials {
         costedHours: number;
         uncostedHours: number;
         labourCost: number;
+        /** Expenses, cost entries and issued materials (Phase B). */
+        directCost: number;
+        totalCost: number;
         budget: number | null;
         budgetUsedPct: number | null;
         budgetRemaining: number | null;
         averageRate: number | null;
     };
-    uncosted: { noEmployeeHours: number; noRateHours: number };
+    uncosted: { noEmployeeHours: number; noRateHours: number; materialLines: number };
+    byCategory: Array<{ category: ProjectCostCategoryKey; amount: number }>;
     forecast: { remainingHours: number; estimatedRemainingCost: number | null; estimateAtCompletion: number | null };
     byPerson: Array<{
         key: string;
@@ -931,7 +935,31 @@ export interface ProjectFinancials {
         labourCost: number;
         uncostedHours: number;
     }>;
-    byMonth: Array<{ month: string; hours: number; labourCost: number }>;
+    byMonth: Array<{ month: string; hours: number; labourCost: number; directCost: number; totalCost: number }>;
+}
+
+export type ProjectCostCategoryKey = 'LABOUR' | 'MATERIAL' | 'SERVICES' | 'EXPENSE' | 'OVERHEAD' | 'OTHER';
+
+/** One line of a project's direct costs, whichever document it came from. */
+export interface ProjectDirectCost {
+    kind: 'ENTRY' | 'ISSUE' | 'EXPENSE';
+    id: string;
+    date: string;
+    category: ProjectCostCategoryKey;
+    description: string;
+    source: string | null;
+    amount: number;
+    uncosted: boolean;
+}
+
+export interface ProjectCostSource {
+    id: string;
+    productName: string;
+    purchaseNumber: string | null;
+    supplierName: string | null;
+    purchaseDate: string;
+    lineTotal: number;
+    remainingAmount: number;
 }
 
 /** Why a login and an employee card look like the same person. Mobile and email are strong; name is a hint. */
@@ -6394,6 +6422,33 @@ export const api = {
     priceProjectHours: (projectId: string): Promise<{ priced: number; stillUncosted: number }> =>
         fetchWithAuth(`/project-costing/projects/${projectId}/price-hours`, { method: 'POST' }),
     getProjectCostingSettings: (): Promise<ProjectCostingSettings> => fetchWithAuth('/project-costing/settings'),
+    /** Projects an expense can be tagged with — visible, live ones. */
+    getProjectOptions: (): Promise<Array<{ id: string; code: string; name: string }>> =>
+        fetchWithAuth('/project-costing/project-options'),
+    getProjectDirectCosts: (projectId: string): Promise<ProjectDirectCost[]> =>
+        fetchWithAuth(`/project-costing/projects/${projectId}/costs`),
+    getProjectCostSources: (search?: string): Promise<ProjectCostSource[]> =>
+        fetchWithAuth(`/project-costing/cost-sources${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+    addProjectCost: (
+        projectId: string,
+        data: { category: Exclude<ProjectCostCategoryKey, 'LABOUR'>; amount: number; costDate: string; description: string; sourcePurchaseItemId?: string },
+    ) => fetchWithAuth(`/project-costing/projects/${projectId}/costs`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    removeProjectCost: (projectId: string, costId: string) =>
+        fetchWithAuth(`/project-costing/projects/${projectId}/costs/${costId}`, { method: 'DELETE' }),
+    issueProjectMaterials: (
+        projectId: string,
+        data: { warehouseId: string; issueDate: string; note?: string; items: Array<{ productId: string; quantity: number }> },
+    ) => fetchWithAuth(`/project-costing/projects/${projectId}/material-issues`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    reverseProjectMaterialIssue: (projectId: string, issueId: string) =>
+        fetchWithAuth(`/project-costing/projects/${projectId}/material-issues/${issueId}`, { method: 'DELETE' }),
     updateProjectCostingSettings: (data: ProjectCostingSettings): Promise<ProjectCostingSettings> =>
         fetchWithAuth('/project-costing/settings', {
             method: 'PUT',

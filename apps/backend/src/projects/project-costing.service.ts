@@ -4,6 +4,7 @@ import { DatabaseService } from '../database/database.service';
 import { AuditService, type AuditContext } from '../audit/audit.service';
 import { ProjectAccessService, type ProjectViewer } from './project-access.service';
 import { LabourPricingService } from './labour-pricing.service';
+import { LIVE_COST_ENTRY } from './project-direct-costs.service';
 
 const num = (value: Prisma.Decimal | number | null | undefined) => Number(value ?? 0);
 const round2 = (value: number) => Math.round(value * 100) / 100;
@@ -48,7 +49,7 @@ export class ProjectCostingService {
         await this.access.assertProjectVisible(viewer, projectId);
         const where = { tenant_id: tenantId, project_id: projectId };
 
-        const [project, byPerson, uncostedByPerson, byDay, remaining, settings] = await Promise.all([
+        const [project, byPerson, uncostedByPerson, byDay, remaining, settings, costEntries, issues, expenses] = await Promise.all([
             this.db.project.findFirst({
                 where: { id: projectId, tenant_id: tenantId },
                 select: { id: true, code: true, name: true, budget_amount: true },
@@ -73,8 +74,23 @@ export class ProjectCostingService {
                 _sum: { remaining_hours: true },
             }),
             this.pricing.settings(tenantId),
+            // Phase B: what the project cost beyond its hours.
+            this.db.projectCostEntry.findMany({
+                where: { ...where, ...LIVE_COST_ENTRY },
+                select: { category: true, amount: true, cost_date: true },
+            }),
+            this.db.projectMaterialIssue.findMany({
+                where,
+                select: { issue_date: true, lines: { select: { line_cost: true } } },
+            }),
+            this.db.expenseEntry.findMany({
+                where,
+                select: { amount: true, expense_date: true },
+            }),
         ]);
         if (!project) throw new NotFoundException('Project not found');
+
+        const direct = this.directCosts(costEntries, issues, expenses);
 
         const people = await this.people(tenantId, byPerson, uncostedByPerson);
 
@@ -85,6 +101,7 @@ export class ProjectCostingService {
         const noEmployeeHours = people
             .filter((row) => !row.employeeId)
             .reduce((sum, row) => sum + row.uncostedHours, 0);
+        const totalCost = round2(labourCost + direct.total);
         const budget = project.budget_amount === null ? null : num(project.budget_amount);
         const averageRate = costedHours > 0 ? round2(labourCost / costedHours) : null;
         const remainingHours = num(remaining._sum.remaining_hours);
@@ -98,16 +115,25 @@ export class ProjectCostingService {
                 costedHours: round2(costedHours),
                 uncostedHours: round2(uncostedHours),
                 labourCost,
+                directCost: direct.total,
+                totalCost,
                 budget,
-                budgetUsedPct: budget && budget > 0 ? round2((labourCost / budget) * 100) : null,
-                budgetRemaining: budget === null ? null : round2(budget - labourCost),
+                // Against everything the project has cost, not labour alone.
+                budgetUsedPct: budget && budget > 0 ? round2((totalCost / budget) * 100) : null,
+                budgetRemaining: budget === null ? null : round2(budget - totalCost),
                 averageRate,
             },
+            byCategory: [
+                { category: 'LABOUR', amount: labourCost },
+                ...direct.byCategory,
+            ].filter((row) => row.amount > 0),
             uncosted: {
                 // No employee behind the login: link it on the Team page.
                 noEmployeeHours: round2(noEmployeeHours),
                 // An employee, but no rate and no salary — or logged before costing existed.
                 noRateHours: round2(uncostedHours - noEmployeeHours),
+                // Issue lines the stock pool had no cost for when they left.
+                materialLines: direct.uncostedMaterialLines,
             },
             forecast: {
                 remainingHours: round2(remainingHours),
@@ -116,7 +142,42 @@ export class ProjectCostingService {
                 estimateAtCompletion: estimatedRemainingCost === null ? null : round2(labourCost + estimatedRemainingCost),
             },
             byPerson: people.sort((a, b) => b.labourCost - a.labourCost || b.hours - a.hours),
-            byMonth: this.months(byDay),
+            byMonth: this.months(byDay, direct.byMonth),
+        };
+    }
+
+    /** Expenses, cost entries and material issues, by category and by month. */
+    private directCosts(
+        entries: Array<{ category: string; amount: Prisma.Decimal | number; cost_date: Date }>,
+        issues: Array<{ issue_date: Date; lines: Array<{ line_cost: Prisma.Decimal | number | null }> }>,
+        expenses: Array<{ amount: Prisma.Decimal | number; expense_date: Date }>,
+    ) {
+        const byCategory = new Map<string, number>();
+        const byMonth = new Map<string, number>();
+        let uncostedMaterialLines = 0;
+        const add = (category: string, date: Date, amount: number) => {
+            byCategory.set(category, (byCategory.get(category) ?? 0) + amount);
+            const month = date.toISOString().slice(0, 7);
+            byMonth.set(month, (byMonth.get(month) ?? 0) + amount);
+        };
+
+        for (const entry of entries) add(entry.category, entry.cost_date, num(entry.amount));
+        for (const issue of issues) {
+            for (const line of issue.lines) {
+                if (line.line_cost === null) uncostedMaterialLines += 1;
+                else add('MATERIAL', issue.issue_date, num(line.line_cost));
+            }
+        }
+        for (const expense of expenses) add('EXPENSE', expense.expense_date, num(expense.amount));
+
+        const order = ['MATERIAL', 'SERVICES', 'EXPENSE', 'OVERHEAD', 'OTHER'];
+        return {
+            total: round2([...byCategory.values()].reduce((sum, value) => sum + value, 0)),
+            byCategory: order
+                .filter((category) => byCategory.has(category))
+                .map((category) => ({ category, amount: round2(byCategory.get(category)!) })),
+            byMonth,
+            uncostedMaterialLines,
         };
     }
 
@@ -255,17 +316,30 @@ export class ProjectCostingService {
         });
     }
 
-    private months(byDay: Array<{ work_date: Date; _sum: { hours: any; cost_amount: any } }>) {
-        const months = new Map<string, { month: string; hours: number; labourCost: number }>();
+    private months(
+        byDay: Array<{ work_date: Date; _sum: { hours: any; cost_amount: any } }>,
+        directByMonth: Map<string, number> = new Map(),
+    ) {
+        const months = new Map<string, { month: string; hours: number; labourCost: number; directCost: number }>();
+        const bucketOf = (month: string) => {
+            const bucket = months.get(month) ?? { month, hours: 0, labourCost: 0, directCost: 0 };
+            months.set(month, bucket);
+            return bucket;
+        };
         for (const row of byDay) {
-            const month = row.work_date.toISOString().slice(0, 7);
-            const bucket = months.get(month) ?? { month, hours: 0, labourCost: 0 };
+            const bucket = bucketOf(row.work_date.toISOString().slice(0, 7));
             bucket.hours += num(row._sum.hours);
             bucket.labourCost += num(row._sum.cost_amount);
-            months.set(month, bucket);
         }
+        for (const [month, amount] of directByMonth) bucketOf(month).directCost += amount;
         return [...months.values()]
             .sort((a, b) => a.month.localeCompare(b.month))
-            .map((bucket) => ({ ...bucket, hours: round2(bucket.hours), labourCost: round2(bucket.labourCost) }));
+            .map((bucket) => ({
+                month: bucket.month,
+                hours: round2(bucket.hours),
+                labourCost: round2(bucket.labourCost),
+                directCost: round2(bucket.directCost),
+                totalCost: round2(bucket.labourCost + bucket.directCost),
+            }));
     }
 }

@@ -13,13 +13,33 @@ jest.mock('next/link', () => ({
 }));
 
 jest.mock('@/lib/api', () => ({
-    api: { getProjectFinancials: jest.fn(), priceProjectHours: jest.fn() },
+    api: {
+        getProjectFinancials: jest.fn(),
+        priceProjectHours: jest.fn(),
+        getProjectDirectCosts: jest.fn(),
+        removeProjectCost: jest.fn(),
+        reverseProjectMaterialIssue: jest.fn(),
+        getProjectCostSources: jest.fn().mockResolvedValue([]),
+        addProjectCost: jest.fn(),
+    },
+}));
+
+jest.mock('@/hooks/use-me', () => ({
+    fetchMe: jest.fn().mockResolvedValue({ tenants: [{ id: 't1', role: 'OWNER', permissions: [] }] }),
 }));
 
 jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 
 const { api } = jest.requireMock('@/lib/api') as {
-    api: { getProjectFinancials: jest.Mock; priceProjectHours: jest.Mock };
+    api: {
+        getProjectFinancials: jest.Mock;
+        priceProjectHours: jest.Mock;
+        getProjectDirectCosts: jest.Mock;
+        removeProjectCost: jest.Mock;
+        reverseProjectMaterialIssue: jest.Mock;
+        getProjectCostSources: jest.Mock;
+        addProjectCost: jest.Mock;
+    };
 };
 const { toast } = jest.requireMock('@/lib/toast') as { toast: { success: jest.Mock; error: jest.Mock } };
 
@@ -31,18 +51,21 @@ const financials = (overrides: Record<string, any> = {}) => ({
         costedHours: 14,
         uncostedHours: 5,
         labourCost: 3500,
+        directCost: 0,
+        totalCost: 3500,
         budget: 10000,
         budgetUsedPct: 35,
         budgetRemaining: 6500,
         averageRate: 250,
     },
-    uncosted: { noEmployeeHours: 4, noRateHours: 1 },
+    uncosted: { noEmployeeHours: 4, noRateHours: 1, materialLines: 0 },
+    byCategory: [{ category: 'LABOUR', amount: 3500 }],
     forecast: { remainingHours: 10, estimatedRemainingCost: 2500, estimateAtCompletion: 6000 },
     byPerson: [
         { key: 'employee:e1', employeeId: 'e1', userId: null, name: 'Karim', employeeCode: 'EMP-1', hours: 10, labourCost: 2000, uncostedHours: 0 },
         { key: 'user:u3', employeeId: null, userId: 'u3', name: 'Temp', employeeCode: null, hours: 4, labourCost: 0, uncostedHours: 4 },
     ],
-    byMonth: [{ month: '2026-08', hours: 15, labourCost: 3000 }],
+    byMonth: [{ month: '2026-08', hours: 15, labourCost: 3000, directCost: 0, totalCost: 3000 }],
     ...overrides,
 });
 
@@ -51,12 +74,14 @@ describe('ProjectFinancialsPage', () => {
         jest.clearAllMocks();
         api.getProjectFinancials.mockResolvedValue(financials());
         api.priceProjectHours.mockResolvedValue({ priced: 3, stillUncosted: 0 });
+        api.getProjectDirectCosts.mockResolvedValue([]);
     });
 
     it('shows labour cost against the budget, and the forecast', async () => {
         render(<ProjectFinancialsPage />);
 
-        expect(await screen.findByText('Labour cost', { selector: 'p' })).toBeInTheDocument();
+        expect(await screen.findByText('Total cost', { selector: 'p' })).toBeInTheDocument();
+        expect(screen.getByText('Labour cost', { selector: 'p' })).toBeInTheDocument();
         expect(screen.getByText('35%')).toBeInTheDocument();
         expect(screen.getByText('Estimated labour cost at completion')).toBeInTheDocument();
         expect(api.getProjectFinancials).toHaveBeenCalledWith('p1');
@@ -102,5 +127,63 @@ describe('ProjectFinancialsPage', () => {
         render(<ProjectFinancialsPage />);
 
         expect(await screen.findByText('Forbidden')).toBeInTheDocument();
+    });
+
+    describe('direct costs', () => {
+        const rows = [
+            { kind: 'ISSUE', id: 'iss-1', date: '2026-09-02', category: 'MATERIAL', description: '10 × Cement', source: 'Main', amount: 5200, uncosted: false },
+            { kind: 'EXPENSE', id: 'x1', date: '2026-08-15', category: 'EXPENSE', description: 'Site tea', source: 'Refreshments', amount: 200, uncosted: false },
+            { kind: 'ENTRY', id: 'c1', date: '2026-08-10', category: 'SERVICES', description: 'Transport', source: 'PUR-1 · Hauliers', amount: 400, uncosted: false },
+        ];
+
+        beforeEach(() => {
+            api.getProjectDirectCosts.mockResolvedValue(rows);
+            api.removeProjectCost.mockResolvedValue({ removed: true });
+            api.reverseProjectMaterialIssue.mockResolvedValue({ reversed: true });
+        });
+
+        it('lists every kind of direct cost with its category', async () => {
+            render(<ProjectFinancialsPage />);
+
+            expect(await screen.findByText('10 × Cement')).toBeInTheDocument();
+            expect(screen.getByText('PUR-1 · Hauliers')).toBeInTheDocument();
+            expect(screen.getByText('Bought-in services')).toBeInTheDocument();
+        });
+
+        it('removes a cost entry, and returns an issue to stock', async () => {
+            render(<ProjectFinancialsPage />);
+            await screen.findByText('Transport');
+
+            fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+            await waitFor(() => expect(api.removeProjectCost).toHaveBeenCalledWith('p1', 'c1'));
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Return to stock' }));
+            await waitFor(() => expect(api.reverseProjectMaterialIssue).toHaveBeenCalledWith('p1', 'iss-1'));
+        });
+
+        it('leaves an expense to be corrected where it posts', async () => {
+            render(<ProjectFinancialsPage />);
+            await screen.findByText('Site tea');
+
+            // One remove (the entry) and one return (the issue) — nothing for the expense.
+            expect(screen.getAllByRole('button', { name: /^(Remove|Return to stock)$/ })).toHaveLength(2);
+        });
+
+        it('adds a cost from the page', async () => {
+            api.addProjectCost.mockResolvedValue({ id: 'c2' });
+            render(<ProjectFinancialsPage />);
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Add cost' }));
+            fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'OVERHEAD' } });
+            fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '750' } });
+            fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Site office share' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+            await waitFor(() =>
+                expect(api.addProjectCost).toHaveBeenCalledWith('p1', expect.objectContaining({
+                    category: 'OVERHEAD', amount: 750, description: 'Site office share',
+                })),
+            );
+        });
     });
 });

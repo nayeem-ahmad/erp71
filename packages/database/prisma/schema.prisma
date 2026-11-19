@@ -1175,6 +1175,8 @@ model Tenant {
   projects                   Project[]
   employeeCostRates          EmployeeCostRate[]
   projectCostingSettings     ProjectCostingSettings?
+  projectCostEntries         ProjectCostEntry[]
+  projectMaterialIssues      ProjectMaterialIssue[]
   projectTypes               ProjectType[]
   projectMembers             ProjectMember[]
   projectMilestones          ProjectMilestone[]
@@ -1924,6 +1926,7 @@ model Warehouse {
   purchaseItems       PurchaseItem[]       @relation("PurchaseItemWarehouse")
   purchaseReturns     PurchaseReturn[]     @relation("PurchaseReturnWarehouse")
   purchaseReturnItems PurchaseReturnItem[] @relation("PurchaseReturnItemWarehouse")
+  projectMaterialIssues ProjectMaterialIssue[]
 
   @@unique([tenant_id, code])
   // A branch cannot hold two warehouses of the same name: the pickers on every
@@ -2071,6 +2074,7 @@ model Product {
   bomComponents          BomComponent[]           @relation("BomComponent")
   productionWastages     ProductionWastage[]      @relation("ProductionWastage")
   importShipmentItems    ImportShipmentItem[]
+  projectMaterialLines   ProjectMaterialIssueLine[]
 
   @@unique([tenant_id, sku])
   @@index([tenant_id, brand_id])
@@ -2733,6 +2737,9 @@ model PurchaseItem {
   warehouse   Warehouse?           @relation("PurchaseItemWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
   returnItems PurchaseReturnItem[]
   jobCosts    ProductionJobCost[]
+  /// Project costs drawn from this line — a subcontractor's or transporter's
+  /// bill split across projects. Capped, with `jobCosts`, at `line_total`.
+  projectCosts ProjectCostEntry[]
 
   @@index([purchase_id])
   /// Purchase entry looks up "what did we last pay for this, and to whom?".
@@ -7748,16 +7755,22 @@ model ExpenseEntry {
   expense_date   DateTime        @db.Date
   description    String?
   payment_method String          @default("CASH")
+  /// The project this expense was spent on, if any — it then counts as a
+  /// direct cost on that project's financials. The ledger posting is the same
+  /// either way: tagging is management accounting.
+  project_id     String?
   created_by     String?
   created_at     DateTime        @default(now())
   tenant         Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   category       ExpenseCategory @relation(fields: [category_id], references: [id])
   head           ExpenseHead?    @relation(fields: [head_id], references: [id])
   store          Store?          @relation(fields: [store_id], references: [id])
+  project        Project?        @relation(fields: [project_id], references: [id], onDelete: SetNull)
 
   @@index([tenant_id, expense_date])
   @@index([tenant_id, category_id])
   @@index([tenant_id, head_id])
+  @@index([tenant_id, project_id])
 }
 
 // ── Loans ───────────────────────────────────────────────────────────────────
@@ -8434,6 +8447,9 @@ model Project {
   remainingLogs  ProjectTaskRemainingLog[]
   taskActivities ProjectTaskActivity[]
   taskStatuses   ProjectTaskStatus[]
+  costEntries    ProjectCostEntry[]
+  materialIssues ProjectMaterialIssue[]
+  expenses       ExpenseEntry[]
   skills         ProjectSkill[]
 
   codeHistory ProjectCodeHistory[]
@@ -9163,6 +9179,92 @@ model ProjectCostingSettings {
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@map("project_costing_settings")
+}
+
+/// What a non-labour project cost was for. Labour is not here: it comes from
+/// priced hours (`ProjectTimeEntry.cost_amount`), never from a cost entry.
+enum ProjectCostCategory {
+  /// Goods consumed — normally a `ProjectMaterialIssue`, entered here only for
+  /// material that never passed through stock.
+  MATERIAL
+  /// Bought-in services: subcontractors, transport, printing.
+  SERVICES
+  EXPENSE
+  OVERHEAD
+  OTHER
+}
+
+/// A project cost with no document of its own elsewhere — a subcontractor's
+/// share, an allocated overhead — or a share of a **service** bill line.
+///
+/// When `source_purchase_item_id` is set the amount is that line's share for
+/// this project: the line's total caps every share drawn from it, across
+/// projects and production jobs alike (see `common/bill-allocation.util.ts`),
+/// so one bill is never counted twice. A share of a cancelled purchase stops
+/// counting. Management accounting only: nothing posts — the bill already did.
+model ProjectCostEntry {
+  id                      String              @id @default(uuid())
+  tenant_id               String
+  project_id              String
+  category                ProjectCostCategory
+  amount                  Decimal             @db.Decimal(14, 2)
+  cost_date               DateTime            @db.Date
+  description             String
+  source_purchase_item_id String?
+  created_by              String?
+  created_at              DateTime            @default(now())
+
+  tenant             Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project            Project       @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  sourcePurchaseItem PurchaseItem? @relation(fields: [source_purchase_item_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, project_id, cost_date])
+  @@index([source_purchase_item_id])
+  @@map("project_cost_entries")
+}
+
+/// Goods taken out of a warehouse for a project.
+///
+/// The stock leaves at the weighted average it was held at, snapshotted on
+/// each line so a later price change cannot restate it. Nothing posts to the
+/// ledger: under the periodic inventory this system keeps, stock was expensed
+/// when it was bought, and an issue — like a transfer or a write-off — is not
+/// an economic event. The cost lands on the project's financials only.
+/// Deleting an issue puts the goods back at the cost they left at.
+model ProjectMaterialIssue {
+  id           String   @id @default(uuid())
+  tenant_id    String
+  project_id   String
+  warehouse_id String
+  issue_date   DateTime @db.Date
+  note         String?
+  created_by   String?
+  created_at   DateTime @default(now())
+
+  tenant    Tenant                     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project   Project                    @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  warehouse Warehouse                  @relation(fields: [warehouse_id], references: [id])
+  lines     ProjectMaterialIssueLine[]
+
+  @@index([tenant_id, project_id, issue_date])
+  @@map("project_material_issues")
+}
+
+model ProjectMaterialIssueLine {
+  id         String   @id @default(uuid())
+  issue_id   String
+  product_id String
+  quantity   Int
+  /// The average the goods were held at when they left. Null when the stock
+  /// pool had no cost yet — counted as an uncosted line, never as free.
+  unit_cost  Decimal? @db.Decimal(12, 2)
+  line_cost  Decimal? @db.Decimal(14, 2)
+
+  issue   ProjectMaterialIssue @relation(fields: [issue_id], references: [id], onDelete: Cascade)
+  product Product              @relation(fields: [product_id], references: [id])
+
+  @@index([issue_id])
+  @@map("project_material_issue_lines")
 }
 
 /// A cross-cutting label on an *hour*, not on a task: "Billable", "Support",

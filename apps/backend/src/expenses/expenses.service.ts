@@ -212,6 +212,7 @@ export class ExpensesService {
         if (dto.storeId) {
             await this.assertStoreExists(tenantId, dto.storeId);
         }
+        if (dto.projectId) await this.assertProjectExists(tenantId, dto.projectId);
 
         const paymentMethod = dto.paymentMethod ?? 'CASH';
 
@@ -226,6 +227,7 @@ export class ExpensesService {
                     expense_date: new Date(dto.expenseDate),
                     description: dto.description,
                     payment_method: paymentMethod,
+                    project_id: dto.projectId ?? null,
                     created_by: userId,
                 },
                 include: this.entryInclude(),
@@ -255,6 +257,7 @@ export class ExpensesService {
         if (dto.storeId) {
             await this.assertStoreExists(tenantId, dto.storeId);
         }
+        if (dto.projectId) await this.assertProjectExists(tenantId, dto.projectId);
 
         return this.db.$transaction(async (tx) => {
             const entry = await tx.expenseEntry.update({
@@ -266,6 +269,7 @@ export class ExpensesService {
                     ...(dto.storeId !== undefined ? { store_id: dto.storeId } : {}),
                     ...(dto.description !== undefined ? { description: dto.description } : {}),
                     ...(dto.paymentMethod !== undefined ? { payment_method: dto.paymentMethod } : {}),
+                    ...(dto.projectId !== undefined ? { project_id: dto.projectId } : {}),
                 },
                 include: this.entryInclude(),
             });
@@ -395,7 +399,17 @@ export class ExpensesService {
             category: true,
             head: true,
             store: { select: { id: true, name: true } },
+            project: { select: { id: true, code: true, name: true } },
         };
+    }
+
+    /** A live project of this workspace. Tagging changes no posting: it only prices the project. */
+    private async assertProjectExists(tenantId: string, projectId: string) {
+        const project = await this.db.project.findFirst({
+            where: { id: projectId, tenant_id: tenantId, deleted_at: null },
+            select: { id: true },
+        });
+        if (!project) throw new NotFoundException('Project not found');
     }
 
     private expensePaymentMode(paymentMethod: string): 'bank' | 'cash' {

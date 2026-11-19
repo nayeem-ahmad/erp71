@@ -70,6 +70,12 @@ const COST_BEHAVIOUR: Record<string, CostBehaviour> = {
     // it edits an imported bill whose receipt never moved the average.
     PURCHASE_EDIT: 'REVALUE',
     PURCHASE_EDIT_REVERSAL: 'REVERSE_RECEIPT',
+
+    // Goods issued to a project leave at the current average (PROJECT_ISSUE is
+    // QUANTITY_ONLY, like a write-off). Deleting the issue puts them back at
+    // the cost they left at — the line's stored unit cost — so issuing and
+    // un-issuing nets the pool to zero, as a purchase return and its deletion do.
+    PROJECT_ISSUE_REVERSAL: 'REVALUE',
 };
 
 export function costBehaviourFor(movementType: string): CostBehaviour {

@@ -60,6 +60,8 @@ describe('ManufacturingService', () => {
                 groupBy: jest.fn().mockResolvedValue([]),
             },
             purchaseItem: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+            // Projects draw on the same bill lines; their shares count against the cap.
+            projectCostEntry: { groupBy: jest.fn().mockResolvedValue([]) },
             saleItem: { findMany: jest.fn().mockResolvedValue([]) },
             product: {
                 findMany: jest.fn().mockResolvedValue([]),
@@ -372,9 +374,9 @@ describe('ManufacturingService', () => {
         it('allocates a bill line to a job cost without exceeding its remaining unallocated amount', async () => {
             db.productionJob.findFirst.mockResolvedValue(job);
             db.purchaseItem.findFirst.mockResolvedValue({ id: 'pi-1', line_total: 1000 });
-            db.productionJobCost.aggregate
-                .mockResolvedValueOnce({ _sum: { amount: 400 } }) // already allocated to this bill line
-                .mockResolvedValueOnce({ _sum: { amount: 500 } }); // job total after adding this cost
+            // Already allocated to this bill line.
+            db.productionJobCost.groupBy.mockResolvedValueOnce([{ sourcePurchaseItemId: 'pi-1', _sum: { amount: 400 } }]);
+            db.productionJobCost.aggregate.mockResolvedValueOnce({ _sum: { amount: 500 } }); // job total after adding this cost
             db.productionJobCost.create.mockResolvedValue({ id: 'cost-1' });
 
             await service.addJobCost('tenant-1', 'job-1', {
@@ -398,7 +400,7 @@ describe('ManufacturingService', () => {
         it("rejects an allocation exceeding the bill line's remaining unallocated amount", async () => {
             db.productionJob.findFirst.mockResolvedValue(job);
             db.purchaseItem.findFirst.mockResolvedValue({ id: 'pi-1', line_total: 1000 });
-            db.productionJobCost.aggregate.mockResolvedValueOnce({ _sum: { amount: 700 } });
+            db.productionJobCost.groupBy.mockResolvedValueOnce([{ sourcePurchaseItemId: 'pi-1', _sum: { amount: 700 } }]);
 
             await expect(
                 service.addJobCost('tenant-1', 'job-1', {
@@ -407,6 +409,22 @@ describe('ManufacturingService', () => {
                     sourcePurchaseItemId: 'pi-1',
                 }),
             ).rejects.toThrow(BadRequestException);
+        });
+
+        it('counts what projects drew from the same bill line against its total', async () => {
+            db.productionJob.findFirst.mockResolvedValue(job);
+            db.purchaseItem.findFirst.mockResolvedValue({ id: 'pi-1', line_total: 1000 });
+            db.productionJobCost.groupBy.mockResolvedValueOnce([{ sourcePurchaseItemId: 'pi-1', _sum: { amount: 300 } }]);
+            db.projectCostEntry.groupBy.mockResolvedValueOnce([{ source_purchase_item_id: 'pi-1', _sum: { amount: 400 } }]);
+
+            await expect(
+                service.addJobCost('tenant-1', 'job-1', {
+                    costType: 'PRINTING',
+                    amount: 500,
+                    sourcePurchaseItemId: 'pi-1',
+                }),
+            ).rejects.toThrow(BadRequestException);
+            expect(db.productionJobCost.create).not.toHaveBeenCalled();
         });
     });
 

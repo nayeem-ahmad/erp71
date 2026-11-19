@@ -234,6 +234,8 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'ProjectTimeEntry', exempt: 'Logged hours, priced for project costing (cost_rate/cost_amount); the pay behind the price posts once, via SalaryAccrual.' },
     { model: 'EmployeeCostRate', exempt: 'Hourly cost rate (config) used to price project hours; same category as Employee.basic_salary.' },
     { model: 'ProjectCostingSettings', exempt: 'Costing configuration (standard hours, overhead %); moves no money.' },
+    { model: 'ProjectCostEntry', exempt: 'A project cost for management accounting — a share of a bill that already posted, or a cost recorded only to price the project. Posting it would count the money twice.' },
+    { model: 'ProjectMaterialIssueLine', exempt: 'Stock issued to a project at its average cost. Under periodic inventory stock was expensed at purchase, so an issue — like a transfer or a write-off — posts nothing.' },
     { model: 'SprintSnapshot', exempt: 'Daily burndown totals in hours.' },
     { model: 'SprintBurndownPoint', exempt: 'Burndown totals in hours, one per sprint change.' },
     { model: 'SprintTask', exempt: 'A task\'s stay in a sprint; remaining_at_close is hours.' },

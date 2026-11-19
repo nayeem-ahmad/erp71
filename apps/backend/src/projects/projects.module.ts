@@ -24,6 +24,7 @@ import { ProjectTimerService } from './project-timer.service';
 import { LabourPricingService } from './labour-pricing.service';
 import { ProjectCostingService } from './project-costing.service';
 import { ProjectCostingController } from './project-costing.controller';
+import { ProjectDirectCostsService } from './project-direct-costs.service';
 import { ProjectSettingsService } from './project-settings.service';
 import { RemainingHoursService } from './remaining-hours.service';
 import { SprintsService } from './sprints.service';
@@ -62,6 +63,7 @@ import { ProjectAttachmentsService } from './project-attachments.service';
         ProjectTimerService,
         LabourPricingService,
         ProjectCostingService,
+        ProjectDirectCostsService,
         ProjectSettingsService,
         RemainingHoursService,
         ProjectActivityService,

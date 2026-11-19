@@ -1425,3 +1425,66 @@ export class CostingSettingsDto {
     @Max(500)
     overheadPct: number;
 }
+
+/** A cost on a project beyond its hours. See `ProjectCostEntry`. */
+export class CreateProjectCostDto {
+    @IsIn(['MATERIAL', 'SERVICES', 'EXPENSE', 'OVERHEAD', 'OTHER'])
+    category: 'MATERIAL' | 'SERVICES' | 'EXPENSE' | 'OVERHEAD' | 'OTHER';
+
+    @Type(() => Number)
+    @IsNumber({ maxDecimalPlaces: 2 })
+    @Min(0.01)
+    @Max(1_000_000_000)
+    amount: number;
+
+    @IsDateString()
+    costDate: string;
+
+    @IsString()
+    @MinLength(1)
+    @MaxLength(200)
+    description: string;
+
+    /** A service bill line this cost is a share of. Capped at the line's total. */
+    @IsOptional()
+    @IsUUID()
+    sourcePurchaseItemId?: string;
+}
+
+export class MaterialIssueLineDto {
+    @IsUUID()
+    productId: string;
+
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    quantity: number;
+}
+
+/** Goods taken out of a warehouse for a project. See `ProjectMaterialIssue`. */
+export class IssueMaterialsDto {
+    @IsUUID()
+    warehouseId: string;
+
+    @IsDateString()
+    issueDate: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(500)
+    note?: string;
+
+    @IsArray()
+    @ArrayNotEmpty()
+    @ArrayMaxSize(100)
+    @ValidateNested({ each: true })
+    @Type(() => MaterialIssueLineDto)
+    items: MaterialIssueLineDto[];
+}
+
+export class CostSourcesQueryDto {
+    @IsOptional()
+    @IsString()
+    @MaxLength(100)
+    search?: string;
+}

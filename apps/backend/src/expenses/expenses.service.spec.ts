@@ -303,6 +303,65 @@ describe('ExpensesService', () => {
         await expect(local.deleteCategory('tenant-1', 'cat-1')).rejects.toBeInstanceOf(BadRequestException);
     });
 
+    describe('the project an expense was spent on', () => {
+        const head = {
+            id: 'head-1',
+            category_id: 'cat-1',
+            tenant_id: 'tenant-1',
+            account_id: null,
+            category: { account_id: null },
+        };
+        const build = (projectFound: boolean) => {
+            const tx = {
+                expenseEntry: {
+                    create: jest.fn(async ({ data }: any) => ({ id: 'entry-1', ...data })),
+                    update: jest.fn(async ({ data }: any) => ({ id: 'entry-1', amount: 500, expense_date: new Date('2026-10-01'), payment_method: 'CASH', head_id: 'head-1', ...data })),
+                },
+            };
+            const db = {
+                expenseEntry: { findFirst: jest.fn().mockResolvedValue({ id: 'entry-1', tenant_id: 'tenant-1', head_id: 'head-1', category_id: 'cat-1' }) },
+                expenseHead: { findFirst: jest.fn().mockResolvedValue(head) },
+                project: { findFirst: jest.fn().mockResolvedValue(projectFound ? { id: 'p1' } : null) },
+                $transaction: jest.fn(async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx)),
+            };
+            return { tx, db, service: new ExpensesService(db as any) };
+        };
+
+        it('stores it on the expense, with the same posting as any other', async () => {
+            const { tx, db, service } = build(true);
+
+            await service.createEntry('tenant-1', 'user-1', { headId: 'head-1', amount: 500, expenseDate: '2026-10-01', projectId: 'p1' } as any);
+
+            expect(tx.expenseEntry.create).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ project_id: 'p1' }),
+            }));
+            expect(db.project.findFirst).toHaveBeenCalledWith({
+                where: { id: 'p1', tenant_id: 'tenant-1', deleted_at: null },
+                select: { id: true },
+            });
+            expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'expense', amount: 500 }));
+        });
+
+        it('refuses a project that is not this workspace\'s', async () => {
+            const { tx, service } = build(false);
+
+            await expect(
+                service.createEntry('tenant-1', 'user-1', { headId: 'head-1', amount: 500, expenseDate: '2026-10-01', projectId: 'p-elsewhere' } as any),
+            ).rejects.toBeInstanceOf(NotFoundException);
+            expect(tx.expenseEntry.create).not.toHaveBeenCalled();
+        });
+
+        it('clears it on an update that sends null, and leaves it alone when omitted', async () => {
+            const { tx, service } = build(true);
+
+            await service.updateEntry('tenant-1', 'entry-1', { projectId: null } as any);
+            expect(tx.expenseEntry.update.mock.calls[0][0].data).toEqual(expect.objectContaining({ project_id: null }));
+
+            await service.updateEntry('tenant-1', 'entry-1', { amount: 600 } as any);
+            expect(tx.expenseEntry.update.mock.calls[1][0].data).not.toHaveProperty('project_id');
+        });
+    });
+
     it('updateEntry() voids the old voucher and reposts at the new amount', async () => {
         const tx = {
             expenseEntry: {
