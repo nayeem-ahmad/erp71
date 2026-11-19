@@ -128,6 +128,13 @@ export const crmHrMessages = {
             open: "Öffnen",
             viewActivities: "Aktivitäten anzeigen",
             openRecord: "Vollständigen Datensatz öffnen",
+            panelSections: 'Bereiche der Seitenleiste',
+            tabActivities: 'Aktivitäten',
+            tabDetails: 'Lead-Details',
+            previousActivity: 'Vorherige Aktivität',
+            nextActivity: 'Nächste Aktivität',
+            position: '{current} von {total}',
+            leadDeleted: 'Lead gelöscht.',
             bulk: {
                 approve: "Ausgewählte genehmigen",
                 withdrawApproval: "Genehmigung zurückziehen",

@@ -128,6 +128,13 @@ export const crmHrMessages = {
             open: 'Buka',
             viewActivities: 'Lihat aktiviti',
             openRecord: 'Buka rekod penuh',
+            panelSections: 'Bahagian panel sisi',
+            tabActivities: 'Aktiviti',
+            tabDetails: 'Butiran prospek',
+            previousActivity: 'Aktiviti sebelumnya',
+            nextActivity: 'Aktiviti seterusnya',
+            position: '{current} daripada {total}',
+            leadDeleted: 'Prospek dipadam.',
             bulk: {
                 approve: 'Luluskan pilihan',
                 withdrawApproval: 'Tarik balik kelulusan',

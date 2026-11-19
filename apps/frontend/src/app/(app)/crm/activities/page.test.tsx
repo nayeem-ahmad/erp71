@@ -11,6 +11,9 @@ jest.mock('next/link', () => {
     return MockLink;
 });
 
+const push = jest.fn();
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: jest.fn() }) }));
+
 jest.mock('@/hooks/useMediaQuery', () => ({
     useMediaQuery: () => true,
     useIsMdUp: () => true,
@@ -33,6 +36,9 @@ jest.mock('@/lib/api', () => ({
         completeCrmActivity: jest.fn(),
         updateCrmActivity: jest.fn(),
         deleteCrmActivity: jest.fn(),
+        getLead: jest.fn(),
+        getCustomFields: jest.fn().mockResolvedValue([]),
+        deleteLead: jest.fn(),
     },
 }));
 jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
@@ -638,8 +644,9 @@ describe('CrmActivitiesPage — the lead timeline drawer', () => {
         expect(within(drawer).getByRole('heading', { name: 'Karim Traders' })).toBeInTheDocument();
         expect(api.getAllCrmActivities).toHaveBeenCalledWith({ leadId: 'lead-1' });
         // The filters and the scroll position are the whole point of not
-        // navigating: the list is still underneath.
-        expect(screen.getByText('Call about pricing')).toBeInTheDocument();
+        // navigating: the list is still underneath. (The drawer names the row
+        // it was opened on too, so look for the copy outside it.)
+        expect(screen.getAllByText('Call about pricing').some((el) => !drawer.contains(el))).toBe(true);
     });
 
     it('keeps the way through to the full record', async () => {
@@ -681,6 +688,163 @@ describe('CrmActivitiesPage — the lead timeline drawer', () => {
 
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
         expect(listCalls()).toBe(before);
+    });
+});
+
+/**
+ * Working down the list from inside the drawer: Previous / Next step to the
+ * neighbouring rows without closing it, and a lead's Details tab shows who
+ * they are without the trip to the lead page.
+ */
+describe('CrmActivitiesPage — stepping through rows in the drawer', () => {
+    const row = (id: string, subject: string, lead: { id: string; name: string } | null, customer: { id: string; name: string } | null = null) => ({
+        ...activity,
+        id,
+        subject,
+        lead: lead ? { ...lead, mobile: '01700000000' } : null,
+        customer: customer ? { ...customer, phone: '01800000000' } : null,
+    });
+    const first = row('act-1', 'Call about pricing', { id: 'lead-1', name: 'Karim Traders' });
+    const second = row('act-2', 'Send the catalogue', { id: 'lead-2', name: 'Rahim Stores' });
+    const third = row('act-3', 'Collect the dues', null, { id: 'cust-1', name: 'Selim Mart' });
+
+    const timelineFor = (params: any) => {
+        const id = params?.leadId ?? params?.customerId;
+        const source = [first, second, third].find((r) => r.lead?.id === id || r.customer?.id === id);
+        return Promise.resolve(source ? [{ ...source, outcome: null, notes: null }] : []);
+    };
+
+    const drawer = () => screen.getByRole('dialog');
+
+    const openOn = async (index: number) => {
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+        fireEvent.click(screen.getAllByRole('button', { name: 'View activities' })[index]);
+        return screen.findByRole('dialog');
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        api.getCrmActivities.mockResolvedValue(pageOf([first, second, third]));
+        api.getAllCrmActivities.mockImplementation(timelineFor);
+        api.getCrmActivitySummary.mockResolvedValue({ dueToday: 3, overdue: 0, total: 3 });
+        api.getCrmAssignees.mockResolvedValue([{ userId: 'user-2', name: 'Rifat' }]);
+        api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
+        api.getCustomFields.mockResolvedValue([]);
+        api.getLead.mockImplementation((id: string) => Promise.resolve({
+            id,
+            name: id === 'lead-1' ? 'Karim Traders' : 'Rahim Stores',
+            mobile: id === 'lead-1' ? '01711111111' : '01722222222',
+            email: `${id}@example.com`,
+            status: 'NEW',
+            source: 'WALK_IN',
+            assignee: { id: 'user-2', name: 'Rifat' },
+        }));
+    });
+
+    it('moves to the next row and back without closing', async () => {
+        const panel = await openOn(0);
+        expect(within(panel).getByRole('heading', { name: 'Karim Traders' })).toBeInTheDocument();
+        expect(within(panel).getByText('1 of 3')).toBeInTheDocument();
+        expect(within(panel).getByRole('button', { name: 'Previous activity' })).toBeDisabled();
+
+        fireEvent.click(within(panel).getByRole('button', { name: 'Next activity' }));
+
+        expect(await within(drawer()).findByRole('heading', { name: 'Rahim Stores' })).toBeInTheDocument();
+        expect(within(drawer()).getByText('2 of 3')).toBeInTheDocument();
+        await waitFor(() => expect(api.getAllCrmActivities).toHaveBeenLastCalledWith({ leadId: 'lead-2' }));
+
+        fireEvent.click(within(drawer()).getByRole('button', { name: 'Previous activity' }));
+        expect(await within(drawer()).findByRole('heading', { name: 'Karim Traders' })).toBeInTheDocument();
+    });
+
+    it('names the row it is on and picks it out of the timeline', async () => {
+        const panel = await openOn(1);
+
+        expect(within(panel).getByText('Send the catalogue', { selector: 'p.text-xs' })).toBeInTheDocument();
+        await waitFor(() => {
+            const current = panel.querySelector('[aria-current="true"]');
+            expect(current).toHaveAttribute('data-activity-id', 'act-2');
+        });
+    });
+
+    it('stops at the last row of the only page', async () => {
+        const panel = await openOn(2);
+
+        expect(within(panel).getByText('3 of 3')).toBeInTheDocument();
+        expect(within(panel).getByRole('button', { name: 'Next activity' })).toBeDisabled();
+    });
+
+    it('opens the next page\'s first row from the last row of this one', async () => {
+        // A total well past any page size, so the list has a second page
+        // whatever size the table was left on; each page answers short.
+        api.getCrmActivities.mockImplementation((params: any) => Promise.resolve(
+            params.page === 2
+                ? { items: [third], total: 500, page: 2, limit: params.limit, pages: 2 }
+                : { items: [first, second], total: 500, page: 1, limit: params.limit, pages: 2 },
+        ));
+        const panel = await openOn(1);
+        expect(within(panel).getByText('2 of 500')).toBeInTheDocument();
+
+        fireEvent.click(within(panel).getByRole('button', { name: 'Next activity' }));
+
+        expect(await within(drawer()).findByRole('heading', { name: 'Selim Mart' })).toBeInTheDocument();
+        expect(api.getCrmActivities).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }));
+        const { limit } = api.getCrmActivities.mock.calls.at(-1)[0];
+        expect(within(drawer()).getByText(`${limit + 1} of 500`)).toBeInTheDocument();
+
+        // And back: Previous from the first row of page 2 lands on page 1's last.
+        fireEvent.click(within(drawer()).getByRole('button', { name: 'Previous activity' }));
+        expect(await within(drawer()).findByRole('heading', { name: 'Rahim Stores' })).toBeInTheDocument();
+        expect(api.getCrmActivities).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }));
+    });
+
+    /**
+     * Completing a call under the Planned filter drops its row from the list;
+     * Next should still mean the row that was below it.
+     */
+    it('carries on from where a row was once it leaves the list', async () => {
+        const panel = await openOn(0);
+        api.cancelCrmActivity.mockResolvedValue({});
+        api.getCrmActivities.mockResolvedValue(pageOf([second, third]));
+
+        fireEvent.click(await within(panel).findByRole('button', { name: /Cancel activity/i }));
+        await waitFor(() => expect(within(drawer()).queryByText(/ of 2$/)).not.toBeInTheDocument());
+        await waitFor(() => expect(api.getCrmActivities.mock.calls.length).toBeGreaterThan(1));
+
+        fireEvent.click(within(drawer()).getByRole('button', { name: 'Next activity' }));
+
+        expect(await within(drawer()).findByRole('heading', { name: 'Rahim Stores' })).toBeInTheDocument();
+        expect(within(drawer()).getByText('1 of 2')).toBeInTheDocument();
+    });
+
+    it('shows the lead\'s details in a tab of its own', async () => {
+        const panel = await openOn(0);
+
+        fireEvent.click(within(panel).getByRole('tab', { name: 'Lead details' }));
+
+        expect(await within(drawer()).findByText('lead-1@example.com')).toBeInTheDocument();
+        expect(api.getLead).toHaveBeenCalledWith('lead-1');
+        // Details only: the timeline is the other tab, not repeated under it.
+        expect(within(drawer()).queryByRole('button', { name: /Cancel activity/i })).not.toBeInTheDocument();
+    });
+
+    it('stays on details while stepping to the next lead', async () => {
+        const panel = await openOn(0);
+        fireEvent.click(within(panel).getByRole('tab', { name: 'Lead details' }));
+        await within(drawer()).findByText('lead-1@example.com');
+
+        fireEvent.click(within(drawer()).getByRole('button', { name: 'Next activity' }));
+
+        expect(await within(drawer()).findByText('lead-2@example.com')).toBeInTheDocument();
+        expect(within(drawer()).getByRole('tab', { name: 'Lead details' })).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('offers no details tab on a customer\'s row', async () => {
+        const panel = await openOn(2);
+
+        expect(within(panel).getByRole('heading', { name: 'Selim Mart' })).toBeInTheDocument();
+        expect(within(panel).queryByRole('tab', { name: 'Lead details' })).not.toBeInTheDocument();
     });
 });
 
