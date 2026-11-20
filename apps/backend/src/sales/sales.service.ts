@@ -111,6 +111,17 @@ interface CreateSaleOptions {
      * written rather than after — see `claimQuotation`.
      */
     claimQuotation?: boolean;
+    /**
+     * The project this invoice bills. Set only by project invoicing, never from
+     * the request body: tagging a sale moves revenue onto a project's margin.
+     */
+    projectId?: string;
+    /**
+     * Runs inside the sale's own transaction, once the row exists — for a
+     * caller whose own record must commit or fail with the invoice (a project
+     * milestone or the hours it billed), never apart from it.
+     */
+    onCreated?: (tx: any, sale: { id: string }) => Promise<void>;
 }
 
 /**
@@ -390,6 +401,7 @@ export class SalesService {
                     serial_number: serialNumber,
                     reference_number: referenceNumber,
                     quotation_id: source.quotationId,
+                    project_id: options.projectId ?? null,
                     sales_order_id: source.salesOrderId,
                     warehouse_id: prep.warehouses.entryWarehouseId,
                     total_amount: prep.computedTotal,
@@ -412,6 +424,7 @@ export class SalesService {
             });
 
             await this.markQuotationConverted(tx, tenantId, source.quotationId);
+            if (options.onCreated) await options.onCreated(tx, sale);
 
             return this.applySalePostings(tx, tenantId, userId, dto, sale, prep);
         });

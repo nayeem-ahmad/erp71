@@ -32,6 +32,7 @@ const db = {
     store: { findFirst: jest.fn() },
     userStoreAccess: { findMany: jest.fn(), create: jest.fn() },
     userStorePermission: { deleteMany: jest.fn(), createMany: jest.fn() },
+    employee: { findFirst: jest.fn(), updateMany: jest.fn() },
     $transaction: jest.fn(),
 };
 const emailService = { sendInvitation: jest.fn().mockResolvedValue(undefined) };
@@ -191,6 +192,77 @@ describe('InvitationsService', () => {
         expect(invalidateMember.mock.invocationCallOrder[0]).toBeGreaterThan(
             (setMemberRoles as jest.Mock).mock.invocationCallOrder[0],
         );
+    });
+
+    describe('an invitation that names an employee card', () => {
+        const rawToken = 'card-token';
+        const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        const invitation = {
+            id: 'inv-card',
+            token_hash: hash,
+            email: 'karim@example.com',
+            accepted_at: null,
+            expires_at: new Date(Date.now() + 86400_000),
+            tenant_id: 't1',
+            tenant_role_id: 'role-cashier',
+            invited_by: 'owner',
+            employee_id: 'e1',
+            tenantRole: { name: 'Cashier', permissions: [] },
+            roles: [],
+        };
+
+        beforeEach(() => {
+            db.userInvitation.findUnique.mockResolvedValue(invitation);
+            db.user.findUnique.mockResolvedValue({ id: 'u9', email: 'karim@example.com' });
+            db.store.findFirst.mockResolvedValue(null);
+            db.employee.updateMany.mockResolvedValue({ count: 1 });
+        });
+
+        it('links the card to the account that accepts, inside the joining transaction', async () => {
+            db.employee.findFirst.mockResolvedValue(null);
+
+            await service.accept(rawToken, 'u9');
+
+            expect(db.employee.updateMany).toHaveBeenLastCalledWith({
+                where: { id: 'e1', tenant_id: 't1', user_id: null, deleted_at: null },
+                data: { user_id: 'u9' },
+            });
+            expect(db.$transaction).toHaveBeenCalled();
+        });
+
+        it('still lets them join when the login is already some other card\'s', async () => {
+            db.employee.findFirst.mockResolvedValue({ id: 'e-other' });
+
+            await service.accept(rawToken, 'u9');
+
+            expect(db.tenantUser.create).toHaveBeenCalled();
+            expect(db.employee.updateMany).not.toHaveBeenCalled();
+        });
+
+        it('refuses to send one for a card that already has a login', async () => {
+            db.tenantRole.findFirst.mockResolvedValue({ id: 'role-cashier', name: 'Cashier', tenant_id: 't1', permissions: [] });
+            db.employee.findFirst.mockResolvedValue({ user_id: 'u-existing' });
+
+            await expect(
+                service.invite('t1', 'owner', UserRole.OWNER, 'karim@example.com', ['role-cashier'], 'e1'),
+            ).rejects.toThrow(ConflictException);
+            expect(db.userInvitation.create).not.toHaveBeenCalled();
+        });
+
+        it('records the card on the invitation it sends', async () => {
+            db.tenantRole.findFirst.mockResolvedValue({ id: 'role-cashier', name: 'Cashier', tenant_id: 't1', permissions: [] });
+            db.employee.findFirst.mockResolvedValue({ user_id: null });
+            db.tenant.findUnique.mockResolvedValue({ id: 't1', name: 'Shop' });
+            db.user.findUnique
+                .mockResolvedValueOnce({ id: 'owner', name: 'Owner', email: 'owner@example.com' })
+                .mockResolvedValueOnce(null);
+
+            await service.invite('t1', 'owner', UserRole.OWNER, 'karim@example.com', ['role-cashier'], 'e1');
+
+            expect(db.userInvitation.create).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ employee_id: 'e1' }) }),
+            );
+        });
     });
 
     it('drops the cached answers of an existing account once it joins', async () => {

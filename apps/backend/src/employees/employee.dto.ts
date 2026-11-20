@@ -339,3 +339,52 @@ export class LinkUserDto {
     @IsUUID()
     user_id: string;
 }
+
+export class LinkPairDto {
+    @IsUUID()
+    employeeId: string;
+
+    @IsUUID()
+    userId: string;
+}
+
+/** Pairs a person confirmed on the bulk matching screen. See `EmployeeLinkService.linkMany`. */
+export class BulkLinkDto {
+    @IsArray()
+    @ArrayMaxSize(200)
+    @ValidateNested({ each: true })
+    @Type(() => LinkPairDto)
+    links: LinkPairDto[];
+}
+
+/**
+ * Whose likeness to rank the cards by: a member (`userId`), or — on the invite
+ * form, before any login exists — the address being invited (`email`). With
+ * neither, the cards come back unranked.
+ */
+export class EmployeeCandidatesQueryDto {
+    @IsOptional()
+    @IsUUID()
+    userId?: string;
+
+    @IsOptional()
+    @IsEmail()
+    email?: string;
+}
+
+/** An hourly cost for an employee, from a date. See `EmployeeCostRate`. */
+export class CreateCostRateDto {
+    @Type(() => Number)
+    @IsNumber({ maxDecimalPlaces: 2 })
+    @Min(0.01)
+    @Max(1_000_000)
+    hourlyCost: number;
+
+    @IsDateString()
+    effectiveFrom: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    note?: string;
+}

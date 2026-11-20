@@ -894,6 +894,228 @@ export function openAuthedStream(endpoint: string, handlers: StreamHandlers): ()
  * derivable from the employee row, which is why there is no endpoint to read it
  * — it comes back from whichever call last changed it.
  */
+export interface ProjectCostingSettings {
+    standardMonthlyHours: number;
+    overheadPct: number;
+    /** The service product project invoices bill as. */
+    billingProductId?: string | null;
+}
+
+export type ProjectBillingType = 'FIXED_PRICE' | 'TIME_AND_MATERIALS' | 'INTERNAL';
+
+export interface ProjectBilling {
+    project: {
+        billingType: ProjectBillingType;
+        contractValue: number | null;
+        billRate: number | null;
+        customer: { id: string; name: string } | null;
+    };
+    billingProductId: string | null;
+    invoices: Array<{ id: string; serialNumber: string; date: string; totalAmount: number; amountPaid: number; status: string; note: string | null }>;
+    milestones: Array<{
+        id: string;
+        name: string;
+        targetDate: string | null;
+        completed: boolean;
+        amount: number | null;
+        invoice: { id: string; serialNumber: string } | null;
+    }>;
+    unbilledHours: {
+        hours: number;
+        amount: number;
+        unratedHours: number;
+        people: Array<{
+            key: string;
+            name: string;
+            memberId: string | null;
+            hours: number;
+            rate: number | null;
+            rateSource: 'MEMBER' | 'PROJECT' | null;
+            amount: number;
+        }>;
+    };
+}
+
+export interface EmployeeCostRates {
+    rates: Array<{ id: string; hourlyCost: number; effectiveFrom: string; note: string | null; createdAt: string }>;
+    current: { hourlyCost: number; source: 'RATE' | 'SALARY' } | null;
+    derivedFromSalary: number | null;
+    settings: ProjectCostingSettings;
+}
+
+export interface ProjectFinancials {
+    project: { id: string; code: string; name: string };
+    settings: ProjectCostingSettings;
+    totals: {
+        hours: number;
+        costedHours: number;
+        uncostedHours: number;
+        labourCost: number;
+        /** Expenses, cost entries and issued materials (Phase B). */
+        directCost: number;
+        totalCost: number;
+        budget: number | null;
+        budgetUsedPct: number | null;
+        budgetRemaining: number | null;
+        averageRate: number | null;
+    };
+    uncosted: { noEmployeeHours: number; noRateHours: number; materialLines: number };
+    /** Phase D: true once the budget is split by category — the project form then leaves it alone. */
+    budgetByCategory: boolean;
+    /** Budget vs actual: every category with a cost or a budget line. */
+    byCategory: Array<{
+        category: ProjectCostCategoryKey;
+        amount: number;
+        budget: number | null;
+        remaining: number | null;
+        usedPct: number | null;
+    }>;
+    forecast: {
+        remainingHours: number;
+        /** Labour still to come, at each assignee's rate (or the project average). */
+        estimatedRemainingCost: number;
+        /** Remaining hours nothing can price yet — counted apart, never as free. */
+        unratedHours: number;
+        /** What each budgeted non-labour category has left. */
+        remainingDirectCost: number;
+        estimateAtCompletion: number;
+        byPerson: ProjectForecastPerson[];
+    };
+    byPerson: Array<{
+        key: string;
+        employeeId: string | null;
+        userId: string | null;
+        name: string;
+        employeeCode: string | null;
+        hours: number;
+        labourCost: number;
+        uncostedHours: number;
+    }>;
+    byMonth: Array<{ month: string; hours: number; labourCost: number; directCost: number; totalCost: number; revenue: number }>;
+    /** Phase C: what the project billed, and how it should finish. */
+    revenue: {
+        billingType: ProjectBillingType;
+        contractValue: number | null;
+        invoiced: number;
+        revenue: number;
+        margin: number;
+        marginPct: number | null;
+        leftToInvoice: number | null;
+        unbilledHours: number | null;
+        unbilledAmount: number | null;
+        unratedHours: number | null;
+        expectedRevenue: number | null;
+        expectedCost: number;
+        expectedMargin: number | null;
+        /** Phase D, fixed price only: cost so far ÷ cost at completion. */
+        percentComplete: number | null;
+        earnedRevenue: number | null;
+        earnedMargin: number | null;
+        /** Positive: invoiced ahead of the work; negative: work not yet invoiced. */
+        billedAheadOfWork: number | null;
+    };
+}
+
+export interface ProjectForecastPerson {
+    key: string;
+    name: string;
+    employeeId: string | null;
+    remainingHours: number;
+    rate: number | null;
+    rateSource: 'PERSON' | 'AVERAGE' | null;
+    cost: number | null;
+}
+
+export interface ProjectProfitabilityRow {
+    id: string;
+    code: string;
+    name: string;
+    status: string;
+    billingType: ProjectBillingType;
+    customer: string | null;
+    budget: number | null;
+    labourCost: number;
+    directCost: number;
+    cost: number;
+    budgetUsedPct: number | null;
+    contractValue: number | null;
+    revenue: number;
+    /** Null on an internal project, which bills nothing. */
+    margin: number | null;
+    marginPct: number | null;
+    uncostedHours: number;
+}
+
+export interface ProjectProfitability {
+    rows: ProjectProfitabilityRow[];
+    totals: {
+        projects: number;
+        cost: number;
+        internalCost: number;
+        revenue: number;
+        billedCost: number;
+        margin: number;
+        marginPct: number | null;
+        uncostedHours: number;
+    };
+    truncated: boolean;
+}
+
+export type ProjectCostCategoryKey = 'LABOUR' | 'MATERIAL' | 'SERVICES' | 'EXPENSE' | 'OVERHEAD' | 'OTHER';
+
+/** One line of a project's direct costs, whichever document it came from. */
+export interface ProjectDirectCost {
+    kind: 'ENTRY' | 'ISSUE' | 'EXPENSE';
+    id: string;
+    date: string;
+    category: ProjectCostCategoryKey;
+    description: string;
+    source: string | null;
+    amount: number;
+    uncosted: boolean;
+}
+
+export interface ProjectCostSource {
+    id: string;
+    productName: string;
+    purchaseNumber: string | null;
+    supplierName: string | null;
+    purchaseDate: string;
+    lineTotal: number;
+    remainingAmount: number;
+}
+
+/** Why a login and an employee card look like the same person. Mobile and email are strong; name is a hint. */
+export type EmployeeLinkMatch = 'mobile' | 'email' | 'name';
+
+export interface EmployeeLoginCandidate {
+    userId: string;
+    name: string | null;
+    email: string | null;
+    mobile: string | null;
+    matches: EmployeeLinkMatch[];
+}
+
+export interface EmployeeLinkCandidate {
+    employeeId: string;
+    employeeCode: string;
+    name: string;
+    phone: string;
+    email: string | null;
+    matches: EmployeeLinkMatch[];
+}
+
+export interface EmployeeLinkSuggestion {
+    employee: { id: string; employeeCode: string; name: string; phone: string; email: string | null };
+    user: { id: string; name: string | null; email: string | null; mobile: string | null };
+    matches: EmployeeLinkMatch[];
+}
+
+export interface EmployeeBulkLinkResult {
+    linked: number;
+    results: Array<{ employeeId: string; userId: string; ok: boolean; error?: string }>;
+}
+
 export type EmployeeLoginState = {
     employee_id: string;
     has_login: boolean;
@@ -5796,7 +6018,7 @@ export const api = {
     getTeamInvitations: () => fetchWithAuth('/team/invitations'),
     // `tenantRoleIds` carries the whole set — the invitee's access is the union of
     // every role in it, and the first is their primary role.
-    sendTeamInvitation: (data: { email: string; tenantRoleIds: string[] }) => fetchWithAuth('/team/invitations', {
+    sendTeamInvitation: (data: { email: string; tenantRoleIds: string[]; employeeId?: string }) => fetchWithAuth('/team/invitations', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -6296,6 +6518,112 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     unlinkEmployeeUser: (id: string) => fetchWithAuth(`/employees/${id}/link-user`, { method: 'DELETE' }),
+    /** Logins this employee could be linked to, likeliest first. Needs MANAGE_HR and MANAGE_USERS. */
+    getEmployeeLoginCandidates: (id: string): Promise<EmployeeLoginCandidate[]> =>
+        fetchWithAuth(`/employees/${id}/link-candidates`),
+    /** Unlinked cards, ranked by likeness to a member or to an address being invited. */
+    getEmployeeCandidates: (whom: { userId?: string; email?: string } = {}): Promise<EmployeeLinkCandidate[]> => {
+        const q = new URLSearchParams();
+        if (whom.userId) q.set('userId', whom.userId);
+        if (whom.email) q.set('email', whom.email);
+        return fetchWithAuth(`/employees/link-candidates${q.toString() ? `?${q}` : ''}`);
+    },
+    getEmployeeLinkSuggestions: (): Promise<EmployeeLinkSuggestion[]> => fetchWithAuth('/employees/link-suggestions'),
+    // Cost rates — VIEW_PAYROLL to read, MANAGE_HR as well to change.
+    getEmployeeCostRates: (id: string): Promise<EmployeeCostRates> => fetchWithAuth(`/employees/${id}/cost-rates`),
+    createEmployeeCostRate: (id: string, data: { hourlyCost: number; effectiveFrom: string; note?: string }) =>
+        fetchWithAuth(`/employees/${id}/cost-rates`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteEmployeeCostRate: (id: string, rateId: string) =>
+        fetchWithAuth(`/employees/${id}/cost-rates/${rateId}`, { method: 'DELETE' }),
+    // Project costing — VIEW_PROJECT_FINANCIALS throughout.
+    getProjectFinancials: (projectId: string): Promise<ProjectFinancials> =>
+        fetchWithAuth(`/project-costing/projects/${projectId}`),
+    setProjectBudget: (
+        projectId: string,
+        lines: Array<{ category: ProjectCostCategoryKey; amount: number }>,
+    ): Promise<{ lines: Array<{ category: ProjectCostCategoryKey; amount: number }>; total: number | null }> =>
+        fetchWithAuth(`/project-costing/projects/${projectId}/budget`, { method: 'PUT', body: JSON.stringify({ lines }) }),
+    getProjectProfitability: (params: { status?: string; billingType?: string } = {}): Promise<ProjectProfitability> => {
+        const query = new URLSearchParams();
+        if (params.status) query.set('status', params.status);
+        if (params.billingType) query.set('billingType', params.billingType);
+        const qs = query.toString();
+        return fetchWithAuth(`/project-costing/report${qs ? `?${qs}` : ''}`);
+    },
+    priceProjectHours: (projectId: string): Promise<{ priced: number; stillUncosted: number }> =>
+        fetchWithAuth(`/project-costing/projects/${projectId}/price-hours`, { method: 'POST' }),
+    getProjectCostingSettings: (): Promise<ProjectCostingSettings> => fetchWithAuth('/project-costing/settings'),
+    /** Projects an expense can be tagged with — visible, live ones. */
+    getProjectBilling: (projectId: string, upTo?: string): Promise<ProjectBilling> =>
+        fetchWithAuth(`/project-costing/projects/${projectId}/billing${upTo ? `?upTo=${upTo}` : ''}`),
+    getProjectBillingProducts: (): Promise<Array<{ id: string; name: string; vatRate: number | null }>> =>
+        fetchWithAuth('/project-costing/billing-products'),
+    createProjectInvoice: (
+        projectId: string,
+        data: {
+            kind: 'MILESTONE' | 'HOURS' | 'AMOUNT';
+            milestoneId?: string;
+            upTo?: string;
+            amount?: number;
+            description?: string;
+            productId?: string;
+            amountIncludesVat?: boolean;
+            saleDate?: string;
+        },
+    ): Promise<{ saleId: string; serialNumber: string; totalAmount: number }> =>
+        fetchWithAuth(`/project-costing/projects/${projectId}/invoices`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    setProjectMemberBillRate: (projectId: string, memberId: string, billRate: number | null) =>
+        fetchWithAuth(`/project-costing/projects/${projectId}/members/${memberId}/bill-rate`, {
+            method: 'PATCH',
+            body: JSON.stringify({ billRate }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    getProjectOptions: (): Promise<Array<{ id: string; code: string; name: string }>> =>
+        fetchWithAuth('/project-costing/project-options'),
+    getProjectDirectCosts: (projectId: string): Promise<ProjectDirectCost[]> =>
+        fetchWithAuth(`/project-costing/projects/${projectId}/costs`),
+    getProjectCostSources: (search?: string): Promise<ProjectCostSource[]> =>
+        fetchWithAuth(`/project-costing/cost-sources${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+    addProjectCost: (
+        projectId: string,
+        data: { category: Exclude<ProjectCostCategoryKey, 'LABOUR'>; amount: number; costDate: string; description: string; sourcePurchaseItemId?: string },
+    ) => fetchWithAuth(`/project-costing/projects/${projectId}/costs`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    removeProjectCost: (projectId: string, costId: string) =>
+        fetchWithAuth(`/project-costing/projects/${projectId}/costs/${costId}`, { method: 'DELETE' }),
+    issueProjectMaterials: (
+        projectId: string,
+        data: { warehouseId: string; issueDate: string; note?: string; items: Array<{ productId: string; quantity: number }> },
+    ) => fetchWithAuth(`/project-costing/projects/${projectId}/material-issues`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    reverseProjectMaterialIssue: (projectId: string, issueId: string) =>
+        fetchWithAuth(`/project-costing/projects/${projectId}/material-issues/${issueId}`, { method: 'DELETE' }),
+    updateProjectCostingSettings: (data: ProjectCostingSettings): Promise<ProjectCostingSettings> =>
+        fetchWithAuth('/project-costing/settings', {
+            method: 'PUT',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    linkEmployeesBulk: (links: Array<{ employeeId: string; userId: string }>): Promise<EmployeeBulkLinkResult> =>
+        fetchWithAuth('/employees/link-bulk', {
+            method: 'POST',
+            body: JSON.stringify({ links }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     // Attendance
     getAttendance: (params?: { employeeId?: string; startDate?: string; endDate?: string; status?: string }) => {
         const q = new URLSearchParams();
@@ -7725,7 +8053,7 @@ export const api = {
         }),
     updateProjectTimeTag: (
         id: string,
-        data: { name?: string; color?: string; sortOrder?: number },
+        data: { name?: string; color?: string; sortOrder?: number; billable?: boolean },
     ) =>
         fetchWithAuth(`/projects/time-tags/${id}`, {
             method: 'PATCH',

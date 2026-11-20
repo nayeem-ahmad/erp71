@@ -50,6 +50,7 @@ import {
     applyEmployeeContext,
     applyTenantContext,
     getLoginContexts,
+    isInEmployeePortal,
     isShopWorkspacePath,
 } from '@/lib/auth-session';
 import {
@@ -291,10 +292,11 @@ function AppShell({ children }: DashboardLayoutProps) {
     // set by hand. Pairing it with `user.employee` — which only the server can
     // populate — means faking the context yields an employee shell with no data
     // rather than any access they did not already have.
-    const inEmployeeMode = Boolean(user?.employee?.id) && activeContext === 'employee';
+    // With cards in several workspaces, the one this tab is pinned to must be among them.
+    const inEmployeeMode = isInEmployeePortal(user, activeContext, activeTenantId);
     const loginContexts = user
         ? getLoginContexts(user)
-        : { hasPlatformConsole: false, isReferee: false, isEmployee: false, tenants: [], count: 0 };
+        : { hasPlatformConsole: false, isReferee: false, isEmployee: false, employees: [], tenants: [], count: 0 };
     const canSwitchAccount = loginContexts.count > 1;
     const activeTenant = (inPlatformAdminMode || inRefereeMode)
         ? null

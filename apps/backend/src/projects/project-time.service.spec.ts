@@ -1,7 +1,9 @@
+import { Prisma } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { ProjectTimeService } from './project-time.service';
 import { RemainingHoursService } from './remaining-hours.service';
+import { LabourPricingService } from './labour-pricing.service';
 import { ProjectAccessService } from './project-access.service';
 import { OWNER, attachEmployeeLookup, narrow, staff, visibilityOr } from './project-access.test-support';
 import { DatabaseService } from '../database/database.service';
@@ -35,6 +37,10 @@ describe('ProjectTimeService', () => {
                 aggregate: jest.fn().mockResolvedValue({ _sum: { hours: 0 }, _count: { _all: 0 } }),
             },
             projectTimeTag: { findMany: jest.fn().mockResolvedValue([]) },
+            // Only reached for a viewer built by hand, which carries no resolved employee.
+            employee: { findFirst: jest.fn().mockResolvedValue(null) },
+            employeeCostRate: { findMany: jest.fn().mockResolvedValue([]) },
+            projectCostingSettings: { findUnique: jest.fn().mockResolvedValue(null) },
             projectTimeEntryTag: {
                 deleteMany: jest.fn().mockResolvedValue({}),
                 createMany: jest.fn().mockResolvedValue({}),
@@ -47,6 +53,7 @@ describe('ProjectTimeService', () => {
             providers: [
                 ProjectTimeService,
                 ProjectAccessService,
+                LabourPricingService,
                 { provide: DatabaseService, useValue: db },
                 { provide: RemainingHoursService, useValue: remaining },
             ],
@@ -62,6 +69,68 @@ describe('ProjectTimeService', () => {
             hours: 3,
             ...overrides,
         } as never);
+
+    it('stamps the entry with the employee the request resolved, without looking it up', async () => {
+        await service.create({ ...OWNER, employeeId: 'emp-1' }, {
+            taskId: 'task-1',
+            workDate: '2026-08-03',
+            hours: 3,
+        } as never);
+
+        expect(db.projectTimeEntry.create.mock.calls[0][0].data.employee_id).toBe('emp-1');
+        // Pricing reads the card's salary; nothing looks the card up by login.
+        expect(db.employee.findFirst).not.toHaveBeenCalledWith(
+            expect.objectContaining({ where: expect.objectContaining({ user_id: expect.anything() }) }),
+        );
+    });
+
+    it('prices the hours from the salary when the person has no explicit rate', async () => {
+        db.employee.findFirst.mockResolvedValueOnce({ basic_salary: 41600 });
+
+        await service.create({ ...OWNER, employeeId: 'emp-1' }, {
+            taskId: 'task-1',
+            workDate: '2026-08-03',
+            hours: 3,
+        } as never);
+
+        const data = db.projectTimeEntry.create.mock.calls[0][0].data;
+        // 41,600 ÷ 208 standard hours = 200 an hour.
+        expect(Number(data.cost_rate)).toBe(200);
+        expect(Number(data.cost_amount)).toBe(600);
+        expect(data.cost_source).toBe('SALARY');
+    });
+
+    it('never returns what an hour cost from the hours API', async () => {
+        db.projectTimeEntry.create.mockResolvedValueOnce({
+            id: 'entry-1',
+            cost_rate: 200,
+            cost_amount: 600,
+            cost_source: 'SALARY',
+            started_at: null,
+            ended_at: null,
+        });
+
+        const entry: any = await service.create({ ...OWNER, employeeId: 'emp-1' }, {
+            taskId: 'task-1',
+            workDate: '2026-08-03',
+            hours: 3,
+        } as never);
+
+        expect(entry).not.toHaveProperty('cost_rate');
+        expect(entry).not.toHaveProperty('cost_amount');
+        expect(entry).not.toHaveProperty('cost_source');
+    });
+
+    it('stamps no employee for a login linked to none', async () => {
+        await service.create({ ...OWNER, employeeId: null }, {
+            taskId: 'task-1',
+            workDate: '2026-08-03',
+            hours: 3,
+        } as never);
+
+        expect(db.projectTimeEntry.create.mock.calls[0][0].data.employee_id).toBeNull();
+        expect(db.employee.findFirst).not.toHaveBeenCalled();
+    });
 
     it('suggests the remainder after logged hours when none is supplied', async () => {
         await log();
@@ -255,6 +324,10 @@ describe('ProjectTimeService', () => {
             work_date: new Date('2026-08-03T00:00:00.000Z'),
             started_at: new Date('2026-08-03T07:45:00.000Z'),
             ended_at: new Date('2026-08-03T12:08:00.000Z'),
+            hours: 4.38,
+            employee_id: null,
+            cost_rate: null,
+            cost_source: null,
         };
 
         const patch = (dto: Record<string, unknown>) => {
@@ -303,7 +376,52 @@ describe('ProjectTimeService', () => {
             });
             await service.update(OWNER, 'entry-1', { hours: 2 } as never);
 
-            expect(written()).toEqual({ hours: 2 });
+            // Re-priced with the new length; nobody behind it, so still uncosted.
+            expect(written()).toEqual({ hours: 2, cost_rate: null, cost_amount: null, cost_source: null });
+        });
+
+        describe('cost', () => {
+            const priced = {
+                ...stored,
+                started_at: null,
+                ended_at: null,
+                hours: 3,
+                employee_id: 'emp-1',
+                cost_rate: new Prisma.Decimal(500),
+                cost_source: 'SALARY',
+            };
+
+            it('keeps the rate the entry was priced at when only its length changes', async () => {
+                db.projectTimeEntry.findFirst.mockResolvedValueOnce(priced);
+
+                await service.update(OWNER, 'entry-1', { hours: 2 } as never);
+
+                expect(Number(written().cost_amount)).toBe(1000);
+                expect(Number(written().cost_rate)).toBe(500);
+                expect(db.employeeCostRate.findMany).not.toHaveBeenCalled();
+            });
+
+            it('re-prices from the rate in force on the new day when the day changes', async () => {
+                db.projectTimeEntry.findFirst.mockResolvedValueOnce(priced);
+                db.employee.findFirst.mockResolvedValueOnce({ basic_salary: null });
+                db.employeeCostRate.findMany.mockResolvedValueOnce([
+                    { hourly_cost: 300, effective_from: new Date('2026-08-01T00:00:00.000Z') },
+                ]);
+
+                await service.update(OWNER, 'entry-1', { workDate: '2026-08-10' } as never);
+
+                expect(written()).toEqual(expect.objectContaining({ cost_source: 'RATE' }));
+                expect(Number(written().cost_amount)).toBe(900);
+            });
+
+            it('leaves cost alone for an edit that changes neither length nor day', async () => {
+                db.projectTimeEntry.findFirst.mockResolvedValueOnce(priced);
+
+                await service.update(OWNER, 'entry-1', { note: 'Rewired the till' } as never);
+
+                expect(written()).not.toHaveProperty('cost_rate');
+                expect(written()).not.toHaveProperty('cost_amount');
+            });
         });
 
         it('replaces tags wholesale, so an empty list means none left', async () => {

@@ -95,7 +95,8 @@ describe('NAV_PERMISSIONS', () => {
         const hidden = projectNodes.filter(
             (id) => NAV_PERMISSIONS[id] && !NAV_PERMISSIONS[id].some((perm) => held.has(perm)),
         );
-        // Setup is the one Projects screen that needs its own management key.
-        expect(hidden).toEqual(['projects.setup']);
+        // Setup needs its own management key; profitability is cost and margin,
+        // which are pay ÷ hours and stay with VIEW_PROJECT_FINANCIALS holders.
+        expect(hidden.sort()).toEqual(['projects.profitability', 'projects.setup']);
     });
 });

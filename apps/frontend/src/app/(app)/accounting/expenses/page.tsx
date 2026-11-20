@@ -43,6 +43,8 @@ interface ExpenseEntry {
     category?: ExpenseCategory;
     head?: ExpenseHead | null;
     store?: { id: string; name: string } | null;
+    project_id?: string | null;
+    project?: { id: string; code: string; name: string } | null;
 }
 
 const columnHelper = createColumnHelper<ExpenseEntry>();
@@ -90,6 +92,12 @@ function ExpensesPageContent() {
     const [formAmount, setFormAmount] = useState('');
     const [formDate, setFormDate] = useState(tenantDateOnly);
     const [formDescription, setFormDescription] = useState('');
+    // The project this was spent on, if any — a direct cost on its financials.
+    const [formProjectId, setFormProjectId] = useState('');
+    const [projectOptions, setProjectOptions] = useState<Array<{ id: string; code: string; name: string }>>([]);
+    useEffect(() => {
+        api.getProjectOptions().then((rows) => setProjectOptions(rows ?? [])).catch(() => setProjectOptions([]));
+    }, []);
     const [formPaymentMethod, setFormPaymentMethod] = useState<(typeof PAYMENT_METHODS)[number]>('CASH');
 
     const loadData = async () => {
@@ -167,6 +175,7 @@ function ExpensesPageContent() {
         setFormDate(tenantDateOnly());
         setFormDescription('');
         setFormPaymentMethod('CASH');
+        setFormProjectId('');
     };
 
     const fillForm = (entry: ExpenseEntry) => {
@@ -175,6 +184,7 @@ function ExpensesPageContent() {
         setFormDate(String(entry.expense_date).slice(0, 10));
         setFormDescription(entry.description ?? '');
         setFormPaymentMethod(isKnownMethod(entry.payment_method) ? entry.payment_method : 'CASH');
+        setFormProjectId(entry.project_id ?? '');
     };
 
     const openCreate = () => {
@@ -209,6 +219,8 @@ function ExpensesPageContent() {
                 expenseDate: formDate,
                 description: editing ? formDescription.trim() : (formDescription.trim() || undefined),
                 paymentMethod: formPaymentMethod,
+                // On an edit, an empty choice clears the project; on a new entry it is simply absent.
+                ...(formProjectId ? { projectId: formProjectId } : editing ? { projectId: null } : {}),
             };
             if (editing) {
                 await api.updateExpenseEntry(editing.id, payload);
@@ -500,6 +512,20 @@ function ExpensesPageContent() {
                                             ))}
                                         </select>
                                     </label>
+                                    {(projectOptions.length > 0 || formProjectId) && (
+                                        <label className="block">
+                                            <span className={`${compactDensity.formLabel} block mb-1`}>{t.projects.financials.expenseProject}</span>
+                                            <select value={formProjectId} onChange={(e) => setFormProjectId(e.target.value)} className={compactDensity.formField}>
+                                                <option value="">{t.projects.financials.noProject}</option>
+                                                {projectOptions.map((project) => (
+                                                    <option key={project.id} value={project.id}>{project.code} · {project.name}</option>
+                                                ))}
+                                                {formProjectId && !projectOptions.some((project) => project.id === formProjectId) && (
+                                                    <option value={formProjectId}>{editing?.project ? `${editing.project.code} · ${editing.project.name}` : formProjectId}</option>
+                                                )}
+                                            </select>
+                                        </label>
+                                    )}
                                     <label className="block">
                                         <span className={`${compactDensity.formLabel} block mb-1`}>{t.expenses.notes}</span>
                                         <textarea value={formDescription} onChange={(e) => setFormDescription(e.target.value)} rows={2} className={compactDensity.formField} />

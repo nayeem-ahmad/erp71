@@ -43,13 +43,16 @@ export class EmployeeGuard implements CanActivate {
             throw new UnauthorizedException('Authentication is required');
         }
 
-        const employee = await this.db.employee.findFirst({
+        // Every portal-enabled card this login holds — one per workspace at
+        // most, but a person can be staff in more than one workspace.
+        const candidates = await this.db.employee.findMany({
             where: {
                 user_id: userId,
                 portal_access: true,
                 status: 'ACTIVE',
                 deleted_at: null,
             },
+            orderBy: { created_at: 'asc' },
             select: {
                 id: true,
                 tenant_id: true,
@@ -64,8 +67,13 @@ export class EmployeeGuard implements CanActivate {
             },
         });
 
+        const employee = pickEmployee(candidates, request.headers?.['x-tenant-id']);
         if (!employee) {
-            throw new ForbiddenException('Employee portal access is required');
+            throw new ForbiddenException(
+                candidates.length > 1
+                    ? 'Choose which workspace to open the employee portal in.'
+                    : 'Employee portal access is required',
+            );
         }
 
         request.employee = employee;
@@ -74,4 +82,26 @@ export class EmployeeGuard implements CanActivate {
         request.tenantId = employee.tenant_id;
         return true;
     }
+}
+
+/**
+ * Which of a login's own portal cards this request is for.
+ *
+ * The workspace header only ever *chooses among the caller's own cards* — the
+ * candidates are already narrowed to the token's user — so a forged header
+ * can at worst pick another card that is theirs anyway. One card is used
+ * whatever the header says, as it was before a login could hold several. More
+ * than one with no header naming one of them is ambiguous, and refused rather
+ * than guessed.
+ */
+export function pickEmployee<T extends { tenant_id: string }>(
+    candidates: readonly T[],
+    tenantHeader: unknown,
+): T | null {
+    if (candidates.length === 0) return null;
+    if (typeof tenantHeader === 'string' && tenantHeader) {
+        const named = candidates.find((candidate) => candidate.tenant_id === tenantHeader);
+        if (named) return named;
+    }
+    return candidates.length === 1 ? candidates[0] : null;
 }

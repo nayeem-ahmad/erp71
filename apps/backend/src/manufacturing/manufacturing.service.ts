@@ -6,6 +6,7 @@ import { CreateBomDto, UpdateBomDto, CreateProductionJobDto, CreateJobCostDto, W
 import { applyInventoryMovement, ensureDefaultWarehouse } from '../database/inventory.utils';
 import { resolveProductCosts } from '../database/product-cost.utils';
 import { resolveZone, zonedDateString } from '../common/tenant-time.util';
+import { allocatedByPurchaseItem, assertWithinLine } from '../common/bill-allocation.util';
 
 @Injectable()
 export class ManufacturingService {
@@ -585,15 +586,8 @@ export class ManufacturingService {
 
         if (items.length === 0) return [];
 
-        const allocatedByItem = new Map<string, number>();
-        const grouped = await this.db.productionJobCost.groupBy({
-            by: ['sourcePurchaseItemId'],
-            where: { tenantId, sourcePurchaseItemId: { in: items.map((i: any) => i.id) } },
-            _sum: { amount: true },
-        });
-        for (const g of grouped) {
-            allocatedByItem.set(g.sourcePurchaseItemId, Number(g._sum.amount ?? 0));
-        }
+        // Shares drawn by projects count too: one bill is one cap.
+        const allocatedByItem = await allocatedByPurchaseItem(this.db, tenantId, items.map((i: any) => i.id));
 
         return items
             .map((item: any) => {
@@ -630,17 +624,9 @@ export class ManufacturingService {
                 throw new BadRequestException('Purchase item not found or does not belong to this tenant');
             }
 
-            const allocated = await this.db.productionJobCost.aggregate({
-                where: { tenantId, sourcePurchaseItemId: dto.sourcePurchaseItemId },
-                _sum: { amount: true },
-            });
-            const alreadyAllocated = Number(allocated._sum.amount ?? 0);
-            const remaining = Number(purchaseItem.line_total) - alreadyAllocated;
-            if (dto.amount - remaining > 0.005) {
-                throw new BadRequestException(
-                    `This allocation (${dto.amount.toFixed(2)}) exceeds the remaining unallocated amount (${remaining.toFixed(2)}) on this bill line.`,
-                );
-            }
+            // Shares drawn by projects count against the same line total.
+            const allocated = await allocatedByPurchaseItem(this.db, tenantId, [dto.sourcePurchaseItemId]);
+            assertWithinLine(Number(purchaseItem.line_total), allocated.get(dto.sourcePurchaseItemId) ?? 0, dto.amount);
         }
 
         const recipe = job.recipe as any;

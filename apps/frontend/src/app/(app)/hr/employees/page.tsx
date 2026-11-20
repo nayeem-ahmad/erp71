@@ -18,6 +18,12 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import { PageShell, Button, BranchFilter, ConfirmDialog, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { useBranchScope } from '@/lib/branch-scope';
+import Link from 'next/link';
+import { buttonClassName } from '@/components/ui';
+import { fetchMe } from '@/hooks/use-me';
+import { getWorkspaceItem } from '@/lib/session-store';
+import { hasPermission, isOwner } from '@/lib/permissions';
+import { routes } from '@/lib/routes';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
@@ -65,6 +71,20 @@ const columnHelper = createColumnHelper<Employee>();
 
 export default function EmployeesPage() {
     const { t, locale } = useI18n();
+    // Bulk matching lists the workspace's logins, so it needs MANAGE_USERS too.
+    const [canMatchLogins, setCanMatchLogins] = useState(false);
+    useEffect(() => {
+        fetchMe()
+            .then((me: any) => {
+                const tenantId = getWorkspaceItem('tenant_id');
+                const tenant = me?.tenants?.find((entry: any) => entry.id === tenantId) || me?.tenants?.[0];
+                setCanMatchLogins(
+                    isOwner(tenant?.role)
+                        || (hasPermission(tenant?.permissions, 'MANAGE_HR') && hasPermission(tenant?.permissions, 'MANAGE_USERS')),
+                );
+            })
+            .catch(() => setCanMatchLogins(false));
+    }, []);
     const branch = useBranchScope();
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
@@ -365,6 +385,11 @@ export default function EmployeesPage() {
                     actions={(
                         <>
                             <BranchFilter scope={branch} />
+                            {canMatchLogins && (
+                                <Link href={routes.hr.employeeLinkLogins} className={buttonClassName({ variant: 'secondary' })}>
+                                    {t.employees.detail.linking.bulkAction}
+                                </Link>
+                            )}
                             <Button variant="secondary" icon={<Upload className="w-4 h-4" />} onClick={() => setImportOpen(true)}>
                                 {t.common.import}
                             </Button>

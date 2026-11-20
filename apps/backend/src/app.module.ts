@@ -110,6 +110,7 @@ import { CrmInteractionsModule } from './crm-interactions/crm-interactions.modul
 import { CrmFollowUpsModule } from './crm-follow-ups/crm-follow-ups.module';
 import { CrmActivitiesModule } from './crm-activities/crm-activities.module';
 import { ProjectsModule } from './projects/projects.module';
+import { ProjectBillingModule } from './projects/project-billing.module';
 import { MeetingsModule } from './meetings/meetings.module';
 import { NotesModule } from './notes/notes.module';
 import { CrmCampaignsModule } from './crm-campaigns/crm-campaigns.module';
@@ -266,6 +267,7 @@ import { Meet71Module } from './meet71/meet71.module';
         CrmFollowUpsModule,
         CrmActivitiesModule,
         ProjectsModule,
+        ProjectBillingModule,
         MeetingsModule,
         NotesModule,
         CrmCampaignsModule,

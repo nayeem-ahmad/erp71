@@ -116,6 +116,7 @@ describe('ProjectForm code', () => {
             code: 'PRJ-0002', name: 'Fit-out', shortName: '', description: '', customerId: '',
             projectTypeId: '', status: 'ACTIVE', priority: 'MEDIUM', visibility: 'PUBLIC',
             startDate: '', targetEndDate: '', budgetAmount: '',
+            billingType: 'INTERNAL', contractValue: '', billRate: '',
         };
         render(<ProjectForm mode="edit" projectId="p1" initial={initial} />);
         expect(codeInput().value).toBe('PRJ-0002');
@@ -127,5 +128,56 @@ describe('ProjectForm code', () => {
         fireEvent.submit(codeInput().closest('form')!);
         await waitFor(() => expect(updateProject).toHaveBeenCalled());
         expect(updateProject.mock.calls[0][1]).toMatchObject({ code: 'FIT' });
+    });
+
+    describe('billing', () => {
+        it('asks for a contract value on a fixed-price project, and sends it', async () => {
+            render(<ProjectForm mode="edit" projectId="p1" initial={{
+                code: 'PRJ-0002', name: 'Fit-out', shortName: '', description: '', customerId: '',
+                projectTypeId: '', status: 'ACTIVE', priority: 'MEDIUM', visibility: 'PUBLIC',
+                startDate: '', targetEndDate: '', budgetAmount: '',
+                billingType: 'INTERNAL', contractValue: '', billRate: '',
+            }} />);
+
+            expect(screen.queryByLabelText('Contract value')).not.toBeInTheDocument();
+            fireEvent.change(screen.getByLabelText('How it is billed'), { target: { value: 'FIXED_PRICE' } });
+            fireEvent.change(screen.getByLabelText('Contract value'), { target: { value: '120000' } });
+            fireEvent.submit(codeInput().closest('form')!);
+
+            await waitFor(() =>
+                expect(updateProject).toHaveBeenCalledWith('p1', expect.objectContaining({
+                    billingType: 'FIXED_PRICE', contractValue: 120000, billRate: null,
+                })),
+            );
+        });
+    });
+
+    describe('budget split by category', () => {
+        const initial = {
+            code: 'PRJ-0002', name: 'Fit-out', shortName: '', description: '', customerId: '',
+            projectTypeId: '', status: 'ACTIVE', priority: 'MEDIUM', visibility: 'PUBLIC',
+            startDate: '', targetEndDate: '', budgetAmount: '7500',
+            billingType: 'INTERNAL', contractValue: '', billRate: '',
+        };
+
+        it('shows the budget read-only, says where it is set, and leaves it out of the save', async () => {
+            render(<ProjectForm mode="edit" projectId="p1" initial={{ ...initial, budgetByCategory: true }} />);
+
+            expect(screen.getByLabelText('Budget')).toBeDisabled();
+            expect(screen.getByText(/Split by category on the project's Financials/)).toBeInTheDocument();
+            fireEvent.submit(codeInput().closest('form')!);
+
+            await waitFor(() => expect(updateProject).toHaveBeenCalled());
+            expect(updateProject.mock.calls[0][1].budgetAmount).toBeUndefined();
+        });
+
+        it('edits and sends the budget as before when it is not split', async () => {
+            render(<ProjectForm mode="edit" projectId="p1" initial={initial} />);
+
+            fireEvent.change(screen.getByLabelText('Budget'), { target: { value: '9000' } });
+            fireEvent.submit(codeInput().closest('form')!);
+
+            await waitFor(() => expect(updateProject).toHaveBeenCalledWith('p1', expect.objectContaining({ budgetAmount: 9000 })));
+        });
     });
 });

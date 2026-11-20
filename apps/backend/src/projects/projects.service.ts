@@ -217,6 +217,27 @@ export class ProjectsService {
         return paginate(items, total, page, limit);
     }
 
+    /**
+     * A budget split by category on Financials is the sum of its lines, so the
+     * project form may send that same figure back (it always sends the field)
+     * but not a different one — that would leave the lines and the total
+     * disagreeing with nothing to say which is right.
+     */
+    private async assertBudgetNotSplit(tenantId: string, projectId: string, budgetAmount: number | null | undefined) {
+        const split = await this.db.projectBudgetLine.aggregate({
+            where: { tenant_id: tenantId, project_id: projectId },
+            _sum: { amount: true },
+            _count: { _all: true },
+        });
+        if (!split?._count?._all) return;
+        const total = Math.round(Number(split._sum.amount ?? 0) * 100) / 100;
+        if (budgetAmount === null || budgetAmount === undefined || Math.round(budgetAmount * 100) / 100 !== total) {
+            throw new BadRequestException(
+                "This project's budget is split by category. Change it on the project's Financials page.",
+            );
+        }
+    }
+
     async findOne(viewer: ProjectViewer, id: string) {
         const tenantId = viewer.tenantId;
         const project = await this.db.project.findFirst({
@@ -241,6 +262,7 @@ export class ProjectsService {
                     include: { skill: { select: { id: true, name: true, category: true, is_active: true } } },
                     orderBy: { created_at: 'asc' },
                 },
+                _count: { select: { budgetLines: true } },
             },
         });
         if (!project) throw new NotFoundException('Project not found');
@@ -248,7 +270,9 @@ export class ProjectsService {
         // Percent complete is derived, never stored — a stored copy drifts the
         // moment a task moves and nobody recalculates it.
         const progress = await this.progress(tenantId, id);
-        return { ...project, progress };
+        const { _count, ...rest } = project as typeof project & { _count?: { budgetLines?: number } };
+        // Split by category on Financials, the budget is set there, not on the form.
+        return { ...rest, budget_by_category: (_count?.budgetLines ?? 0) > 0, progress };
     }
 
     /**
@@ -422,6 +446,9 @@ export class ProjectsService {
                         start_date: this.toDate(dto.startDate) ?? null,
                         target_end_date: this.toDate(dto.targetEndDate) ?? null,
                         budget_amount: dto.budgetAmount ?? null,
+                        billing_type: dto.billingType ?? 'INTERNAL',
+                        contract_value: dto.contractValue ?? null,
+                        bill_rate: dto.billRate ?? null,
                         created_by: userId,
                     },
                 });
@@ -473,6 +500,8 @@ export class ProjectsService {
             }
         }
 
+        if (dto.budgetAmount !== undefined) await this.assertBudgetNotSplit(tenantId, id, dto.budgetAmount);
+
         const updated = await this.db.project.update({
             where: { id },
             data: {
@@ -496,6 +525,9 @@ export class ProjectsService {
                     ? { actual_end_date: this.toDate(dto.actualEndDate) ?? null }
                     : {}),
                 ...(dto.budgetAmount !== undefined ? { budget_amount: dto.budgetAmount ?? null } : {}),
+                ...(dto.billingType !== undefined ? { billing_type: dto.billingType } : {}),
+                ...(dto.contractValue !== undefined ? { contract_value: dto.contractValue } : {}),
+                ...(dto.billRate !== undefined ? { bill_rate: dto.billRate } : {}),
             },
         });
 
@@ -754,6 +786,7 @@ export class ProjectsService {
                 name: dto.name.trim(),
                 target_date: this.toDate(dto.targetDate) ?? null,
                 sort_order: dto.sortOrder ?? 0,
+                amount: dto.amount ?? null,
             },
         });
     }
@@ -772,6 +805,7 @@ export class ProjectsService {
                     ? { completed_at: dto.isCompleted ? (milestone.completed_at ?? new Date()) : null }
                     : {}),
                 ...(dto.sortOrder !== undefined ? { sort_order: dto.sortOrder } : {}),
+                ...(dto.amount !== undefined ? { amount: dto.amount } : {}),
             },
         });
     }

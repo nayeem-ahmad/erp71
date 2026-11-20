@@ -32,6 +32,11 @@ const db = {
     store: { findFirst: jest.fn(), findMany: jest.fn() },
     user: { findUnique: jest.fn() },
     userInvitation: { findMany: jest.fn(), deleteMany: jest.fn() },
+    employee: {
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
+        updateMany: jest.fn(),
+    },
     $transaction: jest.fn(),
 };
 const audit = {
@@ -54,6 +59,9 @@ describe('TeamService', () => {
         db.$transaction.mockImplementation(async (arg: any) =>
             typeof arg === 'function' ? arg(db) : Promise.all(arg),
         );
+        db.employee.findFirst.mockResolvedValue(null);
+        db.employee.findMany.mockResolvedValue([]);
+        db.employee.updateMany.mockResolvedValue({ count: 0 });
         authCache = new AuthCacheService({ ttlMs: 30_000 });
         const mod = await Test.createTestingModule({
             providers: [
@@ -95,6 +103,68 @@ describe('TeamService', () => {
         expect(db.userStorePermission.findFirst).toHaveBeenCalledWith({
             where: { user_id: 'cash', store_id: 's1', tenant_id: 't1', permission: StorePermission.MANAGE_USERS },
             select: { id: true },
+        });
+    });
+
+    describe('the employee card each member is linked to', () => {
+        const row = {
+            user_id: 'u2',
+            role: UserRole.CASHIER,
+            tenant_role_id: 'role-cashier',
+            user: { id: 'u2', email: 'u2@example.com', name: 'Two' },
+            tenantRole: { id: 'role-cashier', name: 'Cashier' },
+            roles: [],
+        };
+
+        it('lists it beside each member, null for one with none', async () => {
+            db.tenantUser.findMany.mockResolvedValue([row, { ...row, user_id: 'u3', user: { ...row.user, id: 'u3' } }]);
+            db.tenantUser.count.mockResolvedValue(2);
+            db.userStoreAccess.findMany.mockResolvedValue([]);
+            db.userStorePermission.groupBy.mockResolvedValue([]);
+            db.employee.findMany.mockResolvedValue([{ id: 'e1', name: 'Karim', employee_code: 'EMP-1', user_id: 'u2' }]);
+
+            const page: any = await service.listMembers(owner);
+
+            expect(page.items.map((item: any) => item.employee)).toEqual([
+                { id: 'e1', name: 'Karim', employeeCode: 'EMP-1' },
+                null,
+            ]);
+            expect(db.employee.findMany).toHaveBeenCalledWith({
+                where: { tenant_id: 't1', deleted_at: null, user_id: { in: ['u2', 'u3'] } },
+                select: { id: true, name: true, employee_code: true, user_id: true },
+            });
+        });
+
+        it('unlinks the card when the member is removed, and records which', async () => {
+            db.tenantUser.findUnique.mockResolvedValue({ role: UserRole.CASHIER, user_id: 'u2', tenant_role_id: null, roles: [] });
+            db.employee.findFirst.mockResolvedValue({ id: 'e1', employee_code: 'EMP-1' });
+
+            await service.removeMember(owner, 'u2');
+
+            expect(db.employee.updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 't1', user_id: 'u2' },
+                data: { user_id: null },
+            });
+            expect(audit.log).toHaveBeenCalledWith(
+                'team.member_removed',
+                'TenantUser',
+                expect.anything(),
+                'u2',
+                { unlinked_employee_id: 'e1', unlinked_employee_code: 'EMP-1' },
+            );
+        });
+
+        it('needs MANAGE_HR as well to invite someone as an employee card', async () => {
+            const manager: TenantContext = { ...cashier, userId: 'mgr' };
+            db.userStorePermission.findFirst.mockImplementation(async ({ where }: any) =>
+                where.permission === StorePermission.MANAGE_USERS ? { id: 'g1' } : null,
+            );
+
+            await expect(service.invite(manager, 'new@example.com', ['role-1'], 'e1')).rejects.toThrow(ForbiddenException);
+            expect(invitations.invite).not.toHaveBeenCalled();
+
+            await service.invite(manager, 'new@example.com', ['role-1']);
+            expect(invitations.invite).toHaveBeenCalledWith('t1', 'mgr', UserRole.CASHIER, 'new@example.com', ['role-1'], undefined);
         });
     });
 

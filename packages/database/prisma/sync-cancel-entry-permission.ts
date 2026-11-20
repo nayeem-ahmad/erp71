@@ -48,6 +48,7 @@
  *   npx tsx prisma/sync-cancel-entry-permission.ts --dry-run
  *   npx tsx prisma/sync-cancel-entry-permission.ts
  *   npx tsx prisma/sync-cancel-entry-permission.ts --permission=ADJUST_PRODUCT_COST
+ *   npx tsx prisma/sync-cancel-entry-permission.ts --permission=VIEW_PROJECT_FINANCIALS
  */
 import { config } from 'dotenv';
 import { resolve } from 'path';
@@ -65,6 +66,7 @@ const TENANT_ADMIN_TEMPLATE_KEY = 'tenant_admin';
 export const TENANT_ADMIN_ONLY_PERMISSIONS = [
     StorePermission.CANCEL_ENTRY,
     StorePermission.ADJUST_PRODUCT_COST,
+    StorePermission.VIEW_PROJECT_FINANCIALS,
 ] as const;
 export type TenantAdminOnlyPermission = (typeof TENANT_ADMIN_ONLY_PERMISSIONS)[number];
 

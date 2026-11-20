@@ -228,7 +228,17 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'Project', exempt: 'budget_amount is a planning figure; no costing rolls up into it in Phase 1.' },
     { model: 'ProjectTask', exempt: 'estimate_hours/remaining_hours are hours, not money.' },
     { model: 'ProjectTaskRemainingLog', exempt: 'Audit trail of remaining hours; no monetary amount.' },
-    { model: 'ProjectTimeEntry', exempt: 'Logged hours; costing them against payroll is Phase 2.' },
+    // Project costing is management accounting: the hourly cost is the salary
+    // seen per hour, and that salary already posts through SalaryAccrual.
+    // Posting hours too would count the same pay twice.
+    { model: 'ProjectTimeEntry', exempt: 'Logged hours, priced for project costing (cost_rate/cost_amount); the pay behind the price posts once, via SalaryAccrual.' },
+    { model: 'EmployeeCostRate', exempt: 'Hourly cost rate (config) used to price project hours; same category as Employee.basic_salary.' },
+    { model: 'ProjectCostingSettings', exempt: 'Costing configuration (standard hours, overhead %); moves no money.' },
+    { model: 'ProjectCostEntry', exempt: 'A project cost for management accounting — a share of a bill that already posted, or a cost recorded only to price the project. Posting it would count the money twice.' },
+    { model: 'ProjectBudgetLine', exempt: 'A planned amount for one cost category of a project (config): budget vs actual compares it with costs that posted elsewhere.' },
+    { model: 'ProjectMilestone', exempt: 'A milestone\'s amount is what reaching it will bill (config); the invoice it raises is a Sale, which posts.' },
+    { model: 'ProjectMember', exempt: 'A member\'s bill rate (config); hours billed at it are invoiced as a Sale, which posts.' },
+    { model: 'ProjectMaterialIssueLine', exempt: 'Stock issued to a project at its average cost. Under periodic inventory stock was expensed at purchase, so an issue — like a transfer or a write-off — posts nothing.' },
     { model: 'SprintSnapshot', exempt: 'Daily burndown totals in hours.' },
     { model: 'SprintBurndownPoint', exempt: 'Burndown totals in hours, one per sprint change.' },
     { model: 'SprintTask', exempt: 'A task\'s stay in a sprint; remaining_at_close is hours.' },

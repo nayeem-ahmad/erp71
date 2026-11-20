@@ -85,4 +85,45 @@ describe('the account chooser', () => {
         expect(await screen.findByText(/\/w\/karim$/)).toBeInTheDocument();
         expect(screen.getByText(/\/w\/rahim-pharmacy$/)).toBeInTheDocument();
     });
+
+    describe('a login with employee-portal cards', () => {
+        const card = (id: string, tenantId: string) => ({ id, tenant_id: tenantId, employee_code: id.toUpperCase(), name: 'Karim' });
+
+        it('names each workspace when the login is staff in more than one', async () => {
+            api.getMe.mockResolvedValue({
+                name: 'Karim',
+                tenants: [KARIM, RAHIM],
+                employee: card('emp-k', KARIM.id),
+                employees: [card('emp-k', KARIM.id), card('emp-r', RAHIM.id)],
+            });
+            render(<SelectAccountPage />);
+
+            expect(await screen.findByText('Employee portal · Karim Electronics')).toBeInTheDocument();
+            expect(screen.getByText('Employee portal · Rahim Pharmacy')).toBeInTheDocument();
+        });
+
+        it('enters the portal pinned to the workspace of the card chosen', async () => {
+            api.getMe.mockResolvedValue({
+                name: 'Karim',
+                tenants: [KARIM, RAHIM],
+                employees: [card('emp-k', KARIM.id), card('emp-r', RAHIM.id)],
+            });
+            render(<SelectAccountPage />);
+
+            (await screen.findByText('Employee portal · Rahim Pharmacy')).click();
+
+            await waitFor(() => expect(replaceMock).toHaveBeenCalledWith('/my'));
+            expect(getWorkspaceItem('active_context')).toBe('employee');
+            expect(getWorkspaceItem('tenant_id')).toBe(RAHIM.id);
+        });
+
+        it('keeps the plain label for a single card, read from an older answer with no list', async () => {
+            api.getMe.mockResolvedValue({ name: 'Karim', tenants: [KARIM, RAHIM], employee: card('emp-k', KARIM.id) });
+            render(<SelectAccountPage />);
+
+            await screen.findByText('Karim Electronics');
+            expect(screen.queryByText(/Employee portal ·/)).not.toBeInTheDocument();
+            expect(screen.getAllByRole('button').length).toBeGreaterThanOrEqual(3);
+        });
+    });
 });

@@ -83,6 +83,7 @@ export class TenantInterceptor implements NestInterceptor {
             request.userRole = membership.role;
             request.timezone = membership.tenant?.timezone ?? undefined;
             request.recordScope = resolveMemberRecordScope(membership);
+            request.employeeId = membership.employee_id ?? null;
         } else {
             const memberships = await this.db.tenantUser.findMany({
                 where: { user_id: userId, tenant: { deleted_at: null } },
@@ -100,6 +101,17 @@ export class TenantInterceptor implements NestInterceptor {
                 request.userRole = memberships[0].role;
                 request.timezone = memberships[0].tenant?.timezone ?? undefined;
                 request.recordScope = resolveMemberRecordScope(memberships[0]);
+                // This read has no employee join, and the path is the rare one
+                // (one workspace, no header). The shared loader answers it from
+                // the same cache the header path fills.
+                const loaded = await loadTenantMembership(
+                    this.db,
+                    request,
+                    resolvedTenantId,
+                    userId,
+                    this.authCache,
+                );
+                request.employeeId = loaded?.employee_id ?? null;
             } else if (memberships.length > 1) {
                 throw new BadRequestException('Tenant context is required for this request.');
             } else {

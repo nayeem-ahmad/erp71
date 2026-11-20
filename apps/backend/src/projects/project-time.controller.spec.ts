@@ -14,6 +14,8 @@ import { AssetsService } from '../assets/assets.service';
 import { ProjectTimeController } from './project-time.controller';
 import { ProjectTimeService } from './project-time.service';
 import { ProjectTimerService } from './project-timer.service';
+import { AuditModule } from '../audit/audit.module';
+import { AuditService } from '../audit/audit.service';
 import { ProjectsModule } from './projects.module';
 
 /**
@@ -55,8 +57,10 @@ describe('/project-time route order (regression guard for the literal segments)'
 
     beforeAll(async () => {
         const moduleRef = await Test.createTestingModule({
-            imports: [CommonModule, ProjectsModule],
+            imports: [CommonModule, AuditModule, ProjectsModule],
         })
+            .overrideProvider(AuditService)
+            .useValue({ log: jest.fn().mockResolvedValue(undefined) })
             .overrideProvider(DatabaseService)
             .useValue({ onModuleInit: async () => {}, onModuleDestroy: async () => {} })
             .overrideProvider(NotificationsService)

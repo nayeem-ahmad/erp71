@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { ProjectTimerService } from './project-timer.service';
 import { RemainingHoursService } from './remaining-hours.service';
+import { LabourPricingService } from './labour-pricing.service';
 import { ProjectAccessService } from './project-access.service';
 import { OWNER, staff, visibilityOr } from './project-access.test-support';
 import { DatabaseService } from '../database/database.service';
@@ -46,6 +47,10 @@ describe('ProjectTimerService', () => {
                 delete: jest.fn().mockResolvedValue({}),
             },
             projectTimeTag: { findMany: jest.fn().mockResolvedValue([]) },
+            // Only reached for a viewer built by hand, which carries no resolved employee.
+            employee: { findFirst: jest.fn().mockResolvedValue(null) },
+            employeeCostRate: { findMany: jest.fn().mockResolvedValue([]) },
+            projectCostingSettings: { findUnique: jest.fn().mockResolvedValue(null) },
             projectTimeEntry: {
                 create: jest.fn().mockResolvedValue({ id: 'entry-1', started_at: null, ended_at: null }),
                 findFirst: jest.fn().mockResolvedValue(null),
@@ -57,6 +62,7 @@ describe('ProjectTimerService', () => {
             providers: [
                 ProjectTimerService,
                 ProjectAccessService,
+                LabourPricingService,
                 { provide: DatabaseService, useValue: db },
                 { provide: RemainingHoursService, useValue: remaining },
             ],
@@ -146,6 +152,50 @@ describe('ProjectTimerService', () => {
             expect(data.started_at).toBe(timer.started_at);
             expect(data.ended_at).toBeInstanceOf(Date);
             expect(data.hours).toBeCloseTo(2, 2);
+        });
+
+        it('stamps the entry with the employee the request resolved, without looking it up', async () => {
+            db.projectTimer.findFirst.mockResolvedValue(runningFor(3600));
+
+            await service.stop({ ...OWNER, employeeId: 'emp-1' }, {} as never);
+
+            expect(db.projectTimeEntry.create.mock.calls[0][0].data.employee_id).toBe('emp-1');
+            // Pricing reads the card's salary; nothing looks the card up by login.
+            expect(db.employee.findFirst).not.toHaveBeenCalledWith(
+                expect.objectContaining({ where: expect.objectContaining({ user_id: expect.anything() }) }),
+            );
+        });
+
+        it('prices the sitting at the rate in force on the day it began, and returns no cost', async () => {
+            db.projectTimer.findFirst.mockResolvedValue(runningFor(2 * 3600));
+            db.employee.findFirst.mockResolvedValueOnce({ basic_salary: null });
+            db.employeeCostRate.findMany.mockResolvedValueOnce([
+                { hourly_cost: 250, effective_from: new Date('2020-01-01T00:00:00.000Z') },
+            ]);
+            db.projectTimeEntry.create.mockResolvedValueOnce({
+                id: 'entry-1', started_at: null, ended_at: null, cost_rate: 250, cost_amount: 500, cost_source: 'RATE',
+            });
+
+            const result: any = await service.stop({ ...OWNER, employeeId: 'emp-1' }, {} as never);
+
+            const data = db.projectTimeEntry.create.mock.calls[0][0].data;
+            expect(data.cost_source).toBe('RATE');
+            expect(Number(data.cost_rate)).toBe(250);
+            expect(result.entry).not.toHaveProperty('cost_rate');
+            expect(result.entry).not.toHaveProperty('cost_amount');
+        });
+
+        it('looks the employee up for a viewer that arrived without one', async () => {
+            db.projectTimer.findFirst.mockResolvedValue(runningFor(3600));
+            db.employee.findFirst.mockResolvedValue({ id: 'emp-9' });
+
+            await service.stop(OWNER, {} as never);
+
+            expect(db.employee.findFirst).toHaveBeenCalledWith({
+                where: { tenant_id: OWNER.tenantId, user_id: OWNER.userId, deleted_at: null },
+                select: { id: true },
+            });
+            expect(db.projectTimeEntry.create.mock.calls[0][0].data.employee_id).toBe('emp-9');
         });
 
         it('deletes the timer in the same transaction that writes the entry', async () => {

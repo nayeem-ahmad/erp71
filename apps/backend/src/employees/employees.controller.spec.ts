@@ -6,6 +6,8 @@ import { StorePermission } from '@erp71/shared-types';
 import { EmployeesController } from './employees.controller';
 import { EmployeesService } from './employees.service';
 import { OrgStructureImportService } from './org-structure-import.service';
+import { EmployeeLinkService } from './employee-link.service';
+import { EmployeeCostRatesService } from './employee-cost-rates.service';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
@@ -96,6 +98,8 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
             providers: [
                 { provide: EmployeesService, useValue: employeesService },
                 { provide: OrgStructureImportService, useValue: { import: jest.fn() } },
+                { provide: EmployeeLinkService, useValue: { loginCandidates: jest.fn(), employeeCandidates: jest.fn(), suggestions: jest.fn(), linkMany: jest.fn() } },
+                { provide: EmployeeCostRatesService, useValue: { list: jest.fn(), create: jest.fn(), remove: jest.fn() } },
                 { provide: DatabaseService, useValue: db },
                 {
                     provide: BranchScopeService,

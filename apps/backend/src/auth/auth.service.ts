@@ -1062,15 +1062,22 @@ export class AuthService {
         // defaults exactly as it did when each of them read it separately.
         const platformFeaturesRead = this.platformSettings.getPlatformFeatures();
 
-        const [platformFeatures, referee, employee, tenants] = await Promise.all([
+        const [platformFeatures, referee, employees, tenants] = await Promise.all([
             platformFeaturesRead.catch(() => DEFAULT_PLATFORM_FEATURES),
             this.referrals.resolveActiveRefereeForUser(userId, user.email),
             // The employee self-service portal. Unlike a referee, an employee is
             // a real tenant member, so this does not add a *new* identity — it
             // tells the client that one of their tenants can also be entered as
             // "me the employee" rather than as staff.
-            this.db.employee.findFirst({
+            //
+            // One card per workspace, but a login can be staff in several.
+            // `employees` lists them all, oldest first, for the workspace chooser
+            // to offer each; `employee` stays the oldest, which clients written
+            // before the list read. Entering a card pins the workspace header to
+            // its tenant, which is how `EmployeeGuard` picks the same card.
+            this.db.employee.findMany({
                 where: { user_id: userId, portal_access: true, status: 'ACTIVE', deleted_at: null },
+                orderBy: { created_at: 'asc' },
                 select: { id: true, tenant_id: true, employee_code: true, name: true },
             }),
             Promise.all(
@@ -1116,14 +1123,20 @@ export class AuthService {
                     has_login: !!referee.user_id,
                 }
                 : null,
-            employee: employee
+            employee: employees[0]
                 ? {
-                    id: employee.id,
-                    tenant_id: employee.tenant_id,
-                    employee_code: employee.employee_code,
-                    name: employee.name,
+                    id: employees[0].id,
+                    tenant_id: employees[0].tenant_id,
+                    employee_code: employees[0].employee_code,
+                    name: employees[0].name,
                 }
                 : null,
+            employees: employees.map((card) => ({
+                id: card.id,
+                tenant_id: card.tenant_id,
+                employee_code: card.employee_code,
+                name: card.name,
+            })),
             tenants,
         };
     }
