@@ -26,7 +26,12 @@ RUN npm rebuild bcrypt --build-from-source \
 RUN npm run build --workspace=@erp71/shared-types
 # Generate Prisma client
 RUN npm run generate --workspace=@erp71/database
-# Build the backend
+# Build the backend. `nest build` type-checks the whole backend, and at
+# Node's default ~2 GB heap it now runs out on the VPS (Deploy to VPS run
+# 44728915234, 2026-11-20: "Ineffective mark-compacts near heap limit", exit
+# 134). Same fix as the frontend image: a 4096 MB heap that can spill into the
+# VPS's swap. Builder stage only; the runner's heap is unchanged.
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build --workspace=@erp71/backend
 
 # Runner stage
