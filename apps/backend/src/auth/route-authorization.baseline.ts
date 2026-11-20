@@ -76,6 +76,7 @@ export const OPEN_ROUTES: Record<string, string> = {
     'TenantExternalSyncController.uploadSnapshot': "every handler asserts OWNER in the service (assertAllowed)", // POST /tenants/external-sync/snapshots/upload
     'TenantExternalSyncController.deleteSnapshot': "every handler asserts OWNER in the service (assertAllowed)", // DELETE /tenants/external-sync/snapshots/:id
     'FeedbackController.create': "any member may submit feedback", // POST /feedback
+    'PageTimingsController.record': "telemetry: every signed-in browser reports its own page load times; stores no user, tenant or record ids and reads nothing back", // POST /page-timings
     'InvitationsController.listMembers': "permission is enforced in the service layer, not by a decorator", // GET /invitations/members
     'InvitationsController.listPending': "permission is enforced in the service layer, not by a decorator", // GET /invitations/pending
     'InvitationsController.updateMemberRole': "permission is enforced in the service layer, not by a decorator", // PATCH /invitations/members/:userId/role
