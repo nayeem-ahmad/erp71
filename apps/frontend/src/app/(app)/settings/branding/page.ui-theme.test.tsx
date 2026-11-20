@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import BrandingSettingsPage from './page';
-import { SetUiSidebarContext, SetUiThemeContext } from '@/lib/ui-theme';
+import { SetNavRecentContext, SetUiSidebarContext, SetUiThemeContext } from '@/lib/ui-theme';
 
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn() }),
@@ -17,20 +17,28 @@ jest.mock('@/lib/api', () => ({
 import { fetchWithAuth } from '@/lib/api';
 const mockFetchWithAuth = fetchWithAuth as jest.MockedFunction<typeof fetchWithAuth>;
 
-function renderPage(stored?: string, storedSidebar?: string) {
+function renderPage(stored?: string, storedSidebar?: string, storedNavRecent?: boolean) {
     mockFetchWithAuth.mockImplementation((_url: string, options?: any) =>
-        Promise.resolve(options?.method === 'PATCH' ? {} : { brand_business_name: 'My Shop', ui_theme: stored, ui_sidebar: storedSidebar }),
+        Promise.resolve(options?.method === 'PATCH' ? {} : {
+            brand_business_name: 'My Shop',
+            ui_theme: stored,
+            ui_sidebar: storedSidebar,
+            nav_recent_enabled: storedNavRecent,
+        }),
     );
     const applyUiTheme = jest.fn();
     const applyUiSidebar = jest.fn();
+    const applyNavRecent = jest.fn();
     render(
         <SetUiThemeContext.Provider value={applyUiTheme}>
             <SetUiSidebarContext.Provider value={applyUiSidebar}>
-                <BrandingSettingsPage />
+                <SetNavRecentContext.Provider value={applyNavRecent}>
+                    <BrandingSettingsPage />
+                </SetNavRecentContext.Provider>
             </SetUiSidebarContext.Provider>
         </SetUiThemeContext.Provider>,
     );
-    return { applyUiTheme, applyUiSidebar };
+    return { applyUiTheme, applyUiSidebar, applyNavRecent };
 }
 
 const patchBody = () => {
@@ -90,5 +98,34 @@ describe('Branding › interface style', () => {
         await waitFor(() => expect(applyUiSidebar).toHaveBeenCalledWith('NAVY'));
         expect(applyUiTheme).toHaveBeenCalledWith('POLISHED');
         expect(patchBody()).toEqual(expect.objectContaining({ ui_theme: 'POLISHED', ui_sidebar: 'NAVY' }));
+    });
+});
+
+describe('Branding › recent menu items', () => {
+    const toggle = () => screen.findByRole('checkbox', { name: 'Show recent menu items in the sidebar' });
+
+    it('is on for a workspace that never touched it', async () => {
+        renderPage('CLASSIC');
+        expect(await toggle()).toBeChecked();
+        expect(screen.getByRole('group', { name: 'Recent menu items' })).toBeInTheDocument();
+    });
+
+    it('shows a workspace that switched it off as off', async () => {
+        renderPage('CLASSIC', 'LIGHT', false);
+        const box = await toggle();
+        await waitFor(() => expect(box).not.toBeChecked());
+    });
+
+    it('switches it off for the workspace on save and applies it straight away', async () => {
+        const { applyNavRecent } = renderPage('CLASSIC', 'LIGHT', true);
+        const box = await toggle();
+        await waitFor(() => expect(box).toBeChecked());
+        fireEvent.click(box);
+        expect(applyNavRecent).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Save Branding' }));
+
+        await waitFor(() => expect(applyNavRecent).toHaveBeenCalledWith(false));
+        expect(patchBody()).toEqual(expect.objectContaining({ nav_recent_enabled: false }));
     });
 });

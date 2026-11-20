@@ -64,6 +64,11 @@ export const settingsExtrasMessages = {
                 light: { name: "Cerah", description: "Putih, seperti biasa." },
                 navy: { name: "Biru laut gelap", description: "Bar gelap yang membezakan navigasi daripada halaman." },
             },
+            navRecent: {
+                label: "Item menu terkini",
+                hint: "Senarai ringkas di bahagian atas bar sisi bagi item menu yang terakhir dibuka oleh setiap orang. Setiap orang hanya melihat senarai mereka sendiri.",
+                toggle: "Tunjukkan item menu terkini di bar sisi",
+            },
             businessName: {
                 label: "Ganti Nama Perniagaan",
                 placeholder: "Nama Perniagaan Anda",

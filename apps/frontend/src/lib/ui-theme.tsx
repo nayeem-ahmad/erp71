@@ -48,6 +48,24 @@ export function useSetUiSidebar() {
     return useContext(SetUiSidebarContext);
 }
 
+/**
+ * Whether the sidebar shows the member's "Recent" menu items (Settings ›
+ * Branding). On by default and outside a provider, so a workspace that never
+ * touched the switch gets the list.
+ */
+export const NavRecentContext = createContext<boolean>(true);
+
+/** Applies the switch from the settings page without a reload. */
+export const SetNavRecentContext = createContext<(enabled: boolean) => void>(() => {});
+
+export function useNavRecentEnabled(): boolean {
+    return useContext(NavRecentContext);
+}
+
+export function useSetNavRecentEnabled() {
+    return useContext(SetNavRecentContext);
+}
+
 /*
  * The last style seen for each workspace, so a reload paints it straight away
  * instead of flashing CLASSIC while `/tenants/branding` is in flight. Keyed by
@@ -55,6 +73,7 @@ export function useSetUiSidebar() {
  */
 const THEME_CACHE = 'erp71.ui_theme.';
 const SIDEBAR_CACHE = 'erp71.ui_sidebar.';
+const NAV_RECENT_CACHE = 'erp71.nav_recent.';
 
 function cacheKey(prefix: string): string | null {
     try {
@@ -90,6 +109,13 @@ export const readCachedUiTheme = () => readCached(THEME_CACHE, isUiTheme);
 export const writeCachedUiTheme = (theme: UiTheme) => writeCached(THEME_CACHE, theme);
 export const readCachedUiSidebar = () => readCached(SIDEBAR_CACHE, isUiSidebar);
 export const writeCachedUiSidebar = (sidebar: UiSidebar) => writeCached(SIDEBAR_CACHE, sidebar);
+const isBooleanString = (value: unknown): value is 'true' | 'false' => value === 'true' || value === 'false';
+/** The switch as last seen for this workspace, or null when never seen — so a reload does not flash the list. */
+export const readCachedNavRecent = (): boolean | null => {
+    const cached = readCached(NAV_RECENT_CACHE, isBooleanString);
+    return cached === null ? null : cached === 'true';
+};
+export const writeCachedNavRecent = (enabled: boolean) => writeCached(NAV_RECENT_CACHE, String(enabled));
 
 /** Mirrors the style onto `<html data-ui-theme>` for any CSS that wants it. */
 export function applyUiThemeToDom(theme: UiTheme) {

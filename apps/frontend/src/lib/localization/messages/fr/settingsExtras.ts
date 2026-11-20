@@ -64,6 +64,11 @@ export const settingsExtrasMessages = {
             light: { name: "Claire", description: "Blanche, comme toujours." },
             navy: { name: "Bleu marine foncé", description: "Une barre sombre qui distingue la navigation de la page." },
         },
+        navRecent: {
+            label: "Éléments de menu récents",
+            hint: "Une courte liste en haut de la barre latérale des éléments de menu que chaque personne a ouverts en dernier. Chacun ne voit que la sienne.",
+            toggle: "Afficher les éléments de menu récents dans la barre latérale",
+        },
         businessName: {
             label: "Nom d'entreprise personnalisé",
             placeholder: "Nom de votre entreprise",

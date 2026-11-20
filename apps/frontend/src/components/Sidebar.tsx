@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useUiSidebar, useUiStyle } from '@/lib/ui-theme';
+import { useNavRecentEnabled, useUiSidebar, useUiStyle } from '@/lib/ui-theme';
 import { moduleIconTone } from '@/lib/ui/module-tone';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -33,6 +33,7 @@ import type { ResolvedNavChild, ResolvedNavModule } from '@/lib/nav-resolver';
 import { isNavSubgroup, resolveSidebarModules } from '@/lib/sidebar-modules';
 import NavCountBadge from '@/components/sidebar/NavCountBadge';
 import NavModuleChildren from '@/components/sidebar/NavModuleChildren';
+import RecentNavSection from '@/components/sidebar/RecentNavSection';
 import {
     accordionCloseState,
     accordionOpenState,
@@ -45,6 +46,7 @@ import { routes } from '@/lib/routes';
 import { collectNavLinkTargets, isNavLinkActive } from '@/lib/app-shell';
 import { useOverdueMeetingActionsCount } from '@/hooks/useOverdueMeetingActionsCount';
 import { usePendingVoucherCount } from '@/hooks/usePendingVoucherCount';
+import { useRecentNavItems } from '@/hooks/useRecentNavItems';
 
 /* ------------------------------------------------------------------ */
 /*  Navigation structure                                               */
@@ -322,6 +324,11 @@ export default function Sidebar({
     // The longest link holding the page is the one lit — see `isNavLinkActive`.
     const navTargets = collectNavLinkTargets(modules);
     const isActive = (href: string, exact = false) => isNavLinkActive(href, pathname, navTargets, exact);
+
+    // The workspace's switch (Settings › Branding). The single-module portals
+    // have nothing worth a shortcut, so they never get the list.
+    const navRecentEnabled = useNavRecentEnabled() && !refereeMode && !employeeMode;
+    const recentItems = useRecentNavItems(modules, pathname, navRecentEnabled);
 
     useEffect(() => {
         const saved = localStorage.getItem('sidebar-collapsed');
@@ -671,6 +678,9 @@ export default function Sidebar({
                         <p className={`px-3 py-6 text-center ${compactNav ? 'text-[13px]' : 'text-sm'} text-gray-400`}>
                             {t.sidebar.noSearchResults}
                         </p>
+                    ) : null}
+                    {!collapsed && !isSearching ? (
+                        <RecentNavSection items={recentItems} compactNav={compactNav} navy={navy} />
                     ) : null}
                     {displayModules.map((mod) => {
                         const Icon = mod.icon;

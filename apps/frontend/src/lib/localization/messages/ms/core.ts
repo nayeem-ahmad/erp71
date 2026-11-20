@@ -400,6 +400,7 @@ export const coreMessages = {
             noSearchResults: "Tiada item menu sepadan dengan carian anda.",
             expandAll: "Kembangkan semua",
             collapseAll: "Runtuhkan semua",
+            recent: "Terkini",
             modules: {
                 dashboard: "Dashboard",
                 scorecard: "Kad skor",

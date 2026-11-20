@@ -400,6 +400,7 @@ export const coreMessages = {
         noSearchResults: "आपकी खोज से कोई मेनू आइटम मेल नहीं खाता।",
         expandAll: "सभी विस्तृत करें",
         collapseAll: "सभी संक्षिप्त करें",
+        recent: "हाल के",
         modules: {
             dashboard: "डैशबोर्ड",
             scorecard: "स्कोरकार्ड",
