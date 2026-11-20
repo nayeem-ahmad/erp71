@@ -134,6 +134,7 @@ jest.mock('@/lib/api', () => ({
         createExpenseEntry: jest.fn(),
         updateExpenseEntry: jest.fn(),
         deleteExpenseEntry: jest.fn(),
+        getProjectOptions: jest.fn().mockResolvedValue([]),
     },
 }));
 
@@ -301,5 +302,51 @@ describe('ExpensesPage', () => {
             ),
         );
         expect(api.createExpenseEntry).not.toHaveBeenCalled();
+    });
+
+    describe('the project an expense was spent on', () => {
+        beforeEach(() => {
+            (api.getExpenseCategories as jest.Mock).mockResolvedValue([
+                { id: 'cat-rent', name: 'Rent', heads: [{ id: 'head-rent', name: 'Shop rent' }] },
+            ]);
+            (api as any).getProjectOptions.mockResolvedValue([{ id: 'p1', code: 'BS23', name: 'Fit-out' }]);
+        });
+
+        it('tags an existing expense with a project, and clears it when set back to none', async () => {
+            (api.getExpenseEntries as jest.Mock).mockResolvedValue([
+                {
+                    id: 'entry-1',
+                    amount: '500',
+                    payment_method: 'CASH',
+                    expense_date: '2026-10-02',
+                    created_at: '2026-10-02T00:00:00.000Z',
+                    description: 'Site tea',
+                    category: { id: 'cat-rent', name: 'Rent' },
+                    head: { id: 'head-rent', name: 'Shop rent' },
+                    project_id: null,
+                },
+            ]);
+            (api.updateExpenseEntry as jest.Mock).mockResolvedValue({ id: 'entry-1' });
+            render(<ExpensesPage />);
+
+            fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+            const dialog = screen.getByRole('dialog');
+            fireEvent.change(await within(dialog).findByRole('combobox', { name: /project/i }), { target: { value: 'p1' } });
+            fireEvent.click(within(dialog).getByRole('button', { name: /^save$/i }));
+
+            await waitFor(() =>
+                expect(api.updateExpenseEntry).toHaveBeenCalledWith('entry-1', expect.objectContaining({ projectId: 'p1' })),
+            );
+        });
+
+        it('offers no project field when there is no project to tag', async () => {
+            (api as any).getProjectOptions.mockResolvedValue([]);
+            (api.getExpenseEntries as jest.Mock).mockResolvedValue([]);
+            render(<ExpensesPage />);
+
+            fireEvent.click(await screen.findByRole('button', { name: /add expense/i }));
+
+            expect(within(screen.getByRole('dialog')).queryByRole('combobox', { name: /project/i })).not.toBeInTheDocument();
+        });
     });
 });

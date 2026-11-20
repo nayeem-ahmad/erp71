@@ -39,6 +39,7 @@ const membershipRows = (
         names?: string[];
         deletedAt?: Date | null;
         timezone?: string | null;
+        employeeId?: string | null;
     } | null,
 ) =>
     row === null
@@ -54,6 +55,7 @@ const membershipRows = (
                       name: row.names?.[i] ?? `Role ${i + 1}`,
                       record_scope,
                   })),
+                  employee_id: row.employeeId ?? null,
               },
           ];
 
@@ -93,6 +95,58 @@ describe('TenantInterceptor', () => {
         await interceptor.intercept(ctx, next);
         expect(req.tenantId).toBe('tenant-1');
         expect(req.userRole).toBe('MANAGER');
+    });
+
+    describe('the linked employee', () => {
+        it('carries the employee the membership read joined, at no extra query', async () => {
+            const { ctx, req } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-1' });
+            db.$queryRaw.mockResolvedValue(membershipRows({ role: 'STAFF', employeeId: 'emp-1' }));
+            db.userStoreAccess.findMany.mockResolvedValue([]);
+
+            await interceptor.intercept(ctx, next);
+
+            expect(req.employeeId).toBe('emp-1');
+            expect(db.$queryRaw).toHaveBeenCalledTimes(1);
+        });
+
+        it('resolves a login linked to no employee as null, not as unresolved', async () => {
+            const { ctx, req } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-1' });
+            db.$queryRaw.mockResolvedValue(membershipRows({ role: 'STAFF' }));
+            db.userStoreAccess.findMany.mockResolvedValue([]);
+
+            await interceptor.intercept(ctx, next);
+
+            expect(req.employeeId).toBeNull();
+        });
+
+        it('resolves it on the single-workspace path, where no header is sent', async () => {
+            const { ctx, req } = makeContext({ userId: 'user-1' });
+            db.tenantUser.findMany.mockResolvedValue([{ tenant_id: 'tenant-1', role: 'STAFF' }]);
+            db.$queryRaw.mockResolvedValue(membershipRows({ role: 'STAFF', employeeId: 'emp-1' }));
+            db.userStoreAccess.findMany.mockResolvedValue([]);
+
+            await interceptor.intercept(ctx, next);
+
+            expect(req.employeeId).toBe('emp-1');
+        });
+
+        it('drops a stale link on the next request once linking invalidates the member', async () => {
+            const cache = new AuthCacheService({ ttlMs: 60_000 });
+            const cached = new TenantInterceptor(db, timezones as any, cache);
+            const run = async () => {
+                const { ctx, req } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-1' });
+                await cached.intercept(ctx, next);
+                return req.employeeId;
+            };
+            db.userStoreAccess.findMany.mockResolvedValue([]);
+            db.$queryRaw.mockResolvedValueOnce(membershipRows({ role: 'STAFF' }));
+            expect(await run()).toBeNull();
+
+            db.$queryRaw.mockResolvedValueOnce(membershipRows({ role: 'STAFF', employeeId: 'emp-1' }));
+            expect(await run()).toBeNull(); // still cached
+            cache.invalidateMember('user-1', 'tenant-1');
+            expect(await run()).toBe('emp-1');
+        });
     });
 
     it('throws ForbiddenException for a tenant the user is not a member of', async () => {
@@ -143,6 +197,7 @@ describe('TenantInterceptor', () => {
     it('auto-resolves tenant when user has exactly one', async () => {
         const { ctx, req } = makeContext({ userId: 'user-1' });
         db.tenantUser.findMany.mockResolvedValue([{ tenant_id: 'tenant-1', role: 'OWNER' }]);
+        db.$queryRaw.mockResolvedValue(membershipRows({ role: 'OWNER' }));
         db.userStoreAccess.findMany.mockResolvedValue([]);
         await interceptor.intercept(ctx, next);
         expect(req.tenantId).toBe('tenant-1');
@@ -366,6 +421,7 @@ describe('TenantInterceptor', () => {
         it('resolves it on the single-workspace path too, where no header is sent', async () => {
             const { ctx, req } = makeContext({ userId: 'user-1' });
             db.tenantUser.findMany.mockResolvedValue([withRolesPrisma('CASHIER', ['OWN'])]);
+            db.$queryRaw.mockResolvedValue(withRoles('CASHIER', ['OWN']));
             db.userStoreAccess.findMany.mockResolvedValue([]);
 
             await interceptor.intercept(ctx, next);

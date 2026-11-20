@@ -20,7 +20,11 @@ import { fetchMe } from '@/hooks/use-me';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { Button, PageShell } from '@/components/ui';
+import Link from 'next/link';
+import { Button, PageShell, buttonClassName } from '@/components/ui';
+import MemberEmployeeSection, { type MemberEmployee } from '@/components/team/MemberEmployeeSection';
+import InviteEmployeeField from '@/components/team/InviteEmployeeField';
+import { routes } from '@/lib/routes';
 import ProfilesPanel from '@/components/preferences/ProfilesPanel';
 import { InviteProfileLine, RoleProfileSelect } from '@/components/preferences/RoleProfileFields';
 import { hasPermission } from '@/lib/permissions';
@@ -45,6 +49,8 @@ type Member = {
     tenantRoleId: string | null;
     tenantRoleIds: string[];
     isSelf: boolean;
+    /** The employee card this login is linked to here, if any. */
+    employee?: MemberEmployee | null;
     stores: MemberStore[];
 };
 type MemberDetailStore = {
@@ -64,6 +70,7 @@ type MemberDetail = {
     tenantRoleId: string | null;
     tenantRoleIds: string[];
     isSelf: boolean;
+    employee?: MemberEmployee | null;
     stores: MemberDetailStore[];
 };
 type Invitation = {
@@ -75,6 +82,8 @@ type Invitation = {
     tenantRoleIds: string[];
     invitedAt: string;
     expiresAt: string;
+    /** The card the invitee becomes on accepting, if the invite named one. */
+    employee?: MemberEmployee | null;
 };
 type ToastState = { type: 'success' | 'error'; message: string } | null;
 type TeamTab = 'members' | 'roles' | 'profiles';
@@ -546,10 +555,12 @@ function RolesPanel({
 /* --------------------------- Member detail ---------------------------- */
 
 function MemberPanel({
-    userId, tenantRoles, onToast, onChanged, onClose,
+    userId, tenantRoles, canManageHr, onToast, onChanged, onClose,
 }: {
     userId: string;
     tenantRoles: TenantRoleSummary[];
+    /** Linking a member to an employee card is HR's half of the job too. */
+    canManageHr: boolean;
     onToast: (t: ToastState) => void;
     onChanged: () => void;
     onClose: () => void;
@@ -697,6 +708,13 @@ function MemberPanel({
                 </button>
             </div>
 
+            <MemberEmployeeSection
+                userId={userId}
+                employee={detail.employee ?? null}
+                canManageHr={canManageHr}
+                onChanged={() => { onChanged(); void load(); }}
+            />
+
             <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 space-y-3">
                 <p className="text-sm font-bold text-gray-800">{tm.roles}</p>
                 {isOwner ? (
@@ -837,6 +855,8 @@ export default function TeamPage() {
     // Default profiles: owners and MANAGE_USERS holders, like the rest of staff
     // management. Assigning a profile to a role stays with role editing (owners).
     const [canManageProfiles, setCanManageProfiles] = useState(false);
+    // Linking logins to employee cards: MANAGE_HR on top of the MANAGE_USERS this page needs.
+    const [canManageHr, setCanManageHr] = useState(false);
     const [creatingProfile, setCreatingProfile] = useState(false);
     const [tenantRoles, setTenantRoles] = useState<TenantRoleSummary[]>([]);
     // Only read to say what an invitee starts with; without it the line just stays away.
@@ -848,6 +868,8 @@ export default function TeamPage() {
 
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviteTenantRoleIds, setInviteTenantRoleIds] = useState<string[]>([]);
+    const [inviteEmployeeId, setInviteEmployeeId] = useState('');
+    const [inviteCount, setInviteCount] = useState(0);
     const [inviting, setInviting] = useState(false);
 
     useEffect(() => {
@@ -856,9 +878,11 @@ export default function TeamPage() {
             const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) || me?.tenants?.[0];
             setIsOwner(tenant?.role === 'OWNER');
             setCanManageProfiles(tenant?.role === 'OWNER' || hasPermission(tenant?.permissions, 'MANAGE_USERS'));
+            setCanManageHr(tenant?.role === 'OWNER' || hasPermission(tenant?.permissions, 'MANAGE_HR'));
         }).catch(() => {
             setIsOwner(false);
             setCanManageProfiles(false);
+            setCanManageHr(false);
         });
     }, []);
 
@@ -910,10 +934,16 @@ export default function TeamPage() {
         if (!inviteEmail.trim() || inviteTenantRoleIds.length === 0) return;
         setInviting(true);
         try {
-            await api.sendTeamInvitation({ email: inviteEmail.trim(), tenantRoleIds: inviteTenantRoleIds });
+            await api.sendTeamInvitation({
+                email: inviteEmail.trim(),
+                tenantRoleIds: inviteTenantRoleIds,
+                ...(inviteEmployeeId ? { employeeId: inviteEmployeeId } : {}),
+            });
             showToast({ type: 'success', message: formatMessage(tm.inviteSent, { email: inviteEmail.trim() }) });
             setInviteEmail('');
             setInviteTenantRoleIds([]);
+            setInviteEmployeeId('');
+            setInviteCount((count) => count + 1);
             await load();
         } catch (err: any) {
             showToast({ type: 'error', message: err?.message || tm.inviteFailed });
@@ -955,6 +985,10 @@ export default function TeamPage() {
                         <Button icon={<Plus className="w-4 h-4" />} onClick={() => setCreatingProfile(true)}>
                             {tm.profiles.newProfile}
                         </Button>
+                    ) : activeTab === 'members' && canManageHr ? (
+                        <Link href={routes.hr.employeeLinkLogins} className={buttonClassName({ variant: 'secondary' })}>
+                            {t.employees.detail.linking.bulkAction}
+                        </Link>
                     ) : undefined}
                 />
 
@@ -1025,6 +1059,14 @@ export default function TeamPage() {
                                     />
                                     <InviteProfileLine roles={tenantRoles} selectedRoleIds={inviteTenantRoleIds} profiles={profiles} />
                                 </div>
+                                {canManageHr && (
+                                    <InviteEmployeeField
+                                        email={inviteEmail}
+                                        value={inviteEmployeeId}
+                                        onChange={setInviteEmployeeId}
+                                        reloadKey={inviteCount}
+                                    />
+                                )}
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                     <p className="text-xs text-gray-500">
                                         {fmt(tm.member.rolesSelected, { count: inviteTenantRoleIds.length })}
@@ -1056,6 +1098,11 @@ export default function TeamPage() {
                                                         {name}
                                                     </span>
                                                 ))}
+                                                {inv.employee && (
+                                                    <span className="truncate text-xs text-gray-500">
+                                                        {fmt(t.employees.detail.linking.invitationBecomes, { name: inv.employee.name })}
+                                                    </span>
+                                                )}
                                             </div>
                                             <button onClick={() => revokeInvite(inv.id, inv.email)} className="text-xs font-semibold text-red-500 hover:text-red-700">{tm.revoke}</button>
                                         </div>
@@ -1091,6 +1138,7 @@ export default function TeamPage() {
                                                         {m.isOwner
                                                             ? tm.allBranches
                                                             : fmt(tm.branchCount, { count: m.stores.length })}
+                                                        {m.employee ? ` · ${m.employee.employeeCode}` : ''}
                                                     </p>
                                                 </div>
                                                 <div className="flex items-center gap-2 shrink-0">
@@ -1116,6 +1164,7 @@ export default function TeamPage() {
                                     <MemberPanel
                                         userId={selected}
                                         tenantRoles={tenantRoles}
+                                        canManageHr={canManageHr}
                                         onToast={showToast}
                                         onChanged={load}
                                         onClose={() => setSelected(null)}

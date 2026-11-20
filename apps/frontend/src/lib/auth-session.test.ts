@@ -2,7 +2,15 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { DEFAULT_SECTION_VALUES, type MyPreferencesResponse } from '@erp71/shared-types';
 import { signInForPreferences } from '@/test-utils/preferences-scope';
 import { clearInvoicePrintPrefsCache, useInvoicePrintPrefs } from './hooks/useInvoicePrintPrefs';
-import { applyTenantContext, clearAuthSession, clearSidebarLayoutState, storeAuthResponse } from './auth-session';
+import {
+    applyTenantContext,
+    clearAuthSession,
+    clearSidebarLayoutState,
+    employeeCards,
+    getLoginContexts,
+    isInEmployeePortal,
+    storeAuthResponse,
+} from './auth-session';
 import { SAVE_DEBOUNCE_MS, usePreferencesStore } from './preferences/store';
 import { getQueryClient, ME_QUERY_KEY } from './query-client';
 import { getWorkspaceItem, setWorkspaceItem } from './session-store';
@@ -278,5 +286,31 @@ describe('the preferences store across sign-in, sign-out and workspace switches'
         expect(usePreferencesStore.getState().scopeKey).toBe('tenant-a:user-1');
         await jest.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS);
         expect(api.saveMyPreferenceSection).toHaveBeenCalledWith('sidebar', { appShellOpenGroups: ['hr'] });
+    });
+});
+
+describe('employee-portal cards', () => {
+    const k = { id: 'emp-k', tenant_id: 't-k' };
+    const r = { id: 'emp-r', tenant_id: 't-r' };
+
+    it('reads the list, falling back to the single card an older answer carries', () => {
+        expect(employeeCards({ employees: [k, r], employee: k })).toEqual([k, r]);
+        expect(employeeCards({ employee: k })).toEqual([k]);
+        expect(employeeCards({ employee: null })).toEqual([]);
+    });
+
+    it('counts one login context per card', () => {
+        const contexts = getLoginContexts({ employees: [k, r], tenants: [{ id: 't-k' }, { id: 't-r' }] });
+        expect(contexts.isEmployee).toBe(true);
+        expect(contexts.count).toBe(4);
+    });
+
+    it('is in the portal only when the pinned workspace holds one of the cards', () => {
+        const me = { employees: [k, r] };
+        expect(isInEmployeePortal(me, 'employee', 't-r')).toBe(true);
+        expect(isInEmployeePortal(me, 'employee', 't-elsewhere')).toBe(false);
+        expect(isInEmployeePortal(me, 'tenant', 't-r')).toBe(false);
+        // A stored context alone is something a user can set by hand.
+        expect(isInEmployeePortal({ employees: [] }, 'employee', 't-r')).toBe(false);
     });
 });

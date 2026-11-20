@@ -445,6 +445,7 @@ export const coreMessages = {
             projectsSprints: "Sprint",
             projectsHourLogs: "Log Jam",
             projectsHourLogReport: "Laporan Log Jam",
+            projectsProfitability: "Keuntungan",
             projectsSetup: "Tetapan Projek",
             meetingsList: "Mesyuarat",
             meetingActions: "Perkara tindakan saya",

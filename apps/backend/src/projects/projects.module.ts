@@ -21,6 +21,12 @@ import { ProjectBacklogService } from './project-backlog.service';
 import { ProjectTasksService } from './project-tasks.service';
 import { ProjectTimeService } from './project-time.service';
 import { ProjectTimerService } from './project-timer.service';
+import { LabourPricingService } from './labour-pricing.service';
+import { ProjectCostingService } from './project-costing.service';
+import { ProjectCostingController } from './project-costing.controller';
+import { ProjectDirectCostsService } from './project-direct-costs.service';
+import { ProjectUnbilledService } from './project-unbilled.service';
+import { ProjectProfitabilityService } from './project-profitability.service';
 import { ProjectSettingsService } from './project-settings.service';
 import { RemainingHoursService } from './remaining-hours.service';
 import { SprintsService } from './sprints.service';
@@ -42,6 +48,7 @@ import { ProjectAttachmentsService } from './project-attachments.service';
         ProjectBacklogController,
         ProjectTasksController,
         ProjectTimeController,
+        ProjectCostingController,
         SprintsController,
     ],
     providers: [
@@ -56,6 +63,11 @@ import { ProjectAttachmentsService } from './project-attachments.service';
         ProjectTasksService,
         ProjectTimeService,
         ProjectTimerService,
+        LabourPricingService,
+        ProjectCostingService,
+        ProjectDirectCostsService,
+        ProjectUnbilledService,
+        ProjectProfitabilityService,
         ProjectSettingsService,
         RemainingHoursService,
         ProjectActivityService,
@@ -65,6 +77,6 @@ import { ProjectAttachmentsService } from './project-attachments.service';
         BurndownRecorder,
         SprintMembershipService,
     ],
-    exports: [ProjectsService, RemainingHoursService, ProjectAccessService],
+    exports: [ProjectsService, RemainingHoursService, ProjectAccessService, ProjectUnbilledService],
 })
 export class ProjectsModule {}

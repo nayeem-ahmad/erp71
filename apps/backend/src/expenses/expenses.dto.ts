@@ -77,6 +77,14 @@ export class ListExpenseHeadsQueryDto {
 }
 
 export class CreateExpenseEntryDto {
+    /**
+     * The project this was spent on — a direct cost on its financials. On an
+     * update, null clears it; omitted leaves it as it was.
+     */
+    @IsOptional()
+    @IsUUID()
+    projectId?: string | null;
+
     @IsUUID()
     headId: string;
 
@@ -101,6 +109,14 @@ export class CreateExpenseEntryDto {
 }
 
 export class UpdateExpenseEntryDto {
+    /**
+     * The project this was spent on — a direct cost on its financials. On an
+     * update, null clears it; omitted leaves it as it was.
+     */
+    @IsOptional()
+    @IsUUID()
+    projectId?: string | null;
+
     @IsOptional()
     @IsUUID()
     headId?: string;

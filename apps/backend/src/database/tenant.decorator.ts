@@ -30,6 +30,17 @@ export interface TenantContext {
      * absence reads as `ALL` everywhere it is consumed.
      */
     recordScope?: TenantRecordScope;
+    /**
+     * The `Employee` this login is linked to in this workspace, resolved by
+     * `TenantInterceptor` from the same membership read — so a module that asks
+     * "who is this person on the payroll" costs no query. `null` when the login
+     * is linked to no employee.
+     *
+     * `undefined` means *not resolved* — a context built by hand (a sweep, a
+     * scheduler, a spec) — and is not the same answer as `null`. A consumer that
+     * needs it there looks it up; see `ProjectAccessService.employeeIdOf`.
+     */
+    employeeId?: string | null;
 }
 
 export const Tenant = createParamDecorator(
@@ -46,6 +57,9 @@ export const Tenant = createParamDecorator(
             userRole: request.userRole,
             timezone: resolveZone(request.timezone),
             recordScope: request.recordScope ?? TenantRecordScope.ALL,
+            // Only a request the interceptor resolved knows the answer; leave it
+            // unresolved otherwise rather than claiming "no employee".
+            ...(request.employeeId !== undefined ? { employeeId: request.employeeId } : {}),
         };
     },
 );

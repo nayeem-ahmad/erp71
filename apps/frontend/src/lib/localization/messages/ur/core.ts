@@ -445,6 +445,7 @@ export const coreMessages = {
             projectsSprints: 'اسپرنٹس',
             projectsHourLogs: 'گھنٹوں کا اندراج',
             projectsHourLogReport: 'گھنٹوں کی رپورٹ',
+            projectsProfitability: "منافع",
             projectsSetup: 'پروجیکٹ سیٹ اپ',
             meetingsList: 'میٹنگز',
             meetingActions: 'میرے ایکشن پوائنٹس',

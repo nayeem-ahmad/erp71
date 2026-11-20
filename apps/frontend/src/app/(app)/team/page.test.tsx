@@ -23,6 +23,11 @@ jest.mock('@/lib/api', () => ({
         getPreferenceProfile: jest.fn(),
         createPreferenceProfile: jest.fn(),
         getAlertPreferences: jest.fn(),
+        getTeamMember: jest.fn(),
+        sendTeamInvitation: jest.fn(),
+        getEmployeeCandidates: jest.fn(),
+        linkEmployeeUser: jest.fn(),
+        unlinkEmployeeUser: jest.fn(),
     },
 }));
 
@@ -38,6 +43,7 @@ beforeEach(() => {
     mockApi.getTeamMembers.mockResolvedValue([]);
     mockApi.getTeamInvitations.mockResolvedValue([]);
     mockApi.getTeamRoles.mockResolvedValue([]);
+    mockApi.getEmployeeCandidates.mockResolvedValue([]);
     mockApi.getPreferenceProfiles.mockResolvedValue([
         {
             id: 'p1',
@@ -270,5 +276,98 @@ describe('TeamPage — invite starts-with line', () => {
         await openInvite([cashierRole, clerkRole], [cashier, shop]);
         await act(async () => {});
         expect(screen.queryByText(/Starts with/)).not.toBeInTheDocument();
+    });
+});
+
+describe('TeamPage — employee records', () => {
+    const member = {
+        userId: 'u2',
+        email: 'karim@example.com',
+        name: 'Karim',
+        isOwner: false,
+        roleName: 'Cashier',
+        roleNames: ['Cashier'],
+        tenantRoleId: 'r1',
+        tenantRoleIds: ['r1'],
+        isSelf: false,
+        employee: { id: 'e1', name: 'Karim Uddin', employeeCode: 'EMP-0007' },
+        stores: [],
+    };
+
+    it('shows the linked card\'s code on the member row', async () => {
+        signIn('OWNER');
+        mockApi.getTeamMembers.mockResolvedValue([member] as never);
+        render(<TeamPage />);
+
+        expect(await screen.findByText(/EMP-0007/)).toBeInTheDocument();
+    });
+
+    it('opens the linked card from the member panel', async () => {
+        signIn('OWNER');
+        mockApi.getTeamMembers.mockResolvedValue([member] as never);
+        mockApi.getTeamMember.mockResolvedValue({ ...member, stores: [] } as never);
+        render(<TeamPage />);
+
+        fireEvent.click(await screen.findByText('Karim'));
+
+        const open = await screen.findByRole('link', { name: 'Open employee' });
+        expect(open).toHaveAttribute('href', '/hr/employees/e1');
+    });
+
+    it('offers cards to link for a member who has none, and links the one picked', async () => {
+        signIn('OWNER');
+        mockApi.getTeamMembers.mockResolvedValue([{ ...member, employee: null }] as never);
+        mockApi.getTeamMember.mockResolvedValue({ ...member, employee: null, stores: [] } as never);
+        mockApi.getEmployeeCandidates.mockResolvedValue([
+            { employeeId: 'e1', employeeCode: 'EMP-0007', name: 'Karim Uddin', phone: '017', email: null, matches: ['mobile'] },
+        ] as never);
+        mockApi.linkEmployeeUser.mockResolvedValue({} as never);
+        render(<TeamPage />);
+
+        fireEvent.click(await screen.findByText('Karim'));
+        expect(await screen.findByText('Same mobile')).toBeInTheDocument();
+        expect(mockApi.getEmployeeCandidates).toHaveBeenCalledWith({ userId: 'u2' });
+
+        fireEvent.click(screen.getByRole('button', { name: /^link$/i }));
+
+        await waitFor(() => expect(mockApi.linkEmployeeUser).toHaveBeenCalledWith('e1', 'u2'));
+    });
+
+    it('only reports the link to someone without Manage HR', async () => {
+        signIn('STAFF', ['MANAGE_USERS']);
+        mockApi.getTeamMembers.mockResolvedValue([{ ...member, employee: null }] as never);
+        mockApi.getTeamMember.mockResolvedValue({ ...member, employee: null, stores: [] } as never);
+        render(<TeamPage />);
+
+        fireEvent.click(await screen.findByText('Karim'));
+
+        expect(await screen.findByText(/also needs the manage hr permission/i)).toBeInTheDocument();
+        expect(mockApi.getEmployeeCandidates).not.toHaveBeenCalled();
+    });
+
+    it('sends the chosen card with an invitation', async () => {
+        signIn('OWNER');
+        mockApi.getTeamRoles.mockResolvedValue([cashierRole] as never);
+        mockApi.getEmployeeCandidates.mockResolvedValue([
+            { employeeId: 'e1', employeeCode: 'EMP-0007', name: 'Karim Uddin', phone: '017', email: null, matches: [] },
+        ] as never);
+        mockApi.sendTeamInvitation.mockResolvedValue({} as never);
+        render(<TeamPage />);
+
+        const select = await screen.findByLabelText('Employee record (optional)');
+        fireEvent.change(select, { target: { value: 'e1' } });
+        fireEvent.change(screen.getByPlaceholderText('colleague@example.com'), {
+            target: { value: 'karim@example.com' },
+        });
+        fireEvent.click(screen.getByLabelText('Cashier'));
+        fireEvent.click(screen.getByRole('button', { name: /send invite/i }));
+
+        await waitFor(() =>
+            expect(mockApi.sendTeamInvitation).toHaveBeenCalledWith({
+                email: 'karim@example.com',
+                tenantRoleIds: ['r1'],
+                employeeId: 'e1',
+            }),
+        );
     });
 });

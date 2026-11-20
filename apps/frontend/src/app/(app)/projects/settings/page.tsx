@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { PageShell, PageHeader, Button, Input, Select, StatusBadge } from '@/components/ui';
+import { PageShell, PageHeader, Button, Checkbox, Input, Select, StatusBadge } from '@/components/ui';
 import {
     LABEL_COLORS,
     labelClass,
@@ -12,6 +12,10 @@ import {
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
+import { fetchMe } from '@/hooks/use-me';
+import { getWorkspaceItem } from '@/lib/session-store';
+import { hasPermission, isOwner } from '@/lib/permissions';
+import ProjectCostingSettingsCard from '@/components/projects/ProjectCostingSettingsCard';
 
 interface ProjectType {
     id: string;
@@ -47,6 +51,19 @@ export default function ProjectSettingsPage() {
         color: 'EMERALD',
     });
     const [busy, setBusy] = useState(false);
+    // Labour costing is behind VIEW_PROJECT_FINANCIALS: it decides what pay an hour reveals.
+    const [costing, setCosting] = useState<{ view: boolean; edit: boolean }>({ view: false, edit: false });
+    useEffect(() => {
+        fetchMe()
+            .then((me: any) => {
+                const tenantId = getWorkspaceItem('tenant_id');
+                const tenant = me?.tenants?.find((entry: any) => entry.id === tenantId) || me?.tenants?.[0];
+                const owner = isOwner(tenant?.role);
+                const view = owner || hasPermission(tenant?.permissions, 'VIEW_PROJECT_FINANCIALS');
+                setCosting({ view, edit: view && (owner || hasPermission(tenant?.permissions, 'MANAGE_PROJECT_SETTINGS')) });
+            })
+            .catch(() => setCosting({ view: false, edit: false }));
+    }, []);
 
     const load = useCallback(async () => {
         const [typeList, columnList, labelList, tagList] = await Promise.all([
@@ -323,6 +340,17 @@ export default function ProjectSettingsPage() {
                                         </option>
                                     ))}
                                 </Select>
+                                {/* An hour carrying a tag that is not billable is never invoiced. */}
+                                <label className="flex min-h-touch items-center gap-1.5 text-xs text-gray-600">
+                                    <Checkbox
+                                        checked={(item as { billable?: boolean }).billable !== false}
+                                        disabled={busy}
+                                        onChange={(e) =>
+                                            run(() => api.updateProjectTimeTag(item.id, { billable: e.target.checked }))
+                                        }
+                                    />
+                                    {m.financials.billable}
+                                </label>
                                 <span className="flex-1" />
                                 <button
                                     type="button"
@@ -411,6 +439,8 @@ export default function ProjectSettingsPage() {
                     </Button>
                 </form>
             </section>
+
+            {costing.view && <ProjectCostingSettingsCard canEdit={costing.edit} />}
         </PageShell>
     );
 }

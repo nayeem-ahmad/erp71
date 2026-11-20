@@ -23,7 +23,8 @@ const REVIEWED: Record<string, string> = {
     'admin-tenants/admin-tenants.service.ts': INVALIDATES, // promote/demote, admin user edit/delete/reset, tenant delete
     'auth/auth.service.ts': INVALIDATES, // logout, changePassword; signup/provisioning only create new rows
     'careers/careers.service.ts': INVALIDATES, // logout (atv); signup creates a new user
-    'employee-portal/employee-login.service.ts': INVALIDATES, // reset, revoke; create makes a new user
+    'employee-portal/employee-login.service.ts': INVALIDATES, // reset, revoke; create links a brand-new user, which nothing can have cached
+    'employees/employees.service.ts': INVALIDATES, // link, unlink and delete change which employee a member's cached membership names
     'invitations/invitations.service.ts': INVALIDATES, // role change, accept
     'password-reset/password-reset.service.ts': INVALIDATES, // token versions bumped on reset
     'platform-workspace/platform-workspace.service.ts': INVALIDATES, // admin roster sync, invited-member access
@@ -41,6 +42,10 @@ const REVIEWED: Record<string, string> = {
     'auth/totp.service.ts': 'totp_secret only — not a column JwtStrategy reads',
     'auth/verified-mobile.util.ts': 'mobile, firebase_uid and mobile_verified_at only — not cached',
     'blog/blog.service.ts': 'blog_last_seen_at only — not cached',
+    'demo-data/generator/write-hr.ts': 'creates demo employees with no login, so no member\'s employee link changes',
+    'employee-lifecycle/employee-lifecycle.service.ts': 'status and exit fields only — the membership caches which employee a login is, not their status',
+    'employee-portal/employee-portal.service.ts': 'Employee.portal_access only — EmployeeGuard reads it fresh, it is not cached',
+    'tenants/clear-tenant-data.ts': 'deletes a tenant\'s employees inside its callers\' transactions; both callers (TenantsService.clearData, AdminTenantsService) invalidate the tenant after it returns',
     'document-numbering/document-numbering.service.ts': 'Store.code only — the cache holds which workspace a branch is in, not its code',
     'payment-methods/payment-methods.service.ts': 'TenantUser.payment_method_prefs only — not cached',
     'preferences/preferences.service.ts': 'TenantUser.preferences, invoice_print_prefs and legacy_browser_sections, and UserAlertPreference rows only — none is in the cached user, membership, grants or branch-access answers',
@@ -51,9 +56,13 @@ const REVIEWED: Record<string, string> = {
     'team/tenant-role.seed.ts': 'creates the roles of a brand-new tenant',
 };
 
-/** Prisma writes to the tables behind `user`, `membership`, `grants`, `storeAccess` and `store`. */
+/**
+ * Prisma writes to the tables behind `user`, `membership`, `grants`, `storeAccess`
+ * and `store`. `employee` is here because the cached membership carries which
+ * employee the login is linked to (`Employee.user_id`).
+ */
 const WRITE =
-    /\b(user|tenantUser|tenantUserRole|userStorePermission|userStoreAccess|tenantRole|tenantRolePermission|store)\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/;
+    /\b(user|tenantUser|tenantUserRole|userStorePermission|userStoreAccess|tenantRole|tenantRolePermission|store|employee)\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/;
 
 function sourceFiles(dir: string): string[] {
     return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
