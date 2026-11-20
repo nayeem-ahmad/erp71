@@ -400,6 +400,7 @@ export const coreMessages = {
             noSearchResults: "আপনার অনুসন্ধানের সাথে কোনো মেনু মিলেনি।",
             expandAll: "সব খুলুন",
             collapseAll: "সব বন্ধ করুন",
+            recent: "সাম্প্রতিক",
             modules: {
                 dashboard: "ড্যাশবোর্ড",
                 scorecard: "স্কোরকার্ড",

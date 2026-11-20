@@ -400,6 +400,7 @@ export const coreMessages = {
         noSearchResults: "Keine Menüeinträge passen zu Ihrer Suche.",
         expandAll: "Alle ausklappen",
         collapseAll: "Alle einklappen",
+        recent: "Zuletzt",
         modules: {
             dashboard: "Übersicht",
             scorecard: "Scorecard",

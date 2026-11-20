@@ -400,6 +400,7 @@ export const coreMessages = {
         noSearchResults: 'لا توجد عناصر قائمة مطابقة لبحثك.',
         expandAll: 'توسيع الكل',
         collapseAll: 'طي الكل',
+        recent: "الأخيرة",
         modules: {
             dashboard: 'لوحة المعلومات',
             scorecard: 'بطاقة الأداء',

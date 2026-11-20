@@ -89,4 +89,46 @@ describe('Branding — UI style', () => {
         const errors = await validate(plainToInstance(UpdateBrandingDto, { ui_sidebar }));
         expect(errors.map((e) => e.property)).toContain('ui_sidebar');
     });
+
+    describe('Recent menu items switch', () => {
+        it('is read and returned with the rest of the branding', async () => {
+            db.tenant.findUnique.mockResolvedValue({ nav_recent_enabled: true });
+            await service.getBranding('tenant-1');
+            expect(db.tenant.findUnique.mock.calls[0][0].select).toEqual(
+                expect.objectContaining({ nav_recent_enabled: true }),
+            );
+        });
+
+        it('switches off on its own, without touching anything else', async () => {
+            db.tenant.update.mockResolvedValue({ nav_recent_enabled: false });
+            await service.updateBranding('tenant-1', { nav_recent_enabled: false });
+            expect(db.tenant.update.mock.calls[0][0]).toEqual(expect.objectContaining({
+                where: { id: 'tenant-1' },
+                data: { nav_recent_enabled: false },
+                select: expect.objectContaining({ nav_recent_enabled: true }),
+            }));
+        });
+
+        it('is left alone when a branding save does not mention it', async () => {
+            db.tenant.update.mockResolvedValue({});
+            await service.updateBranding('tenant-1', { ui_sidebar: 'NAVY' });
+            expect(db.tenant.update.mock.calls[0][0].data).not.toHaveProperty('nav_recent_enabled');
+        });
+
+        it.each([true, false])('accepts %p', async (nav_recent_enabled) => {
+            const errors = await validate(plainToInstance(UpdateBrandingDto, { nav_recent_enabled }));
+            expect(errors).toHaveLength(0);
+        });
+
+        it.each(['true', 1, 'on'])('rejects %p', async (nav_recent_enabled) => {
+            const errors = await validate(plainToInstance(UpdateBrandingDto, { nav_recent_enabled }));
+            expect(errors.map((e) => e.property)).toContain('nav_recent_enabled');
+        });
+
+        it('never writes a null that @IsOptional let through to the non-null column', async () => {
+            db.tenant.update.mockResolvedValue({});
+            await service.updateBranding('tenant-1', { nav_recent_enabled: null as unknown as boolean });
+            expect(db.tenant.update.mock.calls[0][0].data).not.toHaveProperty('nav_recent_enabled');
+        });
+    });
 });

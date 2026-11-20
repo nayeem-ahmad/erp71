@@ -897,6 +897,11 @@ model Tenant {
   ui_theme                  String   @default("CLASSIC")
   /// The sidebar's colour, beside the style: LIGHT | NAVY — see `UI_SIDEBARS`.
   ui_sidebar                String   @default("LIGHT")
+  /// Whether the sidebar opens with a "Recent" list of the menu items each
+  /// member visited last. On by default; an owner can switch it off for the
+  /// whole workspace in Settings › Branding. The history itself is per member
+  /// and per browser — only the switch is stored here.
+  nav_recent_enabled        Boolean  @default(true)
   default_vat_rate          Decimal? @db.Decimal(5, 2) // e.g. 15.00 for 15% BD VAT
   /// How the shop's prices are entered. True (the default, and how ERP71 has
   /// always worked): prices include VAT and the tax is worked out of them.

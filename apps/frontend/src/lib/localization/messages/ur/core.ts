@@ -400,6 +400,7 @@ export const coreMessages = {
         noSearchResults: 'آپ کی تلاش سے کوئی مینو آئٹم نہیں ملا۔',
         expandAll: 'سب کھولیں',
         collapseAll: 'سب بند کریں',
+        recent: "حالیہ",
         modules: {
             dashboard: 'ڈیش بورڈ',
             scorecard: 'اسکور کارڈ',

@@ -64,6 +64,11 @@ export const settingsExtrasMessages = {
             light: { name: "Light", description: "White, as it has always been." },
             navy: { name: "Dark navy", description: "A dark rail that sets the navigation apart from the page." },
         },
+        navRecent: {
+            label: "Recent menu items",
+            hint: "A short list at the top of the sidebar of the menu items each person opened last. Everyone sees only their own.",
+            toggle: "Show recent menu items in the sidebar",
+        },
         businessName: {
             label: 'Business Name Override',
             placeholder: 'Your Business Name',

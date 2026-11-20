@@ -400,6 +400,7 @@ export const coreMessages = {
         noSearchResults: "Ningún elemento del menú coincide con tu búsqueda.",
         expandAll: "Expandir todo",
         collapseAll: "Contraer todo",
+        recent: "Recientes",
         modules: {
             dashboard: "Panel",
             scorecard: "Cuadro de mando",
