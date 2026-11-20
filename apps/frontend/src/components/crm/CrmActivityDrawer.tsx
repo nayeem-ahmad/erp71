@@ -38,12 +38,23 @@ type Props = {
     activityId?: string | null;
     activityLabel?: string | null;
     navigation?: CrmActivityDrawerNavigation | null;
+    /**
+     * The tab the drawer opens on, and the one listed first. The activities
+     * list opens on the timeline — its rows are activities; the leads list
+     * opens on the lead's details, with the timeline one tab over.
+     */
+    primaryTab?: CrmActivityDrawerTab;
+    /** Under the title. Defaults to the open activity's label, else "Activities". */
+    subtitle?: string | null;
+    /** What Previous / Next step through. Defaults to "Previous / Next activity". */
+    navigationLabels?: { previous: string; next: string };
     onClose: () => void;
     /** Forwarded to the panel: a write in here moves a row in the list behind. */
     onChanged?: () => void;
 };
 
-type DrawerTab = 'activities' | 'details';
+export type CrmActivityDrawerTab = 'activities' | 'details';
+type DrawerTab = CrmActivityDrawerTab;
 
 const TAB_PREFIX = 'crm-activity-drawer';
 
@@ -66,6 +77,10 @@ const navButton =
  * to the neighbouring row without closing it, and a lead's Details tab answers
  * "who is this" without the trip to the lead page either. The tab survives the
  * step, so reading details down a list stays on details.
+ *
+ * The leads list uses the same drawer the other way round (`primaryTab:
+ * 'details'`): its rows are leads, so the lead's details come first and the
+ * timeline sits in the second tab, with Previous / Next stepping lead to lead.
  */
 export default function CrmActivityDrawer({
     leadId,
@@ -76,6 +91,9 @@ export default function CrmActivityDrawer({
     activityId,
     activityLabel,
     navigation,
+    primaryTab = 'activities',
+    subtitle,
+    navigationLabels,
     onClose,
     onChanged,
 }: Readonly<Props>) {
@@ -84,7 +102,9 @@ export default function CrmActivityDrawer({
     const leadsCopy = t.crm.leads;
     const router = useRouter();
 
-    const [tab, setTab] = useState<DrawerTab>('activities');
+    const [tab, setTab] = useState<DrawerTab>(primaryTab);
+    const previousLabel = navigationLabels?.previous ?? m.previousActivity;
+    const nextLabel = navigationLabels?.next ?? m.nextActivity;
     // A customer has no lead details to show; its record page is the link above.
     const activeTab: DrawerTab = leadId ? tab : 'activities';
 
@@ -107,7 +127,7 @@ export default function CrmActivityDrawer({
         <ModalShell variant="drawer" size="lg" onBackdropClick={onClose}>
             <ModalHeader
                 title={name}
-                subtitle={activityLabel || t.crm.activities.title}
+                subtitle={subtitle || activityLabel || t.crm.activities.title}
                 onClose={onClose}
                 closeLabel={t.common.close}
             >
@@ -127,10 +147,15 @@ export default function CrmActivityDrawer({
                     <div className="min-w-0 flex-1">
                         {leadId && (
                             <Tabs<DrawerTab>
-                                tabs={[
-                                    { key: 'activities', label: m.tabActivities },
-                                    { key: 'details', label: m.tabDetails },
-                                ]}
+                                tabs={primaryTab === 'details'
+                                    ? [
+                                        { key: 'details', label: m.tabDetails },
+                                        { key: 'activities', label: m.tabActivities },
+                                    ]
+                                    : [
+                                        { key: 'activities', label: m.tabActivities },
+                                        { key: 'details', label: m.tabDetails },
+                                    ]}
                                 value={activeTab}
                                 // Re-clicking the open tab would close the strip; a
                                 // drawer always shows one of the two.
@@ -148,8 +173,8 @@ export default function CrmActivityDrawer({
                                 className={navButton}
                                 onClick={navigation.onPrevious ?? undefined}
                                 disabled={!navigation.onPrevious}
-                                aria-label={m.previousActivity}
-                                title={m.previousActivity}
+                                aria-label={previousLabel}
+                                title={previousLabel}
                             >
                                 <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
                             </button>
@@ -163,8 +188,8 @@ export default function CrmActivityDrawer({
                                 className={navButton}
                                 onClick={navigation.onNext ?? undefined}
                                 disabled={!navigation.onNext}
-                                aria-label={m.nextActivity}
-                                title={m.nextActivity}
+                                aria-label={nextLabel}
+                                title={nextLabel}
                             >
                                 <ChevronRight className="h-4 w-4 rtl:rotate-180" />
                             </button>
