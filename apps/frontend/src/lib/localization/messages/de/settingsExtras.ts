@@ -64,6 +64,11 @@ export const settingsExtrasMessages = {
             light: { name: "Hell", description: "Weiß, wie bisher." },
             navy: { name: "Dunkles Marineblau", description: "Eine dunkle Leiste, die die Navigation von der Seite abhebt." },
         },
+        navRecent: {
+            label: "Zuletzt verwendete Menüeinträge",
+            hint: "Eine kurze Liste oben in der Seitenleiste mit den Menüeinträgen, die jede Person zuletzt geöffnet hat. Jede Person sieht nur ihre eigene.",
+            toggle: "Zuletzt verwendete Menüeinträge in der Seitenleiste anzeigen",
+        },
         businessName: {
             label: "Abweichender Firmenname",
             placeholder: "Ihr Firmenname",

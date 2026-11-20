@@ -400,6 +400,7 @@ export const coreMessages = {
         noSearchResults: 'No menu items match your search.',
         expandAll: 'Expand all',
         collapseAll: 'Collapse all',
+        recent: "Recent",
         modules: {
             dashboard: 'Dashboard',
             scorecard: 'Scorecard',

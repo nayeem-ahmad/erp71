@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { BrandingProvider } from './branding';
-import { styleFor, useUiSidebar, useUiStyle } from './ui-theme';
+import { styleFor, useNavRecentEnabled, useUiSidebar, useUiStyle } from './ui-theme';
 
 jest.mock('./api', () => ({
     fetchWithAuth: jest.fn(),
@@ -97,5 +97,40 @@ describe('useUiStyle', () => {
 
         await waitFor(() => expect(localStorage.getItem('erp71.ui_sidebar.t1')).toBe('LIGHT'));
         expect(screen.getByTestId('probe')).toHaveTextContent('sidebar=LIGHT');
+    });
+});
+
+describe('useNavRecentEnabled', () => {
+    function RecentProbe() {
+        return <p data-testid="recent">{`recent=${useNavRecentEnabled()}`}</p>;
+    }
+
+    it('is on outside a provider, and for a workspace whose branding never mentions it', async () => {
+        render(<RecentProbe />);
+        expect(screen.getByTestId('recent')).toHaveTextContent('recent=true');
+    });
+
+    it('stays on when the branding omits the field', async () => {
+        sessionStorage.setItem('tenant_id', 't1');
+        mockFetchWithAuth.mockResolvedValue({ ui_theme: 'CLASSIC' });
+        render(<BrandingProvider><RecentProbe /></BrandingProvider>);
+        await waitFor(() => expect(localStorage.getItem('erp71.nav_recent.t1')).toBe('true'));
+        expect(screen.getByTestId('recent')).toHaveTextContent('recent=true');
+    });
+
+    it('turns off when the workspace switched it off, and remembers that for the next reload', async () => {
+        sessionStorage.setItem('tenant_id', 't1');
+        mockFetchWithAuth.mockResolvedValue({ nav_recent_enabled: false });
+        render(<BrandingProvider><RecentProbe /></BrandingProvider>);
+        await waitFor(() => expect(screen.getByTestId('recent')).toHaveTextContent('recent=false'));
+        expect(localStorage.getItem('erp71.nav_recent.t1')).toBe('false');
+    });
+
+    it('paints the remembered switch before the branding request answers', () => {
+        sessionStorage.setItem('tenant_id', 't1');
+        localStorage.setItem('erp71.nav_recent.t1', 'false');
+        mockFetchWithAuth.mockReturnValue(new Promise(() => {}));
+        render(<BrandingProvider><RecentProbe /></BrandingProvider>);
+        expect(screen.getByTestId('recent')).toHaveTextContent('recent=false');
     });
 });

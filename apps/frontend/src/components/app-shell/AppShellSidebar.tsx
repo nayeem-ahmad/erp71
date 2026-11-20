@@ -6,11 +6,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronsLeft, ChevronsRight, LayoutGrid, Search, X } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import NavModuleChildren from '@/components/sidebar/NavModuleChildren';
+import RecentNavSection from '@/components/sidebar/RecentNavSection';
 import { useNavLayouts } from '@/contexts/NavLayoutContext';
 import { useDrawerFocusTrap } from '@/hooks/useDrawerFocusTrap';
 import { useIsMdUp } from '@/hooks/useMediaQuery';
 import { useOverdueMeetingActionsCount } from '@/hooks/useOverdueMeetingActionsCount';
 import { usePendingVoucherCount } from '@/hooks/usePendingVoucherCount';
+import { useRecentNavItems } from '@/hooks/useRecentNavItems';
 import { appHomeHref, buildRail, collectNavLinkTargets, findActiveAppKey, isNavLinkActive, railKeyFor, type RailEntry } from '@/lib/app-shell';
 import { BRAND_NAME } from '@/lib/brand';
 import { useBranding } from '@/lib/branding';
@@ -21,6 +23,7 @@ import { usePreferencesStore } from '@/lib/preferences/store';
 import { usePreferenceSection } from '@/lib/preferences/use-preference-section';
 import { filterNavModules, normalizeNavSearchQuery } from '@/lib/sidebar-nav-filter';
 import { routes } from '@/lib/routes';
+import { useNavRecentEnabled } from '@/lib/ui-theme';
 
 const RAIL_WIDTH = 56;
 const PANEL_MIN_WIDTH = 176;
@@ -106,6 +109,8 @@ export default function AppShellSidebar({
         messages: t as Record<string, unknown>,
     });
     const rail = buildRail(modules, copy.helpGroup);
+    // The workspace's switch (Settings › Branding); the history is the member's own.
+    const recentItems = useRecentNavItems(modules, pathname, useNavRecentEnabled());
     const entries = [...rail.business, ...rail.utility];
 
     const [collapsed, setCollapsed] = useState(false);
@@ -652,6 +657,7 @@ export default function AppShellSidebar({
                         </div>
 
                         <nav aria-label={t.sidebar.navigation} className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+                            {!isSearching ? <RecentNavSection items={recentItems} compactNav={compactNav} flat /> : null}
                             {renderPanelBody()}
                         </nav>
 
