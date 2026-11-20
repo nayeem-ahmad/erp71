@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Plus, RefreshCw, Eye, Trash2, Upload, ExternalLink, LayoutList, Kanban, Pencil } from 'lucide-react';
+import { Plus, RefreshCw, Eye, Trash2, Upload, ExternalLink, LayoutList, Kanban, Pencil, PanelRight } from 'lucide-react';
 import { api, ApiError, type BulkLeadChanges } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
@@ -30,6 +30,7 @@ import { useCrmMineOnly } from '@/lib/crm-scope';
 import MineOnlyToggle from '@/components/crm/MineOnlyToggle';
 import Avatar from '@/components/Avatar';
 import BulkEditLeadsModal from '@/components/crm/BulkEditLeadsModal';
+import CrmActivityDrawer, { type CrmActivityDrawerNavigation } from '@/components/crm/CrmActivityDrawer';
 
 import LeadsBoard from '@/components/crm/leads-board/LeadsBoard';
 import { useLeadsView } from '@/components/crm/leads-board/use-leads-view';
@@ -335,6 +336,10 @@ function LeadsPage() {
     const [bulkEditOpen, setBulkEditOpen] = useState(false);
     const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
     const [pendingDelete, setPendingDelete] = useState<Lead | null>(null);
+    // The lead read in the side panel, without leaving the list for its page.
+    // Held with the row's place on the page as well as its id, so Previous /
+    // Next still know where they are if a write drops it from the list.
+    const [viewing, setViewing] = useState<{ leadId: string; index: number; lead: Lead } | null>(null);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -458,6 +463,67 @@ function LeadsPage() {
             toast.error(err instanceof Error ? err.message : m.deleteFailed);
         }
     }, [pendingDelete, m.deleteFailed, loadLeads]);
+
+    const viewLead = useCallback((lead: Lead, index: number) => {
+        setViewing({ leadId: lead.id, index, lead });
+    }, []);
+
+    // Read through a ref so the handler stays one function: the columns close
+    // over it, and a fresh one per reload would rebuild them.
+    const leadsRef = useRef(leads);
+    leadsRef.current = leads;
+    const openLead = useCallback((lead: Lead) => {
+        viewLead(lead, leadsRef.current.findIndex((candidate) => candidate.id === lead.id));
+    }, [viewLead]);
+
+    /**
+     * Stepping off either end of a server page: ask for the neighbouring page
+     * and open its first (or last) lead once it lands. `staleLeads` is the page
+     * being left — until `leads` is something else the new page has not arrived.
+     */
+    const pendingStep = useRef<{ edge: 'first' | 'last'; staleLeads: Lead[] } | null>(null);
+    useEffect(() => {
+        const pending = pendingStep.current;
+        if (!pending || loading || leads === pending.staleLeads) return;
+        pendingStep.current = null;
+        if (leads.length === 0) return;
+        const index = pending.edge === 'first' ? 0 : leads.length - 1;
+        viewLead(leads[index], index);
+    }, [loading, leads, viewLead]);
+
+    const viewingNav = useMemo<{ lead: Lead; navigation: CrmActivityDrawerNavigation } | null>(() => {
+        if (!viewing) return null;
+        const found = leads.findIndex((lead) => lead.id === viewing.leadId);
+        // Gone from the page — converted under an open-pipeline filter, say —
+        // and the leads after it have moved up one, so the one now in its old
+        // slot is the next.
+        const previous = (found >= 0 ? found : viewing.index) - 1;
+        const next = found >= 0 ? found + 1 : viewing.index;
+        const stepPage = (edge: 'first' | 'last', to: number) => () => {
+            pendingStep.current = { edge, staleLeads: leads };
+            setPage(to);
+        };
+        return {
+            // The fresh row once the list reloads, so an edit made in the panel
+            // reaches its title too.
+            lead: found >= 0 ? leads[found] : viewing.lead,
+            navigation: {
+                position: found >= 0 ? (page - 1) * pageSize + found + 1 : null,
+                total,
+                onPrevious: previous >= 0 && previous < leads.length
+                    ? () => viewLead(leads[previous], previous)
+                    : page > 1 ? stepPage('last', page - 1) : null,
+                onNext: next >= 0 && next < leads.length
+                    ? () => viewLead(leads[next], next)
+                    : page * pageSize < total ? stepPage('first', page + 1) : null,
+            },
+        };
+    }, [viewing, leads, page, pageSize, total, viewLead]);
+
+    const closeViewing = useCallback(() => {
+        pendingStep.current = null;
+        setViewing(null);
+    }, []);
 
     const clearSelection = useCallback(() => {
         setSelectedLeads([]);
@@ -716,6 +782,7 @@ function LeadsPage() {
                 const lead = info.row.original;
                 return (
                     <RowActions>
+                        <RowActionButton icon={<PanelRight />} label={m.quickView} onClick={() => openLead(lead)} />
                         <RowActionButton icon={<Eye />} label={c.view} href={routes.crm.leadDetail(lead.id)} />
                         <RowActionButton icon={<Trash2 />} label={c.delete} intent="danger" onClick={() => setPendingDelete(lead)} />
                     </RowActions>
@@ -724,9 +791,9 @@ function LeadsPage() {
             enableSorting: false,
             enableColumnFilter: false,
             enableResizing: false,
-            size: 96,
+            size: 128,
         }),
-    ], [m, c, locale, statusLabel, priorityLabel, customFieldDefs]);
+    ], [m, c, locale, statusLabel, priorityLabel, customFieldDefs, openLead]);
 
     const importFields: ImportField[] = useMemo(
         () => [
@@ -975,6 +1042,8 @@ function LeadsPage() {
                     enableRowSelection
                     onRowSelectionChange={setSelectedLeads}
                     getRowId={(l) => l.id}
+                    onRowClick={openLead}
+                    rowClassName={(l) => (l.id === viewing?.leadId ? 'bg-blue-50/60' : undefined)}
                     emptyMessage={
                         // The table has its own empty text, so leaving it at the default
                         // would print "No leads yet" directly under the notice that says
@@ -988,6 +1057,23 @@ function LeadsPage() {
                     clearSelectionSignal={selectionEpoch}
                     bulkActions={bulkActions}
                     bulkActionsDisabled={bulkBusy}
+                />
+            )}
+
+            {view === 'list' && viewing && viewingNav && (
+                <CrmActivityDrawer
+                    leadId={viewingNav.lead.id}
+                    name={viewingNav.lead.name}
+                    phone={viewingNav.lead.mobile}
+                    href={routes.crm.leadDetail(viewingNav.lead.id)}
+                    subtitle={leadStatusLabel(viewingNav.lead, m.statuses)}
+                    primaryTab="details"
+                    navigation={viewingNav.navigation}
+                    navigationLabels={{ previous: m.previousLead, next: m.nextLead }}
+                    onClose={closeViewing}
+                    // Only on a write, so merely reading never swaps the table
+                    // behind the panel for its loading state.
+                    onChanged={() => { void loadLeads(); }}
                 />
             )}
 
