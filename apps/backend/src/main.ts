@@ -8,6 +8,7 @@ import { AppLogger } from './common/app-logger.service';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 import { corsOptions } from './common/allowed-origins.util';
 import { applyProxyTrust } from './common/trust-proxy.util';
+import { serverTimingMiddleware } from './common/server-timing';
 import helmet from 'helmet';
 
 async function bootstrap() {
@@ -17,6 +18,8 @@ async function bootstrap() {
     applyProxyTrust(app);
     app.use(json({ limit: '5mb' }));
     app.use(urlencoded({ extended: true, limit: '5mb' }));
+    // After the body parsers: its request context would not survive their stream callbacks.
+    app.use(serverTimingMiddleware);
     app.useLogger(app.get(AppLogger));
     app.use(helmet());
     app.setGlobalPrefix('api/v1');

@@ -7,6 +7,7 @@ jest.mock('@/lib/api', () => ({
     api: {
         getSystemHealth: jest.fn(),
         getSystemHealthJobs: jest.fn(),
+        getPageTimingSummary: jest.fn().mockResolvedValue({ days: 7, nav_type: null, overall: { views: 0 }, routes: [] }),
     },
 }));
 
