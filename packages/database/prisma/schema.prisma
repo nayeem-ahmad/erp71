@@ -891,6 +891,12 @@ model Tenant {
   brand_logo_url            String?
   brand_favicon_url         String?
   brand_business_name       String?
+  /// The workspace's visual style: CLASSIC | POLISHED | COLORFUL — see
+  /// `UI_THEMES` in shared-types. Presentation only; every style shows the
+  /// same data and the same actions.
+  ui_theme                  String   @default("CLASSIC")
+  /// The sidebar's colour, beside the style: LIGHT | NAVY — see `UI_SIDEBARS`.
+  ui_sidebar                String   @default("LIGHT")
   default_vat_rate          Decimal? @db.Decimal(5, 2) // e.g. 15.00 for 15% BD VAT
   /// How the shop's prices are entered. True (the default, and how ERP71 has
   /// always worked): prices include VAT and the tax is worked out of them.
@@ -1226,6 +1232,7 @@ model Tenant {
   jobApplications            JobApplication[]
   jobApplicationEvents       JobApplicationEvent[]
   messagingIdentity          TenantMessagingIdentity?
+  smtpServer                 TenantSmtpServer?
   blogPosts                  TenantBlogPost[]
   blogCategories             TenantBlogCategory[]
   blogSettings               TenantBlogSettings?
@@ -1348,6 +1355,45 @@ model TenantMessagingIdentity {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
   /// Platform-admin user id of the last editor.
+  updated_by String?
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+}
+
+/// A shop's own outgoing mail server. Unlike `TenantMessagingIdentity` (set by a
+/// platform admin, sent through the platform's provider) this is entered by the
+/// shop itself: its server authenticates its own address, so there is no way to
+/// send as somebody else's. When enabled it carries every message the shop sends
+/// — receipts, campaigns, meeting mail — and none of the platform's own mail.
+model TenantSmtpServer {
+  id        String @id @default(uuid())
+  tenant_id String @unique
+
+  /// Off until a test send has succeeded against the current settings.
+  enabled  Boolean @default(false)
+  host     String?
+  port     Int     @default(587)
+  /// "starttls" (usually 587) or "ssl" (usually 465). Plaintext is not offered.
+  security String  @default("starttls")
+  username String?
+  /// AES-256-GCM ciphertext from platform-settings/crypto.util — never stored plain.
+  password String?
+
+  /// Bare address the server is allowed to send as.
+  from_email String?
+  from_name  String?
+  reply_to   String?
+
+  /// Last successful test send against the settings as they are now. Cleared
+  /// whenever a connection field changes, and required before `enabled`.
+  verified_at DateTime?
+  /// Last delivery failure, shown to the shop so a broken password is noticed
+  /// before the customers notice the missing receipts.
+  last_error    String?
+  last_error_at DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
   updated_by String?
 
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
+import { useUiStyle } from '@/lib/ui-theme';
 import { compactDensity } from '@/lib/ui/compact-density';
 
 type QuickLink = {
@@ -26,6 +27,16 @@ type QuickLink = {
 type FrequentQuickLinksProps = {
     accountingOnlyMode?: boolean;
 };
+
+// COLORFUL: the link's accent hue as a solid chip — `bg-sky-50 text-sky-700 …` becomes `bg-sky-500 text-white`.
+const SOLID_CHIP: Record<string, string> = {
+    sky: 'bg-sky-500', emerald: 'bg-emerald-500', amber: 'bg-amber-500', violet: 'bg-violet-500',
+    rose: 'bg-rose-500', teal: 'bg-teal-500',
+};
+function solidChip(accent: string) {
+    const hue = /bg-([a-z]+)-50\b/.exec(accent)?.[1];
+    return `${(hue && SOLID_CHIP[hue]) || 'bg-blue-600'} text-white`;
+}
 
 export default function FrequentQuickLinks({ accountingOnlyMode = false }: FrequentQuickLinksProps) {
     const { t } = useI18n();
@@ -51,6 +62,31 @@ export default function FrequentQuickLinks({ accountingOnlyMode = false }: Frequ
     ];
 
     const links = accountingOnlyMode ? accountingLinks : retailLinks;
+    const { polished, colorful } = useUiStyle();
+
+    if (polished) {
+        // One row of pills, which scrolls sideways on a phone, so the figures
+        // below sit in the first screen instead of under six tall tiles.
+        return (
+            <div>
+                <p className="sr-only">{copy.quickActions}</p>
+                <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0">
+                    {links.map(({ key, href, label, icon: Icon, accent }) => (
+                        <Link
+                            key={key}
+                            href={href}
+                            className="inline-flex min-h-touch shrink-0 items-center gap-2 rounded-full border border-gray-200 bg-white pe-3.5 ps-2 text-sm font-medium text-gray-700 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 md:min-h-0 md:py-1.5"
+                        >
+                            <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full ${colorful ? solidChip(accent) : 'bg-blue-50 text-blue-600'}`}>
+                                <Icon className="h-3.5 w-3.5" aria-hidden />
+                            </span>
+                            {label}
+                        </Link>
+                    ))}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div>

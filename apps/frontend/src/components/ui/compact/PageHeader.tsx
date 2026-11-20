@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { compactDensity } from '@/lib/ui/compact-density';
 import type { BreadcrumbItem } from '@/lib/page-breadcrumbs';
+import { useUiStyle } from '@/lib/ui-theme';
 import PageBreadcrumb from './PageBreadcrumb';
 
 type PageHeaderProps = {
@@ -21,10 +22,38 @@ export default function PageHeader({
     actions,
     className = '',
 }: PageHeaderProps) {
+    const { polished } = useUiStyle();
     const hasBreadcrumbs = Boolean(breadcrumbs?.length);
     const hasActions = Boolean(actions);
 
     if (!title && !subtitle && !hasBreadcrumbs && !hasActions) return null;
+
+    if (polished) {
+        // Breadcrumb above the title, so the far side of the row holds only actions.
+        // Hidden on a phone: the sidebar already says where you are.
+        return (
+            <div className={`flex flex-col gap-1 ${className}`}>
+                {hasBreadcrumbs ? (
+                    <PageBreadcrumb items={breadcrumbs!} variant="compact" className="hidden md:flex" />
+                ) : null}
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                    <div className="min-w-0 flex-1">
+                        {title ? (
+                            <h1 className="text-xl font-semibold tracking-tight text-gray-950">{title}</h1>
+                        ) : null}
+                        {subtitle ? (
+                            <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>
+                        ) : null}
+                    </div>
+                    {hasActions ? (
+                        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+                            {actions}
+                        </div>
+                    ) : null}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className={`flex flex-col gap-3 ${className}`}>

@@ -608,6 +608,7 @@ export const coreMessages = {
             loyaltyProgram: 'برنامج الولاء',
             smsNotifications: 'إشعارات الرسائل النصية',
             reportEmails: 'تقارير بالبريد',
+            emailServer: "خادم البريد",
             discountCodes: 'رموز الخصم',
             urlShortener: 'مختصر الروابط',
             shortLinks: 'الروابط القصيرة',
@@ -883,6 +884,7 @@ export const coreMessages = {
                 loyalty: 'برنامج الولاء',
                 sms: 'إشعارات الرسائل النصية',
                 reportEmails: 'تقارير بالبريد',
+                emailServer: "خادم البريد",
                 smsCredits: 'رصيد المراسلة',
                 aiCredits: 'رصيد الذكاء الاصطناعي',
                 auditLogs: 'سجلات التدقيق',
@@ -1222,6 +1224,7 @@ export const coreMessages = {
         compactViewTitle: 'عرض مضغوط',
         loadingProducts: 'جارٍ تحميل المنتجات...',
         stockLeft: '{count} متبقٍ',
+        outOfStockShort: 'نفد',
         notAvailable: 'غير متاح',
         tabs: {
             checkout: 'إتمام البيع',

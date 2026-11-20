@@ -134,6 +134,7 @@ export const NAV_ROUTES: { path: string; label: string }[] = [
     { path: '/settings/loyalty', label: 'Loyalty Program Settings' },
     { path: '/settings/sms', label: 'SMS Notifications' },
     { path: '/settings/reports', label: 'Report Emails' },
+    { path: '/settings/email', label: 'Email Server' },
     { path: '/settings/counters', label: 'Counters' },
     { path: '/settings/discount-codes', label: 'Discount Codes' },
     { path: '/settings/payment-methods', label: 'Payment Methods' },

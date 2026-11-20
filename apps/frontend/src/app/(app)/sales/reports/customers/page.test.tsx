@@ -69,12 +69,12 @@ describe('SalesByCustomerPage', () => {
         render(<SalesByCustomerPage />);
         await screen.findByRole('cell', { name: 'Karim Ahmed' });
 
-        expect(tile('Total Revenue')).toBe('৳ 60,000');
+        expect(tile('Total Revenue')).toBe('৳\u00a060,000');
         expect(tile('Total Orders')).toBe('10');
         expect(tile('Customers')).toBe('2');
         expect(tile('Repeat customers')).toContain('1');
         expect(tile('Repeat customers')).toContain('50%');
-        expect(tile('Avg Order Value')).toBe('৳ 6,000');
+        expect(tile('Avg Order Value')).toBe('৳\u00a06,000');
     });
 
     it('leaves walk-in sales out with the customer chip, and the strip follows', async () => {
@@ -85,7 +85,7 @@ describe('SalesByCustomerPage', () => {
         fireEvent.click(screen.getByRole('checkbox', { name: 'Walk-in' }));
 
         await waitFor(() => expect(screen.queryByRole('cell', { name: 'Karim Ahmed' })).not.toBeInTheDocument());
-        expect(tile('Total Revenue')).toBe('৳ 15,000');
+        expect(tile('Total Revenue')).toBe('৳\u00a015,000');
         expect(tile('Total Orders')).toBe('5');
     });
 

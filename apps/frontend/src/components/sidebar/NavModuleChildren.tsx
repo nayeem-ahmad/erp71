@@ -26,6 +26,8 @@ export interface NavModuleChildrenProps {
      * under a module header (the classic tree), so they indent one step less.
      */
     flat?: boolean;
+    /** Drawn on the dark navy rail (classic sidebar only), so the light-on-dark colours apply. */
+    navy?: boolean;
 }
 
 /**
@@ -43,6 +45,7 @@ export default function NavModuleChildren({
     badgeFor,
     badgeTitle,
     flat = false,
+    navy = false,
 }: NavModuleChildrenProps) {
     const navText = compactNav ? 'text-[13px]' : 'text-sm';
     const navLabelCls = `${navText} font-normal tracking-tight whitespace-nowrap`;
@@ -55,23 +58,25 @@ export default function NavModuleChildren({
             nested ? nestedIndent : indent
         } ${
             active
-                ? 'bg-blue-50 text-blue-700'
-                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                ? navy ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700'
+                : navy ? 'text-slate-400 hover:bg-white/5 hover:text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
         }`;
 
     const subgroupBtnCls = (active: boolean) =>
         `flex items-center w-full rounded-lg transition-all duration-150 space-x-2.5 rtl:space-x-reverse px-2.5 ${compactNav ? 'py-1' : 'py-1.5'} ${indent} ${navText} ${
             active
-                ? 'text-blue-700 bg-blue-50/70'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                ? navy ? 'text-white bg-white/5' : 'text-blue-700 bg-blue-50/70'
+                : navy ? 'text-slate-300 hover:bg-white/5 hover:text-white' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
         }`;
+
+    const activeIcon = navy ? 'text-blue-400' : 'text-blue-600';
 
     const renderLink = (link: ResolvedNavLink, nested = false) => {
         const { href, icon: LinkIcon, label, exact } = link;
         const active = isActive(href, exact);
         const body = (
             <>
-                <LinkIcon className={`flex-shrink-0 ${nested ? 'w-3.5 h-3.5' : 'w-4 h-4'} ${active ? 'text-blue-600' : ''}`} />
+                <LinkIcon className={`flex-shrink-0 ${nested ? 'w-3.5 h-3.5' : 'w-4 h-4'} ${active ? activeIcon : ''}`} />
                 <span className={navLabelCls}>{label}</span>
                 <NavCountBadge count={badgeFor(href)} title={titleFor(href)} />
             </>
@@ -109,12 +114,12 @@ export default function NavModuleChildren({
                                 aria-expanded={subgroupOpen}
                                 className={`${subgroupBtnCls(subgroupActive)}${isSearching ? ' cursor-default' : ''}`}
                             >
-                                <SubgroupIcon className={`flex-shrink-0 w-4 h-4 ${subgroupActive ? 'text-blue-600' : ''}`} />
+                                <SubgroupIcon className={`flex-shrink-0 w-4 h-4 ${subgroupActive ? activeIcon : ''}`} />
                                 <span className={navLabelCls}>{child.label}</span>
                                 <ChevronDown
                                     className={`ms-auto w-3.5 h-3.5 transition-transform duration-200 ${
                                         subgroupOpen ? 'rotate-180' : ''
-                                    } ${subgroupActive ? 'text-blue-400' : 'text-gray-300'}`}
+                                    } ${subgroupActive ? (navy ? 'text-slate-300' : 'text-blue-400') : (navy ? 'text-slate-500' : 'text-gray-300')}`}
                                 />
                             </button>
                             {subgroupOpen && (
@@ -130,8 +135,8 @@ export default function NavModuleChildren({
                 if (section) {
                     return (
                         <div key={href} className={`flex items-center ${indent} px-3 pt-3 pb-1`}>
-                            <ChildIcon className="flex-shrink-0 w-3.5 h-3.5 text-gray-300" />
-                            <span className="ms-2 text-[10px] font-black uppercase tracking-widest text-gray-300">{label}</span>
+                            <ChildIcon className={`flex-shrink-0 w-3.5 h-3.5 ${navy ? 'text-slate-500' : 'text-gray-300'}`} />
+                            <span className={`ms-2 text-[10px] font-black uppercase tracking-widest ${navy ? 'text-slate-500' : 'text-gray-300'}`}>{label}</span>
                         </div>
                     );
                 }

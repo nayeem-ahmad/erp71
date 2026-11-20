@@ -348,6 +348,7 @@ export const routes = {
         loyalty: '/settings/loyalty',
         sms: '/settings/sms',
         reports: '/settings/reports',
+        email: '/settings/email',
         discountCodes: '/settings/discount-codes',
         urlShortener: '/settings/url-shortener',
         paymentMethods: '/settings/payment-methods',

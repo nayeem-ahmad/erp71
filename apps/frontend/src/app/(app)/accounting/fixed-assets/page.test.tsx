@@ -3,6 +3,7 @@
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { formatBDT } from '@/lib/format';
 import FixedAssetsPage from './page';
+import { asRendered } from '@/test-utils/rendered-text';
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -247,7 +248,7 @@ describe('FixedAssetsPage', () => {
     });
 
     it('sums the rows the search leaves in the strip', async () => {
-        const money = (value: number) => formatBDT(value, { locale: 'en', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const money = (value: number) => asRendered(formatBDT(value, { locale: 'en', minimumFractionDigits: 0, maximumFractionDigits: 0 }));
         render(<FixedAssetsPage />);
         await waitFor(() => expect(screen.getByText('FA-002')).toBeInTheDocument());
 

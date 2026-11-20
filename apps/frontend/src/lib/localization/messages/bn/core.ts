@@ -607,6 +607,7 @@ export const coreMessages = {
                 loyaltyProgram: "লয়্যালটি প্রোগ্রাম",
                 smsNotifications: "এসএমএস নোটিফিকেশন",
                 reportEmails: "রিপোর্ট ইমেইল",
+                emailServer: "ইমেইল সার্ভার",
                 discountCodes: "ডিসকাউন্ট কোড",
                 urlShortener: "ইউআরএল শর্টনার",
                 shortLinks: "শর্ট লিংক",
@@ -883,6 +884,7 @@ export const coreMessages = {
                     loyalty: "লয়্যালটি প্রোগ্রাম",
                     sms: "SMS বিজ্ঞপ্তি",
                     reportEmails: "রিপোর্ট ইমেইল",
+                    emailServer: "ইমেইল সার্ভার",
                     smsCredits: "মেসেজিং ক্রেডিট",
                     aiCredits: "AI ক্রেডিট",
                     auditLogs: "অডিট লগ",
@@ -1222,6 +1224,7 @@ export const coreMessages = {
             compactViewTitle: "কম্প্যাক্ট ভিউ",
             loadingProducts: "পণ্য লোড হচ্ছে...",
             stockLeft: "{count} বাকি",
+            outOfStockShort: "স্টক নেই",
             notAvailable: "প্রযোজ্য নয়",
             tabs: {
                 checkout: "চেকআউট",

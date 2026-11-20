@@ -149,9 +149,18 @@ export default function ModalShell({
      */
     const pressedBackdrop = useRef(true);
 
+    /*
+     * `!m-0`: a shell is rendered where it is opened, so it is often a child of
+     * a `space-y-*` stack — the page wrapper itself is one. That utility gives
+     * every child after the first a top margin, and a margin on a `fixed
+     * inset-0` box moves it: the activities drawer opened 16px down the window
+     * with the page showing, undimmed, above it. The stack's selector
+     * (`> :not([hidden]) ~ :not([hidden])`) outranks a plain `m-0`, hence the
+     * `!`.
+     */
     return (
         <div
-            className={`fixed inset-0 z-modal flex p-0 ${backdropClass} ${WRAPPER_CLASS[variant]}`}
+            className={`fixed inset-0 !m-0 z-modal flex p-0 ${backdropClass} ${WRAPPER_CLASS[variant]}`}
             onMouseDown={(event) => {
                 pressedBackdrop.current = event.target === event.currentTarget;
             }}

@@ -608,6 +608,7 @@ export const coreMessages = {
             loyaltyProgram: "Programme de fidélité",
             smsNotifications: "Notifications SMS",
             reportEmails: "E-mails de rapport",
+            emailServer: "Serveur e-mail",
             discountCodes: "Codes de réduction",
             urlShortener: "Raccourcisseur d'URL",
             shortLinks: "Liens courts",
@@ -883,6 +884,7 @@ export const coreMessages = {
                 loyalty: "Programme de fidélité",
                 sms: "Notifications SMS",
                 reportEmails: "E-mails de rapport",
+                emailServer: "Serveur e-mail",
                 smsCredits: "Crédits de messagerie",
                 aiCredits: "Crédits IA",
                 auditLogs: "Journaux d'audit",
@@ -1222,6 +1224,7 @@ export const coreMessages = {
         compactViewTitle: "Vue compacte",
         loadingProducts: "Chargement des produits...",
         stockLeft: "{count} restant(s)",
+        outOfStockShort: "Épuisé",
         notAvailable: 'N/A',
         tabs: {
             checkout: "Encaissement",

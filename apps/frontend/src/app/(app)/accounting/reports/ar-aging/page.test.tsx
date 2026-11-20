@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import ArAgingPage from './page';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
+import { asRendered } from '@/test-utils/rendered-text';
 
 // A wide screen, so the chips sit in the toolbar rather than the phone's Filters sheet.
 jest.mock('@/hooks/useMediaQuery', () => ({
@@ -41,7 +42,7 @@ const RESPONSE = {
     note: 'Aged by voucher date.',
 };
 
-const taka = (value: number) => formatBDT(value, { locale: 'en', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const taka = (value: number) => asRendered(formatBDT(value, { locale: 'en', minimumFractionDigits: 0, maximumFractionDigits: 0 }));
 
 function stat(label: string) {
     const strip = screen.getByRole('region', { name: 'Report figures' });
@@ -82,12 +83,12 @@ describe('AR aging', () => {
 
         const footer = () => screen.getByRole('rowheader', { name: 'Totals' }).closest('tr') as HTMLElement;
         const cell = (columnId: string) => footer().querySelector(`[data-column-id="${columnId}"]`) as HTMLElement;
-        expect(cell('balance')).toHaveTextContent(formatBDT(12000, { locale: 'en' }));
-        expect(cell('overdue_90_plus')).toHaveTextContent(formatBDT(4000, { locale: 'en' }));
+        expect(cell('balance')).toHaveTextContent(asRendered(formatBDT(12000, { locale: 'en' })));
+        expect(cell('overdue_90_plus')).toHaveTextContent(asRendered(formatBDT(4000, { locale: 'en' })));
 
         fireEvent.click(screen.getByRole('button', { name: 'Overdue only' }));
-        await waitFor(() => expect(cell('balance')).toHaveTextContent(formatBDT(7000, { locale: 'en' })));
-        expect(cell('current')).toHaveTextContent(formatBDT(1000, { locale: 'en' }));
+        await waitFor(() => expect(cell('balance')).toHaveTextContent(asRendered(formatBDT(7000, { locale: 'en' }))));
+        expect(cell('current')).toHaveTextContent(asRendered(formatBDT(1000, { locale: 'en' })));
     });
 
     it('asks for the day picked on the as-of chip', async () => {

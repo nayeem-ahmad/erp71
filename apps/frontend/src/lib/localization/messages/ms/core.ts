@@ -607,6 +607,7 @@ export const coreMessages = {
                 loyaltyProgram: "Program Kesetiaan",
                 smsNotifications: "Notifikasi SMS",
                 reportEmails: "Emel Laporan",
+                emailServer: "Pelayan E-mel",
                 discountCodes: "Kod Diskaun",
                 urlShortener: "Pemendek URL",
                 shortLinks: "Pautan pendek",
@@ -884,6 +885,7 @@ export const coreMessages = {
                     loyalty: "Program Kesetiaan",
                     sms: "Pemberitahuan SMS",
                     reportEmails: "E-mel Laporan",
+                    emailServer: "Pelayan E-mel",
                     smsCredits: "Kredit Pemesejan",
                     aiCredits: "Kredit AI",
                     auditLogs: "Log Audit",
@@ -1223,6 +1225,7 @@ export const coreMessages = {
             compactViewTitle: "Paparan padat",
             loadingProducts: "Memuatkan produk...",
             stockLeft: "{count} baki",
+            outOfStockShort: "Habis",
             notAvailable: "T/A",
             tabs: {
                 checkout: "Checkout",

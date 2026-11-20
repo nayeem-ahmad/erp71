@@ -3,6 +3,7 @@
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { DEFAULT_SECTION_VALUES } from '@erp71/shared-types';
 import Sidebar from './Sidebar';
+import { UiSidebarContext, UiThemeContext } from '@/lib/ui-theme';
 import { api } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
 import { SAVE_DEBOUNCE_MS, usePreferencesStore } from '@/lib/preferences/store';
@@ -146,6 +147,50 @@ jest.mock('@/contexts/NavLayoutContext', () => {
             platformAdminLayout: DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT,
         }),
     };
+});
+
+describe('Sidebar — dark navy rail', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        setBranding();
+    });
+
+    const renderIn = (sidebar: 'LIGHT' | 'NAVY', theme: 'CLASSIC' | 'COLORFUL' = 'CLASSIC') => render(
+        <UiThemeContext.Provider value={theme}>
+            <UiSidebarContext.Provider value={sidebar}>
+                <Sidebar canAccessAccounting />
+            </UiSidebarContext.Provider>
+        </UiThemeContext.Provider>,
+    );
+
+    it('stays white with the usual logo when the workspace keeps the light rail', () => {
+        const { container } = renderIn('LIGHT');
+        const aside = container.querySelector('aside')!;
+        expect(aside).toHaveClass('bg-white');
+        expect(container.querySelector('img[src*="/logo/logo.svg"]')).toBeInTheDocument();
+    });
+
+    it('turns navy and swaps to the light-on-dark logo', () => {
+        const { container } = renderIn('NAVY');
+        const aside = container.querySelector('aside')!;
+        expect(aside).toHaveClass('bg-slate-900');
+        expect(aside).not.toHaveClass('bg-white');
+        expect(container.querySelector('img[src*="/logo/reverse-logo.svg"]')).toBeInTheDocument();
+        expect(container.querySelector('img[src*="/logo/logo.svg"]')).not.toBeInTheDocument();
+    });
+
+    it('uses the reverse square mark on a collapsed navy rail', () => {
+        const { container } = renderIn('NAVY');
+        fireEvent.click(screen.getByTitle('Collapse sidebar'));
+        expect(container.querySelector('img[src*="/logo/reverse-icon.svg"]')).toBeInTheDocument();
+    });
+
+    it('draws inactive items light on navy, not grey on white', () => {
+        renderIn('NAVY');
+        const dashboard = screen.getAllByRole('link').find((link) => link.getAttribute('href') === '/dashboard' && link.textContent?.trim() === 'Dashboard');
+        expect(dashboard).toHaveClass('text-slate-300');
+        expect(dashboard).not.toHaveClass('text-gray-500');
+    });
 });
 
 describe('Sidebar — brand mark', () => {
