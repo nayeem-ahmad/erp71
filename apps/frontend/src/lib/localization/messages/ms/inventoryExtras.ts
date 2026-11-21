@@ -139,6 +139,8 @@ export const inventoryExtrasMessages = {
             sourceWarehouse: "Gudang Sumber",
             destinationWarehouse: "Gudang Destinasi",
             initialStatus: "Status Awal",
+            transferDate: "Tarikh Pemindahan",
+            numberAuto: "Automatik",
             sendNow: "Hantar Sekarang",
             saveAsDraft: "Simpan sebagai Draf",
             selectSource: "Pilih sumber",

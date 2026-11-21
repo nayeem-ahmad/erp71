@@ -903,6 +903,19 @@ describe('api.getWarehouseTransfer', () => {
     });
 });
 
+describe('api.getWarehouseTransferNumberPreview', () => {
+    it('fetches /warehouse-transfers/next-number with source warehouse and date', async () => {
+        mockOk({ data: { transferNumber: 'TRF-00003' } });
+        await api.getWarehouseTransferNumberPreview({
+            sourceWarehouseId: 'w1',
+            transferDate: '2026-03-02T03:30:00.000Z',
+        });
+        expect(lastUrl()).toContain('/warehouse-transfers/next-number');
+        expect(lastUrl()).toContain('sourceWarehouseId=w1');
+        expect(lastUrl()).toContain('transferDate=2026-03-02T03%3A30%3A00.000Z');
+    });
+});
+
 describe('api.createWarehouseTransfer', () => {
     it('posts to /warehouse-transfers', async () => {
         mockOk({ data: {} });

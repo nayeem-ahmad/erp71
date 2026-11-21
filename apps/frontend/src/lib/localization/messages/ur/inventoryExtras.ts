@@ -139,6 +139,8 @@ export const inventoryExtrasMessages = {
         "sourceWarehouse": "ماخذ گودام",
         "destinationWarehouse": "منزل گودام",
         "initialStatus": "ابتدائی حالت",
+        "transferDate": "منتقلی کی تاریخ",
+        "numberAuto": "خودکار",
         "sendNow": "ابھی بھیجیں",
         "saveAsDraft": "مسودے کے طور پر محفوظ کریں",
         "selectSource": "ماخذ منتخب کریں",

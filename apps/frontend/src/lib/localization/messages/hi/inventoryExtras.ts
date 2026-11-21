@@ -139,6 +139,8 @@ export const inventoryExtrasMessages = {
         "sourceWarehouse": "स्रोत गोदाम",
         "destinationWarehouse": "गंतव्य गोदाम",
         "initialStatus": "आरंभिक स्थिति",
+        "transferDate": "स्थानांतरण तिथि",
+        "numberAuto": "स्वचालित",
         "sendNow": "अभी भेजें",
         "saveAsDraft": "ड्राफ़्ट के रूप में सहेजें",
         "selectSource": "स्रोत चुनें",

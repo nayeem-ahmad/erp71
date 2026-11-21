@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
+import { issueDocumentNumber, numberTakenIn, previewDocumentNumber } from '../database/document-number.utils';
 import { ApprovalNotifier } from '../approvals/approval-notifier';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant } from '../database/inventory.utils';
 import {
@@ -39,10 +39,12 @@ export class WarehouseTransfersService {
             await this.assertProductsBelongToTenant(tx, tenantId, dto.items.map((item) => item.productId));
 
             // A per-branch series belongs to the branch the goods leave.
+            const transferDate = resolveTransferDate(dto.transferDate);
             const transferNumber = await issueDocumentNumber(tx, {
                 tenantId,
                 docType: 'WAREHOUSE_TRANSFER',
                 storeId: sourceWarehouse.store_id,
+                on: transferDate,
                 isTaken: numberTakenIn(tx.warehouseTransfer, tenantId, 'transfer_number'),
             });
 
@@ -77,6 +79,7 @@ export class WarehouseTransfersService {
                     requires_approval: requiresApproval,
                     status,
                     notes: dto.notes,
+                    transfer_date: transferDate,
                     sent_at: status === 'SENT' ? new Date() : null,
                     items: {
                         create: dto.items.map((item) => ({
@@ -102,6 +105,7 @@ export class WarehouseTransfersService {
                         referenceType: 'WAREHOUSE_TRANSFER',
                         referenceId: transfer.id,
                         note: item.note,
+                        occurredAt: transferDate,
                     });
                 }
 
@@ -156,6 +160,25 @@ export class WarehouseTransfersService {
         });
     }
 
+    /**
+     * The number a new transfer would get, for the entry form to show. A preview
+     * only — `create` reserves the real one — so it is read-only and safe to
+     * call on every open.
+     */
+    async previewNumber(tenantId: string, sourceWarehouseId: string, transferDate?: string) {
+        const sourceWarehouse = await assertWarehouseBelongsToTenant(this.db, tenantId, sourceWarehouseId);
+
+        return {
+            transferNumber: await previewDocumentNumber(this.db, {
+                tenantId,
+                docType: 'WAREHOUSE_TRANSFER',
+                storeId: sourceWarehouse.store_id,
+                on: resolveTransferDate(transferDate),
+                isTaken: numberTakenIn(this.db.warehouseTransfer, tenantId, 'transfer_number'),
+            }),
+        };
+    }
+
     async findOne(tenantId: string, id: string) {
         const transfer = await this.db.warehouseTransfer.findFirst({
             where: { id, tenant_id: tenantId },
@@ -205,6 +228,7 @@ export class WarehouseTransfersService {
             const status = requestedStatus === 'SENT' && requiresApproval
                 ? TRANSFER_PENDING_APPROVAL
                 : requestedStatus;
+            const transferDate = dto.transferDate ? resolveTransferDate(dto.transferDate) : null;
 
             await tx.warehouseTransferItem.deleteMany({ where: { transfer_id: id } });
             await tx.warehouseTransferItem.createMany({
@@ -225,6 +249,7 @@ export class WarehouseTransfersService {
                     requires_approval: requiresApproval,
                     status,
                     notes: dto.notes,
+                    ...(transferDate ? { transfer_date: transferDate } : {}),
                     sent_at: status === 'SENT' ? new Date() : null,
                 },
             });
@@ -242,6 +267,7 @@ export class WarehouseTransfersService {
                         referenceType: 'WAREHOUSE_TRANSFER',
                         referenceId: id,
                         note: item.note,
+                        occurredAt: transferDate ?? existing.transfer_date,
                     });
                 }
 
@@ -390,6 +416,9 @@ export class WarehouseTransfersService {
                 referenceType: 'WAREHOUSE_TRANSFER',
                 referenceId: transfer.id,
                 note: item.note || undefined,
+                // The movement happened on the transfer's own date, not the day
+                // an approver happened to release it.
+                occurredAt: transfer.transfer_date ?? undefined,
             });
         }
 
@@ -604,6 +633,7 @@ export class WarehouseTransfersService {
             amount: totalTransferAmount,
             description: `Auto-posted warehouse transfer ${transfer.transfer_number}`,
             referenceNumber: transfer.transfer_number,
+            date: transfer.transfer_date ?? undefined,
             storeId: sourceStoreId ?? undefined,
             attribution: isCrossBranch ? VoucherAttribution.INTER_BRANCH : VoucherAttribution.BRANCH,
             counterpartyStoreId: isCrossBranch ? destinationStoreId ?? undefined : undefined,
@@ -690,4 +720,18 @@ function branchColumns(
 function buildTransferDateRange(from: string | undefined, to: string | undefined, timezone: string | undefined) {
     const created = createdAtRange(from, to, timezone);
     return created ? { created_at: created } : {};
+}
+
+/**
+ * The transfer's own time. Omitted, that is the moment it is saved — not the
+ * minute the form was opened. A value that is not a date is refused rather than
+ * stored as `Invalid Date`, matching how a purchase reads its `purchaseDate`.
+ */
+function resolveTransferDate(raw?: string): Date {
+    if (!raw) return new Date();
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) {
+        throw new BadRequestException('Transfer date is not a valid date.');
+    }
+    return date;
 }

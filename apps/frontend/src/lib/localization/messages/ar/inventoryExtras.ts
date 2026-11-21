@@ -139,6 +139,8 @@ export const inventoryExtrasMessages = {
         "sourceWarehouse": "مستودع المصدر",
         "destinationWarehouse": "مستودع الوجهة",
         "initialStatus": "الحالة الابتدائية",
+        "transferDate": "تاريخ التحويل",
+        "numberAuto": "تلقائي",
         "sendNow": "إرسال الآن",
         "saveAsDraft": "حفظ كمسودة",
         "selectSource": "اختر المصدر",

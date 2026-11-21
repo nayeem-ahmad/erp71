@@ -139,6 +139,8 @@ export const inventoryExtrasMessages = {
         "sourceWarehouse": "Almacén de origen",
         "destinationWarehouse": "Almacén de destino",
         "initialStatus": "Estado inicial",
+        "transferDate": "Fecha del traslado",
+        "numberAuto": "Automático",
         "sendNow": "Enviar ahora",
         "saveAsDraft": "Guardar como borrador",
         "selectSource": "Seleccione el origen",

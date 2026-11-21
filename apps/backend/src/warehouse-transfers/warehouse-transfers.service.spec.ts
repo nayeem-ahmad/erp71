@@ -5,11 +5,12 @@ import { WarehouseTransfersService } from './warehouse-transfers.service';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant } from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import { ApprovalNotifier } from '../approvals/approval-notifier';
-import { issueDocumentNumber } from '../database/document-number.utils';
+import { issueDocumentNumber, previewDocumentNumber } from '../database/document-number.utils';
 
 jest.mock('../database/document-number.utils', () => ({
     ...jest.requireActual('../database/document-number.utils'),
     issueDocumentNumber: jest.fn(async () => 'TRF-00001'),
+    previewDocumentNumber: jest.fn(async () => 'TRF-00002'),
 }));
 
 jest.mock('../database/inventory.utils', () => ({
@@ -144,6 +145,88 @@ describe('WarehouseTransfersService', () => {
             }),
         );
         expect(result.id).toBe('transfer-1');
+    });
+
+    it('stores a chosen transfer date apart from created_at, and dates stock with it', async () => {
+        tx.product.count.mockResolvedValue(1);
+        tx.warehouseTransfer.create.mockResolvedValue(createdTransfer());
+        tx.warehouseTransfer.findFirst.mockResolvedValue({ id: 'transfer-1', items: [] });
+
+        const transferDate = '2026-03-02T03:30:00.000Z';
+        await service.create('tenant-1', {
+            sourceWarehouseId: 'wh-source',
+            destinationWarehouseId: 'wh-dest',
+            status: 'SENT',
+            items: [{ productId: 'prod-1', quantity: 3 }],
+            transferDate,
+        });
+
+        const created = tx.warehouseTransfer.create.mock.calls[0][0].data;
+        expect(created.transfer_date).toEqual(new Date(transferDate));
+        expect(created).not.toHaveProperty('created_at');
+        expect(issueDocumentNumber).toHaveBeenCalledWith(tx, expect.objectContaining({
+            tenantId: 'tenant-1',
+            docType: 'WAREHOUSE_TRANSFER',
+            storeId: 'store-1',
+            on: new Date(transferDate),
+        }));
+        expect(applyInventoryMovement).toHaveBeenCalledWith(
+            tx,
+            expect.objectContaining({ occurredAt: new Date(transferDate) }),
+        );
+    });
+
+    it('stamps now as the transfer date when none is sent', async () => {
+        tx.product.count.mockResolvedValue(1);
+        tx.warehouseTransfer.create.mockResolvedValue(createdTransfer());
+        tx.warehouseTransfer.findFirst.mockResolvedValue({ id: 'transfer-1', items: [] });
+
+        const before = Date.now();
+        await service.create('tenant-1', {
+            sourceWarehouseId: 'wh-source',
+            destinationWarehouseId: 'wh-dest',
+            status: 'DRAFT',
+            items: [{ productId: 'prod-1', quantity: 3 }],
+        });
+        const after = Date.now();
+
+        const created = tx.warehouseTransfer.create.mock.calls[0][0].data;
+        expect(created.transfer_date).toBeInstanceOf(Date);
+        expect(created.transfer_date.getTime()).toBeGreaterThanOrEqual(before);
+        expect(created.transfer_date.getTime()).toBeLessThanOrEqual(after);
+    });
+
+    it('refuses a transfer date that is not a date', async () => {
+        tx.product.count.mockResolvedValue(1);
+
+        await expect(service.create('tenant-1', {
+            sourceWarehouseId: 'wh-source',
+            destinationWarehouseId: 'wh-dest',
+            status: 'DRAFT',
+            items: [{ productId: 'prod-1', quantity: 3 }],
+            transferDate: 'not-a-date',
+        })).rejects.toThrow(BadRequestException);
+        expect(tx.warehouseTransfer.create).not.toHaveBeenCalled();
+    });
+
+    it('previews the next transfer number for the source warehouse', async () => {
+        const transferDate = '2026-03-02T03:30:00.000Z';
+        const result = await service.previewNumber('tenant-1', 'wh-source', transferDate);
+
+        expect(result).toEqual({ transferNumber: 'TRF-00002' });
+        expect(previewDocumentNumber).toHaveBeenCalledWith(db, expect.objectContaining({
+            tenantId: 'tenant-1',
+            docType: 'WAREHOUSE_TRANSFER',
+            storeId: 'store-1',
+            on: new Date(transferDate),
+        }));
+        const { isTaken } = (previewDocumentNumber as jest.Mock).mock.calls.at(-1)[1];
+        db.warehouseTransfer.findFirst.mockResolvedValueOnce({ id: 'transfer-0' });
+        await expect(isTaken('TRF-00002')).resolves.toBe(true);
+        expect(db.warehouseTransfer.findFirst).toHaveBeenLastCalledWith({
+            where: { tenant_id: 'tenant-1', transfer_number: 'TRF-00002' },
+            select: { id: true },
+        });
     });
 
     it('records the branch pair on create, and flags a transfer that leaves its branch', async () => {
@@ -682,6 +765,23 @@ describe('WarehouseTransfersService', () => {
                 expect.objectContaining({
                     where: { id: 'transfer-1' },
                     data: expect.objectContaining({ status: 'DRAFT', sent_at: null }),
+                }),
+            );
+        });
+
+        it('writes a chosen transfer date onto a draft', async () => {
+            tx.product.count.mockResolvedValue(1);
+            tx.warehouseTransfer.findFirst
+                .mockResolvedValueOnce(createdTransfer({ status: 'DRAFT' }))
+                .mockResolvedValueOnce(createdTransfer({ status: 'DRAFT' }));
+            tx.warehouseTransfer.update.mockResolvedValue({});
+
+            const transferDate = '2026-03-02T03:30:00.000Z';
+            await service.update('tenant-1', 'transfer-1', { ...draftDto, transferDate });
+
+            expect(tx.warehouseTransfer.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ transfer_date: new Date(transferDate) }),
                 }),
             );
         });
