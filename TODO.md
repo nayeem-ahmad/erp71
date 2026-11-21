@@ -2268,6 +2268,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Released `dev` → `main` (PR #1099) — project task pagination, suppliers Current Due, and the board due-today test flake.** Merge commit `2b8a778d`, 2026-11-22. Required checks green (Playwright skipped). Deploy to VPS run 44938948966 green. Live health reports `2b8a778d` with `db: ok`, `status: ok`, app HTTP 200. Did not `--delete-branch`. No schema change.
+
 - [x] **Board "due today" tests follow the workspace calendar** — done 2026-11-22. `matchesFilters` names today in `Tenant.timezone` (Asia/Dhaka by default). The tests built dates from the runner's local day, so they failed on GitHub after 18:00 UTC (Dhaka already tomorrow) and passed earlier the same SHA. They now use `tenantDateOnly`.
 
 - [x] **Suppliers list shows Current Due** — done 2026-11-21. The table now has a Current Due column from `due_balance` (formatBDT, amber when the shop owes). Strings in 9 locales. Tests: the formatted amount on a row, and the ledger link still works with the desktop table.
