@@ -3,6 +3,7 @@
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { PageShell } from '@/components/ui';
 import SystemHealthPanel from '@/components/platform/SystemHealthPanel';
+import PagePerformancePanel from '@/components/platform/PagePerformancePanel';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
@@ -25,6 +26,8 @@ export default function SystemHealthPage() {
                 />
 
                 <SystemHealthPanel />
+
+                <PagePerformancePanel />
             </div>
         </PageShell>
     );

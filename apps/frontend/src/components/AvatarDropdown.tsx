@@ -9,8 +9,11 @@ import {
     Users,
     Loader2,
     LifeBuoy,
+    Gauge,
 } from 'lucide-react';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { Switch } from '@/components/ui/Switch';
+import { setPageTimingSwitchedOn, usePageTimingViewer } from '@/lib/page-timing/viewer';
 import { clearAuthSession } from '@/lib/auth-session';
 import { routes } from '@/lib/routes';
 import { useI18n } from '@/lib/i18n';
@@ -33,6 +36,7 @@ export default function AvatarDropdown({
 }: AvatarDropdownProps) {
     const { t } = useI18n();
     const router = useRouter();
+    const pageTimingViewer = usePageTimingViewer();
     const [isOpen, setIsOpen] = useState(false);
     const [switching, setSwitching] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -162,6 +166,21 @@ export default function AvatarDropdown({
                     {/* Set once and rarely touched, so they live here rather
                         than as header controls of their own. */}
                     <LanguageSwitcher />
+
+                    {/* Platform staff only: load times beside each page title. */}
+                    {pageTimingViewer.isStaff ? (
+                        <div className="flex min-h-touch items-center justify-between gap-3 px-4 py-2 text-sm text-gray-700">
+                            <span className="flex items-center gap-3">
+                                <Gauge className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                <span>{t.admin.pageTiming.menuToggle}</span>
+                            </span>
+                            <Switch
+                                checked={pageTimingViewer.switchedOn}
+                                onCheckedChange={setPageTimingSwitchedOn}
+                                aria-label={t.admin.pageTiming.menuToggle}
+                            />
+                        </div>
+                    ) : null}
 
                     {onOpenSupport ? (
                         <button

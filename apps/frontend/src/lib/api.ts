@@ -27,6 +27,8 @@ import type {
     ReferralCommissionStatus,
 } from '@/components/admin/referrals/types';
 import type { CloudinaryUpload, UploadPurpose, UploadSignature } from '@/lib/uploads/direct-upload';
+import { pageTiming, type ApiCallHandle, type NavType, type PageTimingSample } from '@/lib/page-timing/collector';
+import type { PageTimingSummary, PageTimingWindow } from '@/lib/page-timing/dashboard-types';
 import type { CandidateRow, MatchManifest } from '@/types/match';
 import type {
     AdminCreditTopupRequest,
@@ -645,11 +647,31 @@ async function isInvalidTenant(response: Response): Promise<boolean> {
     }
 }
 
-async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRetry = false): Promise<any> {
+/**
+ * Every authenticated request, timed for the page-timing panel and dashboard:
+ * the token check, the network and the server's own split (`Server-Timing`).
+ * One call covers its retries, since the page waits for all of them.
+ */
+async function requestWithAuth(endpoint: string, options: RequestInit = {}): Promise<any> {
+    const timing = pageTiming.apiCallStarted(options.method, endpoint);
+    try {
+        return await sendWithAuth(endpoint, options, false, timing);
+    } finally {
+        timing?.finish();
+    }
+}
+
+async function sendWithAuth(
+    endpoint: string,
+    options: RequestInit,
+    isRetry: boolean,
+    timing: ApiCallHandle | null,
+): Promise<any> {
     if (!isRetry) {
         if (!hasStoredSession()) throw signedOutError();
         await renewIfNearExpiry();
     }
+    timing?.sent();
 
     const token = getAccessToken();
     const tenantId = resolveTenantHeader();
@@ -673,6 +695,7 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRe
         ...options,
         headers,
     });
+    timing?.headers(response.status, response.headers?.get?.('server-timing') ?? null);
 
     if (!response.ok) {
         if (response.status === 401) {
@@ -681,14 +704,14 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRe
             // server actually *refused* is the end of the session.
             if (!isRetry) {
                 const outcome = await renewSession();
-                if (outcome === 'renewed') return requestWithAuth(endpoint, options, true);
+                if (outcome === 'renewed') return sendWithAuth(endpoint, options, true, timing);
                 if (outcome === 'unavailable') throw renewalUnavailableError();
             }
             handleExpiredSession();
         }
 
         if (response.status === 403 && !isRetry && (await isInvalidTenant(response))) {
-            if (clearRejectedWorkspace()) return requestWithAuth(endpoint, options, true);
+            if (clearRejectedWorkspace()) return sendWithAuth(endpoint, options, true, timing);
         }
 
         let message = `API error: ${response.statusText}`;
@@ -5654,6 +5677,14 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     getSystemHealthJobs: () => fetchWithAuth('/admin/system-health/jobs'),
+    /** Page views this browser timed. `keepalive` lets the last batch out as the tab closes. */
+    recordPageTimings: (samples: PageTimingSample[]) =>
+        fetchWithAuth('/page-timings', { method: 'POST', body: JSON.stringify({ samples }), keepalive: true }),
+    getPageTimingSummary: (params: { days: PageTimingWindow; navType?: NavType | null }): Promise<PageTimingSummary> => {
+        const query = new URLSearchParams({ days: String(params.days) });
+        if (params.navType) query.set('nav_type', params.navType);
+        return fetchWithAuth(`/admin/page-timings?${query}`);
+    },
     getAdminUsers: (params?: { search?: string; isAdmin?: boolean }) => {
         const query = new URLSearchParams();
         if (params?.search) query.set('search', params.search);

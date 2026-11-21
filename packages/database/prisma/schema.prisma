@@ -819,6 +819,40 @@ model JobRun {
   @@index([job_name, status, finished_at])
 }
 
+/// One measured page view in the app, sent by the browser so the platform can
+/// see real users' load times per page (System Health → Page performance).
+/// Platform-level telemetry, deliberately not tenant-scoped and carrying no
+/// user id: the dashboard groups by page, never by who loaded it. Pruned after
+/// 30 days by `PageTimingsService`. All durations are milliseconds.
+model PageTimingSample {
+  id               String   @id @default(uuid())
+  created_at       DateTime @default(now())
+  /// The pathname with ids replaced by `:id`, e.g. `/sales/:id`.
+  route            String
+  /// `load` (a full page load) or `navigate` (a route change inside the app).
+  nav_type         String
+  total_ms         Int
+  /// Full loads only: DNS, connect, server response and download of the page itself.
+  document_ms      Int?
+  /// From the document (or the click) until the page asked for its data.
+  boot_ms          Int
+  /// First API call starting to the last one finishing.
+  data_ms          Int
+  /// Last response until the next paint.
+  render_ms        Int
+  api_calls        Int
+  /// Summed over the view's API calls.
+  network_ms       Int
+  server_ms        Int
+  db_ms            Int
+  token_wait_ms    Int
+  slowest_endpoint String?
+  slowest_ms       Int?
+
+  @@index([created_at])
+  @@index([route, created_at])
+}
+
 /// Progress tracker + append-detection marker for a six-month demo-data load.
 /// Tenant-scoped. One row per "Load Demo Data" invocation; batch_number lets a
 /// tenant append multiple loads. Drives the in-process background generator and
