@@ -1314,6 +1314,7 @@ export const adminMessages = {
     pageTiming: {
         menuToggle: "إظهار توقيت الصفحة",
         badgeLabel: "تفاصيل توقيت الصفحة",
+        details: "التفاصيل",
         measuring: "جارٍ القياس…",
         title: "توقيت الصفحة",
         fullLoad: "تحميل كامل للصفحة",

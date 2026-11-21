@@ -1314,6 +1314,7 @@ export const adminMessages = {
     pageTiming: {
         menuToggle: "صفحے کی ٹائمنگ دکھائیں",
         badgeLabel: "صفحے کی ٹائمنگ کی تفصیل",
+        details: "تفصیل",
         measuring: "پیمائش جاری ہے…",
         title: "صفحے کی ٹائمنگ",
         fullLoad: "پورا صفحہ لوڈ",

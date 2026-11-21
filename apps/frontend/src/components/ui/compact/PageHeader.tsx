@@ -5,8 +5,6 @@ import { compactDensity } from '@/lib/ui/compact-density';
 import type { BreadcrumbItem } from '@/lib/page-breadcrumbs';
 import { useUiStyle } from '@/lib/ui-theme';
 import PageBreadcrumb from './PageBreadcrumb';
-import PageTimingBadge from '@/components/page-timing/PageTimingBadge';
-import { usePageTimingViewer } from '@/lib/page-timing/viewer';
 
 type PageHeaderProps = {
     title: ReactNode;
@@ -27,9 +25,6 @@ export default function PageHeader({
     const { polished } = useUiStyle();
     const hasBreadcrumbs = Boolean(breadcrumbs?.length);
     const hasActions = Boolean(actions);
-    // Platform staff who switched page timing on see the load time on the far
-    // side of the header. Off for everyone else, and then the layout is untouched.
-    const showTiming = usePageTimingViewer().visible;
 
     if (!title && !subtitle && !hasBreadcrumbs && !hasActions) return null;
 
@@ -50,9 +45,8 @@ export default function PageHeader({
                             <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>
                         ) : null}
                     </div>
-                    {hasActions || showTiming ? (
+                    {hasActions ? (
                         <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-                            {showTiming ? <PageTimingBadge /> : null}
                             {actions}
                         </div>
                     ) : null}
@@ -73,7 +67,7 @@ export default function PageHeader({
                     ) : null}
                 </div>
 
-                {(hasBreadcrumbs || hasActions || showTiming) ? (
+                {(hasBreadcrumbs || hasActions) ? (
                     /* `flex-shrink-0` used to sit here beside `min-w-0`, which
                        cancel each other out: a column that may not shrink lays
                        out at its natural content width whatever its minimum,
@@ -85,14 +79,7 @@ export default function PageHeader({
                        there. Shrinking is what lets the nested `flex-wrap`
                        below find a boundary to break against. */
                     <div className="flex min-w-0 flex-col items-end gap-2">
-                        {showTiming ? (
-                            <div className="flex flex-wrap items-center justify-end gap-2">
-                                <PageTimingBadge />
-                                {hasBreadcrumbs ? <PageBreadcrumb items={breadcrumbs!} /> : null}
-                            </div>
-                        ) : hasBreadcrumbs ? (
-                            <PageBreadcrumb items={breadcrumbs!} />
-                        ) : null}
+                        {hasBreadcrumbs ? <PageBreadcrumb items={breadcrumbs!} /> : null}
                         {hasActions ? (
                             <div className="flex flex-wrap items-center justify-end gap-2">
                                 {actions}
