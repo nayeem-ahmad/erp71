@@ -12,7 +12,7 @@ import { BranchFilter, Button, ConfirmDialog, Field, Alert, Select } from '@/com
 import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 import { useServerList } from '@/hooks/useServerList';
 import { api } from '@/lib/api';
-import { formatDate } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
@@ -38,6 +38,7 @@ interface Supplier {
     phone: string | null;
     email: string | null;
     address: string | null;
+    due_balance?: number | string | null;
     created_at: string;
     store_id: string;
 }
@@ -188,6 +189,20 @@ export default function SuppliersPage() {
                 header: t.suppliers.columns.phone,
                 cell: (info) => info.getValue() ?? '-',
                 size: 150,
+            }),
+            columnHelper.accessor('due_balance', {
+                header: t.suppliers.columns.currentDue,
+                cell: (info) => {
+                    const due = Number(info.getValue() || 0);
+                    return (
+                        <span className={due > 0 ? 'text-amber-700' : 'text-gray-500'}>
+                            {formatBDT(due, { locale })}
+                        </span>
+                    );
+                },
+                enableColumnFilter: false,
+                size: 130,
+                meta: { align: 'end' },
             }),
             ...(branch.canSeeAll && !branch.hidden
                 ? [columnHelper.accessor('store_id', {

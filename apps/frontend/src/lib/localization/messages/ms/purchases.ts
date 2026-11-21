@@ -278,6 +278,7 @@ export const purchasesMessages = {
                 code: 'Kod',
                 supplier: 'Pembekal',
                 phone: 'Telefon',
+                currentDue: 'Hutang Semasa',
                 email: 'E-mel',
                 address: 'Alamat',
                 added: 'Ditambah',

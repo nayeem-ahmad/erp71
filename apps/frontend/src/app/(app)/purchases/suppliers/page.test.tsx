@@ -137,26 +137,58 @@ describe('SuppliersPage', () => {
         });
     });
 
+    it('shows what the shop owes each supplier in the current due column', async () => {
+        mockMdUp = true;
+        try {
+            const { api } = require('@/lib/api');
+            api.getSuppliersPaged.mockResolvedValue({
+                items: [{
+                    id: 'sup-1',
+                    name: 'Fresh Farms',
+                    supplier_code: 'SUP-00001',
+                    store_id: 'store-1',
+                    due_balance: '1500.00',
+                    created_at: '2026-01-01T00:00:00Z',
+                }],
+                total: 1,
+                page: 1,
+                limit: 20,
+                pages: 1,
+            });
+            render(<SuppliersPage />);
+
+            const row = (await screen.findByText('Fresh Farms')).closest('tr')!;
+            expect(within(row).getByText('৳ 1,500.00')).toBeInTheDocument();
+        } finally {
+            mockMdUp = false;
+        }
+    });
+
     it('links each row to that supplier\'s ledger, already selected', async () => {
-        const { api } = require('@/lib/api');
-        api.getSuppliersPaged.mockResolvedValue({
-            items: [{
-                id: 'sup-1',
-                name: 'Fresh Farms',
-                store_id: 'store-1',
-                created_at: '2026-01-01T00:00:00Z',
-            }],
-            total: 1,
-            page: 1,
-            limit: 20,
-            pages: 1,
-        });
-        render(<SuppliersPage />);
-        const row = (await screen.findByText('Fresh Farms')).closest('tr')!;
-        expect(within(row).getByRole('link', { name: 'View supplier ledger' })).toHaveAttribute(
-            'href',
-            '/purchases/supplier-ledger?supplierId=sup-1',
-        );
+        mockMdUp = true;
+        try {
+            const { api } = require('@/lib/api');
+            api.getSuppliersPaged.mockResolvedValue({
+                items: [{
+                    id: 'sup-1',
+                    name: 'Fresh Farms',
+                    store_id: 'store-1',
+                    created_at: '2026-01-01T00:00:00Z',
+                }],
+                total: 1,
+                page: 1,
+                limit: 20,
+                pages: 1,
+            });
+            render(<SuppliersPage />);
+            const row = (await screen.findByText('Fresh Farms')).closest('tr')!;
+            expect(within(row).getByRole('link', { name: 'View supplier ledger' })).toHaveAttribute(
+                'href',
+                '/purchases/supplier-ledger?supplierId=sup-1',
+            );
+        } finally {
+            mockMdUp = false;
+        }
     });
 
     it('handles empty state', async () => {

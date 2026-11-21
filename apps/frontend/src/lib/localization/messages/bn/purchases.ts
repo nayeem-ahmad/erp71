@@ -278,6 +278,7 @@ export const purchasesMessages = {
                 code: "কোড",
                 supplier: "সরবরাহকারী",
                 phone: "ফোন",
+                currentDue: "বর্তমান বাকি",
                 email: "ইমেইল",
                 address: "ঠিকানা",
                 added: "যোগ করা হয়েছে",

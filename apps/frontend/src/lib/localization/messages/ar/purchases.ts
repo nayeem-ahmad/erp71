@@ -278,6 +278,7 @@ export const purchasesMessages = {
             code: "الرمز",
             supplier: "المورّد",
             phone: "الهاتف",
+            currentDue: "المستحق الحالي",
             email: "البريد الإلكتروني",
             address: "العنوان",
             added: "تاريخ الإضافة",

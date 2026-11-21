@@ -1,3 +1,4 @@
+import { addCalendarDays, tenantDateOnly } from '@/lib/created-range';
 import {
     applyFilters,
     cardsMatching,
@@ -38,6 +39,9 @@ const shift = (days: number) => {
     // The API serialises a @db.Date at UTC midnight; keep that shape.
     return `${d.getFullYear()}-${month}-${day}T00:00:00.000Z`;
 };
+
+/** The filter names "today" in the workspace timezone (Asia/Dhaka by default). */
+const tenantShift = (days: number) => `${addCalendarDays(tenantDateOnly(), days)}T00:00:00.000Z`;
 
 const task = (overrides: Partial<BoardTask> = {}): BoardTask => ({
     id: 't1',
@@ -194,14 +198,14 @@ describe('matchesFilters', () => {
     });
 
     it('finds overdue cards', () => {
-        expect(matchesFilters(task({ due_date: shift(-1) }), { ...NO_FILTERS, due: ['overdue'] })).toBe(true);
-        expect(matchesFilters(task({ due_date: shift(1) }), { ...NO_FILTERS, due: ['overdue'] })).toBe(false);
+        expect(matchesFilters(task({ due_date: tenantShift(-1) }), { ...NO_FILTERS, due: ['overdue'] })).toBe(true);
+        expect(matchesFilters(task({ due_date: tenantShift(1) }), { ...NO_FILTERS, due: ['overdue'] })).toBe(false);
     });
 
     // Chasing a finished task because its date has passed is noise.
     it('does not call a completed card overdue', () => {
         expect(
-            matchesFilters(task({ due_date: shift(-9), completed_at: shift(-8) }), {
+            matchesFilters(task({ due_date: tenantShift(-9), completed_at: tenantShift(-8) }), {
                 ...NO_FILTERS,
                 due: ['overdue'],
             }),
@@ -209,19 +213,19 @@ describe('matchesFilters', () => {
     });
 
     it('finds cards due today', () => {
-        expect(matchesFilters(task({ due_date: shift(0) }), { ...NO_FILTERS, due: ['today'] })).toBe(true);
-        expect(matchesFilters(task({ due_date: shift(-1) }), { ...NO_FILTERS, due: ['today'] })).toBe(false);
+        expect(matchesFilters(task({ due_date: tenantShift(0) }), { ...NO_FILTERS, due: ['today'] })).toBe(true);
+        expect(matchesFilters(task({ due_date: tenantShift(-1) }), { ...NO_FILTERS, due: ['today'] })).toBe(false);
     });
 
     it('this week means the next seven days, not anything already late', () => {
-        expect(matchesFilters(task({ due_date: shift(3) }), { ...NO_FILTERS, due: ['week'] })).toBe(true);
-        expect(matchesFilters(task({ due_date: shift(30) }), { ...NO_FILTERS, due: ['week'] })).toBe(false);
-        expect(matchesFilters(task({ due_date: shift(-2) }), { ...NO_FILTERS, due: ['week'] })).toBe(false);
+        expect(matchesFilters(task({ due_date: tenantShift(3) }), { ...NO_FILTERS, due: ['week'] })).toBe(true);
+        expect(matchesFilters(task({ due_date: tenantShift(30) }), { ...NO_FILTERS, due: ['week'] })).toBe(false);
+        expect(matchesFilters(task({ due_date: tenantShift(-2) }), { ...NO_FILTERS, due: ['week'] })).toBe(false);
     });
 
     it('finds cards with no due date', () => {
         expect(matchesFilters(task(), { ...NO_FILTERS, due: ['none'] })).toBe(true);
-        expect(matchesFilters(task({ due_date: shift(1) }), { ...NO_FILTERS, due: ['none'] })).toBe(false);
+        expect(matchesFilters(task({ due_date: tenantShift(1) }), { ...NO_FILTERS, due: ['none'] })).toBe(false);
     });
 
     it('a dated filter excludes undated cards', () => {
@@ -229,10 +233,15 @@ describe('matchesFilters', () => {
     });
 
     it('a due range is an alternative to the presets, not a further cut', () => {
-        const ranged = { ...NO_FILTERS, due: ['today' as const], dueFrom: shift(4).slice(0, 10), dueTo: shift(6).slice(0, 10) };
-        expect(matchesFilters(task({ due_date: shift(0) }), ranged)).toBe(true);
-        expect(matchesFilters(task({ due_date: shift(5) }), ranged)).toBe(true);
-        expect(matchesFilters(task({ due_date: shift(20) }), ranged)).toBe(false);
+        const ranged = {
+            ...NO_FILTERS,
+            due: ['today' as const],
+            dueFrom: tenantShift(4).slice(0, 10),
+            dueTo: tenantShift(6).slice(0, 10),
+        };
+        expect(matchesFilters(task({ due_date: tenantShift(0) }), ranged)).toBe(true);
+        expect(matchesFilters(task({ due_date: tenantShift(5) }), ranged)).toBe(true);
+        expect(matchesFilters(task({ due_date: tenantShift(20) }), ranged)).toBe(false);
     });
 
     it('combines filters as AND', () => {
