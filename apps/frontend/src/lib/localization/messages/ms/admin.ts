@@ -1307,6 +1307,7 @@ export const adminMessages = {
         pageTiming: {
             menuToggle: "Tunjukkan masa muat halaman",
             badgeLabel: "Butiran masa muat halaman",
+            details: "Butiran",
             measuring: "Sedang diukur…",
             title: "Masa muat halaman",
             fullLoad: "Muat halaman penuh",

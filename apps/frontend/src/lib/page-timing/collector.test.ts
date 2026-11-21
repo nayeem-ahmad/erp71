@@ -12,6 +12,7 @@ import {
  */
 function harness(options: { navigation?: Partial<PerformanceNavigationTiming>; path?: string; hidden?: boolean } = {}) {
     let now = 0;
+    let routeLoading = false;
     let path = options.path ?? '/dashboard';
     let timers: { at: number; fn: () => void; id: number }[] = [];
     let paints: (() => void)[] = [];
@@ -32,6 +33,7 @@ function harness(options: { navigation?: Partial<PerformanceNavigationTiming>; p
         navigationEntry: () => options.navigation as PerformanceNavigationTiming | undefined,
         currentPath: () => path,
         isHidden: () => options.hidden ?? false,
+        isRouteLoading: () => routeLoading,
     };
     const collector = new PageTimingCollector(deps);
     const reported: PageTimingSample[] = [];
@@ -67,6 +69,9 @@ function harness(options: { navigation?: Partial<PerformanceNavigationTiming>; p
         settle,
         setPath: (next: string) => {
             path = next;
+        },
+        setRouteLoading: (value: boolean) => {
+            routeLoading = value;
         },
         last: () => collector.getSnapshot().history[0],
     };
@@ -159,6 +164,32 @@ describe('PageTimingCollector', () => {
         late.finish();
         h.settle();
         expect(h.last().phases?.apiCalls).toBe(1);
+    });
+
+    it('keeps waiting while the route loading skeleton is up, then times the page behind it', () => {
+        const h = harness();
+        h.collector.startInitialLoad('/dashboard');
+        h.collector.routeCommitted('/dashboard');
+        h.settle();
+
+        // Next shows `loading.tsx` and commits the path at once; the page's
+        // own code takes a while, and only then does it ask for its data.
+        h.collector.navigationStarted('/sales/customers');
+        h.setPath('/sales/customers');
+        h.setRouteLoading(true);
+        h.collector.routeCommitted('/sales/customers');
+        h.paint(20);
+        h.advance(900);
+        h.paint();
+        expect(h.collector.getSnapshot().current).not.toBeNull();
+
+        h.setRouteLoading(false);
+        const list = h.collector.apiCallStarted('GET', '/customers?page=1')!;
+        h.advance(200);
+        list.finish();
+        h.settle(40);
+
+        expect(h.reported[1]).toMatchObject({ route: '/sales/customers', api_calls: 1, boot_ms: 920, data_ms: 200, render_ms: 40 });
     });
 
     it('keeps a redirect on the way in as part of the full load', () => {

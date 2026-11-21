@@ -1314,6 +1314,7 @@ export const adminMessages = {
     pageTiming: {
         menuToggle: "Show page timing",
         badgeLabel: "Page timing details",
+        details: "Details",
         measuring: "Measuring…",
         title: "Page timing",
         fullLoad: "Full page load",

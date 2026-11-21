@@ -16,8 +16,8 @@ import { parseServerTiming, type ServerSplit } from './server-timing';
  *   phases (from its `Server-Timing` header).
  * - render: from the last response to the next paint.
  *
- * A view ends once no call has been in flight for `QUIET_MS` after a paint, or
- * at `MAX_VIEW_MS`. Views that ran in a hidden tab or hit the cap are kept for
+ * A view ends once no call has been in flight for `QUIET_MS` after a paint and
+ * no route loading skeleton is on screen, or at `MAX_VIEW_MS`. Views that ran in a hidden tab or hit the cap are kept for
  * the panel but not reported: rAF is paused in a hidden tab, so the numbers
  * would describe the tab, not the page.
  *
@@ -124,10 +124,14 @@ export type CollectorDeps = {
     navigationEntry: () => PerformanceNavigationTiming | undefined;
     currentPath: () => string;
     isHidden: () => boolean;
+    /** A route's loading skeleton is on screen: the page itself has not rendered yet. */
+    isRouteLoading: () => boolean;
 };
 
 /** No call in flight for this long after a paint, and the page is done. */
 export const QUIET_MS = 300;
+/** How often to look again while a route's loading skeleton is still up. */
+export const ROUTE_LOADING_POLL_MS = 100;
 /** A view still busy after this is stopped and not reported. */
 export const MAX_VIEW_MS = 30_000;
 const HISTORY_SIZE = 20;
@@ -394,6 +398,14 @@ export class PageTimingCollector {
         this.clearQuietTimer();
         this.deps.afterPaint(() => {
             if (this.current !== view || seq !== this.activitySeq) return;
+            // Next commits the new path as soon as the route's `loading.tsx`
+            // skeleton shows, and the page asks for its data only once its own
+            // code has arrived, which can take longer than the quiet window.
+            // Until the skeleton is gone, the page is not on screen yet.
+            if (this.deps.isRouteLoading()) {
+                this.quietTimer = this.deps.setTimer(() => this.activity(view), ROUTE_LOADING_POLL_MS);
+                return;
+            }
             const paintedAt = this.deps.now();
             this.quietTimer = this.deps.setTimer(() => {
                 if (this.current !== view || seq !== this.activitySeq) return;
@@ -466,6 +478,7 @@ function browserDeps(): CollectorDeps {
             performance.getEntriesByType?.('navigation')[0] as PerformanceNavigationTiming | undefined,
         currentPath: () => window.location.pathname,
         isHidden: () => document.visibilityState === 'hidden',
+        isRouteLoading: () => document.querySelector('[data-route-loading]') !== null,
     };
 }
 

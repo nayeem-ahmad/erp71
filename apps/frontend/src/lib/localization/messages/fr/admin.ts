@@ -1314,6 +1314,7 @@ export const adminMessages = {
     pageTiming: {
         menuToggle: "Afficher le temps de chargement",
         badgeLabel: "Détails du temps de chargement",
+        details: "Détails",
         measuring: "Mesure en cours…",
         title: "Temps de chargement",
         fullLoad: "Chargement complet",
