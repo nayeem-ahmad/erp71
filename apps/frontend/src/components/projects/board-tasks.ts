@@ -4,6 +4,11 @@
  * they are the parts most likely to be quietly wrong.
  */
 
+import { addCalendarDays, tenantDateOnly } from '@/lib/created-range';
+import type { NumberCondition } from '@/lib/number-condition';
+import { inDayRange, matchesNumber } from './work-list-filters';
+import { matchesTimeFlag, matchesUpdatedPreset } from './sprint-filters';
+
 export type ProjectLabelColor = 'GRAY' | 'BLUE' | 'EMERALD' | 'AMBER' | 'RED' | 'PURPLE';
 
 export interface ProjectLabel {
@@ -90,6 +95,12 @@ export interface BoardTask {
     checklistItems?: { id: string; is_done: boolean }[];
     _count?: { subtasks?: number; comments?: number } | null;
     status_id: string;
+    /** The card's own column, for the "hide done" filter — loaded with the card. */
+    status?: { id: string; name: string; category: string } | null;
+    /** The last time the task changed, for the "last updated" filter. */
+    updated_at?: string | null;
+    /** When the task was raised, for the "created" filter. */
+    created_at?: string | null;
 }
 
 export interface BoardColumn {
@@ -261,48 +272,175 @@ export function sprintOptionsFrom(tasks: BoardTask[]): SprintOption[] {
         .map((sprint) => ({ key: sprint.id, label: sprint.name, status: sprint.status }));
 }
 
-export type DueFilter = 'all' | 'overdue' | 'today' | 'week' | 'none';
+export interface StoryOption extends FilterOption {
+    /** `OTB-3`, so two similarly titled stories can be told apart in the list. */
+    code: string;
+}
 
+/**
+ * The user stories holding a card on the board, for the story filter — built
+ * from the cards, like the sprint options, so the filter can only offer a
+ * story that is actually here. Ordered by code, which reads in the order the
+ * team wrote them rather than alphabetically by title.
+ */
+export function storyOptionsFrom(tasks: BoardTask[]): StoryOption[] {
+    const byId = new Map<string, StoryOption>();
+    for (const task of tasks) {
+        if (task.userStory && !byId.has(task.userStory.id)) {
+            byId.set(task.userStory.id, {
+                key: task.userStory.id,
+                label: task.userStory.title,
+                code: task.userStory.code,
+            });
+        }
+    }
+    return [...byId.values()].sort((a, b) =>
+        a.code.localeCompare(b.code, undefined, { numeric: true }),
+    );
+}
+
+/** A label with a card here. A tenant label no card carries would only empty the board. */
+export function labelOptionsFrom(tasks: BoardTask[]): ProjectLabel[] {
+    const byId = new Map<string, ProjectLabel>();
+    for (const task of tasks) {
+        for (const label of labelsOf(task)) {
+            if (!byId.has(label.id)) byId.set(label.id, label);
+        }
+    }
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
+export type BoardPriority = (typeof PRIORITIES)[number];
+
+export const STATUS_CATEGORIES = ['TODO', 'IN_PROGRESS', 'DONE'] as const;
+export type StatusCategory = (typeof STATUS_CATEGORIES)[number];
+
+/**
+ * The due presets the Tasks list offers, plus "no due date" — which that list
+ * reaches through its dated presets but a board is often swept for. The three
+ * shared ones mean exactly what they mean there, so a filter picked on the list
+ * and the same one picked here hide the same cards.
+ */
+export const DUE_PRESETS = ['overdue', 'today', 'week'] as const;
+export type DuePreset = (typeof DUE_PRESETS)[number];
+export const BOARD_DUE_PRESETS = [...DUE_PRESETS, 'none'] as const;
+export type BoardDuePreset = (typeof BOARD_DUE_PRESETS)[number];
+
+export const TIME_FLAGS = ['over', 'none', 'no-estimate'] as const;
+export type TimeFlag = (typeof TIME_FLAGS)[number];
+
+export const UPDATED_PRESETS = ['d2', 'd3', 'd7'] as const;
+export type UpdatedPreset = (typeof UPDATED_PRESETS)[number];
+
+/** Which dimension a count ignores, so a tick can say how many it would add. */
+export type BoardFilterDimension =
+    | 'text'
+    | 'assignee'
+    | 'status'
+    | 'hideDone'
+    | 'priority'
+    | 'due'
+    | 'project'
+    | 'sprint'
+    | 'story'
+    | 'label'
+    | 'time'
+    | 'hours'
+    | 'updated'
+    | 'created';
+
+/**
+ * What a card can be narrowed by. Every dimension is multi-valued — "High or
+ * Urgent", "Ravi and Sumaiya", three labels — because a board is scanned for a
+ * slice of the work, and one value at a time was the limitation this replaces.
+ * Empty means "any", the same spelling the Tasks list uses, so the two read the
+ * same way even though the board applies them in the browser.
+ *
+ * `assignees` is deliberately `[]` (anyone), not the Tasks list's default of
+ * "me": a board is a shared artefact, and opening it on only your own cards
+ * would read as a board that had lost most of them.
+ */
 export interface BoardFilters {
-    assignee: string;
-    priority: string;
-    due: DueFilter;
-    label: string;
-    /** A project id. No `none`: every task belongs to a project. */
-    project: string;
-    /** A sprint id, or `none` for the cards in no sprint. */
-    sprint: string;
     /** Free text, matched across everything a card carries. See `matchesText`. */
     text: string;
+    /** `me`, `unassigned`, `user:<id>` or `employee:<id>`. Any of them. */
+    assignees: string[];
+    statusCategories: string[];
+    /** Cards that are already finished are hidden — the list's own toggle. */
+    hideDone: boolean;
+    priorities: string[];
+    due: BoardDuePreset[];
+    dueFrom: string;
+    dueTo: string;
+    /** Project ids. No `none`: every task belongs to a project. */
+    projectIds: string[];
+    /** Sprint ids, plus `none` for the cards in no sprint. */
+    sprintIds: string[];
+    /** Story ids, plus `none` for the cards under no story. */
+    storyIds: string[];
+    /** Label ids, plus `none` for the cards with no label at all. */
+    labelIds: string[];
+    time: TimeFlag[];
+    hours: NumberCondition | null;
+    updated: UpdatedPreset[];
+    updatedFrom: string;
+    updatedTo: string;
+    createdFrom: string;
+    createdTo: string;
 }
 
 export const NO_FILTERS: BoardFilters = {
-    assignee: 'all',
-    priority: 'all',
-    due: 'all',
-    label: 'all',
-    project: 'all',
-    sprint: 'all',
     text: '',
+    assignees: [],
+    statusCategories: [],
+    hideDone: false,
+    priorities: [],
+    due: [],
+    dueFrom: '',
+    dueTo: '',
+    projectIds: [],
+    sprintIds: [],
+    storyIds: [],
+    labelIds: [],
+    time: [],
+    hours: null,
+    updated: [],
+    updatedFrom: '',
+    updatedTo: '',
+    createdFrom: '',
+    createdTo: '',
 };
 
 export function hasActiveFilter(filters: BoardFilters): boolean {
     return (
-        filters.assignee !== 'all' ||
-        filters.priority !== 'all' ||
-        filters.due !== 'all' ||
-        filters.label !== 'all' ||
-        filters.project !== 'all' ||
-        filters.sprint !== 'all' ||
-        filters.text.trim() !== ''
+        filters.text.trim() !== '' ||
+        filters.assignees.length > 0 ||
+        filters.statusCategories.length > 0 ||
+        filters.hideDone ||
+        filters.priorities.length > 0 ||
+        filters.due.length > 0 ||
+        filters.dueFrom !== '' ||
+        filters.dueTo !== '' ||
+        filters.projectIds.length > 0 ||
+        filters.sprintIds.length > 0 ||
+        filters.storyIds.length > 0 ||
+        filters.labelIds.length > 0 ||
+        filters.time.length > 0 ||
+        filters.hours !== null ||
+        filters.updated.length > 0 ||
+        filters.updatedFrom !== '' ||
+        filters.updatedTo !== '' ||
+        filters.createdFrom !== '' ||
+        filters.createdTo !== ''
     );
 }
 
 /**
  * Everything on a card worth searching, as one lower-cased string: its title
  * and description, the project it belongs to (code, short name and full name,
- * because a card only shows one of the three), whoever holds it, its sprint
- * and its labels.
+ * because a card only shows one of the three), whoever holds it, its sprint,
+ * its story and its labels.
  *
  * Description is included even though the card may not be showing it — someone
  * searching for a phrase they wrote in a task means the task, not the part of
@@ -317,6 +455,8 @@ function haystackOf(task: BoardTask): string {
         task.project?.name ?? '',
         assigneeNameOf(task) ?? '',
         task.sprint?.name ?? '',
+        task.userStory?.code ?? '',
+        task.userStory?.title ?? '',
         ...labelsOf(task).map((label) => label.name),
     ]
         .join(' ')
@@ -337,37 +477,130 @@ export function matchesText(task: BoardTask, text: string): boolean {
     return terms.every((term) => haystack.includes(term));
 }
 
-function matchesDue(task: BoardTask, due: DueFilter): boolean {
-    if (due === 'all') return true;
-    if (due === 'none') return !task.due_date;
-    if (!task.due_date) return false;
-
-    const key = task.due_date.slice(0, 10);
-    const today = dayKey(new Date());
-    // A completed task is not chased, however old its date is.
-    if (due === 'overdue') return !task.completed_at && key < today;
-    if (due === 'today') return key === today;
-    return key >= today && key <= shiftedDayKey(7);
+/** The story a card delivers, from the relation the board loads with the card. */
+export function storyIdOf(task: BoardTask): string | null {
+    return task.userStory?.id ?? null;
 }
 
-export function matchesFilters(task: BoardTask, filters: BoardFilters): boolean {
-    if (!matchesText(task, filters.text)) return false;
-    if (filters.assignee !== 'all' && assigneeKeyOf(task) !== filters.assignee) return false;
-    if (filters.priority !== 'all' && task.priority !== filters.priority) return false;
-    if (filters.project !== 'all' && task.project?.id !== filters.project) return false;
-    if (filters.sprint === 'none' && sprintIdOf(task) !== null) return false;
-    if (filters.sprint !== 'all' && filters.sprint !== 'none' && sprintIdOf(task) !== filters.sprint) {
+/** A finished card: its column says so, or it was marked done in the panel. */
+function isDone(task: BoardTask): boolean {
+    return task.status?.category === 'DONE' || Boolean(task.completed_at);
+}
+
+function inList(selected: readonly string[], value: string | null | undefined): boolean {
+    if (selected.length === 0) return true;
+    return selected.some((choice) => (choice === 'none' ? value == null : choice === value));
+}
+
+function matchesAssignees(task: BoardTask, selected: readonly string[], userId: string | null): boolean {
+    if (selected.length === 0) return true;
+    const key = assigneeKeyOf(task);
+    return selected.some((choice) => {
+        if (choice === 'me') return userId != null && key === `user:${userId}`;
+        // The board's own name for "nobody" is `none`; the Tasks page calls it
+        // `unassigned`. Both are accepted so neither chip is a dead option.
+        if (choice === 'unassigned' || choice === 'none') return key === 'none';
+        return key === choice;
+    });
+}
+
+function matchesDuePreset(task: BoardTask, preset: BoardDuePreset, today: string): boolean {
+    if (preset === 'none') return !task.due_date;
+    if (!task.due_date) return false;
+
+    const day = task.due_date.slice(0, 10);
+    // A finished card is not chased, however old its date is.
+    if (preset === 'overdue') return !isDone(task) && day < today;
+    if (preset === 'today') return day === today;
+    // The board's "this week" has always meant the seven days ahead rather than
+    // the calendar week the Tasks list uses — a board is read forward, and a
+    // card due next Monday is this week's work even on a Friday.
+    return day >= today && day <= addCalendarDays(today, 7);
+}
+
+/** Presets and a from/to range are alternatives: a card may match either. */
+function matchesAlternatives(
+    task: BoardTask,
+    presets: readonly BoardDuePreset[],
+    from: string,
+    to: string,
+    today: string,
+): boolean {
+    const hasRange = Boolean(from || to);
+    if (presets.length === 0 && !hasRange) return true;
+    const presetHit = presets.some((preset) => matchesDuePreset(task, preset, today));
+    const rangeHit = hasRange && inDayRange(task.due_date, from, to, false);
+    return presetHit || rangeHit;
+}
+
+/**
+ * Whether a card survives every filter that is set. All the dimensions combine
+ * as AND, and the choices inside one as OR — the same rule the Tasks list's
+ * server applies, so a filter reads the same in both places.
+ *
+ * `userId` is how the assignee filter spells "me"; without it, "me" matches
+ * nobody rather than everybody.
+ *
+ * `omit` drops one dimension, which is how an option's count is worked out: a
+ * tick has to say how many cards it would add, so the count for "High" cannot
+ * itself be narrowed by the priority filter that is already on High.
+ */
+export function matchesFilters(
+    task: BoardTask,
+    filters: BoardFilters,
+    userId: string | null = null,
+    omit?: BoardFilterDimension,
+): boolean {
+    const today = tenantDateOnly();
+    const on = (dimension: BoardFilterDimension) => omit !== dimension;
+
+    if (on('text') && !matchesText(task, filters.text)) return false;
+    if (on('assignee') && !matchesAssignees(task, filters.assignees, userId)) return false;
+    if (on('status') && filters.statusCategories.length > 0) {
+        const category = task.status?.category;
+        if (!category || !filters.statusCategories.includes(category)) return false;
+    }
+    if (on('hideDone') && filters.hideDone && isDone(task)) return false;
+    if (on('priority') && filters.priorities.length > 0 && !filters.priorities.includes(task.priority)) {
         return false;
     }
-    if (filters.label === 'none' && labelsOf(task).length > 0) return false;
+    if (on('due') && !matchesAlternatives(task, filters.due, filters.dueFrom, filters.dueTo, today)) {
+        return false;
+    }
+    if (on('project') && filters.projectIds.length > 0 && !filters.projectIds.includes(task.project?.id ?? '')) {
+        return false;
+    }
+    if (on('sprint') && !inList(filters.sprintIds, sprintIdOf(task))) return false;
+    if (on('story') && !inList(filters.storyIds, storyIdOf(task))) return false;
     if (
-        filters.label !== 'all' &&
-        filters.label !== 'none' &&
-        !labelsOf(task).some((label) => label.id === filters.label)
+        on('label') &&
+        filters.labelIds.length > 0 &&
+        !filters.labelIds.some((id) =>
+            id === 'none' ? labelsOf(task).length === 0 : labelsOf(task).some((label) => label.id === id),
+        )
     ) {
         return false;
     }
-    return matchesDue(task, filters.due);
+    if (on('time') && filters.time.length > 0 && !filters.time.some((flag) => matchesTimeFlag(task, flag))) {
+        return false;
+    }
+    if (
+        on('hours') &&
+        !matchesNumber(task.logged_hours == null ? 0 : Number(task.logged_hours), filters.hours)
+    ) {
+        return false;
+    }
+    if (on('updated') && (filters.updated.length > 0 || filters.updatedFrom || filters.updatedTo)) {
+        const presetHit = filters.updated.some((preset) => matchesUpdatedPreset(task, preset, today));
+        const rangeHit =
+            Boolean(filters.updatedFrom || filters.updatedTo) &&
+            inDayRange(task.updated_at, filters.updatedFrom, filters.updatedTo, true);
+        if (!presetHit && !rangeHit) return false;
+    }
+    if (on('created') && !inDayRange(task.created_at, filters.createdFrom, filters.createdTo, true)) {
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -378,12 +611,42 @@ export function applyFilters(
     columns: BoardColumn[],
     filters: BoardFilters,
     keep?: ReadonlySet<string>,
+    userId: string | null = null,
 ): BoardColumn[] {
     if (!hasActiveFilter(filters)) return columns;
     return columns.map((column) => ({
         ...column,
-        tasks: column.tasks.filter((task) => keep?.has(task.id) || matchesFilters(task, filters)),
+        tasks: column.tasks.filter(
+            (task) => keep?.has(task.id) || matchesFilters(task, filters, userId),
+        ),
     }));
+}
+
+/**
+ * The cards of one dimension as `omit` leaves them — what an option's count is
+ * worked out from. `dimension` is the filter being counted, so the count shows
+ * what ticking that one option would add to the board as it stands.
+ */
+export function cardsMatching(
+    tasks: readonly BoardTask[],
+    filters: BoardFilters,
+    dimension: BoardFilterDimension,
+    userId: string | null = null,
+): BoardTask[] {
+    return tasks.filter((task) => matchesFilters(task, filters, userId, dimension));
+}
+
+/**
+ * Exposed for the filter bar's counts: the same due rule `matchesFilters`
+ * applies, so a count and the tick that follows it cannot disagree.
+ */
+export function matchesDuePresetForCount(task: BoardTask, preset: BoardDuePreset): boolean {
+    return matchesDuePreset(task, preset, tenantDateOnly());
+}
+
+/** The time rule, exposed for the filter bar's counts — see `matchesDuePresetForCount`. */
+export function matchesTimeFlagForCount(task: BoardTask, flag: TimeFlag): boolean {
+    return matchesTimeFlag(task, flag);
 }
 
 export function countTasks(columns: BoardColumn[]): number {

@@ -185,6 +185,30 @@ describe('BoardPage', () => {
             screen.getByRole('button', { name: new RegExp(`Column actions — ${columnName}`) }),
         );
 
+    /**
+     * The board's filters are chips now, the same bar the Tasks list draws: a
+     * chip opens its panel, and the options are checkboxes inside it. A few
+     * filters are folded into "More" — the ones reached rarely — so opening a
+     * chip has to look there too.
+     */
+    const openFilter = (name: string) => {
+        const onRow = screen.queryByRole('button', { name: new RegExp(`^${name}(:|$)`) });
+        if (onRow) {
+            fireEvent.click(onRow);
+            return;
+        }
+        fireEvent.click(screen.getByRole('button', { name: /^More/ }));
+        const more = screen.getByRole('dialog', { name: 'More' });
+        fireEvent.click(within(more).getByRole('button', { name: new RegExp(`^${name}`) }));
+    };
+
+    /** Opens a filter's chip and ticks one of its options. */
+    const pickFilter = (name: string, option: string) => {
+        openFilter(name);
+        // The option's own label, with the count the panel draws beside it.
+        fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(`^${option}(\\s|$)`) }));
+    };
+
     it('renders each column with its cards', async () => {
         render(<BoardPage />);
         expect(await screen.findByText('Fix login')).toBeInTheDocument();
@@ -334,7 +358,8 @@ describe('BoardPage', () => {
         await screen.findByText('Fix login');
         expect(screen.getByText('Orphan card')).toBeInTheDocument();
 
-        fireEvent.change(await screen.findByLabelText('Label'), { target: { value: 'l1' } });
+        await screen.findByText('Orphan card');
+        pickFilter('Labels', 'Blocked');
 
         // Kept: both cards actually tagged "Blocked".
         expect(screen.getByText('Fix login')).toBeInTheDocument();
@@ -375,7 +400,7 @@ describe('BoardPage', () => {
             render(<BoardPage />);
             await screen.findByText('Fix login');
 
-            fireEvent.change(screen.getByLabelText('Filter by project'), { target: { value: 'p2' } });
+            pickFilter('Filter by project', 'BET');
 
             expect(screen.queryByText('Fix login')).not.toBeInTheDocument();
             expect(screen.getByText('Ship docs')).toBeInTheDocument();
@@ -387,15 +412,19 @@ describe('BoardPage', () => {
             render(<BoardPage />);
             await screen.findByText('Fix login');
 
-            const sprint = screen.getByLabelText('Filter by sprint');
-            expect(within(sprint).getByRole('option', { name: 'Sprint 4 (active)' })).toBeInTheDocument();
-
-            fireEvent.change(sprint, { target: { value: 's4' } });
+            openFilter('Filter by sprint');
+            const sprintFour = () =>
+                screen.getByRole('checkbox', { name: /^Sprint 4 \(active\)/ });
+            const noSprint = () => screen.getByRole('checkbox', { name: /^No sprint/ });
+            expect(sprintFour()).toBeInTheDocument();
+            fireEvent.click(sprintFour());
             expect(screen.getByText('Fix login')).toBeInTheDocument();
             expect(screen.getByText('Orphan card')).toBeInTheDocument();
             expect(screen.queryByText('Ship docs')).not.toBeInTheDocument();
 
-            fireEvent.change(sprint, { target: { value: 'none' } });
+            // Swapping the tick: off Sprint 4, on "No sprint".
+            fireEvent.click(sprintFour());
+            fireEvent.click(noSprint());
             expect(screen.getByText('Ship docs')).toBeInTheDocument();
             expect(screen.queryByText('Fix login')).not.toBeInTheDocument();
         });
@@ -415,15 +444,15 @@ describe('BoardPage', () => {
 
             // One option would only ever show the whole board or nothing, and
             // no card here is in a sprint for the other select to narrow by.
-            expect(screen.queryByLabelText('Filter by project')).not.toBeInTheDocument();
-            expect(screen.queryByLabelText('Filter by sprint')).not.toBeInTheDocument();
+            expect(screen.queryByRole('button', { name: /Filter by project/ })).not.toBeInTheDocument();
+            expect(screen.queryByRole('button', { name: /Filter by sprint/ })).not.toBeInTheDocument();
         });
 
         it('composes into the project the board is filtered to', async () => {
             render(<BoardPage />);
             await screen.findByText('Fix login');
 
-            fireEvent.change(screen.getByLabelText('Filter by project'), { target: { value: 'p2' } });
+            pickFilter('Filter by project', 'BET');
             const triggers = await screen.findAllByRole('button', { name: /add a card/i });
             fireEvent.click(triggers[0]);
 
@@ -567,8 +596,7 @@ describe('BoardPage', () => {
             });
 
             /** Sets the board's assignee filter to the named option. */
-            const filterTo = (value: string) =>
-                fireEvent.change(screen.getByLabelText('Assignee'), { target: { value } });
+            const filterTo = (label: string) => pickFilter('Assignee', label);
 
             /**
              * Overrides the composer's assignee. Focus first, because that is
@@ -603,7 +631,7 @@ describe('BoardPage', () => {
                 render(<BoardPage />);
                 await screen.findByText('Fix login');
 
-                filterTo('user:u-rafi');
+                filterTo('Rafi Hasan');
                 const field = await openComposer(0);
                 fireEvent.change(field, { target: { value: 'Rotate the keys' } });
                 fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
@@ -624,7 +652,7 @@ describe('BoardPage', () => {
                 render(<BoardPage />);
                 await screen.findByText('Fix login');
 
-                filterTo('employee:e-sumaiya');
+                filterTo('Sumaiya Akter');
                 const field = await openComposer(0);
                 fireEvent.change(field, { target: { value: 'Rotate the keys' } });
                 fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
@@ -647,7 +675,7 @@ describe('BoardPage', () => {
                 render(<BoardPage />);
                 await screen.findByText('Fix login');
 
-                filterTo('none');
+                filterTo('Unassigned');
                 const field = await openComposer(0);
                 fireEvent.change(field, { target: { value: 'Rotate the keys' } });
                 fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
@@ -665,7 +693,7 @@ describe('BoardPage', () => {
                 render(<BoardPage />);
                 await screen.findByText('Fix login');
 
-                filterTo('user:u-rafi');
+                filterTo('Rafi Hasan');
                 await openComposer(0);
 
                 await waitFor(() =>
@@ -698,7 +726,7 @@ describe('BoardPage', () => {
                 render(<BoardPage />);
                 await screen.findByText('Fix login');
 
-                filterTo('user:u-rafi');
+                filterTo('Rafi Hasan');
                 const field = await openComposer(0);
                 await pickAssignee('employee:e-sumaiya', 'Sumaiya Akter');
                 fireEvent.change(field, { target: { value: 'Rotate the keys' } });
@@ -720,7 +748,7 @@ describe('BoardPage', () => {
                 render(<BoardPage />);
                 await screen.findByText('Fix login');
 
-                filterTo('user:u-rafi');
+                filterTo('Rafi Hasan');
                 const field = await openComposer(0);
                 fireEvent.change(screen.getByRole('combobox', { name: 'Assign card to' }), {
                     target: { value: '' },
@@ -1358,7 +1386,7 @@ describe('BoardPage', () => {
             // makes that back is the selects sharing the header's action row,
             // so it is the shared ancestor that is worth asserting rather than
             // the selects merely existing somewhere on the page.
-            const assignee = screen.getByLabelText('Assignee');
+            const assignee = screen.getByRole('button', { name: 'Assignee' });
             const settings = screen.getByRole('button', { name: 'Board settings' });
             const header = assignee.closest('div.flex.flex-wrap.items-center.justify-end');
 
@@ -1370,10 +1398,10 @@ describe('BoardPage', () => {
             render(<BoardPage />);
             await screen.findByText('Fix login');
 
-            // The visible label text is what was traded away for the height, so
-            // the accessible name has to come from somewhere else.
+            // Each is a chip that opens its own panel — the accessible name
+            // is its label, and the control behind it is a button.
             for (const name of ['Assignee', 'Priority', 'Due']) {
-                expect(screen.getByLabelText(name).tagName).toBe('SELECT');
+                expect(screen.getByRole('button', { name })).toHaveAttribute('aria-haspopup', 'dialog');
             }
         });
     });
@@ -1826,6 +1854,153 @@ describe('BoardPage', () => {
         expect(api.reorderBoardColumns).not.toHaveBeenCalled();
     });
     /**
+     * The richer filters, matching the Tasks list: multiple values per filter,
+     * "hide done", logged hours, the rarely reached ones behind More, and a
+     * count beside each option worked out against the board as it stands.
+     */
+    describe('filtering like the task list', () => {
+        const doing = { id: 's-doing', name: 'Doing', category: 'IN_PROGRESS' };
+        const done = { id: 's-done', name: 'Done', category: 'DONE' };
+
+        const cardedBoard = {
+            id: 'b1',
+            name: 'Release 4',
+            columns: [
+                {
+                    id: 'c1',
+                    name: 'In progress',
+                    category: 'IN_PROGRESS',
+                    wip_limit: null,
+                    tasks: [
+                        {
+                            ...task('k1', 'Fix login', { id: 'p1', code: 'ALP' }),
+                            priority: 'HIGH',
+                            status: doing,
+                            status_id: doing.id,
+                            logged_hours: 6,
+                            estimate_hours: '3',
+                        },
+                        {
+                            ...task('k2', 'Ship docs', { id: 'p1', code: 'ALP' }),
+                            priority: 'LOW',
+                            status: doing,
+                            status_id: doing.id,
+                            logged_hours: 0,
+                        },
+                    ],
+                },
+                {
+                    id: 'c2',
+                    name: 'Done',
+                    category: 'DONE',
+                    wip_limit: null,
+                    tasks: [
+                        {
+                            ...task('k3', 'Close the books', { id: 'p1', code: 'ALP' }),
+                            priority: 'URGENT',
+                            status: done,
+                            status_id: done.id,
+                        },
+                    ],
+                },
+            ],
+            unsorted: [],
+        };
+
+        beforeEach(() => {
+            (api.getBoard as jest.Mock).mockResolvedValue(cardedBoard);
+        });
+
+        it('takes more than one value for a filter, matching any of them', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            openFilter('Priority');
+            fireEvent.click(screen.getByRole('checkbox', { name: /^High/ }));
+            fireEvent.click(screen.getByRole('checkbox', { name: /^Urgent/ }));
+
+            // The chip names the first and counts the rest, the way the list does.
+            expect(screen.getByRole('button', { name: /^Priority: High \+1/ })).toBeInTheDocument();
+            expect(screen.getByText('Fix login')).toBeInTheDocument();
+            expect(screen.getByText('Close the books')).toBeInTheDocument();
+            expect(screen.queryByText('Ship docs')).not.toBeInTheDocument();
+            expect(screen.getByText('2 of 3 cards')).toBeInTheDocument();
+        });
+
+        it('filters by status and can hide the finished cards', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            pickFilter('Status', 'In progress');
+            expect(screen.getByText('Fix login')).toBeInTheDocument();
+            expect(screen.queryByText('Close the books')).not.toBeInTheDocument();
+
+            // Clear that, then ask for the finished ones to be hidden instead.
+            fireEvent.click(screen.getByRole('button', { name: /Remove filter Status/ }));
+            fireEvent.click(screen.getByRole('button', { name: 'Hide done' }));
+
+            expect(screen.queryByText('Close the books')).not.toBeInTheDocument();
+            expect(screen.getByText('Fix login')).toBeInTheDocument();
+        });
+
+        it('shows how many cards each option would add, ignoring that filter’s own choice', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            openFilter('Priority');
+            // Two High/Low in progress and one Urgent that is done: the count is
+            // over every card, not narrowed by the choice being made.
+            expect(screen.getByRole('checkbox', { name: /^High\s*1$/ })).toBeInTheDocument();
+            expect(screen.getByRole('checkbox', { name: /^Urgent\s*1$/ })).toBeInTheDocument();
+        });
+
+        it('reaches the rare filters through More: logged hours and the time flags', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            // Behind More, so the row holds the few people reach for.
+            expect(screen.queryByRole('button', { name: /^Logged hours/ })).not.toBeInTheDocument();
+
+            openFilter('Time');
+            fireEvent.click(screen.getByRole('checkbox', { name: /^Over estimate/ }));
+            // Only the card logging more than its estimate.
+            expect(screen.getByText('Fix login')).toBeInTheDocument();
+            expect(screen.queryByText('Ship docs')).not.toBeInTheDocument();
+            expect(screen.queryByText('Close the books')).not.toBeInTheDocument();
+        });
+
+        it('empties the search with its own clear, which Clear All cannot reach', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            openFilter('Priority');
+            fireEvent.click(screen.getByRole('checkbox', { name: /^High/ }));
+            fireEvent.change(screen.getByLabelText('Search cards'), { target: { value: 'fix' } });
+            expect(screen.queryByText('Ship docs')).not.toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+            // The search is back to empty; the chip is still on.
+            expect(screen.getByLabelText('Search cards')).toHaveValue('');
+            expect(screen.getByRole('button', { name: /^Priority: High/ })).toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Clear All' }));
+            expect(screen.getByRole('button', { name: 'Priority' })).toBeInTheDocument();
+            expect(screen.getByText('Ship docs')).toBeInTheDocument();
+        });
+
+        it('never asks the server for anything as filters change', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            pickFilter('Status', 'In progress');
+            fireEvent.click(screen.getByRole('button', { name: 'Hide done' }));
+
+            // Narrowed in the browser: the board's own order survives a filter.
+            expect(api.getBoard).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    /**
      * A filter picked on a board is picked again on the next visit. Someone
      * who works one lane of a shared board sets the same two controls every
      * time they open it, and re-picking them is the tax this removes.
@@ -1865,9 +2040,7 @@ describe('BoardPage', () => {
             const first = render(<BoardPage />);
             await screen.findByText('Fix login');
 
-            fireEvent.change(screen.getByLabelText('Assignee'), {
-                target: { value: 'user:u-rafi' },
-            });
+            pickFilter('Assignee', 'Rafi Hasan');
             // Rafi's card stays, Sumaiya's goes.
             expect(screen.queryByText('Ship docs')).not.toBeInTheDocument();
             first.unmount();
@@ -1875,7 +2048,7 @@ describe('BoardPage', () => {
             render(<BoardPage />);
             await screen.findByText('Fix login');
             await waitFor(() =>
-                expect(screen.getByLabelText('Assignee')).toHaveValue('user:u-rafi'),
+                expect(screen.getByRole('button', { name: /^Assignee: Rafi Hasan/ })).toBeInTheDocument(),
             );
             expect(screen.queryByText('Ship docs')).not.toBeInTheDocument();
         });
@@ -1883,10 +2056,9 @@ describe('BoardPage', () => {
         it('reopens unfiltered once the filter is cleared', async () => {
             const first = render(<BoardPage />);
             await screen.findByText('Fix login');
-            fireEvent.change(screen.getByLabelText('Assignee'), {
-                target: { value: 'user:u-rafi' },
-            });
-            fireEvent.click(screen.getByRole('button', { name: /Clear/ }));
+            pickFilter('Assignee', 'Rafi Hasan');
+            fireEvent.click(screen.getByRole('button', { name: 'Clear All' }));
+            expect(screen.getByRole('button', { name: 'Assignee' })).toBeInTheDocument();
             first.unmount();
 
             render(<BoardPage />);
@@ -1898,12 +2070,12 @@ describe('BoardPage', () => {
             // or nobody — on the next board.
             localStorage.setItem(
                 boardFiltersKey('other-board'),
-                JSON.stringify({ assignee: 'user:u-rafi' }),
+                JSON.stringify({ assignees: ['user:u-rafi'] }),
             );
 
             render(<BoardPage />);
             expect(await screen.findByText('Ship docs')).toBeInTheDocument();
-            expect(screen.getByLabelText('Assignee')).toHaveValue('all');
+            expect(screen.getByRole('button', { name: 'Assignee' })).toBeInTheDocument();
         });
 
         it('ignores a remembered assignee who no longer holds a card here', async () => {
@@ -1911,19 +2083,19 @@ describe('BoardPage', () => {
             // "Assignee", and nothing on screen explains the missing cards.
             localStorage.setItem(
                 boardFiltersKey('b1'),
-                JSON.stringify({ assignee: 'user:u-departed' }),
+                JSON.stringify({ assignees: ['user:u-departed'] }),
             );
 
             render(<BoardPage />);
             expect(await screen.findByText('Fix login')).toBeInTheDocument();
             expect(screen.getByText('Ship docs')).toBeInTheDocument();
-            expect(screen.getByLabelText('Assignee')).toHaveValue('all');
+            expect(screen.getByRole('button', { name: 'Assignee' })).toBeInTheDocument();
         });
 
         it('never restores the search box', async () => {
             localStorage.setItem(
                 boardFiltersKey('b1'),
-                JSON.stringify({ priority: 'HIGH', text: 'login' }),
+                JSON.stringify({ priorities: ['HIGH'], text: 'login' }),
             );
 
             render(<BoardPage />);
@@ -1931,7 +2103,9 @@ describe('BoardPage', () => {
             // The stored filter that *is* restorable still is — waited for,
             // because the restore lands with the labels fetch rather than with
             // the cards.
-            await waitFor(() => expect(screen.getByLabelText('Priority')).toHaveValue('HIGH'));
+            await waitFor(() =>
+                expect(screen.getByRole('button', { name: /^Priority: High/ })).toBeInTheDocument(),
+            );
             expect(screen.getByLabelText('Search cards')).toHaveValue('');
         });
     });
