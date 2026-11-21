@@ -2268,6 +2268,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Board "due today" tests follow the workspace calendar** — done 2026-11-22. `matchesFilters` names today in `Tenant.timezone` (Asia/Dhaka by default). The tests built dates from the runner's local day, so they failed on GitHub after 18:00 UTC (Dhaka already tomorrow) and passed earlier the same SHA. They now use `tenantDateOnly`.
+
 - [x] **Suppliers list shows Current Due** — done 2026-11-21. The table now has a Current Due column from `due_balance` (formatBDT, amber when the shop owes). Strings in 9 locales. Tests: the formatted amount on a row, and the ledger link still works with the desktop table.
 
 - [x] **Project detail pages the task list** — done 2026-11-21. `/projects/[id]` used to ask for 200 tasks at once. It now loads 25 at a time with Previous/Next, drops a slow page's response if a newer one was requested, and steps back when the last task on the last page is deleted. Strings in 9 locales. Tests: first-page fetch, next page, pager hidden when everything fits.
