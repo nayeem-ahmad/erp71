@@ -2,7 +2,7 @@
 
 How long each page takes to load, split into the steps of the journey. There are two views of it:
 
-- **On the page, for platform staff.** Avatar menu → **Show page timing** (stored per device). A load time then appears beside each `PageHeader` breadcrumb. Click it for the breakdown of this and the last 20 page views.
+- **On the page, for platform staff.** Avatar menu → **Show page timing** (stored per device). A strip then appears along the bottom of the content area on every page (`PageTimingStrip`, rendered by the `(app)` layout, so pages need nothing of their own). It shows the total, each phase and the API/server/DB totals. **Details** opens the breakdown of this and the last 20 page views. The strip takes its height from the page above it; for everyone else the page has the full height as before.
 - **The dashboard, for platform staff.** System Health → **Page performance**: p50/p95 per page over 1, 7 or 30 days, from every signed-in user's browser. Each row also shows median phases and the endpoint that is usually slowest. Support engineers see it too, as they do the rest of System Health.
 
 ## The phases
@@ -14,7 +14,7 @@ How long each page takes to load, split into the steps of the journey. There are
 | Data | First API call starting → last one finishing | same |
 | Render | Last response → the next paint | same |
 
-A view ends once no API call has been in flight for 300 ms after a paint. Views over 30 s, and views in a tab that was hidden at any point, appear in the panel but are not sent to the dashboard.
+A view ends once no API call has been in flight for 300 ms after a paint and no route loading skeleton is on screen. Next commits the new path as soon as a route's `loading.tsx` skeleton shows, before the page's own code has arrived, so the collector waits while an element marked `data-route-loading` (set by `PageSkeleton`) is present, checking every 100 ms. Views over 30 s, and views in a tab that was hidden at any point, appear in the panel but are not sent to the dashboard.
 
 Each API call is split further:
 

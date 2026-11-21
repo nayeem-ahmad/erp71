@@ -17,6 +17,7 @@ import TimerChip from '@/components/projects/TimerChip';
 import Toaster from '@/components/Toaster';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
 import PageTimingTracker from '@/components/page-timing/PageTimingTracker';
+import PageTimingStrip from '@/components/page-timing/PageTimingStrip';
 import { CompactUiProvider } from '@/contexts/CompactUiContext';
 import { PlatformFeaturesProvider } from '@/contexts/PlatformFeaturesContext';
 import { AppShellProvider } from '@/contexts/AppShellContext';
@@ -972,10 +973,17 @@ function AppShell({ children }: DashboardLayoutProps) {
                 )}
 
                 {/* Page content */}
-                <main className="flex-1 overflow-hidden">
-                    <CompactUiProvider density="compact">
-                        {canRenderChildren ? children : null}
-                    </CompactUiProvider>
+                <main className="flex flex-1 flex-col overflow-hidden">
+                    {/* The page keeps the whole height it had, less the page
+                        timing strip when that is showing (platform staff who
+                        switched it on). Pages scroll inside their own shell,
+                        so the strip sits under every page, whatever its layout. */}
+                    <div className="min-h-0 flex-1 overflow-hidden">
+                        <CompactUiProvider density="compact">
+                            {canRenderChildren ? children : null}
+                        </CompactUiProvider>
+                    </div>
+                    {canRenderChildren ? <PageTimingStrip /> : null}
                 </main>
             </div>
 

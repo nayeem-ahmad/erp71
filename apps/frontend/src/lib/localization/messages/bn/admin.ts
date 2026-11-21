@@ -1307,6 +1307,7 @@ export const adminMessages = {
         pageTiming: {
             menuToggle: "পেজ টাইমিং দেখান",
             badgeLabel: "পেজ টাইমিংয়ের বিবরণ",
+            details: "বিস্তারিত",
             measuring: "মাপা হচ্ছে…",
             title: "পেজ টাইমিং",
             fullLoad: "পুরো পেজ লোড",
