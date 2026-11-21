@@ -7,12 +7,21 @@ import {
     readStoredFilters,
     writeStoredFilters,
     type BoardFilterOptionIds,
+    type StoredBoardFilters,
 } from './board-filter-storage';
 
 export interface BoardFilterControls {
     filters: BoardFilters;
     /** Replaces the whole set. Written through to storage — there is no Save. */
     setFilters: (next: BoardFilters) => void;
+}
+
+/** The remembered half of a filter set: everything but the free-text query. */
+function storedOf(filters: BoardFilters): StoredBoardFilters {
+    const { text, ...rest } = filters;
+    // The search text is the one filter deliberately not remembered.
+    void text;
+    return rest;
 }
 
 /**
@@ -36,7 +45,7 @@ export function useBoardFilters(
 ): BoardFilterControls {
     const [filters, setFiltersState] = useState<BoardFilters>(NO_FILTERS);
 
-    // `available` is a fresh pair of Sets every render; the effect must not
+    // `available` is a fresh set of Sets every render; the effect must not
     // chase it, so it is read through a ref and the effect keys off the board
     // and the readiness flag instead.
     const availableRef = useRef(available);
@@ -50,7 +59,7 @@ export function useBoardFilters(
 
         const stored = readStoredFilters(boardId);
         const pruned = pruneMissingOptions(stored, availableRef.current);
-        // Write back a pruned set so the dropped id does not sit in storage
+        // Write back a pruned set so a dropped id does not sit in storage
         // waiting to be pruned again on every future visit.
         if (pruned !== stored) writeStoredFilters(boardId, pruned);
         // `text` is never stored: a restored search reads as a board that has
@@ -61,16 +70,7 @@ export function useBoardFilters(
     const setFilters = useCallback(
         (next: BoardFilters) => {
             setFiltersState(next);
-            // Named field by field rather than spread-minus-`text`, so a filter
-            // added later has to be considered here before it is persisted.
-            writeStoredFilters(boardId, {
-                assignee: next.assignee,
-                priority: next.priority,
-                due: next.due,
-                label: next.label,
-                project: next.project,
-                sprint: next.sprint,
-            });
+            writeStoredFilters(boardId, storedOf(next));
         },
         [boardId],
     );

@@ -79,6 +79,9 @@ describe('BoardsService', () => {
                 // move unless a test overrides it.
                 findFirst: jest.fn().mockResolvedValue({ id: 'k1', project_id: 'p1', tenant_id: tenantId, status_id: 's1', deleted_at: null }),
             },
+            // Logged hours are derived, so the board reads them in one grouped
+            // query for its time and hours filters. Nothing logged by default.
+            projectTimeEntry: { groupBy: jest.fn().mockResolvedValue([]) },
         };
         // Every real transaction below is a same-model batch of updates, so a
         // callback invoked with the top-level mock stands in fine for a tx client.
@@ -268,6 +271,38 @@ describe('BoardsService', () => {
 
         const [{ include }] = db.boardTask.findMany.mock.calls.at(-1);
         expect(include.task.include.assignee.select).toMatchObject({ avatar_url: true });
+    });
+
+    // The board's "hide done" filter reads the card's own column, which it has
+    // no other way to reach without walking the column heading it sits under.
+    it('sends the card\'s status category, so the board can hide done cards', async () => {
+        db.boardTask.findMany.mockResolvedValue([card('k1', 'p1', 's1')]);
+
+        await service.findOne(owner, 'b1');
+
+        const [{ include }] = db.boardTask.findMany.mock.calls.at(-1);
+        expect(include.task.include.status.select).toMatchObject({ category: true });
+    });
+
+    // Logged hours are derived, never stored on the task. The board reads them
+    // in one grouped query so its time and hours filters have the figure.
+    it('attaches the logged hours to each card, in one grouped read', async () => {
+        db.boardTask.findMany.mockResolvedValue([card('k1', 'p1', 's1'), card('k2', 'p2', 's2')]);
+        db.projectTimeEntry.groupBy.mockResolvedValue([
+            { task_id: 'k1', _sum: { hours: 3.5 } },
+        ]);
+
+        const board = await service.findOne(owner, 'b1');
+
+        const [call] = db.projectTimeEntry.groupBy.mock.calls.at(-1);
+        expect(call.where).toEqual({ tenant_id: tenantId, task_id: { in: ['k1', 'k2'] } });
+        const cards = board.columns.flatMap((column: any) => column.tasks);
+        expect(cards.map((task: any) => [task.id, task.logged_hours])).toEqual([
+            ['k1', 3.5],
+            // Explicitly zero rather than absent, so the filter reads "nothing
+            // logged" instead of "not loaded yet".
+            ['k2', 0],
+        ]);
     });
 
     it('puts a card whose status is bound to nothing into unsorted', async () => {

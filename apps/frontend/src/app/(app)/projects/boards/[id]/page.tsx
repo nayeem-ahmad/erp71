@@ -31,7 +31,8 @@ import BoardCardComposer, {
 } from '@/components/projects/BoardCardComposer';
 import TaskEntryModal, { type TaskEntryValues } from '@/components/projects/TaskEntryModal';
 import { useProjectMeta } from '@/components/projects/use-project-meta';
-import { assigneeColumns, defaultAssigneeKeyFor } from '@/components/projects/task-assignee';
+import { assigneeColumns } from '@/components/projects/task-assignee';
+import { composerAssigneeKey } from '@/components/projects/sprint-filters';
 import BoardColumnComposer from '@/components/projects/BoardColumnComposer';
 import BoardColumnHead from '@/components/projects/BoardColumnHead';
 import BoardSettingsModal from '@/components/projects/BoardSettingsModal';
@@ -65,6 +66,7 @@ import {
 } from '@/components/projects/board-drag';
 import {
     applyFilters,
+    assigneeKeyOf,
     assigneeNameOf,
     assigneeOptionsFrom,
     countTasks,
@@ -74,23 +76,42 @@ import {
     initialsOf,
     isOverWip,
     labelClass,
+    labelOptionsFrom,
     labelsOf,
+    matchesDuePresetForCount,
     matchesFilters,
-    NO_FILTERS,
+    matchesTimeFlagForCount,
     projectLabelOf,
     projectOptionsFrom,
     sortCards,
+    sprintIdOf,
     sprintOptionsFrom,
+    storyIdOf,
+    storyOptionsFrom,
+    BOARD_DUE_PRESETS,
+    PRIORITIES,
+    STATUS_CATEGORIES,
+    TIME_FLAGS,
+    UPDATED_PRESETS,
+    cardsMatching,
     type AssigneeOption,
     type BoardColumn,
     type FilterOption,
     type BoardFilters,
     type BoardTask,
     type CardSort,
+    type BoardDuePreset,
     type DueState,
     type ProjectLabel,
     type SprintOption,
+    type StoryOption,
+    type TimeFlag,
+    type UpdatedPreset,
 } from '@/components/projects/board-tasks';
+import FilterBar, { type ResolvedListFilter } from '@/components/data-table/FilterBar';
+import { tenantDateOnly, type CreatedRange } from '@/lib/created-range';
+import type { NumberCondition } from '@/lib/number-condition';
+import { matchesUpdatedPreset } from '@/components/projects/sprint-filters';
 import { useBoardFilters } from '@/components/projects/use-board-filters';
 import {
     laneStorageId,
@@ -299,26 +320,31 @@ export default function BoardPage() {
         [columns, unsorted],
     );
     /**
-     * The projects and sprints the board can be narrowed to — from the cards,
-     * like the assignees, so neither offers a choice that can only empty it.
+     * The projects, sprints and stories the board can be narrowed to — from the
+     * cards, like the assignees, so none offers a choice that can only empty
+     * it. The labels are the ones a card here actually carries, which is the
+     * same rule: a tenant label with no card is a filter that hides everything.
      */
     const projectOptions = useMemo(() => projectOptionsFrom(boardTasks), [boardTasks]);
     const sprintOptions = useMemo(() => sprintOptionsFrom(boardTasks), [boardTasks]);
+    const storyOptions = useMemo(() => storyOptionsFrom(boardTasks), [boardTasks]);
+    const labelOptions = useMemo(() => labelOptionsFrom(boardTasks), [boardTasks]);
 
     /**
      * What the remembered filters are checked against. A stored filter is an
-     * id, and the person, label, project or sprint it names can be gone by the
-     * next visit — without these the board would open on zero cards under a
-     * filter its own controls could not show.
+     * id, and the person, label, project, sprint or story it names can be gone
+     * by the next visit — without these the board would open on zero cards
+     * under a filter its own controls could not show.
      */
     const filterOptionIds = useMemo(
         () => ({
             assignees: new Set(assigneeOptions.map((option) => option.key)),
-            labels: new Set(labels.map((label) => label.id)),
+            labels: new Set(labelOptions.map((label) => label.id)),
             projects: new Set(projectOptions.map((option) => option.key)),
             sprints: new Set(sprintOptions.map((option) => option.key)),
+            stories: new Set(storyOptions.map((option) => option.key)),
         }),
-        [assigneeOptions, labels, projectOptions, sprintOptions],
+        [assigneeOptions, labelOptions, projectOptions, sprintOptions, storyOptions],
     );
     /**
      * The filters this browser last left the board on. Restored only once both
@@ -333,12 +359,12 @@ export default function BoardPage() {
 
     const keep = useMemo(() => new Set(composed), [composed]);
     const visibleColumns = useMemo(
-        () => applyFilters(columns, filters, keep),
-        [columns, filters, keep],
+        () => applyFilters(columns, filters, keep, userId),
+        [columns, filters, keep, userId],
     );
     const visibleUnsorted = useMemo(
-        () => unsorted.filter((task) => keep.has(task.id) || matchesFilters(task, filters)),
-        [unsorted, filters, keep],
+        () => unsorted.filter((task) => keep.has(task.id) || matchesFilters(task, filters, userId)),
+        [unsorted, filters, keep, userId],
     );
     /** Grouped after filtering, so a filter that empties a lane hides it. */
     const lanes = useMemo(
@@ -406,10 +432,14 @@ export default function BoardPage() {
      * nobody in particular. Composing a run of cards while filtered to Rafi
      * means those cards are for Rafi — and they would otherwise vanish from
      * the view the moment they were created.
+     *
+     * The filter is a list now, so a single named holder is read off it; any
+     * wider choice (nobody, or several people) falls back to the signed-in
+     * user, which is what an unfiltered board already did.
      */
     const composerAssignee = useMemo(
-        () => defaultAssigneeKeyFor(filters.assignee, userId),
-        [filters.assignee, userId],
+        () => composerAssigneeKey(filters.assignees, userId),
+        [filters.assignees, userId],
     );
     /**
      * A name for that default while the project's roster is still loading. A
@@ -511,13 +541,16 @@ export default function BoardPage() {
      * A board filtered to one project is being worked one project at a time,
      * so the composer follows it — the same reasoning that lands a composed
      * card on the person the board is filtered to. Covers a restored filter
-     * as well as one picked on this visit.
+     * as well as one picked on this visit. Only a single picked project is
+     * followed: with several, there is no one answer and guessing would file
+     * the card in a project the reader may not be looking at.
      */
     useEffect(() => {
-        if (filters.project !== 'all' && projects.some((project) => project.id === filters.project)) {
-            setComposerProject(filters.project);
+        const [only] = filters.projectIds;
+        if (filters.projectIds.length === 1 && projects.some((project) => project.id === only)) {
+            setComposerProject(only);
         }
-    }, [filters.project, projects]);
+    }, [filters.projectIds, projects]);
 
     /**
      * The bulk bar acts on what is on screen. A filter typed (or a search run)
@@ -1367,10 +1400,13 @@ export default function BoardPage() {
                                 <BoardFilterBar
                                     filters={filters}
                                     onChange={changeFilters}
+                                    cards={boardTasks}
                                     assignees={assigneeOptions}
-                                    labels={labels}
+                                    labels={labelOptions}
                                     projects={projectOptions}
                                     sprints={sprintOptions}
+                                    stories={storyOptions}
+                                    userId={userId}
                                     shown={shown}
                                     total={total}
                                 />
@@ -1928,24 +1964,43 @@ function SelectionBar({
     );
 }
 
+/**
+ * The board's filters, on the same bar the Tasks list uses.
+ *
+ * A board is scanned for a slice of the work — my plate this week, everything on
+ * High or Urgent in the running sprint — so the filters here mirror the Tasks
+ * list's: the same dimensions, the same multi-select chips, the same "More" for
+ * the rarely reached ones, and the same per-option counts. What differs is where
+ * they run: the whole board is already in the browser, so these narrow it there
+ * and never ask the server for anything. That keeps the board's own order intact
+ * under a filter, which a re-query could not.
+ */
 function BoardFilterBar({
     filters,
     onChange,
+    cards,
     assignees,
     labels,
     projects,
     sprints,
+    stories,
+    userId,
     shown,
     total,
 }: {
     filters: BoardFilters;
     onChange: (next: BoardFilters) => void;
+    /** Every card on the board, for the option counts. */
+    cards: BoardTask[];
     assignees: AssigneeOption[];
     labels: ProjectLabel[];
     /** The projects holding a card here. */
     projects: FilterOption[];
     /** The sprints holding a card here, the running one first. */
     sprints: SprintOption[];
+    stories: StoryOption[];
+    /** So the assignee filter can spell "me". */
+    userId: string | null;
     shown: number;
     total: number;
 }) {
@@ -1953,39 +2008,274 @@ function BoardFilterBar({
     const f = t.projects.board.filters;
     const m = t.projects.boards;
     const active = hasActiveFilter(filters);
+    const today = tenantDateOnly();
+
+    const patch = (partial: Partial<BoardFilters>) => onChange({ ...filters, ...partial });
+
+    const listFilters = useMemo<ResolvedListFilter[]>(() => {
+        // How many cards an option would add: the cards that pass every other
+        // filter and this one — so the count is answered against the board as
+        // it stands, not against the whole board.
+        const count = (dimension: Parameters<typeof cardsMatching>[2], pick: (task: BoardTask) => boolean) =>
+            cardsMatching(cards, filters, dimension, userId).filter(pick).length;
+
+        const assigneeOptionsWithMe = [
+            { value: 'me', label: f.me },
+            ...assignees.map((option) => ({ value: option.key, label: option.label })),
+            { value: 'unassigned', label: f.unassigned },
+        ].map((option) => ({
+            ...option,
+            count: count('assignee', (task) => {
+                const key = assigneeKeyOf(task);
+                if (option.value === 'me') return userId != null && key === `user:${userId}`;
+                if (option.value === 'unassigned') return key === 'none';
+                return key === option.value;
+            }),
+        }));
+
+        const dueRange: CreatedRange | null =
+            filters.dueFrom || filters.dueTo
+                ? { ...(filters.dueFrom ? { from: filters.dueFrom } : {}), ...(filters.dueTo ? { to: filters.dueTo } : {}) }
+                : null;
+        const updatedRange: CreatedRange | null =
+            filters.updatedFrom || filters.updatedTo
+                ? {
+                      ...(filters.updatedFrom ? { from: filters.updatedFrom } : {}),
+                      ...(filters.updatedTo ? { to: filters.updatedTo } : {}),
+                  }
+                : null;
+        const createdRange: CreatedRange | null =
+            filters.createdFrom || filters.createdTo
+                ? {
+                      ...(filters.createdFrom ? { from: filters.createdFrom } : {}),
+                      ...(filters.createdTo ? { to: filters.createdTo } : {}),
+                  }
+                : null;
+
+        return [
+            {
+                id: 'assignee',
+                type: 'multi-select',
+                label: f.assignee,
+                options: assigneeOptionsWithMe,
+                value: filters.assignees,
+                onChange: (assignees) => patch({ assignees }),
+            },
+            {
+                id: 'status',
+                type: 'multi-select',
+                label: f.status,
+                options: STATUS_CATEGORIES.map((category) => ({
+                    value: category,
+                    label: t.projects.statusCategory[category],
+                    count: count('status', (task) => task.status?.category === category),
+                })),
+                value: filters.statusCategories,
+                onChange: (statusCategories) => patch({ statusCategories }),
+            },
+            {
+                id: 'hideDone',
+                type: 'toggle',
+                label: f.hideDone,
+                pressed: filters.hideDone,
+                onChange: (hideDone) => patch({ hideDone }),
+            },
+            {
+                id: 'priority',
+                type: 'multi-select',
+                label: f.priority,
+                options: PRIORITIES.map((value) => ({
+                    value,
+                    label: t.projects.priority[value],
+                    count: count('priority', (task) => task.priority === value),
+                })),
+                value: filters.priorities,
+                onChange: (priorities) => patch({ priorities }),
+            },
+            {
+                id: 'due',
+                type: 'multi-select',
+                label: f.due,
+                options: BOARD_DUE_PRESETS.map((value) => ({
+                    value,
+                    label: {
+                        overdue: f.overdue,
+                        today: f.dueToday,
+                        week: f.dueThisWeek,
+                        none: f.noDueDate,
+                    }[value],
+                    count: count('due', (task) => matchesDuePresetForCount(task, value)),
+                })),
+                value: filters.due,
+                onChange: (due) =>
+                    patch({
+                        due: due.filter((value): value is BoardDuePreset =>
+                            (BOARD_DUE_PRESETS as readonly string[]).includes(value),
+                        ),
+                    }),
+            },
+            ...(projects.length > 1 || filters.projectIds.length > 0
+                ? [
+                      {
+                          id: 'project',
+                          type: 'multi-select' as const,
+                          label: f.projectFilter,
+                          options: projects.map((option) => ({
+                              value: option.key,
+                              label: option.label,
+                              count: count('project', (task) => task.project?.id === option.key),
+                          })),
+                          value: filters.projectIds,
+                          onChange: (projectIds: string[]) => patch({ projectIds }),
+                      },
+                  ]
+                : []),
+            ...(sprints.length > 0 || filters.sprintIds.length > 0
+                ? [
+                      {
+                          id: 'sprint',
+                          type: 'multi-select' as const,
+                          label: f.sprintFilter,
+                          options: [
+                              { value: 'none', label: f.noSprint, count: count('sprint', (task) => sprintIdOf(task) === null) },
+                              ...sprints.map((option) => ({
+                                  value: option.key,
+                                  label:
+                                      option.status === 'ACTIVE'
+                                          ? f.sprintActive.replace('{name}', option.label)
+                                          : option.label,
+                                  count: count('sprint', (task) => sprintIdOf(task) === option.key),
+                              })),
+                          ],
+                          value: filters.sprintIds,
+                          onChange: (sprintIds: string[]) => patch({ sprintIds }),
+                      },
+                  ]
+                : []),
+            ...(stories.length > 0 || filters.storyIds.length > 0
+                ? [
+                      {
+                          id: 'story',
+                          type: 'multi-select' as const,
+                          label: f.story,
+                          more: true,
+                          options: [
+                              { value: 'none', label: f.noStory, count: count('story', (task) => storyIdOf(task) === null) },
+                              ...stories.map((option) => ({
+                                  value: option.key,
+                                  label: `${option.code} · ${option.label}`,
+                                  count: count('story', (task) => storyIdOf(task) === option.key),
+                              })),
+                          ],
+                          value: filters.storyIds,
+                          onChange: (storyIds: string[]) => patch({ storyIds }),
+                      },
+                  ]
+                : []),
+            ...(labels.length > 0 || filters.labelIds.length > 0
+                ? [
+                      {
+                          id: 'labels',
+                          type: 'multi-select' as const,
+                          label: f.label,
+                          more: true,
+                          options: [
+                              { value: 'none', label: f.noLabel, count: count('label', (task) => labelsOf(task).length === 0) },
+                              ...labels.map((label) => ({
+                                  value: label.id,
+                                  label: label.name,
+                                  count: count('label', (task) => labelsOf(task).some((row) => row.id === label.id)),
+                              })),
+                          ],
+                          value: filters.labelIds,
+                          onChange: (labelIds: string[]) => patch({ labelIds }),
+                      },
+                  ]
+                : []),
+            {
+                id: 'dueBetween',
+                type: 'date-range',
+                label: f.dueBetween,
+                more: true,
+                value: dueRange,
+                presets: [],
+                onChange: (next) => patch({ dueFrom: next?.from ?? '', dueTo: next?.to ?? '' }),
+            },
+            {
+                id: 'time',
+                type: 'multi-select',
+                label: f.time,
+                more: true,
+                options: TIME_FLAGS.map((value) => ({
+                    value,
+                    label: { over: f.overEstimate, none: f.noHours, 'no-estimate': f.noEstimate }[value],
+                    count: count('time', (task) => matchesTimeFlagForCount(task, value)),
+                })),
+                value: filters.time,
+                onChange: (time) =>
+                    patch({
+                        time: time.filter((value): value is TimeFlag =>
+                            (TIME_FLAGS as readonly string[]).includes(value),
+                        ),
+                    }),
+            },
+            {
+                id: 'hours',
+                type: 'number',
+                label: f.loggedHours,
+                more: true,
+                value: filters.hours,
+                onChange: (hours: NumberCondition | null) => patch({ hours }),
+            },
+            {
+                id: 'updated',
+                type: 'multi-select',
+                label: f.updated,
+                more: true,
+                options: UPDATED_PRESETS.map((value) => ({
+                    value,
+                    label: { d2: f.stale2, d3: f.stale3, d7: f.stale7 }[value],
+                    count: count('updated', (task) => matchesUpdatedPreset(task, value as UpdatedPreset, today)),
+                })),
+                value: filters.updated,
+                onChange: (updated) =>
+                    patch({
+                        updated: updated.filter((value): value is UpdatedPreset =>
+                            (UPDATED_PRESETS as readonly string[]).includes(value),
+                        ),
+                    }),
+            },
+            {
+                id: 'updatedBetween',
+                type: 'date-range',
+                label: f.updatedBetween,
+                more: true,
+                value: updatedRange,
+                presets: [],
+                onChange: (next) => patch({ updatedFrom: next?.from ?? '', updatedTo: next?.to ?? '' }),
+            },
+            {
+                id: 'created',
+                type: 'date-range',
+                label: f.createdBetween,
+                more: true,
+                value: createdRange,
+                presets: [],
+                onChange: (next) => patch({ createdFrom: next?.from ?? '', createdTo: next?.to ?? '' }),
+            },
+        ];
+        // `patch` closes over the latest filters setter. Rebuilding the bar when
+        // the cards or the choices change is the point of this memo.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cards, filters, assignees, labels, projects, sprints, stories, userId, today, f, t.projects]);
 
     return (
-        /* No card of its own any more: this sits among the header's buttons, so
-           a border and white fill around a row of selects would read as a panel
-           floating in the action row. The labels move onto the controls as
-           `aria-label`, which keeps every select named for a screen reader
-           without spending a line of height on visible label text — the point
-           of moving the filters up here was to get that height back.
-
-           `[&_select]:w-auto` is the load-bearing part: `Select` ships `w-full`
-           from `compactDensity.formField`, which is right in a form column and
-           wrong in a header row — each select claims the full width and the
-           selects stack into a tall ladder instead of sitting in a line.
-           Overriding it here rather than in `Select` keeps every form on the
-           app untouched. The selects then size to their content, so the widest
-           option label sets the width; `max-w-[9rem]` stops a long assignee
-           name from pushing the buttons off the row.
-
-           `max-w-full` is what makes it wrap on a phone. `PageHeader` lays its
-           actions out in a `flex-shrink-0` column, so that column takes its
-           natural content width — 898px at a 360px viewport — and a nested
-           wrapping row given 898px of space never has any reason to wrap. It
-           overflows the plate instead and clips the last filter, which puts
-           "Due" out of reach on a phone. Capping this row at the width it
-           actually has gives `flex-wrap` a real boundary to break against.
-           Fixing `PageHeader` itself would be the deeper repair, but it is a
-           shared primitive behind every module header — logged as a follow-up
-           rather than changed from inside one board page. */
-        <div className="flex max-w-full flex-wrap items-center gap-2 [&_select]:w-auto [&_select]:max-w-[9rem]">
-            {/* First in the row because it is what a full board is reached for:
-                on a board of two hundred cards, typing three letters is the
-                fastest of the controls here and the only one that reaches
-                a card's own words rather than its metadata. */}
+        /* No card of its own: this sits among the header's buttons, so a border
+           and white fill around a row of chips would read as a panel floating in
+           the action row. The search box stays first — on a board of two hundred
+           cards, typing three letters is the fastest of these and the only
+           control that reaches a card's own words rather than its metadata. */
+        <div className="flex max-w-full flex-1 flex-wrap items-center gap-2" data-testid="board-filters">
             <span className="relative">
                 <Search
                     aria-hidden
@@ -1995,137 +2285,32 @@ function BoardFilterBar({
                     type="search"
                     aria-label={m.searchCards}
                     placeholder={m.searchCards}
-                    className="w-40 max-md:min-h-touch ps-7"
+                    // The bar's own Clear all only reaches the chips, so the
+                    // search keeps a clear of its own — otherwise the one filter
+                    // typed rather than picked would be the one left behind.
+                    className={`w-40 max-md:min-h-touch ps-7 ${filters.text ? 'pe-7' : ''}`}
                     value={filters.text}
-                    onChange={(e) => onChange({ ...filters, text: e.target.value })}
+                    onChange={(e) => patch({ text: e.target.value })}
                 />
-            </span>
-
-            {/* The two coarse cuts — whose project, which sprint — before the
-                finer ones. Each only appears when it can narrow something: a
-                board drawn from one project has nothing for a project filter to
-                do, and one with no card in a sprint has nothing for the sprint
-                filter to split. A remembered choice keeps its select on screen,
-                so the filter that is hiding cards can always be cleared.
-
-                Named "Filter by …" rather than "Project": the card composer
-                has a "Project" select of its own, open beside these. */}
-            {(projects.length > 1 || filters.project !== 'all') && (
-                <Select
-                    aria-label={f.projectFilter}
-                    className="max-md:min-h-touch"
-                    value={filters.project}
-                    onChange={(e) => onChange({ ...filters, project: e.target.value })}
-                >
-                    <option value="all">{f.project}</option>
-                    {projects.map((option) => (
-                        <option key={option.key} value={option.key}>
-                            {option.label}
-                        </option>
-                    ))}
-                </Select>
-            )}
-
-            {(sprints.length > 0 || filters.sprint !== 'all') && (
-                <Select
-                    aria-label={f.sprintFilter}
-                    className="max-md:min-h-touch"
-                    value={filters.sprint}
-                    onChange={(e) => onChange({ ...filters, sprint: e.target.value })}
-                >
-                    <option value="all">{f.sprint}</option>
-                    <option value="none">{f.noSprint}</option>
-                    {sprints.map((option) => (
-                        <option key={option.key} value={option.key}>
-                            {option.status === 'ACTIVE'
-                                ? f.sprintActive.replace('{name}', option.label)
-                                : option.label}
-                        </option>
-                    ))}
-                </Select>
-            )}
-
-            <Select
-                aria-label={f.assignee}
-                className="max-md:min-h-touch"
-                value={filters.assignee}
-                onChange={(e) => onChange({ ...filters, assignee: e.target.value })}
-            >
-                <option value="all">{f.assignee}</option>
-                <option value="none">{f.unassigned}</option>
-                {assignees.map((option) => (
-                    <option key={option.key} value={option.key}>
-                        {option.label}
-                    </option>
-                ))}
-            </Select>
-
-            <Select
-                aria-label={f.priority}
-                className="max-md:min-h-touch"
-                value={filters.priority}
-                onChange={(e) => onChange({ ...filters, priority: e.target.value })}
-            >
-                <option value="all">{f.priority}</option>
-                {(['URGENT', 'HIGH', 'MEDIUM', 'LOW'] as const).map((value) => (
-                    <option key={value} value={value}>
-                        {t.projects.priority[value]}
-                    </option>
-                ))}
-            </Select>
-
-            {/* Only offered once the tenant has labels — an empty select is a
-                dead control that just makes the bar longer. */}
-            {labels.length > 0 && (
-                <Select
-                    aria-label={f.label}
-                    className="max-md:min-h-touch"
-                    value={filters.label}
-                    onChange={(e) => onChange({ ...filters, label: e.target.value })}
-                >
-                    <option value="all">{f.label}</option>
-                    <option value="none">{f.noLabel}</option>
-                    {labels.map((label) => (
-                        <option key={label.id} value={label.id}>
-                            {label.name}
-                        </option>
-                    ))}
-                </Select>
-            )}
-
-            <Select
-                aria-label={f.due}
-                className="max-md:min-h-touch"
-                value={filters.due}
-                onChange={(e) =>
-                    onChange({ ...filters, due: e.target.value as BoardFilters['due'] })
-                }
-            >
-                <option value="all">{f.due}</option>
-                <option value="overdue">{f.overdue}</option>
-                <option value="today">{f.dueToday}</option>
-                <option value="week">{f.dueThisWeek}</option>
-                <option value="none">{f.noDueDate}</option>
-            </Select>
-
-            {active && (
-                <>
-                    <span className="text-xs text-gray-500">
-                        {f.showing
-                            .replace('{shown}', String(shown))
-                            .replace('{total}', String(total))}
-                    </span>
-                    <Button
+                {filters.text ? (
+                    <button
                         type="button"
-                        variant="ghost"
-                        className="max-md:min-h-touch"
-                        onClick={() => onChange(NO_FILTERS)}
+                        // Named for what it clears: the panel's own footer has a
+                        // "Clear" of its own one click away.
+                        aria-label={m.clearSearch}
+                        onClick={() => patch({ text: '' })}
+                        className="absolute top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-gray-700 end-1.5 max-md:min-h-touch max-md:min-w-touch"
                     >
-                        <X className="me-1 h-4 w-4" />
-                        {f.clear}
-                    </Button>
-                </>
-            )}
+                        <X className="h-3.5 w-3.5" />
+                    </button>
+                ) : null}
+            </span>
+            <FilterBar filters={listFilters} compact={false} layout="row" />
+            {active ? (
+                <span className="whitespace-nowrap text-xs text-gray-500">
+                    {f.showing.replace('{shown}', String(shown)).replace('{total}', String(total))}
+                </span>
+            ) : null}
         </div>
     );
 }
