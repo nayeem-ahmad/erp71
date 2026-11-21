@@ -278,6 +278,7 @@ export const purchasesMessages = {
             code: "Código",
             supplier: "Proveedor",
             phone: "Teléfono",
+            currentDue: "Deuda actual",
             email: "Correo electrónico",
             address: "Dirección",
             added: "Añadido",

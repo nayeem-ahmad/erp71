@@ -278,6 +278,7 @@ export const purchasesMessages = {
             code: 'Code',
             supplier: 'Supplier',
             phone: 'Phone',
+            currentDue: 'Current Due',
             email: 'Email',
             address: 'Address',
             added: 'Added',
