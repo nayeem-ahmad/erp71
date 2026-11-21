@@ -90,6 +90,10 @@ export function corsOptions(allowedOrigins: string[] = getAllowedOrigins()): Cor
             callback(new Error(`Origin ${origin} is not allowed by CORS`));
         },
         credentials: true,
+        // The app is on another origin, so the browser hides every response
+        // header not listed here. The page-timing panel reads the server's
+        // phase split from this one.
+        exposedHeaders: ['Server-Timing'],
         maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
     };
 }

@@ -2,6 +2,7 @@ import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { CorrelationMiddleware } from './common/correlation.middleware';
 import { TransformInterceptor } from './common/transform.interceptor';
+import { ServerTimingInterceptor } from './common/server-timing.interceptor';
 import { CommonModule } from './common/common.module';
 import { accountThrottler } from './common/account-throttle.util';
 import { defaultThrottler, ipThrottler } from './common/default-throttle.util';
@@ -19,6 +20,7 @@ import { HealthModule } from './health/health.module';
 import { SystemHealthModule } from './system-health/system-health.module';
 import { JobsModule } from './system-health/jobs/jobs.module';
 import { MetricsModule } from './system-health/metrics/metrics.module';
+import { PageTimingsModule } from './system-health/page-timings/page-timings.module';
 import { CircuitBreakerModule } from './system-health/resilience/circuit-breaker.module';
 import { AuthModule } from './auth/auth.module';
 import { BillingSuspensionGuard } from './auth/billing-suspension.guard';
@@ -186,6 +188,7 @@ import { Meet71Module } from './meet71/meet71.module';
         CircuitBreakerModule,
         SystemHealthModule,
         MetricsModule,
+        PageTimingsModule,
         AuthModule,
         PasswordResetModule,
         InvitationsModule,
@@ -318,6 +321,8 @@ import { Meet71Module } from './meet71/meet71.module';
         // module added later is covered without wiring — the guarantee is that
         // *nothing* can be entered, which a per-controller opt-in would leak.
         { provide: APP_GUARD, useClass: BillingSuspensionGuard },
+        // Ends the `auth` phase of `Server-Timing`: interceptors run once every guard has passed.
+        { provide: APP_INTERCEPTOR, useClass: ServerTimingInterceptor },
         { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
         // Must stay after TransformInterceptor: it needs to sit inside the
         // response envelope so it can read the raw controller result.

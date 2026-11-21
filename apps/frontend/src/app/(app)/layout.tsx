@@ -16,6 +16,7 @@ import { AiChatWidget, SupportDialog, TimeTracker, VoiceNavWidget } from '@/comp
 import TimerChip from '@/components/projects/TimerChip';
 import Toaster from '@/components/Toaster';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
+import PageTimingTracker from '@/components/page-timing/PageTimingTracker';
 import { CompactUiProvider } from '@/contexts/CompactUiContext';
 import { PlatformFeaturesProvider } from '@/contexts/PlatformFeaturesContext';
 import { AppShellProvider } from '@/contexts/AppShellContext';
@@ -982,6 +983,7 @@ function AppShell({ children }: DashboardLayoutProps) {
             {supportOpen && canOpenSupport ? <SupportDialog onClose={() => setSupportOpen(false)} /> : null}
             <Toaster />
             <ServiceWorkerRegistrar />
+            <PageTimingTracker isPlatformStaff={platformRole !== null} />
         </div>
         </TenantLocaleProvider>
         </AppShellProvider>
