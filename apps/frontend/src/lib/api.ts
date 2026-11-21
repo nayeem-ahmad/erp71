@@ -2642,6 +2642,12 @@ export const api = {
         return fetchWithAuth(`/warehouse-transfers${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getWarehouseTransfer: (id: string) => fetchWithAuth(`/warehouse-transfers/${id}`),
+    /** The number a new transfer would get. A preview, not a reservation. */
+    getWarehouseTransferNumberPreview: (params: { sourceWarehouseId: string; transferDate?: string }) => {
+        const query = new URLSearchParams({ sourceWarehouseId: params.sourceWarehouseId });
+        if (params.transferDate) query.set('transferDate', params.transferDate);
+        return fetchWithAuth(`/warehouse-transfers/next-number?${query.toString()}`);
+    },
     createWarehouseTransfer: (data: any) => fetchWithAuth('/warehouse-transfers', {
         method: 'POST',
         body: JSON.stringify(data),

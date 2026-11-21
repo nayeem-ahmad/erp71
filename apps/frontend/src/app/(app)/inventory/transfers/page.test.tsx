@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import InventoryTransfersPage from './page';
 import { pickSearchOption } from '@/test-utils/id-search-select';
+import { toDatetimeLocal } from '@/lib/format';
 
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn() }),
@@ -125,6 +126,7 @@ jest.mock('@/lib/api', () => ({
         getInventoryWarehouses: jest.fn(),
         getProducts: jest.fn(),
         getStores: jest.fn(),
+        getWarehouseTransferNumberPreview: jest.fn(),
         createWarehouseTransfer: jest.fn(),
         updateWarehouseTransfer: jest.fn(),
         deleteWarehouseTransfer: jest.fn(),
@@ -161,6 +163,7 @@ const sampleTransfers = [
         id: 't2',
         transfer_number: 'TRF-002',
         status: 'DRAFT',
+        transfer_date: '2024-01-02T09:15:00Z',
         created_at: '2024-01-02T10:00:00Z',
         sent_at: null,
         received_at: null,
@@ -202,6 +205,7 @@ function setupDefaultMocks() {
     mockApi.getInventoryWarehouses.mockResolvedValue(sampleWarehouses);
     mockApi.getProducts.mockResolvedValue(sampleProducts);
     mockApi.getStores.mockResolvedValue(sampleStores);
+    mockApi.getWarehouseTransferNumberPreview.mockResolvedValue({ transferNumber: 'TRF-003' });
 }
 
 beforeEach(() => {
@@ -415,6 +419,59 @@ describe('InventoryTransfersPage', () => {
         });
     });
 
+    it('defaults the transfer date/time to now and shows Auto until a source is picked', async () => {
+        jest.useFakeTimers({ advanceTimers: true, now: new Date('2026-11-21T09:30:00.000Z') });
+        try {
+            render(<InventoryTransfersPage />);
+            await openNewTransferForm();
+
+            const dateInput = screen.getByLabelText(/Transfer Date/) as HTMLInputElement;
+            expect(dateInput.value).toBe(toDatetimeLocal(new Date('2026-11-21T09:30:00.000Z')));
+            expect(screen.getByTestId('transfer-number-preview')).toHaveTextContent('Auto');
+            expect(mockApi.getWarehouseTransferNumberPreview).not.toHaveBeenCalled();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('shows the auto-generated transfer number once a source warehouse is selected', async () => {
+        render(<InventoryTransfersPage />);
+        await openNewTransferForm();
+
+        fireEvent.change(screen.getByLabelText(/Source Warehouse/), { target: { value: 'w1' } });
+
+        await waitFor(() => {
+            expect(mockApi.getWarehouseTransferNumberPreview).toHaveBeenCalledWith(
+                expect.objectContaining({ sourceWarehouseId: 'w1' }),
+            );
+            expect(screen.getByTestId('transfer-number-preview')).toHaveTextContent('TRF-003');
+        });
+    });
+
+    it('sends the chosen transfer date/time when creating a transfer', async () => {
+        mockApi.createWarehouseTransfer.mockResolvedValue({ id: 'tnew' });
+        render(<InventoryTransfersPage />);
+        await openNewTransferForm();
+
+        fireEvent.change(screen.getByLabelText(/Transfer Date/), { target: { value: '2026-01-15T10:30' } });
+        fireEvent.change(screen.getByLabelText(/Source Warehouse/), { target: { value: 'w1' } });
+        fireEvent.change(screen.getByLabelText(/Destination Warehouse/), { target: { value: 'w2' } });
+        await waitFor(() => expect(screen.getByTestId('transfer-number-preview')).toHaveTextContent('TRF-003'));
+        pickSearchOption('Product', 'Widget A');
+
+        await act(async () => {
+            fireEvent.submit(screen.getByRole('button', { name: /Create Transfer/ }).closest('form')!);
+        });
+
+        await waitFor(() => {
+            expect(mockApi.createWarehouseTransfer).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    transferDate: new Date('2026-01-15T10:30').toISOString(),
+                }),
+            );
+        });
+    });
+
     it('submits the new transfer form and shows a success toast', async () => {
         mockApi.createWarehouseTransfer.mockResolvedValue({ id: 'tnew' });
         mockApi.getWarehouseTransfers
@@ -425,6 +482,7 @@ describe('InventoryTransfersPage', () => {
 
         fireEvent.change(screen.getByLabelText(/Source Warehouse/), { target: { value: 'w1' } });
         fireEvent.change(screen.getByLabelText(/Destination Warehouse/), { target: { value: 'w2' } });
+        await waitFor(() => expect(screen.getByTestId('transfer-number-preview')).toHaveTextContent('TRF-003'));
         pickSearchOption('Product', 'Widget A');
 
         await act(async () => {
@@ -457,6 +515,7 @@ describe('InventoryTransfersPage', () => {
 
         fireEvent.change(screen.getByLabelText(/Source Warehouse/), { target: { value: 'w1' } });
         fireEvent.change(screen.getByLabelText(/Destination Warehouse/), { target: { value: 'w2' } });
+        await waitFor(() => expect(screen.getByTestId('transfer-number-preview')).toHaveTextContent('TRF-003'));
         expect(screen.getByTestId('transfer-line-stock-0')).toHaveTextContent('Available at source: 12 · At destination: 3');
         expect(screen.queryByText(/More than the source holds/)).not.toBeInTheDocument();
 
@@ -471,6 +530,7 @@ describe('InventoryTransfersPage', () => {
 
         fireEvent.change(screen.getByLabelText(/Source Warehouse/), { target: { value: 'w1' } });
         fireEvent.change(screen.getByLabelText(/Destination Warehouse/), { target: { value: 'w2' } });
+        await waitFor(() => expect(screen.getByTestId('transfer-number-preview')).toHaveTextContent('TRF-003'));
 
         await act(async () => {
             fireEvent.submit(screen.getByRole('button', { name: /Create Transfer/ }).closest('form')!);
@@ -569,6 +629,11 @@ describe('InventoryTransfersPage', () => {
 
         await waitFor(() => expect(screen.getByText('Edit Transfer')).toBeInTheDocument());
         expect(screen.getByDisplayValue('Draft notes')).toBeInTheDocument();
+        expect(screen.getByTestId('transfer-number-preview')).toHaveTextContent('TRF-002');
+        expect((screen.getByLabelText(/Transfer Date/) as HTMLInputElement).value).toBe(
+            toDatetimeLocal(new Date('2024-01-02T09:15:00Z')),
+        );
+        expect(mockApi.getWarehouseTransferNumberPreview).not.toHaveBeenCalled();
 
         await act(async () => {
             fireEvent.submit(screen.getByRole('button', { name: /Save Transfer/ }).closest('form')!);
@@ -654,6 +719,7 @@ describe('InventoryTransfersPage', () => {
                 fireEvent.change(screen.getByLabelText(/Source Warehouse/), { target: { value: 'w1' } });
                 fireEvent.change(screen.getByLabelText(/Destination Warehouse/), { target: { value: 'w2' } });
             });
+            await waitFor(() => expect(screen.getByTestId('transfer-number-preview')).toHaveTextContent('TRF-003'));
 
             expect(screen.getByText(/waits for approval/)).toBeInTheDocument();
         });
@@ -670,6 +736,7 @@ describe('InventoryTransfersPage', () => {
                 fireEvent.change(screen.getByLabelText(/Source Warehouse/), { target: { value: 'w1' } });
                 fireEvent.change(screen.getByLabelText(/Destination Warehouse/), { target: { value: 'w4' } });
             });
+            await waitFor(() => expect(screen.getByTestId('transfer-number-preview')).toHaveTextContent('TRF-003'));
 
             expect(screen.queryByText(/waits for approval/)).not.toBeInTheDocument();
         });

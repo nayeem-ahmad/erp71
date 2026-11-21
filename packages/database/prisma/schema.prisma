@@ -2410,6 +2410,9 @@ model WarehouseTransfer {
   /// APPROVE_GOODS_TRANSFER approves it. REJECTED is terminal.
   status                   String    @default("DRAFT")
   notes                    String?
+  /// The transfer's own date, chosen on the entry form and defaulting to the
+  /// moment it is saved. `created_at` stays the time the row was inserted.
+  transfer_date            DateTime  @default(now())
   sent_at                  DateTime?
   received_at              DateTime?
   created_at               DateTime  @default(now())
@@ -2451,6 +2454,7 @@ model WarehouseTransfer {
   items                WarehouseTransferItem[]
 
   @@unique([tenant_id, transfer_number])
+  @@index([tenant_id, transfer_date])
   @@index([tenant_id, status, created_at])
   @@index([tenant_id, source_warehouse_id])
   @@index([tenant_id, destination_warehouse_id])

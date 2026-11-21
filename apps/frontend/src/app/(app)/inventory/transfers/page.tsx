@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { ArrowRightLeft, CheckCircle2, Clock, Eye, Hash, Pencil, Plus, ShieldCheck, Trash2, Truck } from 'lucide-react';
-import { DataTable, createdAtColumn, type ListFilter, type ListStat } from '@/components/data-table';
+import { DataTable, type ListFilter, type ListStat } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { matchesAnyOf } from '@/lib/list-filter';
+import { formatDateTime, toDatetimeLocal } from '@/lib/format';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { RowActions, RowActionButton } from '@/components/table';
@@ -24,6 +25,7 @@ interface WarehouseTransfer {
     id: string;
     transfer_number: string;
     status: string;
+    transfer_date?: string | null;
     created_at: string;
     sent_at?: string | null;
     received_at?: string | null;
@@ -48,6 +50,8 @@ interface TransferForm {
     destinationWarehouseId: string;
     status: 'SENT' | 'DRAFT';
     notes: string;
+    /** `datetime-local` value: the transfer's own time, defaulting to now. */
+    transferDate: string;
     items: FormLine[];
 }
 
@@ -56,6 +60,7 @@ const EMPTY_FORM: TransferForm = {
     destinationWarehouseId: '',
     status: 'SENT',
     notes: '',
+    transferDate: '',
     items: [{ productId: '', quantity: 1 }],
 };
 
@@ -109,6 +114,7 @@ export default function InventoryTransfersPage() {
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState<WarehouseTransfer | null>(null);
     const [form, setForm] = useState<TransferForm>(EMPTY_FORM);
+    const [numberPreview, setNumberPreview] = useState('');
     const [formError, setFormError] = useState('');
     const [pendingDelete, setPendingDelete] = useState<WarehouseTransfer | null>(null);
     const [deleting, setDeleting] = useState(false);
@@ -170,8 +176,38 @@ export default function InventoryTransfersPage() {
 
     const blankForm = (): TransferForm => ({
         ...EMPTY_FORM,
+        transferDate: toDatetimeLocal(new Date()),
         items: [{ productId: '', quantity: 1 }],
     });
+
+    /**
+     * The number the server would issue for this form. Only a new transfer has
+     * one to show — an existing row already carries its own, and only the source
+     * warehouse decides which series it comes from.
+     */
+    useEffect(() => {
+        if (!formOpen || editing || !form.sourceWarehouseId) {
+            setNumberPreview('');
+            return;
+        }
+
+        let cancelled = false;
+        const transferDate = form.transferDate ? new Date(form.transferDate) : null;
+        api.getWarehouseTransferNumberPreview({
+            sourceWarehouseId: form.sourceWarehouseId,
+            ...(transferDate && !Number.isNaN(transferDate.getTime())
+                ? { transferDate: transferDate.toISOString() }
+                : {}),
+        })
+            .then((data: any) => {
+                if (!cancelled) setNumberPreview(data?.transferNumber ?? '');
+            })
+            .catch(() => {
+                if (!cancelled) setNumberPreview('');
+            });
+
+        return () => { cancelled = true; };
+    }, [formOpen, editing, form.sourceWarehouseId, form.transferDate]);
 
     const openCreate = () => {
         setEditing(null);
@@ -188,6 +224,7 @@ export default function InventoryTransfersPage() {
             // A draft reopen defaults to draft so Save does not accidentally send.
             status: 'DRAFT',
             notes: transfer.notes ?? '',
+            transferDate: toDatetimeLocal(new Date(transfer.transfer_date ?? transfer.created_at)),
             items: transfer.items.length
                 ? transfer.items.map((item) => ({
                     productId: item.product_id,
@@ -202,6 +239,7 @@ export default function InventoryTransfersPage() {
     const closeForm = () => {
         setFormOpen(false);
         setEditing(null);
+        setNumberPreview('');
         setFormError('');
     };
 
@@ -210,11 +248,17 @@ export default function InventoryTransfersPage() {
         setFormError('');
         setSaving(true);
         try {
+            const transferDate = form.transferDate ? new Date(form.transferDate) : null;
             const payload = {
                 sourceWarehouseId: form.sourceWarehouseId,
                 destinationWarehouseId: form.destinationWarehouseId,
                 status: form.status,
                 notes: form.notes || undefined,
+                // Prefills to now. A back-dated pick is sent; empty/invalid
+                // leaves the server to stamp the moment it is saved.
+                ...(transferDate && !Number.isNaN(transferDate.getTime())
+                    ? { transferDate: transferDate.toISOString() }
+                    : {}),
                 items: form.items.map((item) => ({
                     productId: item.productId,
                     quantity: Number(item.quantity),
@@ -402,7 +446,16 @@ export default function InventoryTransfersPage() {
                 size: 110,
                 meta: { align: 'end' },
             }),
-            createdAtColumn(columnHelper, { header: t.common.createdAt }),
+            columnHelper.accessor((row) => row.transfer_date ?? row.created_at, {
+                id: 'transfer_date',
+                header: t.inventoryTransfers.transferDate,
+                enableColumnFilter: false,
+                cell: (info) => (
+                    <span className="text-sm text-gray-600">{formatDateTime(info.getValue(), locale)}</span>
+                ),
+                size: 160,
+                meta: { hideOnMobile: true },
+            }),
             columnHelper.display({
                 id: 'posting',
                 header: t.inventoryTransfers.columns.voucher,
@@ -633,6 +686,24 @@ export default function InventoryTransfersPage() {
                             ) : null}
 
                             <div className="grid gap-3 md:grid-cols-2">
+                                <Field label={t.inventoryTransfers.columns.transferNumber}>
+                                    <p
+                                        className="flex min-h-touch items-center text-sm font-semibold text-gray-900"
+                                        data-testid="transfer-number-preview"
+                                    >
+                                        {editing
+                                            ? editing.transfer_number
+                                            : numberPreview || <span className="italic font-normal text-gray-400">{t.inventoryTransfers.numberAuto}</span>}
+                                    </p>
+                                </Field>
+                                <Field label={t.inventoryTransfers.transferDate} htmlFor="transfer-date">
+                                    <Input
+                                        id="transfer-date"
+                                        type="datetime-local"
+                                        value={form.transferDate}
+                                        onChange={(e) => setForm((current) => ({ ...current, transferDate: e.target.value }))}
+                                    />
+                                </Field>
                                 <Field label={t.inventoryTransfers.sourceWarehouse} required htmlFor="transfer-source">
                                     <Select
                                         id="transfer-source"
