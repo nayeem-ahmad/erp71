@@ -54,6 +54,17 @@ import type {
 } from '@/components/crm/reports/types';
 import type { DailyReport } from '@/lib/daily-report';
 import type { Note, NoteInput, NoteSummary } from '@/components/notes/types';
+import type {
+    BillScanResult,
+    BillScanTarget,
+    BusinessDocument,
+    BusinessDocumentInput,
+    Cheque,
+    ChequeInput,
+    ChequeListQuery,
+    ChequeRegister,
+    PriceCheckResult,
+} from '@/components/tools/types';
 import type { Department, Designation, DesignationLevel, OrgImportResult } from '@/lib/org-structure';
 import { numberConditionParam, type NumberCondition } from '@/lib/number-condition';
 import { browserApiBase } from './api-base';
@@ -4523,6 +4534,41 @@ export const api = {
             body: JSON.stringify(body),
             headers: { 'Content-Type': 'application/json' },
         }),
+
+    /** Tools → Cheques: the register of cheques written and received. */
+    getCheques: (params: ChequeListQuery = {}): Promise<ChequeRegister> => {
+        const query = new URLSearchParams();
+        if (params.direction) query.set('direction', params.direction);
+        if (params.status) query.set('status', params.status);
+        if (params.search) query.set('search', params.search);
+        const qs = query.toString();
+        return fetchWithAuth(`/cheques${qs ? `?${qs}` : ''}`);
+    },
+    createCheque: (body: ChequeInput): Promise<Cheque> =>
+        fetchWithAuth('/cheques', { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
+    updateCheque: (id: string, body: Partial<ChequeInput>): Promise<Cheque> =>
+        fetchWithAuth(`/cheques/${id}`, { method: 'PATCH', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
+    deleteCheque: (id: string): Promise<{ id: string }> => fetchWithAuth(`/cheques/${id}`, { method: 'DELETE' }),
+
+    /** Tools → Documents: licences and registrations with their expiry dates. */
+    getBusinessDocuments: (): Promise<BusinessDocument[]> => fetchWithAuth('/business-documents'),
+    createBusinessDocument: (body: BusinessDocumentInput): Promise<BusinessDocument> =>
+        fetchWithAuth('/business-documents', { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
+    updateBusinessDocument: (id: string, body: Partial<BusinessDocumentInput>): Promise<BusinessDocument> =>
+        fetchWithAuth(`/business-documents/${id}`, { method: 'PATCH', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
+    deleteBusinessDocument: (id: string): Promise<{ id: string }> => fetchWithAuth(`/business-documents/${id}`, { method: 'DELETE' }),
+    uploadBusinessDocumentFile: (id: string, body: { fileBase64: string; mimeType?: string; fileName?: string }): Promise<BusinessDocument> =>
+        fetchWithAuth(`/business-documents/${id}/file`, { method: 'PUT', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
+    removeBusinessDocumentFile: (id: string): Promise<BusinessDocument> =>
+        fetchWithAuth(`/business-documents/${id}/file`, { method: 'DELETE' }),
+
+    /** Tools → Price checker: price and stock by barcode, SKU or name. */
+    priceCheck: (code: string): Promise<PriceCheckResult> =>
+        fetchWithAuth(`/tools/price-check?code=${encodeURIComponent(code)}`),
+
+    /** Tools → Scan a bill. Spends AI credits — the screen shows the estimate first. */
+    scanBill: (body: { target: BillScanTarget; imageBase64: string; mimeType?: string; width?: number; height?: number }): Promise<BillScanResult> =>
+        fetchWithAuth('/tools/bill-scan', { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
 
     getMeetings: (params?: { status?: string; type?: string; search?: string; from?: string; to?: string }) => {
         const query = new URLSearchParams();

@@ -229,6 +229,11 @@ export const routes = {
     tools: {
         root: '/tools',
         notes: '/tools/notes',
+        cheques: '/tools/cheques',
+        priceChecker: '/tools/price-checker',
+        documents: '/tools/documents',
+        billScan: '/tools/scan',
+        bijoy: '/tools/bijoy',
     },
 
     meetings: {

@@ -355,6 +355,14 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   // Meet71 is a separate product on its own origin, so this is the one nav
   // link whose href is absolute — the sidebar opens it in a new tab.
   'tools.meet71': { id: 'tools.meet71', kind: 'link', icon: 'Video', labelKey: 'sidebar.items.meet71', href: 'https://meet.erp71.com/' },
+  // The 2026-11-22 tools. Cheques and Documents keep a shared register, so
+  // they carry permission tags below; the converter is a page of pure
+  // browser code with nothing to gate.
+  'tools.cheques': { id: 'tools.cheques', kind: 'link', icon: 'Banknote', labelKey: 'sidebar.items.toolsCheques', href: '/tools/cheques' },
+  'tools.price-checker': { id: 'tools.price-checker', kind: 'link', icon: 'ScanBarcode', labelKey: 'sidebar.items.toolsPriceChecker', href: '/tools/price-checker' },
+  'tools.documents': { id: 'tools.documents', kind: 'link', icon: 'FolderLock', labelKey: 'sidebar.items.toolsDocuments', href: '/tools/documents' },
+  'tools.bill-scan': { id: 'tools.bill-scan', kind: 'link', icon: 'ScanText', labelKey: 'sidebar.items.toolsBillScan', href: '/tools/scan' },
+  'tools.bijoy': { id: 'tools.bijoy', kind: 'link', icon: 'Languages', labelKey: 'sidebar.items.toolsBijoy', href: '/tools/bijoy' },
   // Minutes moved from the rail's business apps to Tools on 2026-11-18. It is a
   // subgroup, not a module, because only links and subgroups render inside a
   // parent. The `VIEW_MEETINGS` tag replaces the APP_REGISTRY gate the module
@@ -563,6 +571,14 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
   // its own tag on top: VIEW_ALL_MEETINGS is owner/admin-only.
   'tools.meetings': ['VIEW_MEETINGS'],
   'tools.meetings.actions-all': ['VIEW_ALL_MEETINGS'],
+  // The API's CHEQUE_READ: the people who record payments and read the books.
+  'tools.cheques': ['CREATE_VOUCHER', 'VIEW_FINANCIAL_REPORTS'],
+  // The API's CATALOG_READ — price and stock, never cost.
+  'tools.price-checker': ['VIEW_PRODUCT_CATALOG'],
+  // The API's BUSINESS_DOCUMENTS: licences are the business's own papers.
+  'tools.documents': ['MANAGE_STORES', 'MANAGE_USERS'],
+  // A scanned bill lands in the purchase or expense form, so either right will do.
+  'tools.bill-scan': ['CREATE_PURCHASE', 'CREATE_VOUCHER'],
 
   crm: CRM_ANY,
   'crm.reports.lead-sources': ['VIEW_LEADS'],
@@ -678,6 +694,12 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
  * the registry — and is replaced by this default at read time, so it needs no
  * sync run at all. `addNavNodesToLayout` cannot reparent anyway, so this is the
  * only path that leaves a customised sidebar with minutes in the right place.
+ *
+ * The 2026-11-22 tools added five leaves under Tools, after Meetings:
+ * `tools.cheques`, `tools.price-checker`, `tools.documents`, `tools.bill-scan`
+ * and `tools.bijoy`. New leaves, so a saved layout takes them with
+ * `npx tsx prisma/sync-nav-layout.ts --nodes=tools.cheques,tools.price-checker,tools.documents,tools.bill-scan,tools.bijoy`
+ * (also run from db-prepare) and needs no reset.
  */
 export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('dashboard', null, 0),
@@ -896,6 +918,11 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('tools.meetings.list', 'tools.meetings', 0),
   layoutNode('tools.meetings.actions', 'tools.meetings', 1),
   layoutNode('tools.meetings.actions-all', 'tools.meetings', 2),
+  layoutNode('tools.cheques', 'tools', 4),
+  layoutNode('tools.price-checker', 'tools', 5),
+  layoutNode('tools.documents', 'tools', 6),
+  layoutNode('tools.bill-scan', 'tools', 7),
+  layoutNode('tools.bijoy', 'tools', 8),
   layoutNode('support', null, 17),
   layoutNode('admin', null, 18),
   layoutNode('admin.overview', 'admin', 0),

@@ -477,6 +477,39 @@ describe('NewPurchasePage', () => {
         });
     });
 
+    it('opens a scanned bill once, with an unmatched vendor offered as a new supplier', async () => {
+        window.sessionStorage.setItem('erp71.billScan.purchaseDraft', JSON.stringify({
+            label: 'M-55',
+            purchase: {
+                items: [{ product_id: 'prod-1', product: { name: 'Coffee Beans' }, unit_cost: 9, quantity: 3 }],
+                tax_amount: 0,
+                discount_amount: 0,
+                freight_amount: 40,
+                notes: 'Scanned bill M-55.',
+            },
+            newSupplier: { name: 'Rahim Traders', phone: '01711000000', email: '', address: '' },
+            unmatched: [],
+        }));
+        searchParams = new URLSearchParams('from=scan');
+        await renderPage();
+
+        await waitFor(() => expect(screen.getAllByText('Coffee Beans').length).toBeGreaterThan(0));
+        expect(screen.getAllByText(/M-55/).length).toBeGreaterThan(0);
+        expect(screen.getByLabelText('Notes')).toHaveValue('Scanned bill M-55.');
+        expect(window.sessionStorage.getItem('erp71.billScan.purchaseDraft')).toBeNull();
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /post purchase/i }));
+        });
+        await waitFor(() => {
+            expect(api.createPurchase).toHaveBeenCalledWith(expect.objectContaining({
+                newSupplier: expect.objectContaining({ name: 'Rahim Traders', phone: '01711000000' }),
+                freightAmount: 40,
+                items: [{ productId: 'prod-1', quantity: 3, unitCost: 9 }],
+            }));
+        });
+    });
+
     describe('paying at the counter', () => {
         /** One 40.00 line, so the bill total is a round 40. */
         const billOf40 = async () => {
