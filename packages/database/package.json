@@ -51,6 +51,7 @@
     "sync:support-thread-creators": "tsx prisma/sync-support-thread-creators.ts",
     "sync:lead-activity": "tsx prisma/sync-lead-activity.ts",
     "sync:found-reasons": "tsx prisma/sync-found-reasons.ts",
+    "sync:inventory-reasons": "tsx prisma/sync-inventory-reasons.ts",
     "sync:project-members": "tsx prisma/sync-project-members.ts",
     "sync:time-entry-employee": "tsx prisma/sync-time-entry-employee.ts",
     "sync:setup-fee-paid": "tsx prisma/sync-setup-fee-paid.ts",
