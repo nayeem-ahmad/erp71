@@ -400,6 +400,7 @@ export const coreMessages = {
         noSearchResults: "Aucun élément de menu ne correspond à votre recherche.",
         expandAll: "Tout développer",
         collapseAll: "Tout réduire",
+        recent: "Récents",
         modules: {
             dashboard: "Tableau de bord",
             scorecard: "Indicateurs clés",
@@ -445,6 +446,7 @@ export const coreMessages = {
             projectsSprints: "Sprints",
             projectsHourLogs: "Relevés d'heures",
             projectsHourLogReport: "Rapport des heures",
+            projectsProfitability: "Rentabilité",
             projectsSetup: "Configuration des projets",
             meetingsList: "Réunions",
             meetingActions: "Mes points d'action",
@@ -476,6 +478,18 @@ export const coreMessages = {
             crmLeadAging: "Ancienneté des pistes",
 
             crmActivitySummary: "Résumé des activités",
+
+            crmCampaignReport: "Performance des campagnes",
+
+            crmBirthdays: "Anniversaires à venir",
+
+            crmContactCoverage: "Couverture des contacts",
+
+            crmRfm: "Valeur client (RFM)",
+
+            crmLeadFunnel: "Entonnoir de pistes",
+
+            crmLostLeads: "Pistes perdues",
 
             crmReports: "Rapports CRM",
             crmSetup: "Configuration CRM",
@@ -600,6 +614,7 @@ export const coreMessages = {
             loyaltyProgram: "Programme de fidélité",
             smsNotifications: "Notifications SMS",
             reportEmails: "E-mails de rapport",
+            emailServer: "Serveur e-mail",
             discountCodes: "Codes de réduction",
             urlShortener: "Raccourcisseur d'URL",
             shortLinks: "Liens courts",
@@ -875,6 +890,7 @@ export const coreMessages = {
                 loyalty: "Programme de fidélité",
                 sms: "Notifications SMS",
                 reportEmails: "E-mails de rapport",
+                emailServer: "Serveur e-mail",
                 smsCredits: "Crédits de messagerie",
                 aiCredits: "Crédits IA",
                 auditLogs: "Journaux d'audit",
@@ -1214,6 +1230,7 @@ export const coreMessages = {
         compactViewTitle: "Vue compacte",
         loadingProducts: "Chargement des produits...",
         stockLeft: "{count} restant(s)",
+        outOfStockShort: "Épuisé",
         notAvailable: 'N/A',
         tabs: {
             checkout: "Encaissement",

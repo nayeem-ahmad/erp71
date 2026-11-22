@@ -855,6 +855,9 @@ export class AdminTenantsService {
         }
 
         const result = await clearTenantData(this.db, tenantId, mode, storeId, keep);
+        // A clear can delete employees, and each member's cached membership
+        // names the employee their login is linked to.
+        this.authCache.invalidateTenant(tenantId);
 
         await this.auditService.log('tenant.data.clear', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
             mode,

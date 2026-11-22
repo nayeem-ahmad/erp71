@@ -33,23 +33,54 @@ export type LoginContexts = {
     hasPlatformConsole: boolean;
     isReferee: boolean;
     isEmployee: boolean;
+    /** One per workspace the login has a portal card in — see `employeeCards`. */
+    employees: EmployeeCard[];
     tenants: any[];
     /** Total selectable contexts (admin console + portals + each shop). */
     count: number;
 };
 
+export type EmployeeCard = { id: string; tenant_id?: string | null; employee_code?: string; name?: string };
+
+/**
+ * Every employee-portal card this login holds, oldest first.
+ *
+ * A login is at most one employee per workspace but can be staff in several,
+ * so `/auth/me` lists them under `employees`. `employee` — the oldest, and the
+ * only field before the list existed — is the fallback for a cached answer
+ * from an older server.
+ */
+export function employeeCards(me: any): EmployeeCard[] {
+    if (Array.isArray(me?.employees)) return me.employees.filter((card: any) => card?.id);
+    return me?.employee?.id ? [me.employee] : [];
+}
+
 export function getLoginContexts(me: any): LoginContexts {
     const tenants = Array.isArray(me?.tenants) ? me.tenants : [];
     const hasPlatformConsole = platformRoleOf(me) !== null;
     const isReferee = Boolean(me?.referee?.is_active);
-    const isEmployee = Boolean(me?.employee?.id);
+    const employees = employeeCards(me);
+    const isEmployee = employees.length > 0;
     return {
         hasPlatformConsole,
         isReferee,
         isEmployee,
+        employees,
         tenants,
-        count: (hasPlatformConsole ? 1 : 0) + (isReferee ? 1 : 0) + (isEmployee ? 1 : 0) + tenants.length,
+        count: (hasPlatformConsole ? 1 : 0) + (isReferee ? 1 : 0) + employees.length + tenants.length,
     };
+}
+
+/**
+ * Whether this tab is in the employee portal: the stored context says so
+ * *and* the workspace it is pinned to is one the server lists a card for.
+ * The stored value alone is something a user can set by hand.
+ */
+export function isInEmployeePortal(me: any, activeContext: string | null, activeTenantId: string | null): boolean {
+    if (activeContext !== 'employee') return false;
+    const cards = employeeCards(me);
+    if (cards.length === 0) return false;
+    return !activeTenantId || cards.some((card) => card.tenant_id === activeTenantId);
 }
 
 /** Which workspace this tab is in, as far as anything cached could care. */

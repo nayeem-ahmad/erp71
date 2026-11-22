@@ -400,6 +400,7 @@ export const coreMessages = {
             noSearchResults: "Tiada item menu sepadan dengan carian anda.",
             expandAll: "Kembangkan semua",
             collapseAll: "Runtuhkan semua",
+            recent: "Terkini",
             modules: {
                 dashboard: "Dashboard",
                 scorecard: "Kad skor",
@@ -445,6 +446,7 @@ export const coreMessages = {
             projectsSprints: "Sprint",
             projectsHourLogs: "Log Jam",
             projectsHourLogReport: "Laporan Log Jam",
+            projectsProfitability: "Keuntungan",
             projectsSetup: "Tetapan Projek",
             meetingsList: "Mesyuarat",
             meetingActions: "Perkara tindakan saya",
@@ -476,6 +478,18 @@ export const coreMessages = {
             crmLeadAging: "Umur petunjuk",
 
             crmActivitySummary: "Ringkasan aktiviti",
+
+            crmCampaignReport: "Prestasi kempen",
+
+            crmBirthdays: "Hari lahir akan datang",
+
+            crmContactCoverage: "Liputan hubungan",
+
+            crmRfm: "Nilai pelanggan (RFM)",
+
+            crmLeadFunnel: "Funnel petunjuk",
+
+            crmLostLeads: "Petunjuk hilang",
 
             crmReports: "Laporan CRM",
             crmSetup: "Persediaan CRM",
@@ -599,6 +613,7 @@ export const coreMessages = {
                 loyaltyProgram: "Program Kesetiaan",
                 smsNotifications: "Notifikasi SMS",
                 reportEmails: "Emel Laporan",
+                emailServer: "Pelayan E-mel",
                 discountCodes: "Kod Diskaun",
                 urlShortener: "Pemendek URL",
                 shortLinks: "Pautan pendek",
@@ -876,6 +891,7 @@ export const coreMessages = {
                     loyalty: "Program Kesetiaan",
                     sms: "Pemberitahuan SMS",
                     reportEmails: "E-mel Laporan",
+                    emailServer: "Pelayan E-mel",
                     smsCredits: "Kredit Pemesejan",
                     aiCredits: "Kredit AI",
                     auditLogs: "Log Audit",
@@ -1215,6 +1231,7 @@ export const coreMessages = {
             compactViewTitle: "Paparan padat",
             loadingProducts: "Memuatkan produk...",
             stockLeft: "{count} baki",
+            outOfStockShort: "Habis",
             notAvailable: "T/A",
             tabs: {
                 checkout: "Checkout",

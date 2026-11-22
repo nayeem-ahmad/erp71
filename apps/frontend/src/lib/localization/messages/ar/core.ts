@@ -400,6 +400,7 @@ export const coreMessages = {
         noSearchResults: 'لا توجد عناصر قائمة مطابقة لبحثك.',
         expandAll: 'توسيع الكل',
         collapseAll: 'طي الكل',
+        recent: "الأخيرة",
         modules: {
             dashboard: 'لوحة المعلومات',
             scorecard: 'بطاقة الأداء',
@@ -445,6 +446,7 @@ export const coreMessages = {
             projectsSprints: 'السبرنتات',
             projectsHourLogs: 'سجلات الساعات',
             projectsHourLogReport: 'تقرير سجل الساعات',
+            projectsProfitability: "الربحية",
             projectsSetup: 'إعداد المشاريع',
             meetingsList: 'الاجتماعات',
             meetingActions: 'نقاط عملي',
@@ -476,6 +478,18 @@ export const coreMessages = {
             crmLeadAging: "عمر العملاء المحتملين",
 
             crmActivitySummary: "ملخص الأنشطة",
+
+            crmCampaignReport: "أداء الحملات",
+
+            crmBirthdays: "أعياد الميلاد القادمة",
+
+            crmContactCoverage: "تغطية التواصل",
+
+            crmRfm: "قيمة العميل (RFM)",
+
+            crmLeadFunnel: "مسار العملاء المحتملين",
+
+            crmLostLeads: "العملاء المحتملون المفقودون",
 
             crmReports: 'تقارير إدارة العلاقات',
             crmSetup: 'إعداد إدارة العلاقات',
@@ -600,6 +614,7 @@ export const coreMessages = {
             loyaltyProgram: 'برنامج الولاء',
             smsNotifications: 'إشعارات الرسائل النصية',
             reportEmails: 'تقارير بالبريد',
+            emailServer: "خادم البريد",
             discountCodes: 'رموز الخصم',
             urlShortener: 'مختصر الروابط',
             shortLinks: 'الروابط القصيرة',
@@ -875,6 +890,7 @@ export const coreMessages = {
                 loyalty: 'برنامج الولاء',
                 sms: 'إشعارات الرسائل النصية',
                 reportEmails: 'تقارير بالبريد',
+                emailServer: "خادم البريد",
                 smsCredits: 'رصيد المراسلة',
                 aiCredits: 'رصيد الذكاء الاصطناعي',
                 auditLogs: 'سجلات التدقيق',
@@ -1214,6 +1230,7 @@ export const coreMessages = {
         compactViewTitle: 'عرض مضغوط',
         loadingProducts: 'جارٍ تحميل المنتجات...',
         stockLeft: '{count} متبقٍ',
+        outOfStockShort: 'نفد',
         notAvailable: 'غير متاح',
         tabs: {
             checkout: 'إتمام البيع',

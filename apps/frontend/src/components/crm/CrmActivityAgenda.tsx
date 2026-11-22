@@ -5,11 +5,11 @@ import Link from 'next/link';
 import { AlertTriangle, ClipboardList, Eye } from 'lucide-react';
 import { Input, StatusBadge, Switch, type StatusBadgeTone } from '@/components/ui';
 import {
-    activityDueDay,
     activityKindName,
     activityLabel,
     activityTarget,
     groupActivities,
+    isPlannedActivityOverdue,
     type ActivityGroupId,
     type CrmActivityListRow,
 } from '@/components/crm/crm-activity-layout';
@@ -128,6 +128,8 @@ export default function CrmActivityAgenda({
                 return haystack.includes(needle);
             })
             : rows;
+        // The page's side panel walks the same order (`agendaOrder`), so a change
+        // to the grouping here has to be made in `groupActivities`, not inline.
         return groupActivities(matched, tenantDateOnly());
     }, [rows, query]);
 
@@ -138,8 +140,6 @@ export default function CrmActivityAgenda({
         earlier: m.groups.earlier,
         undated: m.groups.undated,
     };
-
-    const today = tenantDateOnly();
 
     return (
         <div className="space-y-3">
@@ -164,8 +164,7 @@ export default function CrmActivityAgenda({
                         {group.rows.map((row) => {
                             const target = activityTarget(row);
                             const kind = activityKindName(row);
-                            const dueDay = row.due_at ? activityDueDay(row.due_at) : null;
-                            const overdue = row.status === 'PLANNED' && !!dueDay && dueDay < today;
+                            const overdue = isPlannedActivityOverdue(row.status, row.due_at);
                             return (
                                 <div
                                     key={row.id}

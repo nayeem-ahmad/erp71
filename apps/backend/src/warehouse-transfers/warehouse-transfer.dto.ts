@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsBoolean, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateNested } from 'class-validator';
 import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 
 export class WarehouseTransferItemDto {
@@ -32,6 +32,14 @@ export class CreateWarehouseTransferDto {
     @IsString()
     notes?: string;
 
+    /**
+     * When the transfer happened. Omitted, the server stamps the moment it is
+     * saved. Never written into `created_at`, which stays the insert time.
+     */
+    @IsOptional()
+    @IsDateString()
+    transferDate?: string;
+
     @IsOptional()
     @IsString()
     status?: 'DRAFT' | 'SENT';
@@ -59,6 +67,10 @@ export class UpdateWarehouseTransferDto {
     @IsOptional()
     @IsString()
     notes?: string;
+
+    @IsOptional()
+    @IsDateString()
+    transferDate?: string;
 
     @IsOptional()
     @IsString()
@@ -96,6 +108,16 @@ export class RejectWarehouseTransferDto {
     @IsString()
     @MaxLength(500)
     reason?: string;
+}
+
+export class WarehouseTransferNumberPreviewQueryDto {
+    /** The branch the number belongs to is the source warehouse's. */
+    @IsUUID()
+    sourceWarehouseId: string;
+
+    @IsOptional()
+    @IsDateString()
+    transferDate?: string;
 }
 
 export class ListWarehouseTransfersQueryDto {

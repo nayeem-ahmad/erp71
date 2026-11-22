@@ -6,20 +6,26 @@ describe('format helpers', () => {
         localStorage.clear();
     });
 
+    it('keeps the symbol and the figure together with a non-breaking space', () => {
+        // A plain space let a narrow column wrap ৳ onto a line of its own.
+        expect(formatBDT(1234.5)).toContain('\u00a0');
+        expect(formatBDT(1234.5)).not.toMatch(/৳ /);
+    });
+
     it('formats BDT using English digits by default', () => {
-        expect(formatBDT(1234.5)).toBe('৳ 1,234.50');
+        expect(formatBDT(1234.5)).toBe('৳\u00a01,234.50');
     });
 
     it('groups BDT in thousand, lac and crore', () => {
-        expect(formatBDT(1_000)).toBe('৳ 1,000.00');
-        expect(formatBDT(1_00_000)).toBe('৳ 1,00,000.00');
-        expect(formatBDT(12_34_567)).toBe('৳ 12,34,567.00');
-        expect(formatBDT(1_23_45_678.9)).toBe('৳ 1,23,45,678.90');
+        expect(formatBDT(1_000)).toBe('৳\u00a01,000.00');
+        expect(formatBDT(1_00_000)).toBe('৳\u00a01,00,000.00');
+        expect(formatBDT(12_34_567)).toBe('৳\u00a012,34,567.00');
+        expect(formatBDT(1_23_45_678.9)).toBe('৳\u00a01,23,45,678.90');
     });
 
     it('formats BDT using Bangla digits when locale is bn', () => {
-        expect(formatBDT(1234.5, { locale: 'bn' })).toBe('৳ ১,২৩৪.৫০');
-        expect(formatBDT(12_34_567, { locale: 'bn' })).toBe('৳ ১২,৩৪,৫৬৭.০০');
+        expect(formatBDT(1234.5, { locale: 'bn' })).toBe('৳\u00a0১,২৩৪.৫০');
+        expect(formatBDT(12_34_567, { locale: 'bn' })).toBe('৳\u00a0১২,৩৪,৫৬৭.০০');
     });
 
     it('formats numbers using locale metadata', () => {
@@ -33,7 +39,7 @@ describe('format helpers', () => {
     });
 
     it('supports future currencies without coupling them to language', () => {
-        expect(formatCurrency(2500, { locale: 'ms', currency: 'MYR' })).toBe('RM 2,500.00');
+        expect(formatCurrency(2500, { locale: 'ms', currency: 'MYR' })).toBe('RM\u00a02,500.00');
     });
 
     describe('formatCalendarDate', () => {

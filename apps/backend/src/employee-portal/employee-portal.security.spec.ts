@@ -10,6 +10,8 @@ import { EmployeeGuard } from './employee.guard';
 import { EmployeesController } from '../employees/employees.controller';
 import { EmployeesService } from '../employees/employees.service';
 import { OrgStructureImportService } from '../employees/org-structure-import.service';
+import { EmployeeLinkService } from '../employees/employee-link.service';
+import { EmployeeCostRatesService } from '../employees/employee-cost-rates.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
@@ -91,7 +93,7 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
           ];
 
     const db = {
-        employee: { findFirst: jest.fn() },
+        employee: { findMany: jest.fn() },
         // The membership is read through the shared loader's joined query.
         $queryRaw: jest.fn().mockResolvedValue(membershipRows('CASHIER')),
         userStoreAccess: { findMany: jest.fn().mockResolvedValue([]) },
@@ -115,7 +117,7 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
 
     beforeEach(async () => {
         jest.clearAllMocks();
-        db.employee.findFirst.mockResolvedValue(EMPLOYEE);
+        db.employee.findMany.mockResolvedValue([EMPLOYEE]);
         db.$queryRaw.mockResolvedValue(membershipRows('CASHIER'));
         db.userStorePermission.findMany.mockResolvedValue([]);
 
@@ -126,6 +128,8 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
                 { provide: EmployeeLoginService, useValue: loginService },
                 { provide: EmployeesService, useValue: employeesService },
                 { provide: OrgStructureImportService, useValue: { import: jest.fn() } },
+                { provide: EmployeeLinkService, useValue: { loginCandidates: jest.fn(), employeeCandidates: jest.fn(), suggestions: jest.fn(), linkMany: jest.fn() } },
+                { provide: EmployeeCostRatesService, useValue: { list: jest.fn(), create: jest.fn(), remove: jest.fn() } },
                 { provide: DatabaseService, useValue: db },
                 {
                     provide: BranchScopeService,
@@ -161,13 +165,13 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
         });
 
         it('refuses a user with no employee row', async () => {
-            db.employee.findFirst.mockResolvedValue(null);
+            db.employee.findMany.mockResolvedValue([]);
             await request(app.getHttpServer()).get('/employee-portal/me').expect(403);
         });
 
         it('queries on portal_access, ACTIVE and not-deleted — not on user_id alone', async () => {
             await request(app.getHttpServer()).get('/employee-portal/me').expect(200);
-            expect(db.employee.findFirst).toHaveBeenCalledWith(
+            expect(db.employee.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
                     where: expect.objectContaining({
                         user_id: 'user-1',
@@ -177,6 +181,43 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
                     }),
                 }),
             );
+        });
+
+        describe('a login that is staff in more than one workspace', () => {
+            const SECOND = { ...EMPLOYEE, id: 'emp-2', tenant_id: 'tenant-2', employee_code: 'EMP-00009' };
+
+            it('opens the card in the workspace the header names', async () => {
+                db.employee.findMany.mockResolvedValue([EMPLOYEE, SECOND]);
+
+                await request(app.getHttpServer())
+                    .get('/employee-portal/summary')
+                    .set('x-tenant-id', 'tenant-2')
+                    .expect(200);
+
+                expect(portalService.getSummary).toHaveBeenCalledWith('tenant-2', 'emp-2', undefined, undefined);
+            });
+
+            it('refuses rather than guesses when the header names none of their cards', async () => {
+                db.employee.findMany.mockResolvedValue([EMPLOYEE, SECOND]);
+
+                await request(app.getHttpServer())
+                    .get('/employee-portal/summary')
+                    .set('x-tenant-id', 'tenant-ATTACKER')
+                    .expect(403);
+
+                expect(portalService.getSummary).not.toHaveBeenCalled();
+            });
+
+            it('only ever chooses among the token user\'s own cards', async () => {
+                await request(app.getHttpServer()).get('/employee-portal/me').expect(200);
+
+                // The header cannot widen the candidates: they are narrowed to
+                // the token's user before it is consulted.
+                expect(db.employee.findMany).toHaveBeenCalledWith(
+                    expect.objectContaining({ where: expect.objectContaining({ user_id: 'user-1' }) }),
+                );
+                expect(db.employee.findMany.mock.calls[0][0].where).not.toHaveProperty('tenant_id');
+            });
         });
 
         it('does not leak the salary onto the profile payload', async () => {

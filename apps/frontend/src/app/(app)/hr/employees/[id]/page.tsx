@@ -2,9 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { User, Phone, Mail, Calendar, Briefcase, KeyRound, LinkIcon, Unlink, Save } from 'lucide-react';
-import { api, type EmployeeLoginState, type PersonSkillAssignment } from '@/lib/api';
+import { User, Phone, Mail, Calendar, Briefcase, KeyRound, Unlink, Save } from 'lucide-react';
+import {
+    api, type EmployeeLoginCandidate, type EmployeeLoginState, type PersonSkillAssignment,
+} from '@/lib/api';
 import EmployeeSkillsCard from '@/components/hr/EmployeeSkillsCard';
+import LinkCandidatePicker from '@/components/hr/LinkCandidatePicker';
+import EmployeeCostRateCard from '@/components/hr/EmployeeCostRateCard';
+import { hasPermission, isOwner } from '@/lib/permissions';
 import { fetchMe } from '@/hooks/use-me';
 import { displayEmail } from '@erp71/shared-types';
 import { formatDate } from '@/lib/format';
@@ -50,8 +55,11 @@ interface Employee {
     skills?: PersonSkillAssignment[];
 }
 
+/** Statuses that mean the person has left — see EmployeeLifecycleService.EXIT_STATUSES. */
+const EXIT_STATUSES = ['RESIGNED', 'TERMINATED', 'CONTRACT_ENDED', 'INACTIVE'];
+
 export default function EmployeeDetailPage() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const params = useParams();
     const id = params.id as string;
     const [employee, setEmployee] = useState<Employee | null>(null);
@@ -63,8 +71,14 @@ export default function EmployeeDetailPage() {
     const [success, setSuccess] = useState('');
     const [departments, setDepartments] = useState<Department[]>([]);
     const [designations, setDesignations] = useState<Designation[]>([]);
-    const [, setTenantUsers] = useState<any[]>([]);
-    const [linkUserId, setLinkUserId] = useState('');
+    // Linking an existing login lists the workspace's logins, so it needs
+    // MANAGE_USERS on top of the MANAGE_HR this page already implies.
+    const [canLinkExisting, setCanLinkExisting] = useState(false);
+    // Setting a cost rate is an HR change; seeing one needs the salary anyway.
+    const [canManageHr, setCanManageHr] = useState(false);
+    const [candidates, setCandidates] = useState<EmployeeLoginCandidate[] | null>(null);
+    const [candidatesError, setCandidatesError] = useState<string | null>(null);
+    const [linkingUserId, setLinkingUserId] = useState<string | null>(null);
     const [linkLoading, setLinkLoading] = useState(false);
     const [loginLoading, setLoginLoading] = useState(false);
     const [showLinkExisting, setShowLinkExisting] = useState(false);
@@ -81,7 +95,7 @@ export default function EmployeeDetailPage() {
             api.getEmployee(id),
             api.getDepartments(),
             api.getDesignations(),
-            fetchTenantUsers(),
+            loadLinkPermission(),
         ]).then(([emp, depts, desigs]) => {
             setEmployee(emp);
             // The API omits `basic_salary` entirely for a viewer without
@@ -106,17 +120,31 @@ export default function EmployeeDetailPage() {
           .finally(() => setLoading(false));
     }, [id]);
 
-    async function fetchTenantUsers() {
+    async function loadLinkPermission() {
         try {
-            // Get tenant users via the invitations/users context from auth/me
             const me = await fetchMe();
             const tenantId = typeof window !== 'undefined' ? getWorkspaceItem('tenant_id') : null;
             const tenant = me?.tenants?.find((t: any) => t.id === tenantId) || me?.tenants?.[0];
-            setTenantUsers(tenant?.users ?? []);
+            setCanLinkExisting(
+                isOwner(tenant?.role)
+                    || (hasPermission(tenant?.permissions, 'MANAGE_USERS') && hasPermission(tenant?.permissions, 'MANAGE_HR')),
+            );
+            setCanManageHr(isOwner(tenant?.role) || hasPermission(tenant?.permissions, 'MANAGE_HR'));
         } catch {
-            // fallback: can't load users, link feature will be limited
+            setCanLinkExisting(false);
+            setCanManageHr(false);
         }
     }
+
+    // Only fetched when the disclosure opens: most employees get a fresh login
+    // instead, and the list carries every login's email and mobile.
+    useEffect(() => {
+        if (!showLinkExisting || !canLinkExisting || candidates) return;
+        api.getEmployeeLoginCandidates(id)
+            .then((rows) => setCandidates(rows ?? []))
+            .catch((err: any) => setCandidatesError(err?.message || t.employees.detail.linking.loadFailed));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showLinkExisting, canLinkExisting, id]);
 
     // `loginState` is whatever the last login call reported; before any of them
     // has run, the employee row is the only source. Reading the two in that order
@@ -196,20 +224,21 @@ export default function EmployeeDetailPage() {
         }
     };
 
-    const handleLinkUser = async () => {
-        if (!linkUserId) return;
-        setLinkLoading(true);
+    const handleLinkUser = async (userId: string) => {
+        setLinkingUserId(userId);
         setError('');
         setSuccess('');
         try {
-            const updated = await api.linkEmployeeUser(id, linkUserId);
+            const updated = await api.linkEmployeeUser(id, userId);
             setEmployee(updated);
-            setLinkUserId('');
+            setLoginState(null);
+            setShowLinkExisting(false);
+            setCandidates(null);
             setSuccess(t.employees.detail.linkSuccess);
         } catch (err: any) {
             setError(err.message || t.employees.detail.linkFailed);
         } finally {
-            setLinkLoading(false);
+            setLinkingUserId(null);
         }
     };
 
@@ -270,6 +299,8 @@ export default function EmployeeDetailPage() {
         try {
             const updated = await api.unlinkEmployeeUser(id);
             setEmployee(updated);
+            setLoginState(null);
+            setCandidates(null);
             setSuccess(t.employees.detail.unlinkSuccess);
         } catch (err: any) {
             setError(err.message || t.employees.detail.unlinkFailed);
@@ -478,6 +509,9 @@ export default function EmployeeDetailPage() {
                     onChanged={reloadEmployee}
                 />
 
+                {/* Only where the salary is shown: an hourly cost is pay by another name. */}
+                {canSeeSalary && <EmployeeCostRateCard employeeId={employee.id} canEdit={canManageHr} />}
+
                 {/*
                   * System access.
                   *
@@ -507,6 +541,18 @@ export default function EmployeeDetailPage() {
 
                             {mustChangePassword && (
                                 <Alert tone="info">{t.employeePortal.login.pendingPasswordChange}</Alert>
+                            )}
+
+                            {/*
+                              * Leaving does not switch the portal off — someone
+                              * working their notice still needs their payslips, and
+                              * the final one is paid after the exit is recorded. So
+                              * the page asks, at the point the button already is.
+                              */}
+                            {portalAccess && EXIT_STATUSES.includes(employee.status) && (
+                                <Alert tone="warning">
+                                    {fmt(t.employees.detail.linking.leftWithPortal, { name: employee.name })}
+                                </Alert>
                             )}
 
                             <div className="flex flex-wrap gap-2">
@@ -564,27 +610,26 @@ export default function EmployeeDetailPage() {
 
                                 {showLinkExisting && (
                                     <div className="mt-3 space-y-2">
-                                        <p className="text-sm text-gray-500">{t.employees.detail.linkDescription}</p>
-                                        <div className="flex flex-wrap gap-2">
-                                            <Input
-                                                type="text"
-                                                value={linkUserId}
-                                                onChange={(e) => setLinkUserId(e.target.value)}
-                                                placeholder={t.employees.detail.pasteUserId}
-                                                className="flex-1 font-mono"
+                                        <p className="text-sm font-medium text-gray-900">{t.employees.detail.linking.pickerTitle}</p>
+                                        {canLinkExisting ? (
+                                            <LinkCandidatePicker
+                                                rows={(candidates ?? []).map((row) => ({
+                                                    id: row.userId,
+                                                    primary: row.name || row.email || row.mobile || row.userId,
+                                                    secondary: [row.email, row.mobile].filter(Boolean).join(' · ') || null,
+                                                    matches: row.matches,
+                                                }))}
+                                                loading={candidates === null && !candidatesError}
+                                                error={candidatesError}
+                                                hint={t.employees.detail.linking.pickerHint}
+                                                searchPlaceholder={t.employees.detail.linking.searchLogins}
+                                                emptyText={t.employees.detail.linking.noLoginCandidates}
+                                                busyId={linkingUserId}
+                                                onLink={handleLinkUser}
                                             />
-                                            <Button
-                                                type="button"
-                                                variant="secondary"
-                                                disabled={!linkUserId}
-                                                loading={linkLoading}
-                                                onClick={handleLinkUser}
-                                                icon={<LinkIcon className="w-4 h-4" />}
-                                            >
-                                                {t.employees.detail.link}
-                                            </Button>
-                                        </div>
-                                        <p className="text-xs text-gray-400">{t.employees.detail.linkTip}</p>
+                                        ) : (
+                                            <p className="text-sm text-gray-500">{t.employees.detail.linking.needsUsersPermission}</p>
+                                        )}
                                     </div>
                                 )}
                             </div>

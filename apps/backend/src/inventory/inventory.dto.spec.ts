@@ -1,57 +1,50 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
-import { ListStockLedgerQueryDto } from './inventory.dto';
+import { CreateInventoryReasonDto } from './inventory.dto';
 
-const validate = (payload: Record<string, unknown>) => {
-    const dto = plainToInstance(ListStockLedgerQueryDto, payload);
-    return { dto, errors: validateSync(dto as object).map((e) => e.property) };
-};
-
-/**
- * A query string has no types: `?page=2&limit=25` arrives as the strings "2" and
- * "25". The global ValidationPipe runs with `transform: true` but not
- * `enableImplicitConversion`, so every numeric query field needs `@Type(() => Number)`
- * of its own. `limit` was missing it, and since the ledger page sends `limit` on
- * every single request, every request 400d and the table rendered "no history".
- */
-describe('ListStockLedgerQueryDto', () => {
-    it('accepts the page and limit the ledger page actually sends', () => {
-        const { dto, errors } = validate({ page: '2', limit: '25' });
-
-        expect(errors).toEqual([]);
-        expect(dto.page).toBe(2);
-        expect(dto.limit).toBe(25);
+const errorsFor = (payload: Record<string, unknown>) =>
+    validateSync(plainToInstance(CreateInventoryReasonDto, payload), {
+        whitelist: true,
+        forbidNonWhitelisted: true,
     });
 
-    it('accepts every page size the table offers', () => {
-        for (const size of [10, 20, 50, 100, 500]) {
-            expect(validate({ limit: String(size) }).errors).toEqual([]);
-        }
+const propertiesOf = (payload: Record<string, unknown>) => errorsFor(payload).map((error) => error.property);
+
+describe('CreateInventoryReasonDto', () => {
+    const valid = { type: 'SHRINKAGE', code: 'THEFT', label: 'Theft' };
+
+    it('accepts a Product Lost reason', () => {
+        expect(propertiesOf(valid)).toEqual([]);
     });
 
-    it('accepts a bare request with no pagination at all', () => {
-        expect(validate({}).errors).toEqual([]);
+    it('accepts Product Found and stock-take types', () => {
+        expect(propertiesOf({ ...valid, type: 'FOUND' })).toEqual([]);
+        expect(propertiesOf({ ...valid, type: 'DISCREPANCY' })).toEqual([]);
     });
 
-    it('still rejects a limit past the cap', () => {
-        expect(validate({ limit: '501' }).errors).toEqual(['limit']);
+    it('rejects an unknown type', () => {
+        expect(propertiesOf({ ...valid, type: 'DAMAGE' })).toEqual(['type']);
     });
 
-    it('still rejects a non-numeric limit', () => {
-        expect(validate({ limit: 'all' }).errors).toEqual(['limit']);
+    it('rejects a blank code or label', () => {
+        expect(propertiesOf({ ...valid, code: '' })).toEqual(['code']);
+        expect(propertiesOf({ ...valid, label: '' })).toEqual(['label']);
     });
 
-    it('accepts the filters alongside pagination', () => {
-        const { errors } = validate({
-            warehouseId: '11111111-1111-4111-8111-111111111111',
-            movementType: 'SALE',
-            page: '1',
-            limit: '50',
-            sortBy: 'created_at',
-            sortDir: 'desc',
+    it('rejects whitespace-only code or label after trim', () => {
+        expect(propertiesOf({ ...valid, code: '   ' })).toEqual(['code']);
+        expect(propertiesOf({ ...valid, label: '   ' })).toEqual(['label']);
+    });
+
+    it('trims code and label', () => {
+        const dto = plainToInstance(CreateInventoryReasonDto, {
+            type: 'SHRINKAGE',
+            code: '  THEFT  ',
+            label: '  Theft  ',
         });
-
-        expect(errors).toEqual([]);
+        expect(dto.code).toBe('THEFT');
+        expect(dto.label).toBe('Theft');
+        expect(validateSync(dto)).toEqual([]);
     });
 });

@@ -9,6 +9,7 @@ import {
 import { api } from '@/lib/api';
 import { SAVE_DEBOUNCE_MS, usePreferencesStore } from '@/lib/preferences/store';
 import { signInForPreferences } from '@/test-utils/preferences-scope';
+import { NavRecentContext } from '@/lib/ui-theme';
 import AppShellSidebar from './AppShellSidebar';
 
 jest.mock('@/lib/api', () => ({
@@ -487,5 +488,91 @@ describe('AppShellSidebar — preferences', () => {
             expect(localStorage.getItem('app-shell-collapsed')).toBe('false');
             expect(saveApi).not.toHaveBeenCalled();
         });
+    });
+});
+
+describe('AppShellSidebar — Recent menu items', () => {
+    const recent = () => screen.queryByRole('list', { name: 'Recent' });
+    const navigate = (rerender: (ui: React.ReactElement) => void, path: string, ui: () => React.ReactElement) => {
+        mockPathname = path;
+        rerender(ui());
+    };
+    const shell = (enabled = true) => (
+        <NavRecentContext.Provider value={enabled}>
+            <AppShellSidebar appStates={states()} planFeatures={PLAN} canAccessInventoryReports memberIsOwner memberPermissions={[]} />
+        </NavRecentContext.Provider>
+    );
+
+    beforeEach(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+        signInForPreferences('t1:u1');
+        usePreferencesStore.getState().clear();
+        mockPathname = '/sales/list';
+        mockIsMdUp = true;
+        mockPendingVouchers = 0;
+    });
+
+    it('shows nothing before a second page, since the page you are on is left out', () => {
+        render(shell());
+        expect(recent()).not.toBeInTheDocument();
+    });
+
+    it('lists the menu items visited, newest first, above the app menu, across apps', () => {
+        const { rerender } = render(shell());
+        navigate(rerender, '/sales/customer-payments', () => shell());
+        navigate(rerender, '/inventory/reports/reorder', () => shell());
+
+        const links = within(recent()!).getAllByRole('link');
+        expect(links.map((link) => link.getAttribute('href'))).toEqual(['/sales/customer-payments', '/sales/list']);
+        // Above the app's own menu in the panel.
+        const nav = within(panel()).getByRole('navigation', { name: 'Main navigation' });
+        expect(nav.firstElementChild).toBe(screen.getByTestId('recent-nav'));
+    });
+
+    it('survives a remount for the same member and workspace, and is not shown to another member', () => {
+        const first = render(shell());
+        navigate(first.rerender, '/inventory/reports/reorder', () => shell());
+        first.unmount();
+
+        const again = render(shell());
+        expect(within(recent()!).getAllByRole('link').map((l) => l.getAttribute('href'))).toEqual(['/sales/list']);
+        again.unmount();
+
+        signInForPreferences('t1:u2');
+        render(shell());
+        expect(recent()).not.toBeInTheDocument();
+    });
+
+    it('folds away and stays folded', () => {
+        const { rerender, unmount } = render(shell());
+        navigate(rerender, '/inventory/reports/reorder', () => shell());
+
+        fireEvent.click(within(panel()).getByRole('button', { name: 'Recent' }));
+        expect(recent()).not.toBeInTheDocument();
+        unmount();
+
+        render(shell());
+        expect(within(panel()).getByRole('button', { name: 'Recent' })).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('is hidden while searching', () => {
+        const { rerender } = render(shell());
+        navigate(rerender, '/inventory/reports/reorder', () => shell());
+
+        fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'reorder' } });
+        expect(screen.queryByTestId('recent-nav')).not.toBeInTheDocument();
+    });
+
+    it('when the workspace switched it off, shows nothing and records nothing', () => {
+        const { rerender, unmount } = render(shell(false));
+        navigate(rerender, '/inventory/reports/reorder', () => shell(false));
+        expect(screen.queryByTestId('recent-nav')).not.toBeInTheDocument();
+        expect(localStorage.getItem('erp71:nav-recent:t1:u1')).toBeNull();
+        unmount();
+
+        // Switched back on: starts from a clean slate rather than a trail recorded while off.
+        render(shell(true));
+        expect(recent()).not.toBeInTheDocument();
     });
 });

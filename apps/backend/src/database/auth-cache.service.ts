@@ -118,7 +118,11 @@ export class AuthCacheService {
         return this.remember<T>('user', keyOf('user', userId), load, isPresent);
     }
 
-    /** `membership:{userId}:{tenantId}` — role, roles and tenant, for the guards and `TenantInterceptor`. */
+    /**
+     * `membership:{userId}:{tenantId}` — role, roles and tenant, for the guards
+     * and `TenantInterceptor`, plus which employee the login is linked to there.
+     * Linking, unlinking or deleting an employee therefore invalidates the member.
+     */
     membership<T>(userId: string, tenantId: string, load: () => Promise<T>): Promise<T> {
         return this.remember<T>('membership', keyOf('membership', userId, tenantId), load, isPresent);
     }

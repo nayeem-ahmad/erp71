@@ -497,6 +497,14 @@ step sync:cancel-entry-permission \
 step sync:adjust-product-cost-permission \
     npm run sync:adjust-product-cost-permission --workspace=@erp71/database
 
+# sync:project-financials-permission is the same reconciler for
+# VIEW_PROJECT_FINANCIALS (Projects -> Financials), which belongs to Tenant
+# Admin alone among the seeded roles because labour cost is priced from pay.
+# Without it an existing workspace's Tenant Admins get a 403 on a project's
+# Financials while the owner sees it. Same ordering constraint as above.
+step sync:project-financials-permission \
+    npm run sync:project-financials-permission --workspace=@erp71/database
+
 # sync:work-schedules gives every tenant a default work schedule and every
 # employee an assignment to it (HRIS Phase 2). Attendance still works without it
 # — resolveScheduleDays falls back to an in-code default — but the tenant would
@@ -547,6 +555,17 @@ step sync:lead-activity \
 step sync:found-reasons \
     npm run sync:found-reasons --workspace=@erp71/database
 
+# sync:inventory-reasons gives tenants their Product Lost (SHRINKAGE) and
+# stock-take (DISCREPANCY) catalogues, and labels blank custom rows so the
+# Stock Discrepancy picker is not an empty option. REQUIRED: seed.ts writes
+# these only at tenant creation, and unlike FOUND there was no boot-time
+# backfill — a workspace that saved a blank reason from settings (code and
+# label were not required) ends up with type SHRINKAGE rows that have nothing
+# to show. Additive per code, so a tenant that already has Theft keeps it;
+# blank labels become the code, or Unspecified. See prisma/sync-inventory-reasons.ts.
+step sync:inventory-reasons \
+    npm run sync:inventory-reasons --workspace=@erp71/database
+
 # sync:project-members puts each project's manager and creator on its team.
 # REQUIRED for any workspace that created a project before this ran: the task
 # Assignee picker offers a project's roster and nothing else, and projects used
@@ -558,6 +577,15 @@ step sync:found-reasons \
 # prisma/sync-project-members.ts.
 step sync:project-members \
     npm run sync:project-members --workspace=@erp71/database
+
+# sync:time-entry-employee stamps each project hour log with the employee its
+# login is linked to. ProjectTimeEntry.employee_id was never written before
+# 2026-11-19, and project costing prices hours through it. New entries and a
+# fresh link stamp themselves; this fills the entries logged before that. Only
+# fills NULLs, so an hour stays with the card it was logged under. Idempotent.
+# See prisma/sync-time-entry-employee.ts.
+step sync:time-entry-employee \
+    npm run sync:time-entry-employee --workspace=@erp71/database
 
 # sync:crm-activity-approval marks every DONE and CANCELLED CrmActivity approved.
 # REQUIRED for the same reason as sync:lead-activity above: db push adds

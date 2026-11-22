@@ -2,18 +2,25 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { EmployeesService, findReportingCycle } from './employees.service';
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
+import { AuditService } from '../audit/audit.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 
 describe('EmployeesService', () => {
   let service: EmployeesService;
   let db: any;
   let encryption: { encrypt: jest.Mock; decrypt: jest.Mock };
+  let audit: { log: jest.Mock };
+  let authCache: { invalidateMember: jest.Mock };
 
   beforeEach(async () => {
     encryption = {
       encrypt: jest.fn((value: string) => `enc:${value}`),
       decrypt: jest.fn((value: string) => value.replace(/^enc:/, '')),
     };
+
+    audit = { log: jest.fn().mockResolvedValue(undefined) };
+    authCache = { invalidateMember: jest.fn() };
 
     db = {
       employee: {
@@ -22,8 +29,12 @@ describe('EmployeesService', () => {
         findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
         delete: jest.fn(),
         count: jest.fn(),
+      },
+      projectTimeEntry: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       department: {
         findUnique: jest.fn(),
@@ -66,6 +77,8 @@ describe('EmployeesService', () => {
         EmployeesService,
         { provide: DatabaseService, useValue: db },
         { provide: EncryptionService, useValue: encryption },
+        { provide: AuditService, useValue: audit },
+        { provide: AuthCacheService, useValue: authCache },
       ],
     }).compile();
 
@@ -609,6 +622,139 @@ describe('EmployeesService', () => {
       const result = await service.linkUser('t1', 'emp-1', 'u1');
 
       expect(result.user_id).toBe('u1');
+    });
+  });
+
+  describe('linkUser — side effects', () => {
+    const linkedRecord = {
+      id: 'emp-1',
+      user_id: 'u1',
+      nid: null,
+      department: null,
+      designation: null,
+      user: null,
+    };
+
+    beforeEach(() => {
+      db.tenantUser.findFirst.mockResolvedValue({ tenant_id: 't1', user_id: 'u1' });
+      db.employee.update.mockResolvedValue(linkedRecord);
+    });
+
+    it('stamps the person\'s unstamped project hours with the employee, in the same transaction', async () => {
+      db.employee.findFirst
+        .mockResolvedValueOnce({ id: 'emp-1', employee_code: 'EMP-00001', user_id: null })
+        .mockResolvedValueOnce(null);
+      db.projectTimeEntry.updateMany.mockResolvedValue({ count: 7 });
+
+      await service.linkUser('t1', 'emp-1', 'u1', undefined, { userId: 'hr-1' });
+
+      expect(db.$transaction).toHaveBeenCalled();
+      expect(db.projectTimeEntry.updateMany).toHaveBeenCalledWith({
+        where: { tenant_id: 't1', user_id: 'u1', employee_id: null },
+        data: { employee_id: 'emp-1' },
+      });
+      expect(audit.log).toHaveBeenCalledWith(
+        'EMPLOYEE_USER_LINKED',
+        'Employee',
+        { userId: 'hr-1', tenantId: 't1' },
+        'emp-1',
+        { employee_code: 'EMP-00001', user_id: 'u1', previous_user_id: null, hours_stamped: 7 },
+      );
+    });
+
+    it('frees the login from a deleted card that still holds it, so the unique index does not trip', async () => {
+      db.employee.findFirst
+        .mockResolvedValueOnce({ id: 'emp-1', user_id: null })
+        .mockResolvedValueOnce(null);
+
+      await service.linkUser('t1', 'emp-1', 'u1');
+
+      expect(db.employee.updateMany).toHaveBeenCalledWith({
+        where: { tenant_id: 't1', user_id: 'u1', deleted_at: { not: null } },
+        data: { user_id: null },
+      });
+    });
+
+    it('drops the cached membership of both the new and the replaced login', async () => {
+      db.employee.findFirst
+        .mockResolvedValueOnce({ id: 'emp-1', user_id: 'u-old' })
+        .mockResolvedValueOnce(null);
+
+      await service.linkUser('t1', 'emp-1', 'u1');
+
+      expect(authCache.invalidateMember).toHaveBeenCalledWith('u1', 't1');
+      expect(authCache.invalidateMember).toHaveBeenCalledWith('u-old', 't1');
+    });
+
+    it('answers a link that loses a race for the same login with 409, not 500', async () => {
+      db.employee.findFirst
+        .mockResolvedValueOnce({ id: 'emp-1', user_id: null })
+        .mockResolvedValueOnce(null);
+      db.employee.update.mockRejectedValue(Object.assign(new Error('unique'), { code: 'P2002' }));
+
+      await expect(service.linkUser('t1', 'emp-1', 'u1')).rejects.toThrow(ConflictException);
+      expect(authCache.invalidateMember).not.toHaveBeenCalled();
+    });
+
+    it('scopes the duplicate check to this workspace — staff in another one may be linked here', async () => {
+      db.employee.findFirst
+        .mockResolvedValueOnce({ id: 'emp-1', user_id: null })
+        .mockResolvedValueOnce(null);
+
+      await service.linkUser('t1', 'emp-1', 'u1');
+
+      expect(db.employee.findFirst).toHaveBeenNthCalledWith(2, {
+        where: { tenant_id: 't1', user_id: 'u1', deleted_at: null },
+      });
+    });
+
+    it('still links when the audit write fails', async () => {
+      db.employee.findFirst
+        .mockResolvedValueOnce({ id: 'emp-1', user_id: null })
+        .mockResolvedValueOnce(null);
+      audit.log.mockRejectedValue(new Error('audit down'));
+
+      await expect(service.linkUser('t1', 'emp-1', 'u1')).resolves.toMatchObject({ user_id: 'u1' });
+    });
+  });
+
+  describe('unlinkUser — side effects', () => {
+    it('drops the cached membership and audits the unlink, without touching logged hours', async () => {
+      db.employee.findFirst.mockResolvedValue({ id: 'emp-1', employee_code: 'EMP-00001', user_id: 'u1' });
+      db.employee.update.mockResolvedValue({ id: 'emp-1', user_id: null, nid: null, user: null });
+
+      await service.unlinkUser('t1', 'emp-1', undefined, { userId: 'hr-1' });
+
+      expect(authCache.invalidateMember).toHaveBeenCalledWith('u1', 't1');
+      expect(audit.log).toHaveBeenCalledWith(
+        'EMPLOYEE_USER_UNLINKED',
+        'Employee',
+        { userId: 'hr-1', tenantId: 't1' },
+        'emp-1',
+        { employee_code: 'EMP-00001', user_id: 'u1' },
+      );
+      expect(db.projectTimeEntry.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('audits nothing when there was no login to unlink', async () => {
+      db.employee.findFirst.mockResolvedValue({ id: 'emp-1', user_id: null });
+      db.employee.update.mockResolvedValue({ id: 'emp-1', user_id: null, nid: null, user: null });
+
+      await service.unlinkUser('t1', 'emp-1');
+
+      expect(audit.log).not.toHaveBeenCalled();
+      expect(authCache.invalidateMember).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('remove — linked login', () => {
+    it('drops the cached membership of the login the deleted card held', async () => {
+      db.employee.findFirst.mockResolvedValue({ id: 'emp-1', user_id: 'u1' });
+      db.employee.update.mockResolvedValue({ id: 'emp-1' });
+
+      await service.remove('t1', 'emp-1');
+
+      expect(authCache.invalidateMember).toHaveBeenCalledWith('u1', 't1');
     });
   });
 

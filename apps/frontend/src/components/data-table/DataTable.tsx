@@ -78,6 +78,7 @@ import BulkActionBar, { type BulkAction } from './BulkActionBar';
 import ExportDialog, { type ExportFormat, type ExportRowScope } from './ExportDialog';
 import AnchoredDropdown from '@/components/document-entry/AnchoredDropdown';
 import { toast } from '@/lib/toast';
+import { useUiStyle } from '@/lib/ui-theme';
 
 declare module '@tanstack/react-table' {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -246,6 +247,9 @@ export interface DataTableProps<T> {
 }
 
 /** Whether a click started on something with a click of its own inside a row. */
+/** How many columns a phone card shows under its title; the rest stay a tap away on the detail page. */
+const PHONE_CARD_FIELDS = 6;
+
 function isFromControl(target: EventTarget | null): boolean {
     return target instanceof Element
         && !!target.closest('button, a, input, select, textarea, label, [role="button"], [role="menuitem"]');
@@ -509,6 +513,9 @@ export default function DataTable<T>({
      */
     const personEntryKey = prefs.personColumns ? JSON.stringify(prefs.personColumns[tableId] ?? null) : null;
     const isMdUp = useIsMdUp();
+    // Outside CLASSIC a phone gets one card per row instead of a table that scrolls sideways.
+    const { polished } = useUiStyle();
+    const phoneCards = polished && !isMdUp;
     const { settings: view } = useTableViewSettings(tableId);
     const rowToneClass = viewOptions
         ? view.striped ? TABLE_ROW_CLASSES.striped : TABLE_ROW_CLASSES.plain
@@ -1406,6 +1413,52 @@ export default function DataTable<T>({
                             {resolvedEmptyMessage}
                         </p>
                     </div>
+                ) : phoneCards ? (
+                    /* The first data column is the card's title, the next few visible
+                       columns become label/value pairs, and the row actions get a
+                       footer of their own so they never squeeze the title. */
+                    <ul className="divide-y divide-gray-100" data-testid="data-table-cards">
+                        {table.getRowModel().rows.map((row) => {
+                            const cells = row.getVisibleCells();
+                            const select = cells.find((c) => c.column.id === PINNED_FIRST_COLUMN_ID);
+                            const actions = cells.find((c) => c.column.id === PINNED_LAST_COLUMN_ID);
+                            const [primary, ...rest] = cells.filter((c) => c !== select && c !== actions);
+                            return (
+                                <li
+                                    key={row.id}
+                                    className={`px-3 py-3 ${onRowClick ? 'cursor-pointer active:bg-gray-50' : ''} ${rowClassName?.(row.original) ?? ''}`}
+                                    onClick={onRowClick ? (event) => {
+                                        if (isFromControl(event.target)) return;
+                                        onRowClick(row.original);
+                                    } : undefined}
+                                >
+                                    <div className="flex items-start gap-2">
+                                        {select ? <div className="pt-0.5">{flexRender(select.column.columnDef.cell, select.getContext())}</div> : null}
+                                        <div className="min-w-0 flex-1 text-sm font-medium text-gray-900">
+                                            {primary ? flexRender(primary.column.columnDef.cell, primary.getContext()) : null}
+                                        </div>
+                                    </div>
+                                    {rest.length ? (
+                                        <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[13px]">
+                                            {rest.slice(0, PHONE_CARD_FIELDS).map((cell) => (
+                                                <div key={cell.id} className="min-w-0">
+                                                    <dt className="truncate text-xs text-gray-500">{exportableColumnLabel(cell.column)}</dt>
+                                                    <dd className="truncate tabular-nums text-gray-900">
+                                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                    </dd>
+                                                </div>
+                                            ))}
+                                        </dl>
+                                    ) : null}
+                                    {actions ? (
+                                        <div className="mt-2 flex justify-end border-t border-gray-100 pt-1.5">
+                                            {flexRender(actions.column.columnDef.cell, actions.getContext())}
+                                        </div>
+                                    ) : null}
+                                </li>
+                            );
+                        })}
+                    </ul>
                 ) : (
                     <DndContext
                         sensors={sensors}

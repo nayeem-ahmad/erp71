@@ -3,6 +3,7 @@ import {
     loadNumberingConfig,
     numberTakenIn,
     numberingScopeKey,
+    previewDocumentNumber,
     tenantCalendarMonth,
 } from './document-number.utils';
 
@@ -45,6 +46,10 @@ function makeNumberingTx(options: {
             findFirst: jest.fn(async ({ where }: any) => counters.find((c) => c.id === where.id && c.tenant_id === where.tenant_id) ?? null),
         },
         documentSequence: {
+            findUnique: jest.fn(async ({ where }: any) => {
+                const next = sequences.get(keyOf(where));
+                return next === undefined ? null : { next_number: next };
+            }),
             createMany: jest.fn(async ({ data }: any) => {
                 const row = data[0];
                 const key = [row.tenant_id, row.doc_type, row.period_key, row.scope_key].join('|');
@@ -198,6 +203,42 @@ describe('issueDocumentNumber', () => {
             tenantId: 't1', docType: 'SALE', storeId: 'store-1', on: october,
             isTaken: async () => true,
         })).rejects.toThrow(/Could not find an unused document number/);
+    });
+});
+
+describe('previewDocumentNumber', () => {
+    const october = new Date('2026-10-07T04:00:00.000Z');
+
+    it('shows the next number without reserving it', async () => {
+        const tx = makeNumberingTx();
+
+        const preview = await previewDocumentNumber(tx as any, {
+            tenantId: 't1', docType: 'WAREHOUSE_TRANSFER', storeId: 'store-1', on: october,
+        });
+        const issued = await issueDocumentNumber(tx as any, {
+            tenantId: 't1', docType: 'WAREHOUSE_TRANSFER', storeId: 'store-1', on: october,
+        });
+        const previewAfter = await previewDocumentNumber(tx as any, {
+            tenantId: 't1', docType: 'WAREHOUSE_TRANSFER', storeId: 'store-1', on: october,
+        });
+
+        expect(preview).toBe('TRF-00001');
+        expect(issued).toBe('TRF-00001');
+        expect(previewAfter).toBe('TRF-00002');
+        expect([...tx.sequences.values()]).toEqual([2]);
+    });
+
+    it('steps over a number that is already in use without advancing the counter', async () => {
+        const tx = makeNumberingTx();
+        const taken = new Set(['TRF-00001']);
+
+        const preview = await previewDocumentNumber(tx as any, {
+            tenantId: 't1', docType: 'WAREHOUSE_TRANSFER', storeId: 'store-1', on: october,
+            isTaken: async (candidate) => taken.has(candidate),
+        });
+
+        expect(preview).toBe('TRF-00002');
+        expect([...tx.sequences.keys()]).toEqual([]);
     });
 });
 

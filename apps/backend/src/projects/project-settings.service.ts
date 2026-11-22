@@ -346,6 +346,7 @@ export class ProjectSettingsService {
                 name,
                 color: (dto.color ?? 'GRAY') as never,
                 sort_order: dto.sortOrder ?? count,
+                billable: dto.billable ?? true,
             },
         });
     }
@@ -368,6 +369,7 @@ export class ProjectSettingsService {
                 ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
                 ...(dto.color !== undefined ? { color: dto.color as never } : {}),
                 ...(dto.sortOrder !== undefined ? { sort_order: dto.sortOrder } : {}),
+                ...(dto.billable !== undefined ? { billable: dto.billable } : {}),
             },
         });
     }

@@ -400,6 +400,7 @@ export const coreMessages = {
         noSearchResults: 'آپ کی تلاش سے کوئی مینو آئٹم نہیں ملا۔',
         expandAll: 'سب کھولیں',
         collapseAll: 'سب بند کریں',
+        recent: "حالیہ",
         modules: {
             dashboard: 'ڈیش بورڈ',
             scorecard: 'اسکور کارڈ',
@@ -445,6 +446,7 @@ export const coreMessages = {
             projectsSprints: 'اسپرنٹس',
             projectsHourLogs: 'گھنٹوں کا اندراج',
             projectsHourLogReport: 'گھنٹوں کی رپورٹ',
+            projectsProfitability: "منافع",
             projectsSetup: 'پروجیکٹ سیٹ اپ',
             meetingsList: 'میٹنگز',
             meetingActions: 'میرے ایکشن پوائنٹس',
@@ -476,6 +478,18 @@ export const coreMessages = {
             crmLeadAging: "لیڈ کی عمر",
 
             crmActivitySummary: "سرگرمیوں کا خلاصہ",
+
+            crmCampaignReport: "مہم کی کارکردگی",
+
+            crmBirthdays: "آنے والی سالگرہیں",
+
+            crmContactCoverage: "رابطے کی کوریج",
+
+            crmRfm: "گاہک کی قدر (RFM)",
+
+            crmLeadFunnel: "لیڈ فنل",
+
+            crmLostLeads: "کھوئی ہوئی لیڈز",
 
             crmReports: 'سی آر ایم رپورٹس',
             crmSetup: 'سی آر ایم سیٹ اپ',
@@ -600,6 +614,7 @@ export const coreMessages = {
             loyaltyProgram: 'لائلٹی پروگرام',
             smsNotifications: 'ایس ایم ایس اطلاعات',
             reportEmails: 'رپورٹ ای میلز',
+            emailServer: "ای میل سرور",
             discountCodes: 'رعایتی کوڈ',
             urlShortener: 'یو آر ایل شارٹنر',
             shortLinks: 'مختصر لنکس',
@@ -875,6 +890,7 @@ export const coreMessages = {
                 loyalty: 'لائلٹی پروگرام',
                 sms: 'ایس ایم ایس اطلاعات',
                 reportEmails: 'رپورٹ ای میلز',
+                emailServer: "ای میل سرور",
                 smsCredits: 'میسجنگ کریڈٹ',
                 aiCredits: 'اے آئی کریڈٹ',
                 auditLogs: 'آڈٹ لاگز',
@@ -1214,6 +1230,7 @@ export const coreMessages = {
         compactViewTitle: 'مختصر منظر',
         loadingProducts: 'پروڈکٹس لوڈ ہو رہے ہیں...',
         stockLeft: '{count} باقی',
+        outOfStockShort: 'ختم',
         notAvailable: 'دستیاب نہیں',
         tabs: {
             checkout: 'چیک آؤٹ',

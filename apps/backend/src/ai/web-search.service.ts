@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { lookup } from 'node:dns/promises';
-import { BlockList, isIP } from 'node:net';
+import { isIP } from 'node:net';
 import { DatabaseService } from '../database/database.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { AiService, type WebCitation } from './ai.service';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
 import { startOfZonedToday } from '../common/tenant-time.util';
+import { isPublicAddress } from '../common/public-address.util';
 
 /**
  * Outside-world lookups for the data chatbot.
@@ -30,44 +31,6 @@ const PAGE_FETCH_TIMEOUT_MS = 15_000;
 const MAX_REDIRECTS = 3;
 
 const FETCHABLE_CONTENT_TYPES = ['text/html', 'application/xhtml+xml', 'text/plain', 'text/markdown'];
-
-/**
- * Ranges a fetch must never reach. The interesting entries are not the obvious
- * loopback ones: 169.254.169.254 (link-local) is the cloud metadata endpoint
- * that turns a page fetch into credential theft, and 100.64/10 is carrier-grade
- * NAT, which on a VPS host is other tenants.
- */
-const BLOCKED_V4: Array<[string, number]> = [
-    ['0.0.0.0', 8],
-    ['10.0.0.0', 8],
-    ['100.64.0.0', 10],
-    ['127.0.0.0', 8],
-    ['169.254.0.0', 16],
-    ['172.16.0.0', 12],
-    ['192.0.0.0', 24],
-    ['192.168.0.0', 16],
-    ['198.18.0.0', 15],
-    ['224.0.0.0', 4],
-    ['240.0.0.0', 4],
-];
-
-const BLOCKED_V6: Array<[string, number]> = [
-    ['::', 128],
-    ['::1', 128],
-    ['fc00::', 7],
-    ['fe80::', 10],
-    ['ff00::', 8],
-    ['64:ff9b::', 96],
-];
-
-function buildBlockList(): BlockList {
-    const list = new BlockList();
-    for (const [net, prefix] of BLOCKED_V4) list.addSubnet(net, prefix, 'ipv4');
-    for (const [net, prefix] of BLOCKED_V6) list.addSubnet(net, prefix, 'ipv6');
-    return list;
-}
-
-const BLOCKED_ADDRESSES = buildBlockList();
 
 /**
  * First-person references to the business, which make a query nonsense as a web
@@ -345,22 +308,13 @@ export class WebSearchService {
         // Every resolved address must be public: a host that returns one public
         // and one internal address would otherwise be a coin flip.
         for (const address of addresses) {
-            if (!this.isPublicAddress(address)) {
+            if (!isPublicAddress(address)) {
                 this.logger.warn(`Blocked page fetch to non-public address ${address} (${host})`);
                 throw new WebToolRefusal(
                     `"${host}" resolves to a private network address and cannot be fetched.`,
                 );
             }
         }
-    }
-
-    private isPublicAddress(address: string): boolean {
-        // ::ffff:10.0.0.1 is 10.0.0.1 wearing a hat — compare the address it maps.
-        const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address);
-        const candidate = mapped ? mapped[1] : address;
-        const version = isIP(candidate);
-        if (version === 0) return false;
-        return !BLOCKED_ADDRESSES.check(candidate, version === 4 ? 'ipv4' : 'ipv6');
     }
 
     /** Reads the body with a byte budget so a huge page cannot exhaust memory. */

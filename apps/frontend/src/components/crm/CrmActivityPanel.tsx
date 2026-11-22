@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CalendarPlus, CheckCircle2, ClipboardList, Pencil, PhoneCall, X } from 'lucide-react';
 import { Button, Field, Input, Select, Switch, Textarea } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
@@ -8,6 +8,7 @@ import CrmActivityComposer from './CrmActivityComposer';
 import CrmMessageTemplatePicker from './CrmMessageTemplatePicker';
 import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
+import { isPlannedActivityOverdue } from '@/components/crm/crm-activity-layout';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { useCanApproveCrmActivity } from '@/lib/use-can-approve-crm-activity';
@@ -59,6 +60,13 @@ type Props = {
      * looked.
      */
     onChanged?: () => void;
+    /**
+     * One activity to pick out of the timeline — the row the activities list's
+     * side panel was opened on. Stepping to the next row of the same lead moves
+     * the marker without refetching, which is what tells two calls to one lead
+     * apart.
+     */
+    highlightId?: string | null;
 };
 
 const emptyComplete = {
@@ -69,6 +77,9 @@ const emptyComplete = {
     nextDueAt: '',
     nextAssignedTo: '',
 };
+/** The activity the side panel was opened on. A ring, so an overdue card keeps its red border. */
+const highlightRing = 'ring-2 ring-blue-600 ring-offset-1';
+
 const emptyEdit = { subject: '', due_at: '', purpose: '', notes: '', assigned_to: '' };
 
 /**
@@ -100,6 +111,7 @@ export default function CrmActivityPanel({
     draft,
     onDraftConsumed,
     onChanged,
+    highlightId,
 }: Readonly<Props>) {
     const { t } = useI18n();
     const m = t.crm.activities;
@@ -163,6 +175,16 @@ export default function CrmActivityPanel({
     }, [leadId, customerId]);
 
     useEffect(() => { void load(); }, [load]);
+
+    // Brings the picked activity into view once the timeline has drawn it — a
+    // lead with a long history would otherwise leave it below the fold.
+    const listRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (loading || !highlightId) return;
+        const card = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[data-activity-id]') ?? [])
+            .find((el) => el.dataset.activityId === highlightId);
+        card?.scrollIntoView?.({ block: 'nearest' });
+    }, [loading, highlightId]);
 
     useEffect(() => {
         if (!draft) return;
@@ -334,7 +356,7 @@ export default function CrmActivityPanel({
     };
 
     return (
-        <div className="space-y-4">
+        <div ref={listRef} className="space-y-4">
             <div className="flex flex-wrap justify-end gap-2">
                 <Button
                     variant="secondary"
@@ -365,11 +387,13 @@ export default function CrmActivityPanel({
                             </div>
                         ) : (
                             planned.map((row) => {
-                                const overdue = Boolean(row.due_at) && new Date(row.due_at as string) < new Date();
+                                const overdue = isPlannedActivityOverdue(row.status, row.due_at);
                                 return (
                                     <div
                                         key={row.id}
-                                        className={`rounded-lg border bg-white p-3 ${overdue ? 'border-red-200' : 'border-gray-100'}`}
+                                        data-activity-id={row.id}
+                                        aria-current={row.id === highlightId ? 'true' : undefined}
+                                        className={`rounded-lg border bg-white p-3 ${overdue ? 'border-red-200' : 'border-gray-100'} ${row.id === highlightId ? highlightRing : ''}`}
                                     >
                                         <div className="flex items-start gap-3">
                                             <div className="min-w-0 flex-1">
@@ -453,7 +477,9 @@ export default function CrmActivityPanel({
                             history.map((row) => (
                                 <div
                                     key={row.id}
-                                    className={`rounded-lg border border-gray-100 bg-white p-3 ${row.status === 'CANCELLED' ? 'opacity-60' : ''}`}
+                                    data-activity-id={row.id}
+                                    aria-current={row.id === highlightId ? 'true' : undefined}
+                                    className={`rounded-lg border border-gray-100 bg-white p-3 ${row.status === 'CANCELLED' ? 'opacity-60' : ''} ${row.id === highlightId ? highlightRing : ''}`}
                                 >
                                     <div className="flex items-start gap-3">
                                         <div className="min-w-0 flex-1">

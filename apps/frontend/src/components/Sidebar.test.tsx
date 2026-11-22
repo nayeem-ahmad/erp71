@@ -3,6 +3,7 @@
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { DEFAULT_SECTION_VALUES } from '@erp71/shared-types';
 import Sidebar from './Sidebar';
+import { NavRecentContext, UiSidebarContext, UiThemeContext } from '@/lib/ui-theme';
 import { api } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
 import { SAVE_DEBOUNCE_MS, usePreferencesStore } from '@/lib/preferences/store';
@@ -95,6 +96,7 @@ jest.mock('lucide-react', () => {
         X: icon,
         Link2: icon,
         Video: icon,
+        History: icon,
     };
 });
 
@@ -146,6 +148,50 @@ jest.mock('@/contexts/NavLayoutContext', () => {
             platformAdminLayout: DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT,
         }),
     };
+});
+
+describe('Sidebar — dark navy rail', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        setBranding();
+    });
+
+    const renderIn = (sidebar: 'LIGHT' | 'NAVY', theme: 'CLASSIC' | 'COLORFUL' = 'CLASSIC') => render(
+        <UiThemeContext.Provider value={theme}>
+            <UiSidebarContext.Provider value={sidebar}>
+                <Sidebar canAccessAccounting />
+            </UiSidebarContext.Provider>
+        </UiThemeContext.Provider>,
+    );
+
+    it('stays white with the usual logo when the workspace keeps the light rail', () => {
+        const { container } = renderIn('LIGHT');
+        const aside = container.querySelector('aside')!;
+        expect(aside).toHaveClass('bg-white');
+        expect(container.querySelector('img[src*="/logo/logo.svg"]')).toBeInTheDocument();
+    });
+
+    it('turns navy and swaps to the light-on-dark logo', () => {
+        const { container } = renderIn('NAVY');
+        const aside = container.querySelector('aside')!;
+        expect(aside).toHaveClass('bg-slate-900');
+        expect(aside).not.toHaveClass('bg-white');
+        expect(container.querySelector('img[src*="/logo/reverse-logo.svg"]')).toBeInTheDocument();
+        expect(container.querySelector('img[src*="/logo/logo.svg"]')).not.toBeInTheDocument();
+    });
+
+    it('uses the reverse square mark on a collapsed navy rail', () => {
+        const { container } = renderIn('NAVY');
+        fireEvent.click(screen.getByTitle('Collapse sidebar'));
+        expect(container.querySelector('img[src*="/logo/reverse-icon.svg"]')).toBeInTheDocument();
+    });
+
+    it('draws inactive items light on navy, not grey on white', () => {
+        renderIn('NAVY');
+        const dashboard = screen.getAllByRole('link').find((link) => link.getAttribute('href') === '/dashboard' && link.textContent?.trim() === 'Dashboard');
+        expect(dashboard).toHaveClass('text-slate-300');
+        expect(dashboard).not.toHaveClass('text-gray-500');
+    });
 });
 
 describe('Sidebar — brand mark', () => {
@@ -806,5 +852,54 @@ describe('Sidebar — preferences', () => {
         const saved = JSON.parse(localStorage.getItem('sidebar-open-groups') ?? '{}');
         expect(Object.keys(saved).some((key) => key.endsWith(':reports'))).toBe(true);
         expect(saveApi).not.toHaveBeenCalled();
+    });
+});
+
+describe('Sidebar — Recent menu items', () => {
+    const seed = (hrefs: string[]) => localStorage.setItem('erp71:nav-recent:t1:u1', JSON.stringify(hrefs));
+    const recentHrefs = () => {
+        const list = screen.queryByRole('list', { name: 'Recent' });
+        return list ? Array.from(list.querySelectorAll('a')).map((a) => a.getAttribute('href')) : null;
+    };
+    const renderWith = (props: Partial<React.ComponentProps<typeof Sidebar>> = {}, enabled = true) => render(
+        <NavRecentContext.Provider value={enabled}>
+            <Sidebar canAccessAccounting {...props} />
+        </NavRecentContext.Provider>,
+    );
+
+    beforeEach(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+        signInForPreferences('t1:u1');
+        usePreferencesStore.getState().clear();
+        setBranding();
+    });
+
+    it('opens the nav with the member\'s recent items, then records the page they are on', () => {
+        seed(['/dashboard', '/no-longer-in-the-nav']);
+        renderWith();
+
+        expect(recentHrefs()).toEqual(['/dashboard']);
+        expect(screen.getByTestId('recent-nav').parentElement?.firstElementChild).toBe(screen.getByTestId('recent-nav'));
+        expect(JSON.parse(localStorage.getItem('erp71:nav-recent:t1:u1')!)[0]).toBe('/accounting');
+    });
+
+    it('is not drawn on the collapsed rail', () => {
+        seed(['/dashboard']);
+        localStorage.setItem('sidebar-collapsed', 'true');
+        renderWith();
+        expect(screen.queryByTestId('recent-nav')).not.toBeInTheDocument();
+    });
+
+    it('is left out of the referee portal, which has one page worth of nav', () => {
+        seed(['/dashboard']);
+        renderWith({ refereeMode: true });
+        expect(screen.queryByTestId('recent-nav')).not.toBeInTheDocument();
+    });
+
+    it('is not shown when the workspace switched it off', () => {
+        seed(['/dashboard']);
+        renderWith({}, false);
+        expect(screen.queryByTestId('recent-nav')).not.toBeInTheDocument();
     });
 });

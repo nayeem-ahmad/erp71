@@ -210,6 +210,12 @@ export const routes = {
             scorecard: '/crm/reports/scorecard',
             leadAging: '/crm/reports/lead-aging',
             activitySummary: '/crm/reports/activity-summary',
+            campaigns: '/crm/reports/campaigns',
+            birthdays: '/crm/reports/birthdays',
+            contactCoverage: '/crm/reports/contact-coverage',
+            rfm: '/crm/reports/rfm',
+            leadFunnel: '/crm/reports/lead-funnel',
+            lostLeads: '/crm/reports/lost-leads',
             followUpCompliance: '/crm/reports/follow-up-compliance',
             coldCustomers: '/crm/reports/cold-customers',
         },
@@ -251,6 +257,8 @@ export const routes = {
         columns: (id: string) => `/projects/${id}/columns` as const,
         backlog: (id: string) => `/projects/${id}/backlog` as const,
         edit: (id: string) => `/projects/${id}/edit` as const,
+        /** Labour cost against budget — VIEW_PROJECT_FINANCIALS. */
+        financials: (id: string) => `/projects/${id}/financials` as const,
         tasks: '/projects/tasks',
         // A card is normally a modal opened from a list or a board. This is the
         // same card as a page, so a link to one task can be pasted somewhere.
@@ -276,6 +284,8 @@ export const routes = {
         sprintDetail: (id: string) => `/projects/sprints/${id}` as const,
         hourLogs: '/projects/hour-logs',
         hourLogReport: '/projects/hour-logs/report',
+        /** Every project's cost, revenue and margin — VIEW_PROJECT_FINANCIALS. */
+        profitability: '/projects/profitability',
         staffing: '/projects/staffing',
         settings: '/projects/settings',
     },
@@ -284,6 +294,8 @@ export const routes = {
         root: '/hr',
         employees: '/hr/employees',
         employeeDetail: (id: string) => `/hr/employees/${id}` as const,
+        /** Bulk "which login is which employee" — static, so it wins over `[id]`. */
+        employeeLinkLogins: '/hr/employees/link-logins',
         departments: '/hr/employees/departments',
         designations: '/hr/employees/designations',
         designationLevels: '/hr/employees/designation-levels',
@@ -341,6 +353,7 @@ export const routes = {
         loyalty: '/settings/loyalty',
         sms: '/settings/sms',
         reports: '/settings/reports',
+        email: '/settings/email',
         discountCodes: '/settings/discount-codes',
         urlShortener: '/settings/url-shortener',
         paymentMethods: '/settings/payment-methods',

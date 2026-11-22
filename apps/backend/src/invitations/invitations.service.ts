@@ -259,8 +259,24 @@ export class InvitationsService {
         callerRole: string,
         inviteeEmail: string,
         tenantRoleIds: string | string[],
+        employeeId?: string,
     ): Promise<void> {
         this.assertCanManageTeam(callerRole);
+
+        // Checked now so the person sending it hears about a taken or departed
+        // card, rather than the invitee silently joining unlinked next week.
+        // Acceptance checks again, because a week is long enough for HR to link
+        // the card by hand.
+        if (employeeId) {
+            const employee = await this.db.employee.findFirst({
+                where: { id: employeeId, tenant_id: tenantId, deleted_at: null },
+                select: { user_id: true },
+            });
+            if (!employee) throw new NotFoundException('Employee not found');
+            if (employee.user_id) {
+                throw new ConflictException('This employee already has a login. Unlink it first.');
+            }
+        }
 
         const roles = await this.getTenantRoles(
             tenantId,
@@ -307,6 +323,7 @@ export class InvitationsService {
                 token_hash: tokenHash,
                 invited_by: invitedByUserId,
                 expires_at: expiresAt,
+                employee_id: employeeId ?? null,
                 roles: { create: roleIds.map((tenant_role_id) => ({ tenant_role_id })) },
             },
         });
@@ -402,7 +419,45 @@ export class InvitationsService {
             }
         }
 
+        if (invitation.employee_id) await this.linkInvitedEmployeeTx(tx, invitation, userId);
+
         await tx.userInvitation.update({ where: { id: invitation.id }, data: { accepted_at: new Date() } });
+    }
+
+    /**
+     * Link the card the invitation named, when it is still free.
+     *
+     * Never fails the acceptance: joining the workspace is what the invitee
+     * came to do, and a card HR linked to someone else in the meantime, or
+     * deleted, is HR's to sort out on the employee page — not a reason to turn
+     * the new member away. Likewise a login already linked to another card here
+     * keeps that link. Hours need no stamping: a brand-new member has none.
+     */
+    private async linkInvitedEmployeeTx(
+        tx: Prisma.TransactionClient,
+        invitation: ValidInvitation,
+        userId: string,
+    ): Promise<void> {
+        const alreadyLinked = await tx.employee.findFirst({
+            where: { tenant_id: invitation.tenant_id, user_id: userId, deleted_at: null },
+            select: { id: true },
+        });
+        if (alreadyLinked) return;
+
+        // A deleted card that still holds this login would trip the unique index.
+        await tx.employee.updateMany({
+            where: { tenant_id: invitation.tenant_id, user_id: userId, deleted_at: { not: null } },
+            data: { user_id: null },
+        });
+        await tx.employee.updateMany({
+            where: {
+                id: invitation.employee_id!,
+                tenant_id: invitation.tenant_id,
+                user_id: null,
+                deleted_at: null,
+            },
+            data: { user_id: userId },
+        });
     }
 
     async accept(rawToken: string, acceptingUserId: string): Promise<void> {

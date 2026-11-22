@@ -1,6 +1,9 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { Prisma } from '@prisma/client';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
+import { LabourPricingService } from './labour-pricing.service';
+import { costColumns, withoutCost } from '../common/labour-cost.util';
 import { paginate } from '../common/pagination.dto';
 import { runImport, type ImportResult } from '../common/import.util';
 import { RemainingHoursService, RemainingSource } from './remaining-hours.service';
@@ -184,6 +187,7 @@ export class ProjectTimeService {
         private readonly db: DatabaseService,
         private readonly remaining: RemainingHoursService,
         private readonly access: ProjectAccessService,
+        private readonly pricing: LabourPricingService,
     ) {}
 
     /**
@@ -304,6 +308,12 @@ export class ProjectTimeService {
         if (span && !dto.allowOverlap) await this.assertNoOverlap(viewer, span, null);
 
         const tagIds = await this.liveTagIds(tenantId, dto.tagIds);
+        // The employee card the hour is costed against. Resolved per request,
+        // so this is free; null for a login linked to none.
+        const employeeId = await this.access.employeeIdOf(viewer);
+        const workDate = new Date(dto.workDate);
+        // Priced now, at the rate in force for this person on this day.
+        const cost = await this.pricing.price(tenantId, employeeId, workDate, hours);
 
         const entry = await this.db.projectTimeEntry.create({
             data: {
@@ -311,8 +321,10 @@ export class ProjectTimeService {
                 task_id: dto.taskId,
                 project_id: task.project_id,
                 user_id: userId,
-                work_date: new Date(dto.workDate),
+                employee_id: employeeId,
+                work_date: workDate,
                 hours,
+                ...cost,
                 started_at: span?.startedAt ?? null,
                 ended_at: span?.endedAt ?? null,
                 note: dto.note?.trim() || null,
@@ -530,6 +542,10 @@ export class ProjectTimeService {
                 work_date: true,
                 started_at: true,
                 ended_at: true,
+                hours: true,
+                employee_id: true,
+                cost_rate: true,
+                cost_source: true,
             },
         });
         if (!entry) throw new NotFoundException('Time entry not found');
@@ -554,6 +570,7 @@ export class ProjectTimeService {
         const tagIds = dto.tagIds === undefined
             ? null
             : await this.liveTagIds(viewer.tenantId, dto.tagIds);
+        const cost = await this.repriceOnUpdate(viewer.tenantId, entry, dto, span);
 
         return this.db.$transaction(async (tx) => {
             if (tagIds !== null) {
@@ -587,6 +604,7 @@ export class ProjectTimeService {
                         : {}),
                     ...(dto.hours !== undefined && !span.value ? { hours: dto.hours } : {}),
                     ...(dto.note !== undefined ? { note: dto.note?.trim() || null } : {}),
+                    ...(cost ?? {}),
                 },
                 include: {
                     user: { select: { id: true, name: true, email: true } },
@@ -725,6 +743,44 @@ export class ProjectTimeService {
      * the join. Both are derived here rather than in the client so no screen
      * has to do timezone arithmetic or know the join table exists.
      */
+    /**
+     * The cost columns an edit should write, or null to leave them alone.
+     *
+     * Only an edit that changes how long the entry was, or which day it was,
+     * touches cost. A new length keeps the rate the entry was priced at — the
+     * hour did not get dearer because someone corrected a typo — unless it was
+     * never priced, when this is a chance to. A new day re-prices from the
+     * rate in force on that day.
+     */
+    private async repriceOnUpdate(
+        tenantId: string,
+        entry: {
+            work_date: Date;
+            hours: Prisma.Decimal | number;
+            employee_id: string | null;
+            cost_rate: Prisma.Decimal | null;
+            cost_source: 'RATE' | 'SALARY' | null;
+        },
+        dto: UpdateTimeEntryDto,
+        span: { changed: boolean; value: { hours: number } | null },
+    ) {
+        const newHours = span.changed && span.value
+            ? span.value.hours
+            : dto.hours !== undefined && !span.value
+                ? dto.hours
+                : null;
+        const newDate = dto.workDate !== undefined && dto.workDate !== entry.work_date.toISOString().slice(0, 10)
+            ? new Date(dto.workDate)
+            : null;
+        if (newHours === null && newDate === null) return null;
+
+        const hours = newHours ?? entry.hours;
+        if (!newDate && entry.cost_rate && entry.cost_source) {
+            return costColumns(hours, { rate: entry.cost_rate, source: entry.cost_source });
+        }
+        return this.pricing.price(tenantId, entry.employee_id, newDate ?? entry.work_date, hours);
+    }
+
     private present<T extends {
         started_at?: Date | null;
         ended_at?: Date | null;
@@ -732,7 +788,8 @@ export class ProjectTimeService {
     }>(entry: T) {
         const { tags, ...rest } = entry;
         return {
-            ...rest,
+            // Cost is pay ÷ hours; it is read through project financials only.
+            ...withoutCost(rest as Record<string, unknown>),
             ...spanTimes(entry.started_at, entry.ended_at),
             tags: (tags ?? []).map((row): TagRow => ({
                 id: row.tag.id,

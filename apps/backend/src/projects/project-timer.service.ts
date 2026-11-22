@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
+import { LabourPricingService } from './labour-pricing.service';
+import { withoutCost } from '../common/labour-cost.util';
 import { RemainingHoursService, RemainingSource } from './remaining-hours.service';
 import { StartTimerDto, StopTimerDto, UpdateTimerDto } from './project.dto';
 import {
@@ -54,6 +56,7 @@ export class ProjectTimerService {
         private readonly db: DatabaseService,
         private readonly remaining: RemainingHoursService,
         private readonly access: ProjectAccessService,
+        private readonly pricing: LabourPricingService,
     ) {}
 
     /** The caller's running timer, or null. Never anyone else's. */
@@ -175,6 +178,11 @@ export class ProjectTimerService {
         const tagIds = await liveTagIds(this.db, viewer.tenantId, timer.tag_ids);
         const note = (dto.note ?? timer.note)?.trim() || null;
 
+        // Outside the transaction: they are reads, and the first is normally no
+        // query at all. The sitting is priced at the rate for the day it began.
+        const employeeId = await this.access.employeeIdOf(viewer);
+        const cost = await this.pricing.price(viewer.tenantId, employeeId, workDate, hours);
+
         const entry = await this.db.$transaction(async (tx) => {
             const created = await tx.projectTimeEntry.create({
                 data: {
@@ -182,8 +190,10 @@ export class ProjectTimerService {
                     task_id: timer.task_id,
                     project_id: timer.project_id,
                     user_id: viewer.userId,
+                    employee_id: employeeId,
                     work_date: workDate,
                     hours,
+                    ...cost,
                     started_at: timer.started_at,
                     ended_at: endedAt,
                     note,
@@ -227,7 +237,8 @@ export class ProjectTimerService {
         });
 
         return {
-            entry: { ...entry, ...spanTimes(entry.started_at, entry.ended_at) },
+            // Cost is pay ÷ hours; it is read through project financials only.
+            entry: { ...withoutCost(entry), ...spanTimes(entry.started_at, entry.ended_at) },
             // Reported rather than refused: see the class comment. The row is
             // written either way and the UI warns instead of blocking.
             overlap: overlap

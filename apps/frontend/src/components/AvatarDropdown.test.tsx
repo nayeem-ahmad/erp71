@@ -1,5 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import AvatarDropdown from './AvatarDropdown';
+import { resetPageTimingViewerForTests, setPageTimingViewerIsStaff } from '@/lib/page-timing/viewer';
 
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn(), replace: jest.fn(), refresh: jest.fn() }),
@@ -55,5 +56,30 @@ describe('AvatarDropdown', () => {
         render(<AvatarDropdown userName="Rahim Uddin" />);
 
         expect(screen.queryByRole('button', { name: 'Support' })).not.toBeInTheDocument();
+    });
+
+    describe('page timing switch', () => {
+        afterEach(() => {
+            resetPageTimingViewerForTests();
+            window.localStorage.clear();
+        });
+
+        it('is not offered to a tenant user', () => {
+            render(<AvatarDropdown userName="Rahim Uddin" />);
+            expect(screen.queryByRole('switch', { name: 'Show page timing' })).not.toBeInTheDocument();
+        });
+
+        it('is offered to platform staff, off by default, and remembered on this device', () => {
+            act(() => setPageTimingViewerIsStaff(true));
+            render(<AvatarDropdown userName="Ops" />);
+            fireEvent.click(screen.getByRole('button', { name: 'User menu' }));
+
+            const toggle = screen.getByRole('switch', { name: 'Show page timing' });
+            expect(toggle).toHaveAttribute('aria-checked', 'false');
+            fireEvent.click(toggle);
+
+            expect(toggle).toHaveAttribute('aria-checked', 'true');
+            expect(window.localStorage.getItem('erp71:page-timing-visible')).toBe('1');
+        });
     });
 });

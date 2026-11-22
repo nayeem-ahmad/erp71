@@ -403,6 +403,28 @@ describe('SalesService', () => {
       }));
     });
 
+    it('tags an invoice raised from a project, and runs the project\'s claim inside the same transaction', async () => {
+      const onCreated = jest.fn(async (client: unknown) => {
+        // Inside the sale's transaction: the client it is handed is the transaction's.
+        expect(client).toBe(tx);
+      });
+
+      await service.create('tenant-1', 'user-1', saleDto, { projectId: 'p1', onCreated } as any);
+
+      expect(tx.sale.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ project_id: 'p1' }),
+      }));
+      expect(onCreated).toHaveBeenCalledWith(tx, expect.objectContaining({ id: expect.any(String) }));
+    });
+
+    it('leaves an ordinary sale untagged', async () => {
+      await service.create('tenant-1', 'user-1', saleDto);
+
+      expect(tx.sale.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ project_id: null }),
+      }));
+    });
+
     it('no longer invents a reference number the user did not type', async () => {
       await service.create('tenant-1', 'user-1', saleDto);
 

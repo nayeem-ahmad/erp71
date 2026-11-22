@@ -223,6 +223,75 @@ export async function issueDocumentNumber(
 }
 
 /**
+ * The number a new document of this type would get, without reserving it.
+ *
+ * A preview for an entry form, not a reservation: two callers opening the form
+ * see the same number, and whichever saves first takes it. It steps over the
+ * same already-taken numbers `issueDocumentNumber` would, so the form does not
+ * promise a number the save then refuses.
+ */
+export async function previewDocumentNumber(
+    tx: Prisma.TransactionClient,
+    params: {
+        tenantId: string;
+        docType: NumberingDocType;
+        storeId: string;
+        /** The POS counter the document would be raised on, if any. */
+        counterId?: string | null;
+        /** The document's date. Defaults to now. */
+        on?: Date;
+        isTaken?: (candidate: string) => Promise<boolean>;
+    },
+): Promise<string> {
+    const { tenantId, docType, storeId } = params;
+    const { config } = await loadNumberingConfig(tx, tenantId, docType);
+    const date = await tenantCalendarMonth(tx, tenantId, params.on ?? new Date());
+
+    const storeCode = templateUsesToken(config.template, 'STORE')
+        ? await ensureStoreCode(tx, tenantId, storeId)
+        : null;
+
+    const needsCounter = config.scope === 'COUNTER' || templateUsesToken(config.template, 'COUNTER');
+    const counter = needsCounter && params.counterId
+        ? await tx.posCounter.findFirst({
+            where: { id: params.counterId, tenant_id: tenantId },
+            select: { id: true, counter_number: true },
+        })
+        : null;
+
+    const periodKey = numberingPeriodKey(config.resetPolicy, date);
+    const scopeKey = numberingScopeKey(config.scope, { storeId, counterId: counter?.id ?? null });
+
+    const row = await tx.documentSequence.findUnique({
+        where: {
+            tenant_id_doc_type_period_key_scope_key: {
+                tenant_id: tenantId,
+                doc_type: docType,
+                period_key: periodKey,
+                scope_key: scopeKey,
+            },
+        },
+        select: { next_number: true },
+    });
+    const nextNumber = row?.next_number ?? 1;
+
+    for (let attempt = 0; attempt <= MAX_TAKEN_SKIPS; attempt += 1) {
+        const candidate = renderDocumentNumber(config, nextNumber + attempt, {
+            ...date,
+            storeCode,
+            counterNumber: counter?.counter_number ?? null,
+        });
+        if (!params.isTaken || !(await params.isTaken(candidate))) {
+            return candidate;
+        }
+    }
+
+    throw new ConflictException(
+        'Could not find an unused document number. Check the format under Settings → Document Numbering.',
+    );
+}
+
+/**
  * The usual `isTaken`: whether any of the tenant's rows already holds the
  * candidate in the unique column the number goes into. Deleted rows count —
  * their number may already be on paper.

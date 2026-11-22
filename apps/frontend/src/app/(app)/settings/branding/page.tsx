@@ -1,13 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, Palette, Image, Globe, Building2 } from 'lucide-react';
+import { Loader2, Palette, Image, Globe, Building2, History } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { toast } from '@/lib/toast';
-import { Button, Field, Input, PageShell } from '@/components/ui';
+import { Button, Checkbox, Field, Input, PageShell } from '@/components/ui';
+import { DEFAULT_UI_SIDEBAR, DEFAULT_UI_THEME, isUiSidebar, isUiTheme, type UiSidebar, type UiTheme } from '@erp71/shared-types';
+import { useSetNavRecentEnabled, useSetUiSidebar, useSetUiTheme } from '@/lib/ui-theme';
+import UiThemePicker from './UiThemePicker';
+import UiSidebarPicker from './UiSidebarPicker';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -18,6 +22,9 @@ interface BrandingForm {
     brand_primary_color: string;
     brand_logo_url: string;
     brand_favicon_url: string;
+    ui_theme: UiTheme;
+    ui_sidebar: UiSidebar;
+    nav_recent_enabled: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -34,7 +41,16 @@ export default function BrandingSettingsPage() {
         brand_primary_color: DEFAULT_COLOR,
         brand_logo_url: '',
         brand_favicon_url: '',
+        ui_theme: DEFAULT_UI_THEME,
+        ui_sidebar: DEFAULT_UI_SIDEBAR,
+        nav_recent_enabled: true,
     });
+    // The style in force right now, as opposed to the one picked but not yet saved.
+    const [savedTheme, setSavedTheme] = useState<UiTheme>(DEFAULT_UI_THEME);
+    const [savedSidebar, setSavedSidebar] = useState<UiSidebar>(DEFAULT_UI_SIDEBAR);
+    const applyUiTheme = useSetUiTheme();
+    const applyUiSidebar = useSetUiSidebar();
+    const applyNavRecent = useSetNavRecentEnabled();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -47,7 +63,13 @@ export default function BrandingSettingsPage() {
                     brand_primary_color: data?.brand_primary_color ?? DEFAULT_COLOR,
                     brand_logo_url: data?.brand_logo_url ?? '',
                     brand_favicon_url: data?.brand_favicon_url ?? '',
+                    ui_theme: isUiTheme(data?.ui_theme) ? data.ui_theme : DEFAULT_UI_THEME,
+                    ui_sidebar: isUiSidebar(data?.ui_sidebar) ? data.ui_sidebar : DEFAULT_UI_SIDEBAR,
+                    // On unless the workspace switched it off.
+                    nav_recent_enabled: data?.nav_recent_enabled !== false,
                 });
+                setSavedSidebar(isUiSidebar(data?.ui_sidebar) ? data.ui_sidebar : DEFAULT_UI_SIDEBAR);
+                setSavedTheme(isUiTheme(data?.ui_theme) ? data.ui_theme : DEFAULT_UI_THEME);
             })
             .catch(() => {
                 // Use defaults
@@ -70,7 +92,7 @@ export default function BrandingSettingsPage() {
         setSaving(true);
         try {
             // Build payload — omit empty strings to allow clearing optional fields
-            const payload: Record<string, string> = {};
+            const payload: Record<string, string | boolean> = {};
             if (form.brand_business_name.trim()) {
                 payload.brand_business_name = form.brand_business_name.trim();
             } else {
@@ -86,6 +108,9 @@ export default function BrandingSettingsPage() {
             if (form.brand_favicon_url.trim()) {
                 payload.brand_favicon_url = form.brand_favicon_url.trim();
             }
+            payload.ui_theme = form.ui_theme;
+            payload.ui_sidebar = form.ui_sidebar;
+            payload.nav_recent_enabled = form.nav_recent_enabled;
 
             await fetchWithAuth('/tenants/branding', {
                 method: 'PATCH',
@@ -94,8 +119,15 @@ export default function BrandingSettingsPage() {
             });
             toast.success(m.saved);
 
+            // The whole app switches style now, not on the next reload.
+            setSavedTheme(form.ui_theme);
+            applyUiTheme(form.ui_theme);
+            setSavedSidebar(form.ui_sidebar);
+            applyUiSidebar(form.ui_sidebar);
+            applyNavRecent(form.nav_recent_enabled);
+
             // Apply primary color change immediately
-            if (payload.brand_primary_color) {
+            if (typeof payload.brand_primary_color === 'string' && payload.brand_primary_color) {
                 document.documentElement.style.setProperty('--color-primary', payload.brand_primary_color);
             }
         } catch (err: any) {
@@ -131,6 +163,33 @@ export default function BrandingSettingsPage() {
                     </div>
                 ) : (
                     <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                        <UiThemePicker
+                            value={form.ui_theme}
+                            saved={savedTheme}
+                            onChange={(ui_theme) => setForm((p) => ({ ...p, ui_theme }))}
+                        />
+                        <UiSidebarPicker
+                            value={form.ui_sidebar}
+                            saved={savedSidebar}
+                            onChange={(ui_sidebar) => setForm((p) => ({ ...p, ui_sidebar }))}
+                        />
+
+                        {/* Recent menu items — a workspace-wide switch; each member's list is their own. */}
+                        <fieldset>
+                            <legend className="inline-flex items-center gap-2 text-sm font-medium text-gray-900">
+                                <History className="w-4 h-4 text-gray-400" aria-hidden />
+                                {m.navRecent.label}
+                            </legend>
+                            <p className="mt-0.5 text-xs text-gray-500">{m.navRecent.hint}</p>
+                            <label className="mt-2 inline-flex min-h-touch items-center gap-2 text-sm text-gray-700 md:min-h-0">
+                                <Checkbox
+                                    checked={form.nav_recent_enabled}
+                                    onChange={(e) => setForm((p) => ({ ...p, nav_recent_enabled: e.target.checked }))}
+                                />
+                                {m.navRecent.toggle}
+                            </label>
+                        </fieldset>
+
                         {/* Business Name */}
                         <Field
                             label={(

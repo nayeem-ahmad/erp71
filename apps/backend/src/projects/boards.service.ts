@@ -37,6 +37,10 @@ import {
  */
 const CARD_TASK_INCLUDE = {
     project: { select: { id: true, code: true, name: true, short_name: true } },
+    // For the board's "hide done" filter: a card's column is derived from this
+    // binding, so the category is the only thing that says whether a card is
+    // finished without walking the column it happens to sit in.
+    status: { select: { id: true, name: true, category: true } },
     assignee: { select: { id: true, name: true, email: true, avatar_url: true } },
     assigneeEmployee: { select: { id: true, name: true } },
     // For the story swimlanes. The code and title are what a lane is headed
@@ -357,6 +361,7 @@ export class BoardsService {
         );
         const unsorted: any[] = [];
 
+        const live: any[] = [];
         for (const row of cards as any[]) {
             // A soft-deleted task is filtered out here rather than having its
             // BoardTask row cleaned up: undeleting the task should bring the
@@ -367,7 +372,14 @@ export class BoardsService {
             const columnId = columnOfStatus.get(row.task.status_id);
             if (columnId && buckets.has(columnId)) buckets.get(columnId)!.push(row.task);
             else unsorted.push(row.task);
+            live.push(row.task);
         }
+
+        // Logged hours are derived from the time entries, never stored on the
+        // task — the same rule the task list follows. The board needs them for
+        // its time and logged-hours filters, and one grouped read is cheaper
+        // than a join per card.
+        await this.attachLoggedHours(tenantId, live);
 
         return {
             id: board.id,
@@ -847,6 +859,28 @@ export class BoardsService {
         });
 
         return this.findOne(viewer, boardId);
+    }
+
+    /**
+     * Logged hours on each card, in place. Derived from the time entries rather
+     * than stored on the task, and read in one grouped query for the whole
+     * board — the time and logged-hours filters need the figure, and a join per
+     * card would cost a round trip for every one of them.
+     *
+     * A task with nothing logged gets an explicit `0` rather than no field, so
+     * the filters read it as "no hours" instead of "not loaded yet".
+     */
+    private async attachLoggedHours(tenantId: string, tasks: any[]): Promise<void> {
+        if (tasks.length === 0) return;
+        const totals = await this.db.projectTimeEntry.groupBy({
+            by: ['task_id'],
+            where: { tenant_id: tenantId, task_id: { in: tasks.map((task) => task.id) } },
+            _sum: { hours: true },
+        });
+        const byTask = new Map<string, number>(
+            (totals as any[]).map((row) => [row.task_id, Number(row._sum?.hours ?? 0)]),
+        );
+        for (const task of tasks) task.logged_hours = byTask.get(task.id) ?? 0;
     }
 }
 

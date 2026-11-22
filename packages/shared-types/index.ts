@@ -152,6 +152,10 @@ export const StorePermission = {
   LOG_PROJECT_TIME: "LOG_PROJECT_TIME",
   MANAGE_SPRINTS: "MANAGE_SPRINTS",
   MANAGE_PROJECT_SETTINGS: "MANAGE_PROJECT_SETTINGS",
+  // Hours are priced from salaries, so labour cost reveals pay. In no module
+  // template: Tenant Admin holds it, and an owner grants it to a project
+  // manager on purpose, as with VIEW_ALL_PROJECTS.
+  VIEW_PROJECT_FINANCIALS: "VIEW_PROJECT_FINANCIALS",
 
   // Meetings
   VIEW_MEETINGS: "VIEW_MEETINGS",
@@ -1066,6 +1070,7 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.MANAGE_PROJECTS]: "Create & edit projects",
   [StorePermission.MANAGE_PROJECT_TASKS]: "Manage project tasks",
   [StorePermission.LOG_PROJECT_TIME]: "Log time on tasks",
+  [StorePermission.VIEW_PROJECT_FINANCIALS]: "See project labour cost & budget use",
   [StorePermission.MANAGE_SPRINTS]: "Plan & run sprints",
   [StorePermission.MANAGE_PROJECT_SETTINGS]: "Manage project types & board columns",
   [StorePermission.VIEW_MEETINGS]: "View meetings you organized, attended or hold an action point in",
@@ -1182,6 +1187,7 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
       StorePermission.LOG_PROJECT_TIME,
       StorePermission.MANAGE_SPRINTS,
       StorePermission.MANAGE_PROJECT_SETTINGS,
+      StorePermission.VIEW_PROJECT_FINANCIALS,
     ],
   },
   {
@@ -2213,6 +2219,7 @@ export * from './careers';
 export * from './locales';
 export * from './terms';
 export * from './password-policy';
+export * from './ui-theme';
 export * from './storefront-orders';
 export * from './board-background';
 export * from './placeholder-email';

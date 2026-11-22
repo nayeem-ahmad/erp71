@@ -12,7 +12,11 @@ import { seedDefaultTenantRoles } from './tenant-role.seed';
 import { linkDefaultPaymentMethodAccounts, seedDefaultPaymentMethods } from './payment-method.seed';
 import { seedDefaultExpenseCategories } from './expense-category.seed';
 import { seedPlatformReferenceData } from './seed-platform';
-import { DEFAULT_FOUND_REASONS } from './inventory-reasons.seed';
+import {
+    DEFAULT_DISCREPANCY_REASONS,
+    DEFAULT_FOUND_REASONS,
+    DEFAULT_SHRINKAGE_REASONS,
+} from './inventory-reasons.seed';
 
 const prisma = new PrismaClient();
 
@@ -296,18 +300,14 @@ async function main() {
     }
 
     const inventoryReasonDefs = [
-        { type: 'SHRINKAGE', code: 'THEFT', label: 'Theft' },
-        { type: 'SHRINKAGE', code: 'DAMAGE', label: 'Damage' },
-        { type: 'SHRINKAGE', code: 'EXPIRATION', label: 'Expiration' },
-        { type: 'SHRINKAGE', code: 'UNKNOWN', label: 'Unknown Loss' },
+        ...DEFAULT_SHRINKAGE_REASONS.map((reason) => ({ type: 'SHRINKAGE', ...reason })),
         // FOUND is the mirror of SHRINKAGE: stock the shelf holds and the book
         // does not. Its own catalogue on purpose — "Theft" cannot explain a
         // surplus, and offering it would invite a nonsense audit trail.
         // Shared with sync-found-reasons.ts, which carries the same list to
         // tenants created before FOUND existed; two copies would drift.
         ...DEFAULT_FOUND_REASONS.map((reason) => ({ type: 'FOUND', ...reason })),
-        { type: 'DISCREPANCY', code: 'COUNT_ERROR', label: 'Count Error' },
-        { type: 'DISCREPANCY', code: 'RECONCILIATION', label: 'Reconciliation Adjustment' },
+        ...DEFAULT_DISCREPANCY_REASONS.map((reason) => ({ type: 'DISCREPANCY', ...reason })),
     ];
 
     for (const [index, def] of inventoryReasonDefs.entries()) {

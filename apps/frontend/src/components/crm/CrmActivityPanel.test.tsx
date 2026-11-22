@@ -1,6 +1,8 @@
 import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { renderWithQueryClient } from '@/test-utils/query-client';
 import CrmActivityPanel from './CrmActivityPanel';
+import { tenantDateOnly } from '@/lib/created-range';
+import { setActiveTimeZone } from '@/lib/format';
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -87,6 +89,8 @@ beforeEach(() => {
     api.getMe.mockResolvedValue({ id: 'user-1' });
 });
 
+afterEach(() => setActiveTimeZone(undefined));
+
 describe('CrmActivityPanel', () => {
     it('splits planned work from logged history', async () => {
         renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
@@ -95,6 +99,21 @@ describe('CrmActivityPanel', () => {
         expect(screen.getByText('Sent the catalogue')).toBeInTheDocument();
         // A past due date on a PLANNED row is the overdue signal.
         expect(screen.getByText('Overdue')).toBeInTheDocument();
+    });
+
+    it('does not call a plan due today overdue after the scheduled hour has passed', async () => {
+        setActiveTimeZone('Asia/Dhaka');
+        const today = tenantDateOnly();
+        api.getAllCrmActivities.mockResolvedValue([
+            { ...planned, due_at: `${today}T00:00:00.000Z` },
+            logged,
+            cancelled,
+        ]);
+
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
+
+        expect(await screen.findByText('Chase the invoice')).toBeInTheDocument();
+        expect(screen.queryByText('Overdue')).not.toBeInTheDocument();
     });
 
     it('scopes the load to the lead it was given', async () => {

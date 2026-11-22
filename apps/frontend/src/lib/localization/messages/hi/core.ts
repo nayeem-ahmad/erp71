@@ -400,6 +400,7 @@ export const coreMessages = {
         noSearchResults: "आपकी खोज से कोई मेनू आइटम मेल नहीं खाता।",
         expandAll: "सभी विस्तृत करें",
         collapseAll: "सभी संक्षिप्त करें",
+        recent: "हाल के",
         modules: {
             dashboard: "डैशबोर्ड",
             scorecard: "स्कोरकार्ड",
@@ -445,6 +446,7 @@ export const coreMessages = {
             projectsSprints: "स्प्रिंट",
             projectsHourLogs: "घंटा लॉग",
             projectsHourLogReport: "घंटा लॉग रिपोर्ट",
+            projectsProfitability: "लाभप्रदता",
             projectsSetup: "परियोजना सेटअप",
             meetingsList: "बैठकें",
             meetingActions: "मेरे कार्य बिंदु",
@@ -476,6 +478,18 @@ export const coreMessages = {
             crmLeadAging: "लीड की आयु",
 
             crmActivitySummary: "गतिविधि सारांश",
+
+            crmCampaignReport: "अभियान प्रदर्शन",
+
+            crmBirthdays: "आने वाले जन्मदिन",
+
+            crmContactCoverage: "संपर्क कवरेज",
+
+            crmRfm: "ग्राहक मूल्य (RFM)",
+
+            crmLeadFunnel: "लीड फ़नल",
+
+            crmLostLeads: "खोई लीड",
 
             crmReports: "CRM रिपोर्ट",
             crmSetup: "CRM सेटअप",
@@ -600,6 +614,7 @@ export const coreMessages = {
             loyaltyProgram: "लॉयल्टी कार्यक्रम",
             smsNotifications: "SMS सूचनाएँ",
             reportEmails: "रिपोर्ट ईमेल",
+            emailServer: "ईमेल सर्वर",
             discountCodes: "छूट कोड",
             urlShortener: "URL शॉर्टनर",
             shortLinks: "छोटे लिंक",
@@ -875,6 +890,7 @@ export const coreMessages = {
                 loyalty: "लॉयल्टी कार्यक्रम",
                 sms: "SMS सूचनाएँ",
                 reportEmails: "रिपोर्ट ईमेल",
+                emailServer: "ईमेल सर्वर",
                 smsCredits: "मैसेजिंग क्रेडिट",
                 aiCredits: "AI क्रेडिट",
                 auditLogs: "ऑडिट लॉग",
@@ -1214,6 +1230,7 @@ export const coreMessages = {
         compactViewTitle: "संक्षिप्त दृश्य",
         loadingProducts: "उत्पाद लोड हो रहे हैं...",
         stockLeft: "{count} शेष",
+        outOfStockShort: "स्टॉक नहीं",
         notAvailable: 'N/A',
         tabs: {
             checkout: "चेकआउट",

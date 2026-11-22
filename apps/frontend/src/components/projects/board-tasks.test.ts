@@ -1,5 +1,7 @@
+import { addCalendarDays, tenantDateOnly } from '@/lib/created-range';
 import {
     applyFilters,
+    cardsMatching,
     coverClass,
     CARD_SORTS,
     matchesText,
@@ -13,12 +15,14 @@ import {
     initialsOf,
     LABEL_COLORS,
     labelClass,
+    labelOptionsFrom,
     labelsOf,
     matchesFilters,
     NO_FILTERS,
     projectLabelOf,
     projectOptionsFrom,
     sprintOptionsFrom,
+    storyOptionsFrom,
     type BoardColumn,
     type BoardTask,
     type ProjectLabel,
@@ -35,6 +39,9 @@ const shift = (days: number) => {
     // The API serialises a @db.Date at UTC midnight; keep that shape.
     return `${d.getFullYear()}-${month}-${day}T00:00:00.000Z`;
 };
+
+/** The filter names "today" in the workspace timezone (Asia/Dhaka by default). */
+const tenantShift = (days: number) => `${addCalendarDays(tenantDateOnly(), days)}T00:00:00.000Z`;
 
 const task = (overrides: Partial<BoardTask> = {}): BoardTask => ({
     id: 't1',
@@ -140,124 +147,203 @@ describe('matchesFilters', () => {
         expect(matchesFilters(task(), NO_FILTERS)).toBe(true);
     });
 
-    it('filters by assignee', () => {
+    it('filters by assignee, and by several at once', () => {
         const mine = task({ assignee: { id: 'u1', name: 'Karim', email: 'k@x.com' } });
-        expect(matchesFilters(mine, { ...NO_FILTERS, assignee: 'user:u1' })).toBe(true);
-        expect(matchesFilters(mine, { ...NO_FILTERS, assignee: 'user:u2' })).toBe(false);
+        const theirs = task({ assignee: { id: 'u2', name: 'Rafi', email: 'r@x.com' } });
+        expect(matchesFilters(mine, { ...NO_FILTERS, assignees: ['user:u1'] })).toBe(true);
+        expect(matchesFilters(mine, { ...NO_FILTERS, assignees: ['user:u2'] })).toBe(false);
+        // Any of the picked people, the way the list treats a multi-select.
+        expect(matchesFilters(mine, { ...NO_FILTERS, assignees: ['user:u2', 'user:u1'] })).toBe(true);
+        expect(matchesFilters(theirs, { ...NO_FILTERS, assignees: ['user:u2', 'user:u1'] })).toBe(true);
     });
 
-    it('filters down to unassigned cards', () => {
-        expect(matchesFilters(task(), { ...NO_FILTERS, assignee: 'none' })).toBe(true);
+    it('spells "me" with the signed-in user, and matches nobody without one', () => {
+        const mine = task({ assignee: { id: 'u1', name: 'Karim', email: 'k@x.com' } });
+        expect(matchesFilters(mine, { ...NO_FILTERS, assignees: ['me'] }, 'u1')).toBe(true);
+        expect(matchesFilters(mine, { ...NO_FILTERS, assignees: ['me'] }, 'u2')).toBe(false);
+        // Before `/auth/me` answers, "me" is nobody rather than everybody.
+        expect(matchesFilters(mine, { ...NO_FILTERS, assignees: ['me'] }, null)).toBe(false);
+    });
+
+    it('filters down to unassigned cards, under either name', () => {
+        expect(matchesFilters(task(), { ...NO_FILTERS, assignees: ['none'] })).toBe(true);
+        expect(matchesFilters(task(), { ...NO_FILTERS, assignees: ['unassigned'] })).toBe(true);
         expect(
             matchesFilters(task({ assignee: { id: 'u1', email: 'k@x.com' } }), {
                 ...NO_FILTERS,
-                assignee: 'none',
+                assignees: ['none'],
             }),
         ).toBe(false);
     });
 
-    it('filters by priority', () => {
-        expect(matchesFilters(task({ priority: 'URGENT' }), { ...NO_FILTERS, priority: 'URGENT' })).toBe(true);
-        expect(matchesFilters(task({ priority: 'LOW' }), { ...NO_FILTERS, priority: 'URGENT' })).toBe(false);
+    it('filters by status, and hides done cards on request', () => {
+        const doing = task({ status: { id: 's2', name: 'Doing', category: 'IN_PROGRESS' } });
+        const done = task({ status: { id: 's3', name: 'Done', category: 'DONE' } });
+        expect(matchesFilters(doing, { ...NO_FILTERS, statusCategories: ['IN_PROGRESS'] })).toBe(true);
+        expect(matchesFilters(done, { ...NO_FILTERS, statusCategories: ['IN_PROGRESS'] })).toBe(false);
+
+        expect(matchesFilters(done, { ...NO_FILTERS, hideDone: true })).toBe(false);
+        expect(matchesFilters(doing, { ...NO_FILTERS, hideDone: true })).toBe(true);
+        // A card marked finished in the panel counts as done even if the column
+        // still says otherwise — the same rule the list applies.
+        expect(matchesFilters(task({ completed_at: shift(-1) }), { ...NO_FILTERS, hideDone: true })).toBe(false);
+    });
+
+    it('filters by priority, and by several at once', () => {
+        expect(matchesFilters(task({ priority: 'URGENT' }), { ...NO_FILTERS, priorities: ['URGENT'] })).toBe(true);
+        expect(matchesFilters(task({ priority: 'LOW' }), { ...NO_FILTERS, priorities: ['URGENT'] })).toBe(false);
+        expect(matchesFilters(task({ priority: 'LOW' }), { ...NO_FILTERS, priorities: ['URGENT', 'LOW'] })).toBe(
+            true,
+        );
     });
 
     it('finds overdue cards', () => {
-        expect(matchesFilters(task({ due_date: shift(-1) }), { ...NO_FILTERS, due: 'overdue' })).toBe(true);
-        expect(matchesFilters(task({ due_date: shift(1) }), { ...NO_FILTERS, due: 'overdue' })).toBe(false);
+        expect(matchesFilters(task({ due_date: tenantShift(-1) }), { ...NO_FILTERS, due: ['overdue'] })).toBe(true);
+        expect(matchesFilters(task({ due_date: tenantShift(1) }), { ...NO_FILTERS, due: ['overdue'] })).toBe(false);
     });
 
     // Chasing a finished task because its date has passed is noise.
     it('does not call a completed card overdue', () => {
         expect(
-            matchesFilters(task({ due_date: shift(-9), completed_at: shift(-8) }), {
+            matchesFilters(task({ due_date: tenantShift(-9), completed_at: tenantShift(-8) }), {
                 ...NO_FILTERS,
-                due: 'overdue',
+                due: ['overdue'],
             }),
         ).toBe(false);
     });
 
     it('finds cards due today', () => {
-        expect(matchesFilters(task({ due_date: shift(0) }), { ...NO_FILTERS, due: 'today' })).toBe(true);
-        expect(matchesFilters(task({ due_date: shift(-1) }), { ...NO_FILTERS, due: 'today' })).toBe(false);
+        expect(matchesFilters(task({ due_date: tenantShift(0) }), { ...NO_FILTERS, due: ['today'] })).toBe(true);
+        expect(matchesFilters(task({ due_date: tenantShift(-1) }), { ...NO_FILTERS, due: ['today'] })).toBe(false);
     });
 
     it('this week means the next seven days, not anything already late', () => {
-        expect(matchesFilters(task({ due_date: shift(3) }), { ...NO_FILTERS, due: 'week' })).toBe(true);
-        expect(matchesFilters(task({ due_date: shift(30) }), { ...NO_FILTERS, due: 'week' })).toBe(false);
-        expect(matchesFilters(task({ due_date: shift(-2) }), { ...NO_FILTERS, due: 'week' })).toBe(false);
+        expect(matchesFilters(task({ due_date: tenantShift(3) }), { ...NO_FILTERS, due: ['week'] })).toBe(true);
+        expect(matchesFilters(task({ due_date: tenantShift(30) }), { ...NO_FILTERS, due: ['week'] })).toBe(false);
+        expect(matchesFilters(task({ due_date: tenantShift(-2) }), { ...NO_FILTERS, due: ['week'] })).toBe(false);
     });
 
     it('finds cards with no due date', () => {
-        expect(matchesFilters(task(), { ...NO_FILTERS, due: 'none' })).toBe(true);
-        expect(matchesFilters(task({ due_date: shift(1) }), { ...NO_FILTERS, due: 'none' })).toBe(false);
+        expect(matchesFilters(task(), { ...NO_FILTERS, due: ['none'] })).toBe(true);
+        expect(matchesFilters(task({ due_date: tenantShift(1) }), { ...NO_FILTERS, due: ['none'] })).toBe(false);
     });
 
     it('a dated filter excludes undated cards', () => {
-        expect(matchesFilters(task(), { ...NO_FILTERS, due: 'overdue' })).toBe(false);
+        expect(matchesFilters(task(), { ...NO_FILTERS, due: ['overdue'] })).toBe(false);
+    });
+
+    it('a due range is an alternative to the presets, not a further cut', () => {
+        const ranged = {
+            ...NO_FILTERS,
+            due: ['today' as const],
+            dueFrom: tenantShift(4).slice(0, 10),
+            dueTo: tenantShift(6).slice(0, 10),
+        };
+        expect(matchesFilters(task({ due_date: tenantShift(0) }), ranged)).toBe(true);
+        expect(matchesFilters(task({ due_date: tenantShift(5) }), ranged)).toBe(true);
+        expect(matchesFilters(task({ due_date: tenantShift(20) }), ranged)).toBe(false);
     });
 
     it('combines filters as AND', () => {
         const t = task({ priority: 'HIGH', assignee: { id: 'u1', email: 'k@x.com' } });
-        expect(matchesFilters(t, { ...NO_FILTERS, assignee: 'user:u1', priority: 'HIGH' })).toBe(true);
-        expect(matchesFilters(t, { ...NO_FILTERS, assignee: 'user:u1', priority: 'LOW' })).toBe(false);
+        expect(matchesFilters(t, { ...NO_FILTERS, assignees: ['user:u1'], priorities: ['HIGH'] })).toBe(true);
+        expect(matchesFilters(t, { ...NO_FILTERS, assignees: ['user:u1'], priorities: ['LOW'] })).toBe(false);
     });
 
-    it('filters by label', () => {
+    it('filters by label, several at once', () => {
         const tagged = task({ labels: [{ label: blocked }] });
-        expect(matchesFilters(tagged, { ...NO_FILTERS, label: 'l1' })).toBe(true);
-        expect(matchesFilters(tagged, { ...NO_FILTERS, label: 'l2' })).toBe(false);
-        expect(matchesFilters(task(), { ...NO_FILTERS, label: 'l1' })).toBe(false);
+        expect(matchesFilters(tagged, { ...NO_FILTERS, labelIds: ['l1'] })).toBe(true);
+        expect(matchesFilters(tagged, { ...NO_FILTERS, labelIds: ['l2'] })).toBe(false);
+        expect(matchesFilters(tagged, { ...NO_FILTERS, labelIds: ['l2', 'l1'] })).toBe(true);
+        expect(matchesFilters(task(), { ...NO_FILTERS, labelIds: ['l1'] })).toBe(false);
     });
 
     it('matches a card carrying the label among several', () => {
         const tagged = task({ labels: [{ label: waiting }, { label: blocked }] });
-        expect(matchesFilters(tagged, { ...NO_FILTERS, label: 'l1' })).toBe(true);
+        expect(matchesFilters(tagged, { ...NO_FILTERS, labelIds: ['l1'] })).toBe(true);
     });
 
     it('finds cards with no label at all', () => {
-        expect(matchesFilters(task(), { ...NO_FILTERS, label: 'none' })).toBe(true);
+        expect(matchesFilters(task(), { ...NO_FILTERS, labelIds: ['none'] })).toBe(true);
         expect(
-            matchesFilters(task({ labels: [{ label: blocked }] }), { ...NO_FILTERS, label: 'none' }),
+            matchesFilters(task({ labels: [{ label: blocked }] }), { ...NO_FILTERS, labelIds: ['none'] }),
         ).toBe(false);
+    });
+
+    it('filters by logged hours and by the time-vs-estimate flags', () => {
+        const over = task({ logged_hours: 9, estimate_hours: '4', status: { id: 's', name: 'Doing', category: 'IN_PROGRESS' } });
+        expect(matchesFilters(over, { ...NO_FILTERS, hours: { op: 'gt', value: 5 } })).toBe(true);
+        expect(matchesFilters(over, { ...NO_FILTERS, hours: { op: 'lt', value: 5 } })).toBe(false);
+        expect(matchesFilters(over, { ...NO_FILTERS, time: ['over'] })).toBe(true);
+        expect(matchesFilters(task({ logged_hours: 0 }), { ...NO_FILTERS, time: ['none'] })).toBe(true);
+        expect(matchesFilters(task({ logged_hours: 1 }), { ...NO_FILTERS, time: ['no-estimate'] })).toBe(true);
+    });
+
+    it('filters by when a card was last updated and when it was created', () => {
+        const stale = task({ updated_at: new Date(Date.now() - 9 * 86400000).toISOString() });
+        expect(matchesFilters(stale, { ...NO_FILTERS, updated: ['d7'] })).toBe(true);
+        expect(matchesFilters(task({ updated_at: new Date().toISOString() }), { ...NO_FILTERS, updated: ['d7'] })).toBe(
+            false,
+        );
+
+        const old = task({ created_at: shift(-40) });
+        expect(matchesFilters(old, { ...NO_FILTERS, createdFrom: shift(-50).slice(0, 10) })).toBe(true);
+        expect(matchesFilters(old, { ...NO_FILTERS, createdFrom: shift(-10).slice(0, 10) })).toBe(false);
     });
 });
 
-describe('project and sprint filters', () => {
+describe('project, sprint and story filters', () => {
     const alpha = { id: 'p1', code: 'ALP', name: 'Alpha' };
     const beta = { id: 'p2', code: 'BET', name: 'Beta' };
     const sprint4 = { id: 's4', name: 'Sprint 4', status: 'ACTIVE' };
 
-    it('filters by project', () => {
-        expect(matchesFilters(task({ project: alpha }), { ...NO_FILTERS, project: 'p1' })).toBe(true);
-        expect(matchesFilters(task({ project: beta }), { ...NO_FILTERS, project: 'p1' })).toBe(false);
+    it('filters by project, and by several at once', () => {
+        expect(matchesFilters(task({ project: alpha }), { ...NO_FILTERS, projectIds: ['p1'] })).toBe(true);
+        expect(matchesFilters(task({ project: beta }), { ...NO_FILTERS, projectIds: ['p1'] })).toBe(false);
+        expect(matchesFilters(task({ project: beta }), { ...NO_FILTERS, projectIds: ['p1', 'p2'] })).toBe(true);
     });
 
     it('filters by sprint', () => {
         const planned = task({ sprint_id: 's4', sprint: sprint4 });
-        expect(matchesFilters(planned, { ...NO_FILTERS, sprint: 's4' })).toBe(true);
-        expect(matchesFilters(planned, { ...NO_FILTERS, sprint: 's5' })).toBe(false);
-        expect(matchesFilters(task(), { ...NO_FILTERS, sprint: 's4' })).toBe(false);
+        expect(matchesFilters(planned, { ...NO_FILTERS, sprintIds: ['s4'] })).toBe(true);
+        expect(matchesFilters(planned, { ...NO_FILTERS, sprintIds: ['s5'] })).toBe(false);
+        expect(matchesFilters(task(), { ...NO_FILTERS, sprintIds: ['s4'] })).toBe(false);
     });
 
     // The scalar arrives on every card even where the relation was not loaded.
     it('reads the sprint off the bare id when the relation is missing', () => {
-        expect(matchesFilters(task({ sprint_id: 's4' }), { ...NO_FILTERS, sprint: 's4' })).toBe(true);
+        expect(matchesFilters(task({ sprint_id: 's4' }), { ...NO_FILTERS, sprintIds: ['s4'] })).toBe(true);
     });
 
-    it('finds cards in no sprint', () => {
-        expect(matchesFilters(task(), { ...NO_FILTERS, sprint: 'none' })).toBe(true);
+    it('finds cards in some sprint, or in none', () => {
+        expect(matchesFilters(task(), { ...NO_FILTERS, sprintIds: ['none'] })).toBe(true);
         expect(
-            matchesFilters(task({ sprint_id: 's4', sprint: sprint4 }), { ...NO_FILTERS, sprint: 'none' }),
+            matchesFilters(task({ sprint_id: 's4', sprint: sprint4 }), { ...NO_FILTERS, sprintIds: ['none'] }),
         ).toBe(false);
+        const both = { ...NO_FILTERS, sprintIds: ['none', 's4'] };
+        expect(matchesFilters(task(), both)).toBe(true);
+        expect(matchesFilters(task({ sprint_id: 's4', sprint: sprint4 }), both)).toBe(true);
     });
 
-    it('counts either as an active filter', () => {
-        expect(hasActiveFilter({ ...NO_FILTERS, project: 'p1' })).toBe(true);
-        expect(hasActiveFilter({ ...NO_FILTERS, sprint: 'none' })).toBe(true);
+    it('filters by user story, and by cards under none', () => {
+        const story = { id: 'st1', code: 'OTB-3', title: 'Take a payment' };
+        expect(matchesFilters(task({ userStory: story }), { ...NO_FILTERS, storyIds: ['st1'] })).toBe(true);
+        expect(matchesFilters(task(), { ...NO_FILTERS, storyIds: ['st1'] })).toBe(false);
+        expect(matchesFilters(task(), { ...NO_FILTERS, storyIds: ['none'] })).toBe(true);
     });
 
-    it('lets the search box find a card by its sprint', () => {
+    it('counts any of them as an active filter', () => {
+        expect(hasActiveFilter({ ...NO_FILTERS, projectIds: ['p1'] })).toBe(true);
+        expect(hasActiveFilter({ ...NO_FILTERS, sprintIds: ['none'] })).toBe(true);
+        expect(hasActiveFilter({ ...NO_FILTERS, storyIds: ['st1'] })).toBe(true);
+        expect(hasActiveFilter({ ...NO_FILTERS, hideDone: true })).toBe(true);
+    });
+
+    it('lets the search box find a card by its sprint or story', () => {
         expect(matchesText(task({ sprint_id: 's4', sprint: sprint4 }), 'sprint 4')).toBe(true);
+        expect(
+            matchesText(task({ userStory: { id: 'st1', code: 'OTB-3', title: 'Take a payment' } }), 'otb-3'),
+        ).toBe(true);
     });
 });
 
@@ -288,6 +374,55 @@ describe('sprintOptionsFrom', () => {
         // Numbers compare as numbers, so Sprint 9 comes before Sprint 10.
         expect(options.map((option) => option.key)).toEqual(['s8', 's9', 's10']);
         expect(options[0]).toEqual({ key: 's8', label: 'Sprint 8', status: 'ACTIVE' });
+    });
+});
+
+describe('storyOptionsFrom', () => {
+    it('offers each story holding a card once, ordered by its code', () => {
+        const options = storyOptionsFrom([
+            task({ id: 'a', userStory: { id: 'st2', code: 'OTB-10', title: 'Refunds' } }),
+            task({ id: 'b', userStory: { id: 'st1', code: 'OTB-2', title: 'Payments' } }),
+            task({ id: 'c', userStory: { id: 'st2', code: 'OTB-10', title: 'Refunds' } }),
+            task({ id: 'd' }),
+        ]);
+        // Numeric compare, so OTB-2 comes before OTB-10.
+        expect(options).toEqual([
+            { key: 'st1', label: 'Payments', code: 'OTB-2' },
+            { key: 'st2', label: 'Refunds', code: 'OTB-10' },
+        ]);
+    });
+});
+
+describe('labelOptionsFrom', () => {
+    it('offers each label a card actually carries, sorted by name', () => {
+        const options = labelOptionsFrom([
+            task({ id: 'a', labels: [{ label: blocked }] }),
+            task({ id: 'b', labels: [{ label: waiting }, { label: blocked }] }),
+            task({ id: 'c' }),
+        ]);
+        expect(options).toEqual([blocked, waiting]);
+    });
+
+    it('leaves out a tenant label nobody on the board carries', () => {
+        expect(labelOptionsFrom([task({ id: 'a', labels: [{ label: blocked }] })])).toEqual([blocked]);
+    });
+});
+
+describe('cardsMatching', () => {
+    // A tick's count has to say what ticking it would add, so the count for one
+    // dimension ignores the choice already made in it.
+    it('ignores the dimension it is counting', () => {
+        const cards = [
+            task({ id: 'a', priority: 'URGENT' }),
+            task({ id: 'b', priority: 'HIGH' }),
+            task({ id: 'c', priority: 'LOW' }),
+        ];
+        const filters = { ...NO_FILTERS, priorities: ['LOW'] };
+        // Narrowed by priority, only the low one survives...
+        expect(cards.filter((card) => matchesFilters(card, filters)).map((card) => card.id)).toEqual(['c']);
+        // ...but counting the priority options against everything else keeps all
+        // three, so ticking "Urgent" still reads as one card.
+        expect(cardsMatching(cards, filters, 'priority').map((card) => card.id)).toEqual(['a', 'b', 'c']);
     });
 });
 
@@ -325,7 +460,7 @@ describe('applyFilters', () => {
             column([task({ id: 'a', priority: 'URGENT' }), task({ id: 'b', priority: 'LOW' })]),
             { ...column([task({ id: 'c', priority: 'LOW' })]), id: 'doing', name: 'Doing' },
         ];
-        const result = applyFilters(columns, { ...NO_FILTERS, priority: 'URGENT' });
+        const result = applyFilters(columns, { ...NO_FILTERS, priorities: ['URGENT'] });
 
         // Dropping an empty column would make the board's shape change as you
         // type, and you could no longer drop a card into it.
@@ -343,7 +478,7 @@ describe('applyFilters', () => {
                 task({ id: 'new', priority: 'MEDIUM' }),
             ]),
         ];
-        const result = applyFilters(columns, { ...NO_FILTERS, priority: 'URGENT' }, new Set(['new']));
+        const result = applyFilters(columns, { ...NO_FILTERS, priorities: ['URGENT'] }, new Set(['new']));
 
         expect(result[0].tasks.map((t) => t.id)).toEqual(['a', 'new']);
     });
@@ -457,7 +592,7 @@ describe('text search', () => {
 
     it('narrows the board through matchesFilters, alongside the other filters', () => {
         expect(matchesFilters(card(), { ...NO_FILTERS, text: 'login' })).toBe(true);
-        expect(matchesFilters(card(), { ...NO_FILTERS, text: 'login', priority: 'URGENT' })).toBe(
+        expect(matchesFilters(card(), { ...NO_FILTERS, text: 'login', priorities: ['URGENT'] })).toBe(
             false,
         );
         expect(hasActiveFilter({ ...NO_FILTERS, text: 'login' })).toBe(true);

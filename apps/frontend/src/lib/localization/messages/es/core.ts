@@ -400,6 +400,7 @@ export const coreMessages = {
         noSearchResults: "Ningún elemento del menú coincide con tu búsqueda.",
         expandAll: "Expandir todo",
         collapseAll: "Contraer todo",
+        recent: "Recientes",
         modules: {
             dashboard: "Panel",
             scorecard: "Cuadro de mando",
@@ -445,6 +446,7 @@ export const coreMessages = {
             projectsSprints: "Sprints",
             projectsHourLogs: "Registros de horas",
             projectsHourLogReport: "Informe de horas",
+            projectsProfitability: "Rentabilidad",
             projectsSetup: "Configuración de proyectos",
             meetingsList: "Reuniones",
             meetingActions: "Mis puntos de acción",
@@ -476,6 +478,18 @@ export const coreMessages = {
             crmLeadAging: "Antigüedad de clientes potenciales",
 
             crmActivitySummary: "Resumen de actividades",
+
+            crmCampaignReport: "Rendimiento de campañas",
+
+            crmBirthdays: "Próximos cumpleaños",
+
+            crmContactCoverage: "Cobertura de contactos",
+
+            crmRfm: "Valor del cliente (RFM)",
+
+            crmLeadFunnel: "Embudo de clientes potenciales",
+
+            crmLostLeads: "Clientes potenciales perdidos",
 
             crmReports: "Informes de CRM",
             crmSetup: "Configuración de CRM",
@@ -600,6 +614,7 @@ export const coreMessages = {
             loyaltyProgram: "Programa de fidelidad",
             smsNotifications: "Notificaciones por SMS",
             reportEmails: "Correos de informes",
+            emailServer: "Servidor de correo",
             discountCodes: "Códigos de descuento",
             urlShortener: "Acortador de URL",
             shortLinks: "Enlaces cortos",
@@ -875,6 +890,7 @@ export const coreMessages = {
                 loyalty: "Programa de fidelidad",
                 sms: "Notificaciones por SMS",
                 reportEmails: "Correos de informes",
+                emailServer: "Servidor de correo",
                 smsCredits: "Créditos de mensajería",
                 aiCredits: "Créditos de IA",
                 auditLogs: "Registros de auditoría",
@@ -1214,6 +1230,7 @@ export const coreMessages = {
         compactViewTitle: "Vista compacta",
         loadingProducts: "Cargando productos...",
         stockLeft: "{count} restantes",
+        outOfStockShort: "Agotado",
         notAvailable: 'N/A',
         tabs: {
             checkout: "Cobro",

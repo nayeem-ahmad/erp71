@@ -16,6 +16,8 @@ import { AiChatWidget, SupportDialog, TimeTracker, VoiceNavWidget } from '@/comp
 import TimerChip from '@/components/projects/TimerChip';
 import Toaster from '@/components/Toaster';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
+import PageTimingTracker from '@/components/page-timing/PageTimingTracker';
+import PageTimingStrip from '@/components/page-timing/PageTimingStrip';
 import { CompactUiProvider } from '@/contexts/CompactUiContext';
 import { PlatformFeaturesProvider } from '@/contexts/PlatformFeaturesContext';
 import { AppShellProvider } from '@/contexts/AppShellContext';
@@ -50,6 +52,7 @@ import {
     applyEmployeeContext,
     applyTenantContext,
     getLoginContexts,
+    isInEmployeePortal,
     isShopWorkspacePath,
 } from '@/lib/auth-session';
 import {
@@ -291,10 +294,11 @@ function AppShell({ children }: DashboardLayoutProps) {
     // set by hand. Pairing it with `user.employee` — which only the server can
     // populate — means faking the context yields an employee shell with no data
     // rather than any access they did not already have.
-    const inEmployeeMode = Boolean(user?.employee?.id) && activeContext === 'employee';
+    // With cards in several workspaces, the one this tab is pinned to must be among them.
+    const inEmployeeMode = isInEmployeePortal(user, activeContext, activeTenantId);
     const loginContexts = user
         ? getLoginContexts(user)
-        : { hasPlatformConsole: false, isReferee: false, isEmployee: false, tenants: [], count: 0 };
+        : { hasPlatformConsole: false, isReferee: false, isEmployee: false, employees: [], tenants: [], count: 0 };
     const canSwitchAccount = loginContexts.count > 1;
     const activeTenant = (inPlatformAdminMode || inRefereeMode)
         ? null
@@ -655,6 +659,12 @@ function AppShell({ children }: DashboardLayoutProps) {
             routes.crm.reports.scorecard,
             routes.crm.reports.leadAging,
             routes.crm.reports.activitySummary,
+            routes.crm.reports.campaigns,
+            routes.crm.reports.birthdays,
+            routes.crm.reports.contactCoverage,
+            routes.crm.reports.rfm,
+            routes.crm.reports.leadFunnel,
+            routes.crm.reports.lostLeads,
             routes.crm.reports.followUpCompliance,
         ];
         if (!hasPremiumCrm && premiumCrmPaths.some((p) => pathname.startsWith(p))) {
@@ -963,10 +973,17 @@ function AppShell({ children }: DashboardLayoutProps) {
                 )}
 
                 {/* Page content */}
-                <main className="flex-1 overflow-hidden">
-                    <CompactUiProvider density="compact">
-                        {canRenderChildren ? children : null}
-                    </CompactUiProvider>
+                <main className="flex flex-1 flex-col overflow-hidden">
+                    {/* The page keeps the whole height it had, less the page
+                        timing strip when that is showing (platform staff who
+                        switched it on). Pages scroll inside their own shell,
+                        so the strip sits under every page, whatever its layout. */}
+                    <div className="min-h-0 flex-1 overflow-hidden">
+                        <CompactUiProvider density="compact">
+                            {canRenderChildren ? children : null}
+                        </CompactUiProvider>
+                    </div>
+                    {canRenderChildren ? <PageTimingStrip /> : null}
                 </main>
             </div>
 
@@ -974,6 +991,7 @@ function AppShell({ children }: DashboardLayoutProps) {
             {supportOpen && canOpenSupport ? <SupportDialog onClose={() => setSupportOpen(false)} /> : null}
             <Toaster />
             <ServiceWorkerRegistrar />
+            <PageTimingTracker isPlatformStaff={platformRole !== null} />
         </div>
         </TenantLocaleProvider>
         </AppShellProvider>

@@ -467,6 +467,7 @@ function expectedKarim() {
             has_login: true,
         },
         employee: { id: 'emp-1', tenant_id: 'tenant-2', employee_code: 'EMP-00007', name: 'Karim' },
+        employees: [{ id: 'emp-1', tenant_id: 'tenant-2', employee_code: 'EMP-00007', name: 'Karim' }],
         tenants: [
             {
                 id: 'tenant-1',
@@ -665,6 +666,7 @@ describe('AuthService.getMe — the response the app shell reads', () => {
             platform_features: PLATFORM_FEATURES,
             referee: null,
             employee: null,
+            employees: [],
             // The platform workspace is reached from the admin console, not listed.
             tenants: [],
         });
@@ -690,7 +692,7 @@ describe('AuthService.getMe — the response the app shell reads', () => {
         expect(log.map((entry) => [entry.model, entry.op, entry.statements])).toEqual([
             ['user', 'findUnique', 11],
             ['referee', 'findMany', 1],
-            ['employee', 'findFirst', 1],
+            ['employee', 'findMany', 1],
             ['tenantAddonSubscription', 'findMany', 2],
             ['tenantAddonSubscription', 'findMany', 2],
         ]);

@@ -400,6 +400,7 @@ export const coreMessages = {
         noSearchResults: "Keine Menüeinträge passen zu Ihrer Suche.",
         expandAll: "Alle ausklappen",
         collapseAll: "Alle einklappen",
+        recent: "Zuletzt",
         modules: {
             dashboard: "Übersicht",
             scorecard: "Scorecard",
@@ -445,6 +446,7 @@ export const coreMessages = {
             projectsSprints: "Sprints",
             projectsHourLogs: "Stundenerfassung",
             projectsHourLogReport: "Stundenbericht",
+            projectsProfitability: "Rentabilität",
             projectsSetup: "Projekteinrichtung",
             meetingsList: "Besprechungen",
             meetingActions: "Meine Maßnahmen",
@@ -476,6 +478,18 @@ export const coreMessages = {
             crmLeadAging: "Lead-Alter",
 
             crmActivitySummary: "Aktivitätenübersicht",
+
+            crmCampaignReport: "Kampagnenleistung",
+
+            crmBirthdays: "Anstehende Geburtstage",
+
+            crmContactCoverage: "Kontaktabdeckung",
+
+            crmRfm: "Kundenwert (RFM)",
+
+            crmLeadFunnel: "Lead-Trichter",
+
+            crmLostLeads: "Verlorene Leads",
 
             crmReports: "CRM-Berichte",
             crmSetup: "CRM-Einrichtung",
@@ -600,6 +614,7 @@ export const coreMessages = {
             loyaltyProgram: "Treueprogramm",
             smsNotifications: "SMS-Benachrichtigungen",
             reportEmails: "Bericht-E-Mails",
+            emailServer: "E-Mail-Server",
             discountCodes: "Rabattcodes",
             urlShortener: "URL-Kürzer",
             shortLinks: "Kurzlinks",
@@ -875,6 +890,7 @@ export const coreMessages = {
                 loyalty: "Treueprogramm",
                 sms: "SMS-Benachrichtigungen",
                 reportEmails: "Bericht-E-Mails",
+                emailServer: "E-Mail-Server",
                 smsCredits: "Nachrichten-Guthaben",
                 aiCredits: "KI-Guthaben",
                 auditLogs: "Prüfprotokolle",
@@ -1214,6 +1230,7 @@ export const coreMessages = {
         compactViewTitle: "Kompaktansicht",
         loadingProducts: "Produkte werden geladen...",
         stockLeft: "{count} übrig",
+        outOfStockShort: "Ausverkauft",
         notAvailable: 'N/A',
         tabs: {
             checkout: "Kassieren",

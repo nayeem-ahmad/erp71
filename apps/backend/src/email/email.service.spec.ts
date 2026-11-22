@@ -4,6 +4,7 @@ import { PlatformSettingsService } from '../platform-settings/platform-settings.
 import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
 import { TenantMessagingIdentityService } from '../tenant-messaging/tenant-messaging-identity.service';
 import { SmsCreditService } from '../sms/sms-credit.service';
+import { TenantSmtpService, TenantSmtpError } from '../tenant-messaging/tenant-smtp.service';
 import { InsufficientMessagingCreditsError } from '../sms/messaging-channel';
 
 describe('EmailService', () => {
@@ -29,6 +30,11 @@ describe('EmailService', () => {
         consume: jest.fn().mockResolvedValue({ allowed: true, balance: 99 }),
     };
 
+    const tenantSmtp = {
+        resolve: jest.fn().mockResolvedValue(null),
+        deliver: jest.fn().mockResolvedValue(undefined),
+    };
+
     beforeEach(async () => {
         process.env = { ...originalEnv };
         global.fetch = jest.fn();
@@ -40,6 +46,7 @@ describe('EmailService', () => {
                 { provide: CircuitBreakerRegistry, useValue: breakers },
                 { provide: TenantMessagingIdentityService, useValue: tenantIdentity },
                 { provide: SmsCreditService, useValue: credits },
+                { provide: TenantSmtpService, useValue: tenantSmtp },
             ],
         }).compile();
 
@@ -50,6 +57,74 @@ describe('EmailService', () => {
         global.fetch = originalFetch;
         process.env = originalEnv;
         jest.clearAllMocks();
+        tenantSmtp.resolve.mockResolvedValue(null);
+    });
+
+    describe("a shop's own mail server", () => {
+        const ownServer = {
+            host: 'smtp.shop.example',
+            port: 587,
+            security: 'starttls',
+            username: 'hello@shop.example',
+            password: 'secret',
+            fromEmail: 'hello@shop.example',
+            fromName: 'Shop',
+            replyTo: null,
+        };
+
+        beforeEach(() => {
+            process.env.BREVO_API_KEY = 'xkeysib-platform';
+            tenantSmtp.resolve.mockImplementation(async (id: string | null) => (id === 'tenant-1' ? ownServer : null));
+        });
+
+        it('carries a metered shop message without spending a credit', async () => {
+            await service.sendCustom('c@example.com', 'Hi', '<p>Hi</p>', { tenantId: 'tenant-1' });
+
+            expect(tenantSmtp.deliver).toHaveBeenCalledWith('tenant-1', ownServer, {
+                to: 'c@example.com',
+                subject: 'Hi',
+                html: '<p>Hi</p>',
+            });
+            expect(credits.consume).not.toHaveBeenCalled();
+            expect(global.fetch).not.toHaveBeenCalled();
+        });
+
+        it('carries a receipt that names only the billed tenant', async () => {
+            await service.sendBillingInvoice('c@example.com', 'Shop', 100, 'BDT', undefined, {
+                billTenantId: 'tenant-1',
+                purpose: 'Sale receipt',
+            });
+
+            expect(tenantSmtp.deliver).toHaveBeenCalledTimes(1);
+            expect(credits.consume).not.toHaveBeenCalled();
+        });
+
+        it('never carries platform mail', async () => {
+            (global.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 201, text: async () => '' });
+            await service.sendPasswordReset('owner@shop.example', 'token');
+
+            expect(tenantSmtp.resolve).toHaveBeenCalledWith(null);
+            expect(tenantSmtp.deliver).not.toHaveBeenCalled();
+            expect(global.fetch).toHaveBeenCalledWith('https://api.brevo.com/v3/smtp/email', expect.anything());
+        });
+
+        it('surfaces the server failure instead of falling back to the platform', async () => {
+            tenantSmtp.deliver.mockRejectedValueOnce(new TenantSmtpError('The server rejected the username or password.'));
+
+            await expect(
+                service.sendCustom('c@example.com', 'Hi', '<p>Hi</p>', { tenantId: 'tenant-1' }),
+            ).rejects.toThrow('The server rejected the username or password.');
+            expect(global.fetch).not.toHaveBeenCalled();
+        });
+
+        it('swallows the failure for fire-and-forget mail', async () => {
+            tenantSmtp.deliver.mockRejectedValueOnce(new TenantSmtpError('down'));
+
+            await expect(
+                service.sendBillingInvoice('c@example.com', 'Shop', 100, 'BDT', undefined, { billTenantId: 'tenant-1' }),
+            ).resolves.toBeUndefined();
+            expect(global.fetch).not.toHaveBeenCalled();
+        });
     });
 
     it('sends verification email via Brevo API when SMTP_PASS is an API key', async () => {

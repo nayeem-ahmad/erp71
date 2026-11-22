@@ -22,6 +22,11 @@ export interface ProjectFormValues {
     startDate: string;
     targetEndDate: string;
     budgetAmount: string;
+    /** Split by category on Financials: the budget is set there, read-only here. */
+    budgetByCategory?: boolean;
+    billingType: string;
+    contractValue: string;
+    billRate: string;
 }
 
 const EMPTY: ProjectFormValues = {
@@ -37,6 +42,9 @@ const EMPTY: ProjectFormValues = {
     startDate: '',
     targetEndDate: '',
     budgetAmount: '',
+    billingType: 'INTERNAL',
+    contractValue: '',
+    billRate: '',
 };
 
 /** Mirrors the backend's `PROJECT_CODE_PATTERN`, so a bad code is caught inline. */
@@ -63,6 +71,10 @@ export function toFormValues(project: Record<string, unknown> | null): ProjectFo
         startDate: toDateInput(project.start_date as string),
         targetEndDate: toDateInput(project.target_end_date as string),
         budgetAmount: project.budget_amount == null ? '' : String(project.budget_amount),
+        budgetByCategory: Boolean(project.budget_by_category),
+        billingType: (project.billing_type as string) ?? 'INTERNAL',
+        contractValue: project.contract_value == null ? '' : String(project.contract_value),
+        billRate: project.bill_rate == null ? '' : String(project.bill_rate),
     };
 }
 
@@ -187,11 +199,23 @@ export default function ProjectForm({
             // `null`, not `undefined`, on edit: undefined is "leave alone", so
             // clearing the field would otherwise leave the old budget in place.
             // `@IsOptional()` skips null, and the service writes it as null.
-            budgetAmount: form.budgetAmount
-                ? Number(form.budgetAmount)
-                : mode === 'edit'
-                  ? null
-                  : undefined,
+            // Split by category, the budget belongs to Financials: leave it alone.
+            budgetAmount: form.budgetByCategory
+                ? undefined
+                : form.budgetAmount
+                  ? Number(form.budgetAmount)
+                  : mode === 'edit'
+                    ? null
+                    : undefined,
+            billingType: form.billingType,
+            // Each figure only means something under its own billing type; the
+            // other is cleared rather than left behind to confuse a report.
+            contractValue: form.billingType === 'FIXED_PRICE' && form.contractValue
+                ? Number(form.contractValue)
+                : mode === 'edit' ? null : undefined,
+            billRate: form.billingType === 'TIME_AND_MATERIALS' && form.billRate
+                ? Number(form.billRate)
+                : mode === 'edit' ? null : undefined,
         };
 
         try {
@@ -296,15 +320,54 @@ export default function ProjectForm({
                         ))}
                     </Select>
                 </Field>
-                <Field label={m.fields.budget}>
+                <Field
+                    label={m.fields.budget}
+                    htmlFor="project-budget"
+                    hint={form.budgetByCategory ? m.financials.budgetSetByCategory : undefined}
+                >
                     <Input
+                        id="project-budget"
                         type="number"
                         min="0"
                         step="0.01"
                         value={form.budgetAmount}
+                        disabled={form.budgetByCategory}
                         onChange={set('budgetAmount')}
                     />
                 </Field>
+                <Field label={m.financials.billingType} htmlFor="project-billing-type">
+                    <Select id="project-billing-type" value={form.billingType} onChange={set('billingType')}>
+                        {(['INTERNAL', 'FIXED_PRICE', 'TIME_AND_MATERIALS'] as const).map((key) => (
+                            <option key={key} value={key}>
+                                {m.financials.billingTypes[key]}
+                            </option>
+                        ))}
+                    </Select>
+                </Field>
+                {form.billingType === 'FIXED_PRICE' && (
+                    <Field label={m.financials.contractValue} htmlFor="project-contract-value" hint={m.financials.beforeVat}>
+                        <Input
+                            id="project-contract-value"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={form.contractValue}
+                            onChange={set('contractValue')}
+                        />
+                    </Field>
+                )}
+                {form.billingType === 'TIME_AND_MATERIALS' && (
+                    <Field label={m.financials.billRate} htmlFor="project-bill-rate" hint={m.financials.beforeVat}>
+                        <Input
+                            id="project-bill-rate"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={form.billRate}
+                            onChange={set('billRate')}
+                        />
+                    </Field>
+                )}
                 <Field label={m.fields.startDate}>
                     <Input type="date" value={form.startDate} onChange={set('startDate')} />
                 </Field>

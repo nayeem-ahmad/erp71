@@ -8,10 +8,13 @@ const H = 30;
 export function Sparkline({
     points,
     positive = true,
+    inverse = false,
     className,
 }: {
     points: number[];
     positive?: boolean;
+    /** A white line, for a coloured card (the COLORFUL KPI tiles). */
+    inverse?: boolean;
     className?: string;
 }) {
     // A single reading has no shape to draw; the tile shows the value instead.
@@ -32,8 +35,8 @@ export function Sparkline({
     const mean = points.reduce((sum, value) => sum + value, 0) / points.length;
     const meanY = y(mean);
 
-    const stroke = positive ? 'stroke-primary' : 'stroke-series-2';
-    const fill = positive ? 'fill-primary-light' : 'fill-series-2-light';
+    const stroke = inverse ? 'stroke-white' : positive ? 'stroke-primary' : 'stroke-series-2';
+    const fill = inverse ? 'fill-white/15' : positive ? 'fill-primary-light' : 'fill-series-2-light';
 
     return (
         <svg
@@ -48,7 +51,7 @@ export function Sparkline({
                 x2={W}
                 y1={meanY}
                 y2={meanY}
-                className="stroke-gray-300"
+                className={inverse ? 'stroke-white/30' : 'stroke-gray-300'}
                 strokeWidth={1}
                 vectorEffect="non-scaling-stroke"
             />
@@ -63,15 +66,18 @@ export function Sparkline({
                 strokeLinejoin="round"
                 vectorEffect="non-scaling-stroke"
             />
-            <circle
-                data-testid="sparkline-endpoint"
-                cx={W}
-                cy={plotted[plotted.length - 1].y}
-                r={3.2}
-                className={`${positive ? 'fill-primary' : 'fill-series-2'} stroke-white`}
-                strokeWidth={2}
-                vectorEffect="non-scaling-stroke"
-            />
+            {/* On a full-width coloured card the stretched viewBox turns the dot into an ellipse. */}
+            {inverse ? null : (
+                <circle
+                    data-testid="sparkline-endpoint"
+                    cx={W}
+                    cy={plotted[plotted.length - 1].y}
+                    r={3.2}
+                    className={`${positive ? 'fill-primary' : 'fill-series-2'} stroke-white`}
+                    strokeWidth={2}
+                    vectorEffect="non-scaling-stroke"
+                />
+            )}
         </svg>
     );
 }

@@ -175,6 +175,9 @@ enum StorePermission {
   LOG_PROJECT_TIME
   MANAGE_SPRINTS
   MANAGE_PROJECT_SETTINGS
+  /// Labour cost, budget use and margin on a project. Hours are priced from
+  /// salaries, so this reveals pay: Tenant Admin only by default.
+  VIEW_PROJECT_FINANCIALS
 
   // Meetings
   VIEW_MEETINGS
@@ -490,7 +493,8 @@ model User {
   notifications                     Notification[]
   storefrontCustomers               Customer[]
   storefrontOrders                  StorefrontOrder[]
-  employee                          Employee?
+  /// One per workspace the login is staff in — see `Employee.user_id`.
+  employees                         Employee[]
   jobSeeker                         JobSeeker?
   applicantRecords                  Applicant[]                 @relation("ApplicantUser")
   approvedLeaves                    LeaveRequest[]              @relation("LeaveApprover")
@@ -707,10 +711,15 @@ model UserInvitation {
   expires_at     DateTime
   accepted_at    DateTime?
   created_at     DateTime  @default(now())
+  /// The employee card the invitee will be linked to when they accept, if
+  /// any. Checked when the invite is sent and again on acceptance, which
+  /// links it only if the card is still free.
+  employee_id    String?
 
   tenant     Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   tenantRole TenantRole           @relation(fields: [tenant_role_id], references: [id], onDelete: Restrict)
   invitedBy  User                 @relation("InvitationSender", fields: [invited_by], references: [id])
+  employee   Employee?            @relation(fields: [employee_id], references: [id], onDelete: SetNull)
   roles      UserInvitationRole[]
 
   @@index([tenant_id, email])
@@ -810,6 +819,40 @@ model JobRun {
   @@index([job_name, status, finished_at])
 }
 
+/// One measured page view in the app, sent by the browser so the platform can
+/// see real users' load times per page (System Health → Page performance).
+/// Platform-level telemetry, deliberately not tenant-scoped and carrying no
+/// user id: the dashboard groups by page, never by who loaded it. Pruned after
+/// 30 days by `PageTimingsService`. All durations are milliseconds.
+model PageTimingSample {
+  id               String   @id @default(uuid())
+  created_at       DateTime @default(now())
+  /// The pathname with ids replaced by `:id`, e.g. `/sales/:id`.
+  route            String
+  /// `load` (a full page load) or `navigate` (a route change inside the app).
+  nav_type         String
+  total_ms         Int
+  /// Full loads only: DNS, connect, server response and download of the page itself.
+  document_ms      Int?
+  /// From the document (or the click) until the page asked for its data.
+  boot_ms          Int
+  /// First API call starting to the last one finishing.
+  data_ms          Int
+  /// Last response until the next paint.
+  render_ms        Int
+  api_calls        Int
+  /// Summed over the view's API calls.
+  network_ms       Int
+  server_ms        Int
+  db_ms            Int
+  token_wait_ms    Int
+  slowest_endpoint String?
+  slowest_ms       Int?
+
+  @@index([created_at])
+  @@index([route, created_at])
+}
+
 /// Progress tracker + append-detection marker for a six-month demo-data load.
 /// Tenant-scoped. One row per "Load Demo Data" invocation; batch_number lets a
 /// tenant append multiple loads. Drives the in-process background generator and
@@ -882,6 +925,17 @@ model Tenant {
   brand_logo_url            String?
   brand_favicon_url         String?
   brand_business_name       String?
+  /// The workspace's visual style: CLASSIC | POLISHED | COLORFUL — see
+  /// `UI_THEMES` in shared-types. Presentation only; every style shows the
+  /// same data and the same actions.
+  ui_theme                  String   @default("CLASSIC")
+  /// The sidebar's colour, beside the style: LIGHT | NAVY — see `UI_SIDEBARS`.
+  ui_sidebar                String   @default("LIGHT")
+  /// Whether the sidebar opens with a "Recent" list of the menu items each
+  /// member visited last. On by default; an owner can switch it off for the
+  /// whole workspace in Settings › Branding. The history itself is per member
+  /// and per browser — only the switch is stored here.
+  nav_recent_enabled        Boolean  @default(true)
   default_vat_rate          Decimal? @db.Decimal(5, 2) // e.g. 15.00 for 15% BD VAT
   /// How the shop's prices are entered. True (the default, and how ERP71 has
   /// always worked): prices include VAT and the tax is worked out of them.
@@ -1164,6 +1218,11 @@ model Tenant {
   externalSyncRuns           ExternalSyncRun[]
   externalSyncSnapshots      ExternalSyncSnapshot[]
   projects                   Project[]
+  employeeCostRates          EmployeeCostRate[]
+  projectCostingSettings     ProjectCostingSettings?
+  projectCostEntries         ProjectCostEntry[]
+  projectBudgetLines         ProjectBudgetLine[]
+  projectMaterialIssues      ProjectMaterialIssue[]
   projectTypes               ProjectType[]
   projectMembers             ProjectMember[]
   projectMilestones          ProjectMilestone[]
@@ -1212,6 +1271,7 @@ model Tenant {
   jobApplications            JobApplication[]
   jobApplicationEvents       JobApplicationEvent[]
   messagingIdentity          TenantMessagingIdentity?
+  smtpServer                 TenantSmtpServer?
   blogPosts                  TenantBlogPost[]
   blogCategories             TenantBlogCategory[]
   blogSettings               TenantBlogSettings?
@@ -1336,6 +1396,45 @@ model TenantMessagingIdentity {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
   /// Platform-admin user id of the last editor.
+  updated_by String?
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+}
+
+/// A shop's own outgoing mail server. Unlike `TenantMessagingIdentity` (set by a
+/// platform admin, sent through the platform's provider) this is entered by the
+/// shop itself: its server authenticates its own address, so there is no way to
+/// send as somebody else's. When enabled it carries every message the shop sends
+/// — receipts, campaigns, meeting mail — and none of the platform's own mail.
+model TenantSmtpServer {
+  id        String @id @default(uuid())
+  tenant_id String @unique
+
+  /// Off until a test send has succeeded against the current settings.
+  enabled  Boolean @default(false)
+  host     String?
+  port     Int     @default(587)
+  /// "starttls" (usually 587) or "ssl" (usually 465). Plaintext is not offered.
+  security String  @default("starttls")
+  username String?
+  /// AES-256-GCM ciphertext from platform-settings/crypto.util — never stored plain.
+  password String?
+
+  /// Bare address the server is allowed to send as.
+  from_email String?
+  from_name  String?
+  reply_to   String?
+
+  /// Last successful test send against the settings as they are now. Cleared
+  /// whenever a connection field changes, and required before `enabled`.
+  verified_at DateTime?
+  /// Last delivery failure, shown to the shop so a broken password is noticed
+  /// before the customers notice the missing receipts.
+  last_error    String?
+  last_error_at DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
   updated_by String?
 
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -1915,6 +2014,7 @@ model Warehouse {
   purchaseItems       PurchaseItem[]       @relation("PurchaseItemWarehouse")
   purchaseReturns     PurchaseReturn[]     @relation("PurchaseReturnWarehouse")
   purchaseReturnItems PurchaseReturnItem[] @relation("PurchaseReturnItemWarehouse")
+  projectMaterialIssues ProjectMaterialIssue[]
 
   @@unique([tenant_id, code])
   // A branch cannot hold two warehouses of the same name: the pickers on every
@@ -2062,6 +2162,8 @@ model Product {
   bomComponents          BomComponent[]           @relation("BomComponent")
   productionWastages     ProductionWastage[]      @relation("ProductionWastage")
   importShipmentItems    ImportShipmentItem[]
+  projectMaterialLines   ProjectMaterialIssueLine[]
+  projectBillingSettings ProjectCostingSettings[] @relation("ProjectBillingProduct")
 
   @@unique([tenant_id, sku])
   @@index([tenant_id, brand_id])
@@ -2310,6 +2412,9 @@ model WarehouseTransfer {
   /// APPROVE_GOODS_TRANSFER approves it. REJECTED is terminal.
   status                   String    @default("DRAFT")
   notes                    String?
+  /// The transfer's own date, chosen on the entry form and defaulting to the
+  /// moment it is saved. `created_at` stays the time the row was inserted.
+  transfer_date            DateTime  @default(now())
   sent_at                  DateTime?
   received_at              DateTime?
   created_at               DateTime  @default(now())
@@ -2351,6 +2456,7 @@ model WarehouseTransfer {
   items                WarehouseTransferItem[]
 
   @@unique([tenant_id, transfer_number])
+  @@index([tenant_id, transfer_date])
   @@index([tenant_id, status, created_at])
   @@index([tenant_id, source_warehouse_id])
   @@index([tenant_id, destination_warehouse_id])
@@ -2724,6 +2830,9 @@ model PurchaseItem {
   warehouse   Warehouse?           @relation("PurchaseItemWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
   returnItems PurchaseReturnItem[]
   jobCosts    ProductionJobCost[]
+  /// Project costs drawn from this line — a subcontractor's or transporter's
+  /// bill split across projects. Capped, with `jobCosts`, at `line_total`.
+  projectCosts ProjectCostEntry[]
 
   @@index([purchase_id])
   /// Purchase entry looks up "what did we last pay for this, and to whom?".
@@ -3226,6 +3335,10 @@ model Sale {
   /// document. Both stay null on an ordinary counter sale.
   quotation_id   String?
   sales_order_id String?
+  /// The project this invoice bills — set when it is raised from the
+  /// project's Financials. Revenue on the project is what these invoice,
+  /// net of VAT and of returns, unless cancelled.
+  project_id     String?
 
   /// Which warehouse the goods left, captured when the entry is posted rather
   /// than re-derived later. Before this column existed an edit or a delete
@@ -3309,10 +3422,14 @@ model Sale {
   exchanges      SalesExchange[]
   warrantyClaims WarrantyClaim[]
   deliveryOrders DeliveryOrder[]
+  project            Project?           @relation(fields: [project_id], references: [id], onDelete: SetNull)
+  billedMilestones   ProjectMilestone[] @relation("ProjectMilestoneSale")
+  billedTimeEntries  ProjectTimeEntry[] @relation("ProjectTimeEntryBilledSale")
 
   @@unique([tenant_id, serial_number])
   @@unique([tenant_id, reference_number])
   @@index([tenant_id, created_at])
+  @@index([tenant_id, project_id])
   @@index([tenant_id, sale_date])
   @@index([tenant_id, store_id])
   @@index([tenant_id, session_id])
@@ -6152,7 +6269,11 @@ model Employee {
   date_of_joining  DateTime?
   department_id    String?
   designation_id   String?
-  user_id          String?        @unique
+  /// The ERP login this person uses, if any. At most one employee per login
+  /// **per workspace** — not across all of them: a manager who runs two shops,
+  /// or an accountant who keeps several clients' books, is staff in each.
+  /// `TenantInterceptor` resolves it once per request (`TenantContext.employeeId`).
+  user_id          String?
   /// Home branch. Nullable until sync-branch-books fills every row and a
   /// later migration sets NOT NULL. Creating an employee still requires it.
   store_id         String?
@@ -6206,9 +6327,12 @@ model Employee {
   jobPostsManaged         JobPost[]                 @relation("JobPostHiringManager")
   hiredFromApplication    JobApplication?           @relation("JobApplicationHire")
   skills                  PersonSkill[]
+  invitations             UserInvitation[]
+  costRates               EmployeeCostRate[]
 
   @@unique([tenant_id, employee_code])
   @@unique([tenant_id, phone])
+  @@unique([tenant_id, user_id])
   @@index([tenant_id, store_id])
   @@index([tenant_id, status, deleted_at])
   @@index([tenant_id, department_id])
@@ -7732,16 +7856,22 @@ model ExpenseEntry {
   expense_date   DateTime        @db.Date
   description    String?
   payment_method String          @default("CASH")
+  /// The project this expense was spent on, if any — it then counts as a
+  /// direct cost on that project's financials. The ledger posting is the same
+  /// either way: tagging is management accounting.
+  project_id     String?
   created_by     String?
   created_at     DateTime        @default(now())
   tenant         Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   category       ExpenseCategory @relation(fields: [category_id], references: [id])
   head           ExpenseHead?    @relation(fields: [head_id], references: [id])
   store          Store?          @relation(fields: [store_id], references: [id])
+  project        Project?        @relation(fields: [project_id], references: [id], onDelete: SetNull)
 
   @@index([tenant_id, expense_date])
   @@index([tenant_id, category_id])
   @@index([tenant_id, head_id])
+  @@index([tenant_id, project_id])
 }
 
 // ── Loans ───────────────────────────────────────────────────────────────────
@@ -8393,6 +8523,16 @@ model Project {
   actual_end_date DateTime?         @db.Date
   /// Plain number in Phase 1 — nothing rolls up into it until costing lands.
   budget_amount   Decimal?          @db.Decimal(14, 2)
+  /// How the customer pays for the work. INTERNAL bills nothing; FIXED_PRICE
+  /// bills `contract_value` (by milestone or by amount); TIME_AND_MATERIALS
+  /// bills billable hours at `bill_rate` (or a member's own rate).
+  billing_type    ProjectBillingType @default(INTERNAL)
+  /// The agreed price of a fixed-price project — what is left to invoice is
+  /// this less what has been invoiced.
+  contract_value  Decimal?          @db.Decimal(14, 2)
+  /// What one billable hour is charged at on a time-and-materials project,
+  /// unless the member has their own `ProjectMember.bill_rate`.
+  bill_rate       Decimal?          @db.Decimal(12, 2)
   created_by      String?
   created_at      DateTime          @default(now())
   updated_at      DateTime          @updatedAt
@@ -8418,7 +8558,12 @@ model Project {
   remainingLogs  ProjectTaskRemainingLog[]
   taskActivities ProjectTaskActivity[]
   taskStatuses   ProjectTaskStatus[]
+  costEntries    ProjectCostEntry[]
+  materialIssues ProjectMaterialIssue[]
+  expenses       ExpenseEntry[]
+  sales          Sale[]
   skills         ProjectSkill[]
+  budgetLines    ProjectBudgetLine[]
 
   codeHistory ProjectCodeHistory[]
 
@@ -8458,6 +8603,9 @@ model ProjectMember {
   user_id     String?
   employee_id String?
   role        ProjectMemberRole @default(MEMBER)
+  /// This person's hourly charge on this project, over the project's own
+  /// `bill_rate`. A senior's hour is billed dearer than a junior's.
+  bill_rate   Decimal?          @db.Decimal(12, 2)
   created_at  DateTime          @default(now())
 
   tenant   Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -8480,11 +8628,17 @@ model ProjectMilestone {
   target_date  DateTime? @db.Date
   completed_at DateTime?
   sort_order   Int       @default(0)
+  /// What reaching this milestone bills, on a fixed-price project.
+  amount       Decimal?  @db.Decimal(14, 2)
+  /// The invoice that billed it. A cancelled invoice frees the milestone to
+  /// be billed again.
+  sale_id      String?
   created_at   DateTime  @default(now())
   updated_at   DateTime  @updatedAt
 
   tenant  Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   project Project       @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  sale    Sale?         @relation("ProjectMilestoneSale", fields: [sale_id], references: [id], onDelete: SetNull)
   tasks   ProjectTask[]
 
   @@index([tenant_id, project_id])
@@ -9054,7 +9208,7 @@ model ProjectTimeEntry {
   /// Denormalised for per-project reporting without joining through tasks.
   project_id  String
   user_id     String?
-  /// Unused in Phase 1 — the hook Phase 2 needs to cost hours against payroll.
+  /// The employee card the hour is costed against, stamped when it is logged.
   employee_id String?
   work_date   DateTime  @db.Date
   /// `hours` stays the stored truth even when a span is present, and every
@@ -9070,14 +9224,29 @@ model ProjectTimeEntry {
   started_at  DateTime?
   ended_at    DateTime?
   note        String?
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @updatedAt
+  /// What one hour of this person cost, **as of when the entry was priced** —
+  /// a snapshot, so a raise next year does not restate last year's margins.
+  /// Null means the hour is uncosted: no employee behind the login, or no
+  /// rate and no salary to derive one from. Never shown in the hours APIs:
+  /// it is pay, read only through project financials.
+  cost_rate   Decimal?          @db.Decimal(12, 2)
+  /// `hours × cost_rate`, rounded to the paisa. Stored rather than derived so
+  /// the totals a report sums are the ones each row was priced at.
+  cost_amount Decimal?          @db.Decimal(14, 2)
+  /// Where `cost_rate` came from: an explicit rate HR set, or the salary.
+  cost_source LabourCostSource?
+  /// The invoice that billed this hour, on a time-and-materials project. An
+  /// hour on a cancelled invoice counts as unbilled again.
+  billed_sale_id String?
+  created_at  DateTime          @default(now())
+  updated_at  DateTime          @updatedAt
 
   tenant   Tenant                @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   task     ProjectTask           @relation(fields: [task_id], references: [id], onDelete: Cascade)
   project  Project               @relation(fields: [project_id], references: [id], onDelete: Cascade)
   user     User?                 @relation("ProjectTimeEntryUser", fields: [user_id], references: [id])
   employee Employee?             @relation(fields: [employee_id], references: [id])
+  billedSale Sale?              @relation("ProjectTimeEntryBilledSale", fields: [billed_sale_id], references: [id], onDelete: SetNull)
   tags     ProjectTimeEntryTag[]
 
   @@index([tenant_id, project_id, work_date])
@@ -9086,6 +9255,188 @@ model ProjectTimeEntry {
   /// is a scan of every entry the tenant has ever written.
   @@index([tenant_id, user_id, started_at])
   @@map("project_time_entries")
+}
+
+enum LabourCostSource {
+  /// An `EmployeeCostRate` HR set for this person.
+  RATE
+  /// Derived: basic salary ÷ standard monthly hours × (1 + overhead).
+  SALARY
+}
+
+/// What one hour of an employee costs the business, from a date onwards.
+///
+/// Effective-dated rather than a single field so pricing an old hour uses the
+/// rate that applied then. Optional: without one, an hour is priced from the
+/// basic salary (see `ProjectCostingSettings`). An explicit rate is the full
+/// cost — overhead is not added on top, since whoever set it decided that.
+model EmployeeCostRate {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  employee_id    String
+  hourly_cost    Decimal  @db.Decimal(12, 2)
+  effective_from DateTime @db.Date
+  note           String?
+  created_by     String?
+  created_at     DateTime @default(now())
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@unique([employee_id, effective_from])
+  @@index([tenant_id, employee_id])
+  @@map("employee_cost_rates")
+}
+
+/// How a workspace turns a monthly salary into an hourly cost, for employees
+/// with no explicit `EmployeeCostRate`. One row per workspace, created on first
+/// save; no row means the defaults. Changing it prices hours logged from then
+/// on — hours already priced keep the rate they were priced at.
+model ProjectCostingSettings {
+  tenant_id              String   @id
+  /// Working hours in a month, the divisor for a monthly salary. 26 days × 8h.
+  standard_monthly_hours Decimal  @default(208) @db.Decimal(6, 2)
+  /// Added on top of the salary-derived rate for what an hour costs beyond pay
+  /// (office, equipment, benefits). 0 prices hours at bare salary.
+  labour_overhead_pct    Decimal  @default(0) @db.Decimal(5, 2)
+  /// The service product project invoices bill as. Without one, invoicing
+  /// asks for it.
+  billing_product_id     String?
+  updated_by             String?
+  updated_at             DateTime @updatedAt
+
+  tenant         Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  billingProduct Product? @relation("ProjectBillingProduct", fields: [billing_product_id], references: [id], onDelete: SetNull)
+
+  @@map("project_costing_settings")
+}
+
+/// What a non-labour project cost was for. Labour is not here: it comes from
+/// priced hours (`ProjectTimeEntry.cost_amount`), never from a cost entry.
+enum ProjectBillingType {
+  FIXED_PRICE
+  TIME_AND_MATERIALS
+  /// Not billed to anyone: internal work, or billed outside the system.
+  INTERNAL
+}
+
+enum ProjectCostCategory {
+  /// Goods consumed — normally a `ProjectMaterialIssue`, entered here only for
+  /// material that never passed through stock.
+  MATERIAL
+  /// Bought-in services: subcontractors, transport, printing.
+  SERVICES
+  EXPENSE
+  OVERHEAD
+  OTHER
+}
+
+/// What a project's budget is split by: its labour, plus the categories its
+/// other costs are recorded under (`ProjectCostCategory`).
+enum ProjectBudgetCategory {
+  LABOUR
+  MATERIAL
+  SERVICES
+  EXPENSE
+  OVERHEAD
+  OTHER
+}
+
+/// One category's share of a project's budget — budget vs actual by category.
+///
+/// While a project has any lines, its budget **is** their sum: saving lines
+/// writes that sum to `Project.budget_amount`, and the project form will not
+/// set a different figure. A category with no line has no budget of its own.
+/// Plain management accounting: nothing posts.
+model ProjectBudgetLine {
+  id         String                @id @default(uuid())
+  tenant_id  String
+  project_id String
+  category   ProjectBudgetCategory
+  amount     Decimal               @db.Decimal(14, 2)
+  updated_by String?
+  created_at DateTime              @default(now())
+  updated_at DateTime              @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@unique([project_id, category])
+  @@index([tenant_id, project_id])
+  @@map("project_budget_lines")
+}
+
+/// A project cost with no document of its own elsewhere — a subcontractor's
+/// share, an allocated overhead — or a share of a **service** bill line.
+///
+/// When `source_purchase_item_id` is set the amount is that line's share for
+/// this project: the line's total caps every share drawn from it, across
+/// projects and production jobs alike (see `common/bill-allocation.util.ts`),
+/// so one bill is never counted twice. A share of a cancelled purchase stops
+/// counting. Management accounting only: nothing posts — the bill already did.
+model ProjectCostEntry {
+  id                      String              @id @default(uuid())
+  tenant_id               String
+  project_id              String
+  category                ProjectCostCategory
+  amount                  Decimal             @db.Decimal(14, 2)
+  cost_date               DateTime            @db.Date
+  description             String
+  source_purchase_item_id String?
+  created_by              String?
+  created_at              DateTime            @default(now())
+
+  tenant             Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project            Project       @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  sourcePurchaseItem PurchaseItem? @relation(fields: [source_purchase_item_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, project_id, cost_date])
+  @@index([source_purchase_item_id])
+  @@map("project_cost_entries")
+}
+
+/// Goods taken out of a warehouse for a project.
+///
+/// The stock leaves at the weighted average it was held at, snapshotted on
+/// each line so a later price change cannot restate it. Nothing posts to the
+/// ledger: under the periodic inventory this system keeps, stock was expensed
+/// when it was bought, and an issue — like a transfer or a write-off — is not
+/// an economic event. The cost lands on the project's financials only.
+/// Deleting an issue puts the goods back at the cost they left at.
+model ProjectMaterialIssue {
+  id           String   @id @default(uuid())
+  tenant_id    String
+  project_id   String
+  warehouse_id String
+  issue_date   DateTime @db.Date
+  note         String?
+  created_by   String?
+  created_at   DateTime @default(now())
+
+  tenant    Tenant                     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  project   Project                    @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  warehouse Warehouse                  @relation(fields: [warehouse_id], references: [id])
+  lines     ProjectMaterialIssueLine[]
+
+  @@index([tenant_id, project_id, issue_date])
+  @@map("project_material_issues")
+}
+
+model ProjectMaterialIssueLine {
+  id         String   @id @default(uuid())
+  issue_id   String
+  product_id String
+  quantity   Int
+  /// The average the goods were held at when they left. Null when the stock
+  /// pool had no cost yet — counted as an uncosted line, never as free.
+  unit_cost  Decimal? @db.Decimal(12, 2)
+  line_cost  Decimal? @db.Decimal(14, 2)
+
+  issue   ProjectMaterialIssue @relation(fields: [issue_id], references: [id], onDelete: Cascade)
+  product Product              @relation(fields: [product_id], references: [id])
+
+  @@index([issue_id])
+  @@map("project_material_issue_lines")
 }
 
 /// A cross-cutting label on an *hour*, not on a task: "Billable", "Support",
@@ -9103,6 +9454,9 @@ model ProjectTimeTag {
   name       String
   color      ProjectLabelColor @default(GRAY)
   sort_order Int               @default(0)
+  /// False makes every hour carrying this tag non-billable — "Rework",
+  /// "Internal meeting". An hour is billable unless one of its tags says not.
+  billable   Boolean           @default(true)
   created_at DateTime          @default(now())
   updated_at DateTime          @updatedAt
 

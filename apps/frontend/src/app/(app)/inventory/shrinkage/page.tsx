@@ -24,6 +24,7 @@ import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { useWarehouses } from '@/lib/hooks/useWarehouses';
 import { availableQtyOf } from '@/components/document-entry/ProductSearch';
 import StockProductPicker from '@/components/document-entry/StockProductPicker';
+import { displayInventoryReasonLabel, INVENTORY_REASON_TYPE } from '@/lib/inventory-reason';
 
 /**
  * LOSS writes stock off; FOUND puts a surplus back. They are the same document
@@ -33,7 +34,10 @@ import StockProductPicker from '@/components/document-entry/StockProductPicker';
  */
 type Direction = 'LOSS' | 'FOUND';
 
-const REASON_TYPE: Record<Direction, string> = { LOSS: 'SHRINKAGE', FOUND: 'FOUND' };
+const REASON_TYPE: Record<Direction, string> = {
+    LOSS: INVENTORY_REASON_TYPE.PRODUCT_LOST,
+    FOUND: INVENTORY_REASON_TYPE.PRODUCT_FOUND,
+};
 
 interface ShrinkageRecord {
     id: string;
@@ -176,6 +180,7 @@ export default function InventoryShrinkagePage() {
         }
     };
 
+    const unspecifiedReason = t.inventorySettings.unspecifiedReason;
     const visibleReasons = useMemo(
         () => reasons.filter((reason: any) => reason.type === REASON_TYPE[direction]),
         [reasons, direction],
@@ -388,7 +393,10 @@ export default function InventoryShrinkagePage() {
                 size: 150,
             }),
             columnHelper.accessor((row) => row.warehouse?.name || '-', { id: 'warehouse', header: t.inventoryShrinkage.columns.warehouse, size: 180 }),
-            columnHelper.accessor((row) => row.reason?.label || '-', { id: 'reason', header: t.inventoryShrinkage.columns.reason, size: 170 }),
+            columnHelper.accessor(
+                (row) => (row.reason ? displayInventoryReasonLabel(row.reason, unspecifiedReason) : '-'),
+                { id: 'reason', header: t.inventoryShrinkage.columns.reason, size: 170 },
+            ),
             columnHelper.accessor((row) => row.items.reduce((sum, item) => sum + item.quantity, 0), {
                 id: 'quantity',
                 header: t.inventoryShrinkage.columns.totalQty,
@@ -451,7 +459,7 @@ export default function InventoryShrinkagePage() {
                 size: 120,
             }),
         ],
-        [t, canCorrect],
+        [t, canCorrect, unspecifiedReason],
     );
 
     const filters = useMemo<ListFilter[]>(() => [
@@ -560,7 +568,11 @@ export default function InventoryShrinkagePage() {
                                 </div>
                                 <div>
                                     <p className="text-xs font-medium text-gray-600">{t.inventoryShrinkage.columns.reason}</p>
-                                    <p className="mt-1 text-sm">{detail.reason?.label || '-'}</p>
+                                    <p className="mt-1 text-sm">
+                                        {detail.reason
+                                            ? displayInventoryReasonLabel(detail.reason, unspecifiedReason)
+                                            : '-'}
+                                    </p>
                                 </div>
                                 <div>
                                     <p className="text-xs font-medium text-gray-600">{t.common.createdAt}</p>
@@ -659,9 +671,9 @@ export default function InventoryShrinkagePage() {
                             />
 
                             <div className="flex-1 space-y-4 overflow-y-auto p-4">
-                                {isFound && visibleReasons.length === 0 ? (
+                                {visibleReasons.length === 0 ? (
                                     <Alert tone="warning">
-                                        {t.inventoryShrinkage.noFoundReasons}{' '}
+                                        {isFound ? t.inventoryShrinkage.noFoundReasons : t.inventoryShrinkage.noLossReasons}{' '}
                                         <Link href={routes.inventory.settings} className="font-medium text-blue-600 underline">
                                             {t.sidebar.modules.inventory}
                                         </Link>
@@ -722,7 +734,9 @@ export default function InventoryShrinkagePage() {
                                         >
                                             <option value="">{t.inventoryShrinkage.selectReason}</option>
                                             {visibleReasons.map((reason) => (
-                                                <option key={reason.id} value={reason.id}>{reason.label}</option>
+                                                <option key={reason.id} value={reason.id}>
+                                                    {displayInventoryReasonLabel(reason, unspecifiedReason)}
+                                                </option>
                                             ))}
                                         </Select>
                                     </Field>

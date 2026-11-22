@@ -241,6 +241,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   // `exact` because the report sits under /projects/hour-logs; without it both entries light up at once.
   'projects.hour-logs': { id: 'projects.hour-logs', kind: 'link', icon: 'Clock', labelKey: 'sidebar.items.projectsHourLogs', href: '/projects/hour-logs', exact: true },
   'projects.hour-log-report': { id: 'projects.hour-log-report', kind: 'link', icon: 'BarChart3', labelKey: 'sidebar.items.projectsHourLogReport', href: '/projects/hour-logs/report' },
+  'projects.profitability': { id: 'projects.profitability', kind: 'link', icon: 'TrendingUp', labelKey: 'sidebar.items.projectsProfitability', href: '/projects/profitability' },
   'projects.setup': { id: 'projects.setup', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.projectsSetup', href: '/projects/settings' },
 
   crm: { id: 'crm', kind: 'module', icon: 'Users', labelKey: 'sidebar.modules.crm', moduleKey: 'crm' },
@@ -269,6 +270,12 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'crm.reports.cold-customers': { id: 'crm.reports.cold-customers', kind: 'link', icon: 'Clock', labelKey: 'sidebar.items.crmColdCustomers', href: '/crm/reports/cold-customers' },
   'crm.reports.lead-aging': { id: 'crm.reports.lead-aging', kind: 'link', icon: 'Hourglass', labelKey: 'sidebar.items.crmLeadAging', href: '/crm/reports/lead-aging', premiumOnly: true },
   'crm.reports.activity-summary': { id: 'crm.reports.activity-summary', kind: 'link', icon: 'Activity', labelKey: 'sidebar.items.crmActivitySummary', href: '/crm/reports/activity-summary', premiumOnly: true },
+  'crm.reports.campaigns': { id: 'crm.reports.campaigns', kind: 'link', icon: 'Megaphone', labelKey: 'sidebar.items.crmCampaignReport', href: '/crm/reports/campaigns', premiumOnly: true },
+  'crm.reports.lead-funnel': { id: 'crm.reports.lead-funnel', kind: 'link', icon: 'Filter', labelKey: 'sidebar.items.crmLeadFunnel', href: '/crm/reports/lead-funnel', premiumOnly: true },
+  'crm.reports.lost-leads': { id: 'crm.reports.lost-leads', kind: 'link', icon: 'Ban', labelKey: 'sidebar.items.crmLostLeads', href: '/crm/reports/lost-leads', premiumOnly: true },
+  'crm.reports.rfm': { id: 'crm.reports.rfm', kind: 'link', icon: 'Crown', labelKey: 'sidebar.items.crmRfm', href: '/crm/reports/rfm', premiumOnly: true },
+  'crm.reports.contact-coverage': { id: 'crm.reports.contact-coverage', kind: 'link', icon: 'PhoneCall', labelKey: 'sidebar.items.crmContactCoverage', href: '/crm/reports/contact-coverage', premiumOnly: true },
+  'crm.reports.birthdays': { id: 'crm.reports.birthdays', kind: 'link', icon: 'Cake', labelKey: 'sidebar.items.crmBirthdays', href: '/crm/reports/birthdays', premiumOnly: true },
   // Replaces the separate 'crm.lead-taxonomy' and 'crm.custom-fields' nodes — both
   // lists are now tabs of one page. Layouts a tenant customised before this still
   // name the old ids; buildNavModulesFromLayout drops ids missing from this
@@ -327,6 +334,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'account-settings.loyalty': { id: 'account-settings.loyalty', kind: 'link', icon: 'Gift', labelKey: 'sidebar.items.loyaltyProgram', href: '/settings/loyalty' },
   'account-settings.sms': { id: 'account-settings.sms', kind: 'link', icon: 'MessageSquare', labelKey: 'sidebar.items.smsNotifications', href: '/settings/sms' },
   'account-settings.report-emails': { id: 'account-settings.report-emails', kind: 'link', icon: 'BarChart3', labelKey: 'sidebar.items.reportEmails', href: '/settings/reports' },
+  'account-settings.email-server': { id: 'account-settings.email-server', kind: 'link', icon: 'Mail', labelKey: 'sidebar.items.emailServer', href: '/settings/email' },
   'account-settings.counters': { id: 'account-settings.counters', kind: 'link', icon: 'Monitor', labelKey: 'sidebar.items.posCounters', href: '/settings/counters' },
   'account-settings.sales': { id: 'account-settings.sales', kind: 'link', icon: 'ShoppingBag', labelKey: 'sidebar.items.salesSettings', href: '/settings/sales' },
   'account-settings.print-templates': { id: 'account-settings.print-templates', kind: 'link', icon: 'Printer', labelKey: 'sidebar.items.printTemplates', href: '/settings/print-templates' },
@@ -552,6 +560,9 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
   // Every Projects read is `VIEW_PROJECTS` on the API, so only the screen that
   // is useless without its own management permission carries a tag.
   'projects.setup': ['MANAGE_PROJECT_SETTINGS'],
+  // Cost and margin are labour priced from pay, so the report is as narrow
+  // as each project's Financials.
+  'projects.profitability': ['VIEW_PROJECT_FINANCIALS'],
 
   // Meetings used to be a root module, so APP_REGISTRY's `VIEW_MEETINGS` gate
   // covered it. Under Tools there is no app gate any more, so the subgroup
@@ -574,6 +585,12 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
   'crm.reports.scorecard': ['VIEW_LEADS'],
   'crm.reports.lead-aging': ['VIEW_LEADS'],
   'crm.reports.activity-summary': ['VIEW_CRM_INTERACTIONS'],
+  'crm.reports.campaigns': ['VIEW_CRM_INTERACTIONS'],
+  'crm.reports.lead-funnel': ['VIEW_LEADS'],
+  'crm.reports.lost-leads': ['VIEW_LEADS'],
+  'crm.reports.rfm': ['VIEW_CRM_INTERACTIONS'],
+  'crm.reports.contact-coverage': ['VIEW_CRM_INTERACTIONS'],
+  'crm.reports.birthdays': ['VIEW_CRM_INTERACTIONS'],
   'crm.reports.follow-up-compliance': ['VIEW_CRM_INTERACTIONS'],
   'crm.reports.cold-customers': ['VIEW_CRM_INTERACTIONS'],
 
@@ -588,6 +605,7 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
   'account-settings.loyalty': SETTINGS_ANY,
   'account-settings.sms': SETTINGS_ANY,
   'account-settings.report-emails': SETTINGS_ANY,
+  'account-settings.email-server': SETTINGS_ANY,
   'account-settings.counters': ['MANAGE_COUNTERS', 'MANAGE_STORES'],
   'account-settings.sales': SETTINGS_ANY,
   'account-settings.print-templates': SETTINGS_ANY,
@@ -632,6 +650,10 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
  * `npx tsx prisma/sync-nav-layout.ts --nodes=projects.epics`.
  *
  * `npx tsx prisma/sync-nav-layout.ts --nodes=projects.staffing`.
+ *
+ * The 2026-11-20 project profitability report added `projects.profitability`
+ * the same way, no reset needed:
+ * `npx tsx prisma/sync-nav-layout.ts --nodes=projects.profitability`.
  *
  * The 2026-09-26 line-item searches added one leaf to each of the two report
  * subgroups, again with no reset needed:
@@ -824,6 +846,12 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('crm.reports.activity-summary', 'crm.reports', 3),
   layoutNode('crm.reports.follow-up-compliance', 'crm.reports', 4),
   layoutNode('crm.reports.cold-customers', 'crm.reports', 5),
+  layoutNode('crm.reports.campaigns', 'crm.reports', 6),
+  layoutNode('crm.reports.lead-funnel', 'crm.reports', 7),
+  layoutNode('crm.reports.lost-leads', 'crm.reports', 8),
+  layoutNode('crm.reports.rfm', 'crm.reports', 9),
+  layoutNode('crm.reports.contact-coverage', 'crm.reports', 10),
+  layoutNode('crm.reports.birthdays', 'crm.reports', 11),
   layoutNode('crm.setup', 'crm', 8),
 
   layoutNode('projects', null, 10),
@@ -836,7 +864,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('projects.sprints', 'projects', 6),
   layoutNode('projects.hour-logs', 'projects', 7),
   layoutNode('projects.hour-log-report', 'projects', 8),
-  layoutNode('projects.setup', 'projects', 9),
+  layoutNode('projects.profitability', 'projects', 9),
+  layoutNode('projects.setup', 'projects', 10),
 
   layoutNode('manufacturing', null, 11),
   layoutNode('manufacturing.boms', 'manufacturing', 0),
@@ -1011,7 +1040,8 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('projects.sprints', 'projects', 6),
   layoutNode('projects.hour-logs', 'projects', 7),
   layoutNode('projects.hour-log-report', 'projects', 8),
-  layoutNode('projects.setup', 'projects', 9),
+  layoutNode('projects.profitability', 'projects', 9),
+  layoutNode('projects.setup', 'projects', 10),
 
   layoutNode('whats-new', null, 2),
   layoutNode('help', null, 3),

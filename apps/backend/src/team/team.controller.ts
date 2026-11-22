@@ -85,7 +85,7 @@ export class TeamController {
 
     @Post('invitations')
     invite(@Tenant() ctx: TenantContext, @Body() dto: InviteMemberDto) {
-        return this.team.invite(ctx, dto.email, roleIdsFrom(dto));
+        return this.team.invite(ctx, dto.email, roleIdsFrom(dto), dto.employeeId);
     }
 
     @Delete('invitations/:id')

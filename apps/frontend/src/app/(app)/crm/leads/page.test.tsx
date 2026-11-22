@@ -2,6 +2,7 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import LeadsPage from './page';
 import { useToastStore } from '@/lib/toast';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 
 jest.mock('next/link', () => {
     const MockLink = ({ children, href }: any) => <a href={href}>{children}</a>;
@@ -44,6 +45,11 @@ jest.mock('@/lib/api', () => ({
         bulkLeadAction: jest.fn(),
         bulkUpdateLeads: jest.fn(),
         importLeads: jest.fn(),
+        // The side panel: the lead's details and its activity timeline.
+        getLead: jest.fn(),
+        getAllCrmActivities: jest.fn().mockResolvedValue([]),
+        getCrmMessageTemplates: jest.fn().mockResolvedValue([]),
+        getMe: jest.fn().mockResolvedValue({ id: 'user-1', name: 'Nayeem' }),
     },
 }));
 
@@ -1060,5 +1066,126 @@ describe('LeadsPage — advanced column filters', () => {
         await openFilters();
 
         expect(screen.queryByPlaceholderText(/^filter created/i)).not.toBeInTheDocument();
+    });
+});
+
+/**
+ * The side panel: the activities list's drawer the other way round. A row
+ * opens the lead's details first, its timeline one tab over, and Previous /
+ * Next step lead to lead without closing it.
+ */
+describe('LeadsPage — the lead side panel', () => {
+    const third = { ...baseLead, id: 'lead-3', name: 'Selim Mart', assigned_to: null, assignee: null };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        searchParams = new URLSearchParams();
+        api.getLeads.mockResolvedValue({ items: [...leads, third], total: 3 });
+        api.getCrmAssignees.mockResolvedValue([]);
+        api.getAllCrmActivities.mockImplementation((params: any) => Promise.resolve(
+            params?.leadId === 'lead-1'
+                ? [{
+                    id: 'act-1', subject: 'Chase the signed quote', status: 'PLANNED',
+                    due_at: '2026-08-26T08:00:00.000Z', completed_at: null, summary: null, outcome: null,
+                    notes: null, purpose: null, channel: null, assignee: null, is_approved: false, approver: null,
+                }]
+                : [],
+        ));
+        api.getLead.mockImplementation((id: string) => Promise.resolve({
+            ...[...leads, third].find((lead) => lead.id === id),
+            email: `${id}@example.com`,
+        }));
+    });
+
+    const panel = () => screen.getByRole('dialog');
+
+    const openOn = async (name: string) => {
+        renderWithQueryClient(<LeadsPage />);
+        fireEvent.click(await screen.findByRole('cell', { name }));
+        return screen.findByRole('dialog');
+    };
+
+    it('opens on the lead\'s details, with the timeline in the second tab', async () => {
+        const drawer = await openOn('Karim Traders');
+
+        expect(within(drawer).getByRole('heading', { name: 'Karim Traders' })).toBeInTheDocument();
+        const tabs = within(drawer).getAllByRole('tab');
+        expect(tabs.map((tab) => tab.textContent)).toEqual(['Lead details', 'Activities']);
+        expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
+        expect(await within(drawer).findByText('lead-1@example.com')).toBeInTheDocument();
+        expect(api.getLead).toHaveBeenCalledWith('lead-1');
+
+        fireEvent.click(tabs[1]);
+        expect(await within(drawer).findByText('Chase the signed quote')).toBeInTheDocument();
+        expect(api.getAllCrmActivities).toHaveBeenCalledWith({ leadId: 'lead-1' });
+    });
+
+    it('keeps the list behind it and the way through to the full record', async () => {
+        const drawer = await openOn('Karim Traders');
+
+        expect(within(drawer).getByRole('link', { name: /Open full record/ })).toHaveAttribute('href', '/crm/leads/lead-1');
+        expect(screen.getByRole('cell', { name: 'Rahim Stores' })).toBeInTheDocument();
+    });
+
+    it('opens from the row action as well as the row', async () => {
+        renderWithQueryClient(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        fireEvent.click(screen.getAllByRole('button', { name: 'Quick view' })[1]);
+
+        expect(await within(panel()).findByRole('heading', { name: 'Rahim Stores' })).toBeInTheDocument();
+    });
+
+    it('steps to the next lead and back without closing, staying on the tab it was on', async () => {
+        const drawer = await openOn('Karim Traders');
+        expect(within(drawer).getByText('1 of 3')).toBeInTheDocument();
+        expect(within(drawer).getByRole('button', { name: 'Previous lead' })).toBeDisabled();
+        fireEvent.click(within(drawer).getByRole('tab', { name: 'Activities' }));
+
+        fireEvent.click(within(drawer).getByRole('button', { name: 'Next lead' }));
+
+        expect(await within(panel()).findByRole('heading', { name: 'Rahim Stores' })).toBeInTheDocument();
+        expect(within(panel()).getByText('2 of 3')).toBeInTheDocument();
+        expect(within(panel()).getByRole('tab', { name: 'Activities' })).toHaveAttribute('aria-selected', 'true');
+        await waitFor(() => expect(api.getAllCrmActivities).toHaveBeenLastCalledWith({ leadId: 'lead-2' }));
+
+        fireEvent.click(within(panel()).getByRole('button', { name: 'Previous lead' }));
+        expect(await within(panel()).findByRole('heading', { name: 'Karim Traders' })).toBeInTheDocument();
+    });
+
+    it('stops at the last lead of the only page', async () => {
+        const drawer = await openOn('Selim Mart');
+
+        expect(within(drawer).getByText('3 of 3')).toBeInTheDocument();
+        expect(within(drawer).getByRole('button', { name: 'Next lead' })).toBeDisabled();
+    });
+
+    it('opens the next page\'s first lead from the last lead of this one', async () => {
+        api.getLeads.mockImplementation((params: any) => Promise.resolve(
+            params.page === 2 ? { items: [third], total: 500 } : { items: leads, total: 500 },
+        ));
+        const drawer = await openOn('Rahim Stores');
+        expect(within(drawer).getByText('2 of 500')).toBeInTheDocument();
+
+        fireEvent.click(within(drawer).getByRole('button', { name: 'Next lead' }));
+
+        expect(await within(panel()).findByRole('heading', { name: 'Selim Mart' })).toBeInTheDocument();
+        expect(api.getLeads).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }));
+        const { limit } = api.getLeads.mock.calls.at(-1)[0];
+        expect(within(panel()).getByText(`${limit + 1} of 500`)).toBeInTheDocument();
+
+        fireEvent.click(within(panel()).getByRole('button', { name: 'Previous lead' }));
+        expect(await within(panel()).findByRole('heading', { name: 'Rahim Stores' })).toBeInTheDocument();
+        expect(api.getLeads).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }));
+    });
+
+    it('leaves the list alone when the panel was only read', async () => {
+        const drawer = await openOn('Karim Traders');
+        const before = api.getLeads.mock.calls.length;
+
+        fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+        expect(api.getLeads.mock.calls.length).toBe(before);
     });
 });

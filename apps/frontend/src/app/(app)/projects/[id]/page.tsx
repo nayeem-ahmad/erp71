@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ListTree, Lock, Plus } from 'lucide-react';
@@ -29,6 +29,9 @@ import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { formatBDT, formatDate } from '@/lib/format';
+import { fetchMe } from '@/hooks/use-me';
+import { getWorkspaceItem } from '@/lib/session-store';
+import { hasPermission, isOwner } from '@/lib/permissions';
 
 interface Progress {
     taskCount: number;
@@ -87,6 +90,8 @@ interface Task {
 
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
 
+const TASKS_PAGE_SIZE = 25;
+
 /** A task goes to a user or to an employee with no login; show whichever holds it. */
 function assigneeLabel(task: Task): string {
     if (task.assignee) return task.assignee.name || task.assignee.email;
@@ -108,12 +113,29 @@ export default function ProjectDetailPage() {
         if (linkedStory) router.replace(routes.projects.storyInProject(projectId, linkedStory));
         else if (linkedEpic) router.replace(routes.projects.epicInProject(projectId, linkedEpic));
     }, [linkedStory, linkedEpic, projectId, router]);
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const m = t.projects;
 
+    // Financials price hours from pay, so the way in is shown only to those
+    // who may open it — the route refuses everyone else anyway.
+    const [canViewFinancials, setCanViewFinancials] = useState(false);
+    useEffect(() => {
+        fetchMe()
+            .then((me: any) => {
+                const tenantId = getWorkspaceItem('tenant_id');
+                const tenant = me?.tenants?.find((entry: any) => entry.id === tenantId) || me?.tenants?.[0];
+                setCanViewFinancials(isOwner(tenant?.role) || hasPermission(tenant?.permissions, 'VIEW_PROJECT_FINANCIALS'));
+            })
+            .catch(() => setCanViewFinancials(false));
+    }, []);
 
     const [project, setProject] = useState<Project | null>(null);
     const [tasks, setTasks] = useState<Task[]>([]);
+    const [tasksTotal, setTasksTotal] = useState(0);
+    const [taskPage, setTaskPage] = useState(1);
+    const [tasksLoading, setTasksLoading] = useState(true);
+    /** Drops a slow page's response if a newer one was requested meanwhile. */
+    const tasksRequest = useRef(0);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
     const [burndown, setBurndown] = useState<BurndownPoint[] | null>(null);
     const [hasIdeal, setHasIdeal] = useState(false);
@@ -131,20 +153,54 @@ export default function ProjectDetailPage() {
 
     const load = useCallback(async () => {
         try {
-            const [detail, taskPage] = await Promise.all([
-                api.getProject(projectId),
-                api.getProjectTasks({ projectId, limit: 200 }),
-            ]);
+            const detail = await api.getProject(projectId);
             setProject(detail as Project);
-            setTasks(((taskPage as { items?: Task[] })?.items ?? []) as Task[]);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Could not load the project');
         }
     }, [projectId]);
 
+    const loadTasks = useCallback(async () => {
+        const requestId = ++tasksRequest.current;
+        setTasksLoading(true);
+        try {
+            const page = await api.getProjectTasks({
+                projectId,
+                page: taskPage,
+                limit: TASKS_PAGE_SIZE,
+            });
+            if (requestId !== tasksRequest.current) return;
+            const total = page?.total ?? 0;
+            const lastPage = Math.max(1, Math.ceil(total / TASKS_PAGE_SIZE));
+            setTasks((page?.items ?? []) as Task[]);
+            setTasksTotal(total);
+            // Deleting the last task on the final page leaves us past the end.
+            if (taskPage > lastPage) setTaskPage(lastPage);
+        } catch (error) {
+            if (requestId !== tasksRequest.current) return;
+            toast.error(error instanceof Error ? error.message : 'Could not load the tasks');
+        } finally {
+            if (requestId === tasksRequest.current) setTasksLoading(false);
+        }
+    }, [projectId, taskPage]);
+
     useEffect(() => {
         load();
     }, [load]);
+
+    useEffect(() => {
+        setTaskPage(1);
+    }, [projectId]);
+
+    useEffect(() => {
+        loadTasks();
+    }, [loadTasks]);
+
+    const refreshTasks = useCallback(async () => {
+        await Promise.all([load(), loadTasks()]);
+    }, [load, loadTasks]);
+
+    const tasksLastPage = Math.max(1, Math.ceil(tasksTotal / TASKS_PAGE_SIZE));
 
     /**
      * The backlog is read here rather than inside the card, because two things
@@ -213,7 +269,7 @@ export default function ProjectDetailPage() {
             toast.success(m.task.created);
             setCreating(false);
             setNewTask({ title: '', description: '', estimateHours: '', userStoryId: '' });
-            await load();
+            await refreshTasks();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Could not create the task');
         } finally {
@@ -250,6 +306,13 @@ export default function ProjectDetailPage() {
                                 {m.backlog.open}
                             </Button>
                         </Link>
+                        {canViewFinancials && (
+                            <Link href={routes.projects.financials(projectId)}>
+                                <Button variant="secondary" className="min-h-touch">
+                                    {m.financials.open}
+                                </Button>
+                            </Link>
+                        )}
                         <Link href={routes.projects.edit(projectId)}>
                             <Button variant="secondary" className="min-h-touch">
                                 {m.editProject}
@@ -309,7 +372,9 @@ export default function ProjectDetailPage() {
                         <h2 className="border-b border-gray-200 px-3 py-2 text-sm font-medium">
                             {m.tabs.tasks}
                         </h2>
-                        {tasks.length === 0 ? (
+                        {tasksLoading && tasks.length === 0 ? (
+                            <p className="p-3 text-sm text-gray-500">{t.common.loading}</p>
+                        ) : tasks.length === 0 ? (
                             <p className="p-3 text-sm text-gray-500">{m.task.noTasks}</p>
                         ) : (
                             <div className="overflow-x-auto">
@@ -388,6 +453,32 @@ export default function ProjectDetailPage() {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                        )}
+                        {tasksLastPage > 1 && (
+                            <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-3 py-2 text-xs text-gray-600">
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => setTaskPage((page) => page - 1)}
+                                    disabled={taskPage <= 1 || tasksLoading}
+                                >
+                                    {m.task.previous}
+                                </Button>
+                                <span>
+                                    {fmt(m.task.pageOf, {
+                                        page: taskPage,
+                                        pages: tasksLastPage,
+                                    })}
+                                </span>
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => setTaskPage((page) => page + 1)}
+                                    disabled={taskPage >= tasksLastPage || tasksLoading}
+                                >
+                                    {m.task.next}
+                                </Button>
                             </div>
                         )}
                     </div>
@@ -527,7 +618,7 @@ export default function ProjectDetailPage() {
                 <TaskDetailPanel
                     taskId={openTaskId}
                     onClose={() => setOpenTaskId(null)}
-                    onChanged={load}
+                    onChanged={refreshTasks}
                 />
             )}
         </PageShell>

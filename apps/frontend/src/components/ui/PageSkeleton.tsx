@@ -195,7 +195,9 @@ export function PageSkeleton({
 }: PageSkeletonProps) {
     return (
         <PageShell maxWidth={maxWidth}>
-            <div aria-hidden data-testid="page-skeleton" data-body={body} className="space-y-4">
+            {/* `data-route-loading`: the page timer counts a view as still loading
+                while this is on screen (see lib/page-timing/collector.ts). */}
+            <div aria-hidden data-testid="page-skeleton" data-route-loading="" data-body={body} className="space-y-4">
                 <HeaderSkeleton actions={actions} />
                 {body === 'dashboard' ? <DashboardSkeleton /> : null}
                 {body === 'table' ? (

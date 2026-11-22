@@ -400,6 +400,7 @@ export const coreMessages = {
             noSearchResults: "আপনার অনুসন্ধানের সাথে কোনো মেনু মিলেনি।",
             expandAll: "সব খুলুন",
             collapseAll: "সব বন্ধ করুন",
+            recent: "সাম্প্রতিক",
             modules: {
                 dashboard: "ড্যাশবোর্ড",
                 scorecard: "স্কোরকার্ড",
@@ -445,6 +446,7 @@ export const coreMessages = {
                 projectsSprints: "স্প্রিন্ট",
                 projectsHourLogs: "ঘণ্টা লগ",
                 projectsHourLogReport: "ঘণ্টা লগ রিপোর্ট",
+                projectsProfitability: "লাভজনকতা",
                 projectsSetup: "প্রকল্প সেটআপ",
                 meetingsList: "মিটিং",
                 meetingActions: "আমার অ্যাকশন পয়েন্ট",
@@ -476,6 +478,18 @@ export const coreMessages = {
                 crmLeadAging: "লিডের বয়স",
 
                 crmActivitySummary: "কার্যক্রমের সারসংক্ষেপ",
+
+                crmCampaignReport: "ক্যাম্পেইনের কার্যকারিতা",
+
+                crmBirthdays: "আসন্ন জন্মদিন",
+
+                crmContactCoverage: "যোগাযোগের কভারেজ",
+
+                crmRfm: "গ্রাহক মূল্য (RFM)",
+
+                crmLeadFunnel: "লিড ফানেল",
+
+                crmLostLeads: "হারানো লিড",
 
                 crmReports: "CRM রিপোর্ট",
                 crmSetup: "CRM সেটআপ",
@@ -599,6 +613,7 @@ export const coreMessages = {
                 loyaltyProgram: "লয়্যালটি প্রোগ্রাম",
                 smsNotifications: "এসএমএস নোটিফিকেশন",
                 reportEmails: "রিপোর্ট ইমেইল",
+                emailServer: "ইমেইল সার্ভার",
                 discountCodes: "ডিসকাউন্ট কোড",
                 urlShortener: "ইউআরএল শর্টনার",
                 shortLinks: "শর্ট লিংক",
@@ -875,6 +890,7 @@ export const coreMessages = {
                     loyalty: "লয়্যালটি প্রোগ্রাম",
                     sms: "SMS বিজ্ঞপ্তি",
                     reportEmails: "রিপোর্ট ইমেইল",
+                    emailServer: "ইমেইল সার্ভার",
                     smsCredits: "মেসেজিং ক্রেডিট",
                     aiCredits: "AI ক্রেডিট",
                     auditLogs: "অডিট লগ",
@@ -1214,6 +1230,7 @@ export const coreMessages = {
             compactViewTitle: "কম্প্যাক্ট ভিউ",
             loadingProducts: "পণ্য লোড হচ্ছে...",
             stockLeft: "{count} বাকি",
+            outOfStockShort: "স্টক নেই",
             notAvailable: "প্রযোজ্য নয়",
             tabs: {
                 checkout: "চেকআউট",

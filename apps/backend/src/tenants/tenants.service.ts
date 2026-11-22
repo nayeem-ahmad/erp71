@@ -122,6 +122,9 @@ export class TenantsService {
                 brand_logo_url: true,
                 brand_favicon_url: true,
                 brand_business_name: true,
+                ui_theme: true,
+                ui_sidebar: true,
+                nav_recent_enabled: true,
             },
         });
     }
@@ -191,11 +194,16 @@ export class TenantsService {
     }
 
     async updateBranding(tenantId: string, dto: UpdateBrandingDto) {
-        const data: Record<string, string | null> = {};
+        const data: Record<string, string | boolean | null> = {};
         if (dto.brand_primary_color !== undefined) data.brand_primary_color = dto.brand_primary_color || null;
         if (dto.brand_logo_url !== undefined) data.brand_logo_url = dto.brand_logo_url || null;
         if (dto.brand_favicon_url !== undefined) data.brand_favicon_url = dto.brand_favicon_url || null;
         if (dto.brand_business_name !== undefined) data.brand_business_name = dto.brand_business_name || null;
+        // Not nullable: a style is always in force, so there is nothing to clear.
+        if (dto.ui_theme !== undefined) data.ui_theme = dto.ui_theme;
+        if (dto.ui_sidebar !== undefined) data.ui_sidebar = dto.ui_sidebar;
+        // A boolean or nothing: `@IsOptional` lets null through, and the column is not nullable.
+        if (typeof dto.nav_recent_enabled === 'boolean') data.nav_recent_enabled = dto.nav_recent_enabled;
 
         return this.db.tenant.update({
             where: { id: tenantId },
@@ -205,6 +213,9 @@ export class TenantsService {
                 brand_logo_url: true,
                 brand_favicon_url: true,
                 brand_business_name: true,
+                ui_theme: true,
+                ui_sidebar: true,
+                nav_recent_enabled: true,
             },
         });
     }
@@ -524,7 +535,11 @@ export class TenantsService {
         keep: string[] = [],
     ) {
         if (userRole !== 'OWNER') throw new ForbiddenException('Only the shop owner can clear data');
-        return clearTenantData(this.db, tenantId, mode, storeId, keep);
+        const result = await clearTenantData(this.db, tenantId, mode, storeId, keep);
+        // A clear can delete employees, and each member's cached membership
+        // names the employee their login is linked to.
+        this.authCache.invalidateTenant(tenantId);
+        return result;
     }
 
     async updateLocalizationSettings(tenantId: string, dto: UpdateLocalizationSettingsDto) {

@@ -74,7 +74,8 @@ export function formatCurrency(
         ? (resolvedLocale === 'bn' ? 'bn-BD' : 'en-IN')
         : localeConfig.numberLocale;
 
-    return `${getCurrencySymbol(currency)} ${new Intl.NumberFormat(numberLocale, {
+    // A non-breaking space, so a narrow column never leaves ৳ alone on one line above the figure.
+    return `${getCurrencySymbol(currency)}\u00a0${new Intl.NumberFormat(numberLocale, {
         minimumFractionDigits,
         maximumFractionDigits,
     }).format(value)}`;

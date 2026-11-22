@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { bootstrapDefaultAccountingForTenant } from './bootstrap-accounting';
 import { seedDefaultExpenseCategories } from './expense-category.seed';
+import { DEFAULT_DISCREPANCY_REASONS, DEFAULT_SHRINKAGE_REASONS } from './inventory-reasons.seed';
 import { ROLE_DEFAULT_PERMISSIONS, UserRole } from '@erp71/shared-types';
 
 export const DEMO_ACCOUNT_EMAIL = 'demo@erp71.com';
@@ -188,13 +189,9 @@ export async function seedDemoAccount(prisma: PrismaClient) {
     // generator exercises shrinkage, which looks reasons up by id and throws if
     // the SHRINKAGE rows are missing.
     const inventoryReasonDefs = [
-        { type: 'SHRINKAGE', code: 'THEFT', label: 'Theft' },
-        { type: 'SHRINKAGE', code: 'DAMAGE', label: 'Damage' },
-        { type: 'SHRINKAGE', code: 'EXPIRATION', label: 'Expiration' },
-        { type: 'SHRINKAGE', code: 'UNKNOWN', label: 'Unknown Loss' },
-        { type: 'DISCREPANCY', code: 'COUNT_ERROR', label: 'Count Error' },
-        { type: 'DISCREPANCY', code: 'RECONCILIATION', label: 'Reconciliation Adjustment' },
-    ] as const;
+        ...DEFAULT_SHRINKAGE_REASONS.map((reason) => ({ type: 'SHRINKAGE' as const, ...reason })),
+        ...DEFAULT_DISCREPANCY_REASONS.map((reason) => ({ type: 'DISCREPANCY' as const, ...reason })),
+    ];
 
     for (const [index, def] of inventoryReasonDefs.entries()) {
         await prisma.inventoryReason.upsert({

@@ -1,6 +1,8 @@
 import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { EncryptionService } from '../common/encryption.service';
+import { AuditService, type AuditContext } from '../audit/audit.service';
 import {
     CreateEmployeeDto, UpdateEmployeeDto, CreateDepartmentDto, UpdateDepartmentDto,
     CreateDesignationDto, UpdateDesignationDto, CreateDesignationLevelDto, UpdateDesignationLevelDto,
@@ -88,6 +90,8 @@ export class EmployeesService {
     constructor(
         private db: DatabaseService,
         private encryption: EncryptionService,
+        private audit: AuditService,
+        private authCache: AuthCacheService,
     ) {}
 
     private encryptNid(value: string | undefined | null): string | undefined {
@@ -647,10 +651,14 @@ export class EmployeesService {
         });
         if (!employee) throw new NotFoundException('Employee not found');
 
-        return this.db.employee.update({
+        const removed = await this.db.employee.update({
             where: { id },
             data: { deleted_at: new Date(), user_id: null },
         });
+        // The login's cached membership names this employee; drop it so the
+        // next request stops resolving them to a deleted card.
+        if (employee.user_id) this.authCache.invalidateMember(employee.user_id, tenantId);
+        return removed;
     }
 
     async importRows(
@@ -707,7 +715,18 @@ export class EmployeesService {
         });
     }
 
-    async linkUser(tenantId: string, id: string, userId: string, storeId?: string) {
+    /**
+     * Attach an existing workspace login to this employee.
+     *
+     * One employee per login per workspace (`@@unique([tenant_id, user_id])`).
+     * The same person may be staff in another workspace too, which is why the
+     * duplicate check — and the index behind it — is scoped to this one.
+     *
+     * Linking also stamps the person's earlier project hours with this employee
+     * (only entries that name none), so costing can price them. Unlinking never
+     * un-stamps: an hour logged under a card stays with that card.
+     */
+    async linkUser(tenantId: string, id: string, userId: string, storeId?: string, ctx?: AuditContext) {
         const employee = await this.db.employee.findFirst({
             where: { id, tenant_id: tenantId, deleted_at: null, ...(storeId ? { store_id: storeId } : {}) },
         });
@@ -727,15 +746,51 @@ export class EmployeesService {
             throw new ConflictException('This user is already linked to another employee.');
         }
 
-        const record = await this.db.employee.update({
-            where: { id },
-            data: { user_id: userId },
-            include: EMPLOYEE_INCLUDE,
-        });
-        return this.decryptEmployee(record);
+        const previousUserId = employee.user_id ?? null;
+        let linked: { record: any; hoursStamped: number };
+        try {
+            linked = await this.db.$transaction(async (tx) => {
+                // A card deleted before `remove` started clearing the link can
+                // still hold this login, and would trip the unique index.
+                await tx.employee.updateMany({
+                    where: { tenant_id: tenantId, user_id: userId, deleted_at: { not: null } },
+                    data: { user_id: null },
+                });
+                const record = await tx.employee.update({
+                    where: { id },
+                    data: { user_id: userId },
+                    include: EMPLOYEE_INCLUDE,
+                });
+                const stamped = await tx.projectTimeEntry.updateMany({
+                    where: { tenant_id: tenantId, user_id: userId, employee_id: null },
+                    data: { employee_id: id },
+                });
+                return { record, hoursStamped: stamped.count };
+            });
+        } catch (err: any) {
+            // Two links racing for the same login: the index catches the loser.
+            if (err?.code === 'P2002') {
+                throw new ConflictException('This user is already linked to another employee.');
+            }
+            throw err;
+        }
+
+        // After commit, never inside: see AuthCacheService.
+        this.authCache.invalidateMember(userId, tenantId);
+        if (previousUserId && previousUserId !== userId) {
+            this.authCache.invalidateMember(previousUserId, tenantId);
+        }
+
+        await this.audit.log('EMPLOYEE_USER_LINKED', 'Employee', { ...ctx, tenantId }, id, {
+            employee_code: employee.employee_code,
+            user_id: userId,
+            previous_user_id: previousUserId,
+            hours_stamped: linked.hoursStamped,
+        }).catch(() => {});
+        return this.decryptEmployee(linked.record);
     }
 
-    async unlinkUser(tenantId: string, id: string, storeId?: string) {
+    async unlinkUser(tenantId: string, id: string, storeId?: string, ctx?: AuditContext) {
         const employee = await this.db.employee.findFirst({
             where: { id, tenant_id: tenantId, deleted_at: null, ...(storeId ? { store_id: storeId } : {}) },
         });
@@ -746,6 +801,14 @@ export class EmployeesService {
             data: { user_id: null },
             include: EMPLOYEE_INCLUDE,
         });
+
+        if (employee.user_id) {
+            this.authCache.invalidateMember(employee.user_id, tenantId);
+            await this.audit.log('EMPLOYEE_USER_UNLINKED', 'Employee', { ...ctx, tenantId }, id, {
+                employee_code: employee.employee_code,
+                user_id: employee.user_id,
+            }).catch(() => {});
+        }
         return this.decryptEmployee(record);
     }
 }

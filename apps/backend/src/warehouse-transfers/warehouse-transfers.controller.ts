@@ -12,6 +12,7 @@ import {
     ReceiveWarehouseTransferDto,
     RejectWarehouseTransferDto,
     UpdateWarehouseTransferDto,
+    WarehouseTransferNumberPreviewQueryDto,
 } from './warehouse-transfer.dto';
 import { WarehouseTransfersService } from './warehouse-transfers.service';
 
@@ -48,6 +49,20 @@ export class WarehouseTransfersController {
             permissions: [StorePermission.VIEW_PRODUCT_CATALOG],
         });
         return this.service.findAll(tenant.tenantId, { ...query, storeId });
+    }
+
+    /**
+     * The number the next transfer would get, so the entry form can show it as
+     * it is filled in. Declared before `:id`, which would otherwise take
+     * "next-number" for an id.
+     */
+    @Get('next-number')
+    @RequireStorePermission(StorePermission.CREATE_GOODS_TRANSFER)
+    async nextNumber(
+        @Tenant() tenant: TenantContext,
+        @Query() query: WarehouseTransferNumberPreviewQueryDto,
+    ) {
+        return this.service.previewNumber(tenant.tenantId, query.sourceWarehouseId, query.transferDate);
     }
 
     @Get(':id')
