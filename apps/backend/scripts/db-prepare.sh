@@ -326,6 +326,11 @@ step sync:nav-tools \
 step sync:nav-meetings \
     npm run sync:nav-layout --workspace=@erp71/database -- --nodes=tools.meetings,tools.meetings.list,tools.meetings.actions,tools.meetings.actions-all
 
+# The 2026-11-22 tools: Cheques, Price checker, Documents, Scan a bill and the
+# Bijoy converter, five new leaves under Tools. Idempotent.
+step sync:nav-tools-2026-11 \
+    npm run sync:nav-layout --workspace=@erp71/database -- --nodes=tools.cheques,tools.price-checker,tools.documents,tools.bill-scan,tools.bijoy
+
 # The KPI scorecard: `account-settings.scorecard` under the tenant Admin module
 # (it started as a root `scorecard` module and moved there 2026-11-17) and
 # `admin.kpis` under the admin console's Overview. Same reason as Tools: a

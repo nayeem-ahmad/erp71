@@ -112,6 +112,9 @@ import { CrmActivitiesModule } from './crm-activities/crm-activities.module';
 import { ProjectsModule } from './projects/projects.module';
 import { MeetingsModule } from './meetings/meetings.module';
 import { NotesModule } from './notes/notes.module';
+import { ChequesModule } from './cheques/cheques.module';
+import { BusinessDocumentsModule } from './business-documents/business-documents.module';
+import { ToolsModule } from './tools/tools.module';
 import { CrmCampaignsModule } from './crm-campaigns/crm-campaigns.module';
 import { CrmContactsModule } from './crm-contacts/crm-contacts.module';
 import { CrmPhotosModule } from './crm-photos/crm-photos.module';
@@ -268,6 +271,9 @@ import { Meet71Module } from './meet71/meet71.module';
         ProjectsModule,
         MeetingsModule,
         NotesModule,
+        ChequesModule,
+        BusinessDocumentsModule,
+        ToolsModule,
         CrmCampaignsModule,
         CrmContactsModule,
         CrmPhotosModule,

@@ -513,6 +513,72 @@ Rules:
     }
 
     /**
+     * Read a photographed purchase bill, cash memo or expense receipt.
+     *
+     * Extraction only, like the business-card scanner: nothing is saved, and
+     * the caller shows every figure in a form a person checks first. Matching
+     * the vendor and the lines to the workspace's own suppliers and products is
+     * the caller's job; this returns what is on the paper, and the credits the
+     * call cost so the screen can show the real charge beside the estimate it
+     * showed before the photo was sent.
+     */
+    async scanBill(
+        tenantId: string,
+        input: { imageBase64: string; mimeType?: string; target: 'purchase' | 'expense'; maxTokens: number },
+    ): Promise<{ fields: Record<string, unknown>; creditsUsed: number }> {
+        await this.enforceCredits(tenantId);
+
+        const { data, mimeType } = this.parseImagePayload(input.imageBase64, input.mimeType);
+        const model = await this.getVisionModel();
+        const kind = input.target === 'purchase' ? 'a supplier\'s bill or cash memo for goods bought' : 'a receipt or bill for a business expense';
+        const systemPrompt = `You read a photograph of ${kind} for a shop in Bangladesh.
+Respond with ONLY valid JSON — no markdown, no explanation.
+
+Schema:
+{
+  "vendor_name": "the shop or company that issued the bill",
+  "vendor_phone": "their phone number",
+  "vendor_address": "their address on one line",
+  "bill_number": "invoice / memo / receipt number",
+  "bill_date": "YYYY-MM-DD",
+  "lines": [{ "description": "item as written", "quantity": number, "unit_price": number, "line_total": number }],
+  "subtotal": number,
+  "discount": number,
+  "tax": number,
+  "freight": number,
+  "total": number,
+  "summary": "a few words saying what was bought or paid for"
+}
+
+Rules:
+- Omit any key you cannot read. Never invent or complete a value.
+- Amounts are Bangladeshi taka: numbers only, no ৳ or Tk, no thousands separators.
+- Read Bangla digits (০-৯) as numbers. Keep Bangla item names in Bangla.
+- "tax" is VAT/tax on the bill; "freight" is delivery, carrying, labour or van charges.
+- A date written DD/MM/YY or DD-MM-YYYY is day first. Convert it to YYYY-MM-DD.
+- If quantity is missing but a line total is shown, use quantity 1.
+- If the image is not a bill or receipt, return {"summary": "<what the image shows>"}.`;
+
+        const { message, usage, model: usedModel } = await this.postVisionChat(model, {
+            max_tokens: input.maxTokens,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                {
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: 'Read this bill.' },
+                        { type: 'image_url', image_url: { url: `data:${mimeType};base64,${data}` } },
+                    ],
+                },
+            ],
+        });
+
+        const creditsUsed = await this.logUsage(tenantId, `bill_scan_${input.target}`, usedModel, usage);
+        const fields = this.extractJson<Record<string, unknown>>(message.content ?? '');
+        return { fields: fields && typeof fields === 'object' ? fields : {}, creditsUsed };
+    }
+
+    /**
      * A vision round-trip that survives a text-only model being configured.
      *
      * `vision_model`, and the `default_model` it falls back to, is a free-text

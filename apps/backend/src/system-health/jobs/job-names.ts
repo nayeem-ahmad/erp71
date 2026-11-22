@@ -34,6 +34,8 @@ export const JOB_NAMES = {
     RECORD_HISTORY_PURGE: 'record-history.purge-expired',
     MEET71_SSO_SWEEP: 'meet71.sso-sweep',
     MEETING_ACTION_REMINDERS: 'meetings.action-reminders',
+    CHEQUE_DUE_REMINDERS: 'tools.cheque-due-reminders',
+    BUSINESS_DOCUMENT_EXPIRY: 'tools.business-document-expiry',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -147,4 +149,6 @@ export const JOB_REGISTRY: JobDefinition[] = [
     { name: JOB_NAMES.RECORD_HISTORY_PURGE, label: 'Record history: purge rows past retention', schedule: '45 1 * * *', maxIntervalMs: DAY + 2 * HOUR },
     { name: JOB_NAMES.MEET71_SSO_SWEEP, label: 'Meet71: sweep expired SSO codes', schedule: '*/5 * * * *', maxIntervalMs: 15 * 60 * 1000 },
     { name: JOB_NAMES.MEETING_ACTION_REMINDERS, label: 'Meetings: action reminders', schedule: '0 9 * * *', maxIntervalMs: DAY + 2 * HOUR },
+    { name: JOB_NAMES.CHEQUE_DUE_REMINDERS, label: 'Tools: post-dated cheque reminders', schedule: '0 9 * * *', maxIntervalMs: DAY + 2 * HOUR },
+    { name: JOB_NAMES.BUSINESS_DOCUMENT_EXPIRY, label: 'Tools: licence and document expiry reminders', schedule: '5 9 * * *', maxIntervalMs: DAY + 2 * HOUR },
 ];

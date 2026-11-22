@@ -1237,6 +1237,8 @@ model Tenant {
   meetingActionItems         MeetingActionItem[]
   meetingActionPeople        MeetingActionPerson[]
   notes                      Note[]
+  cheques                    Cheque[]
+  businessDocuments          BusinessDocument[]
 
   @@index([deleted_at])
   @@index([billing_suspended_at])
@@ -10282,4 +10284,81 @@ model Note {
 
   @@index([tenant_id, user_id, pinned, updated_at])
   @@map("notes")
+}
+
+/// A cheque the business wrote or received, under Tools → Cheques: the
+/// register a shopkeeper otherwise keeps in a notebook, plus the printing.
+///
+/// Standalone on purpose: it records the paper, not the payment. A cheque
+/// paid to a supplier is still entered as a supplier payment, which is what
+/// moves the ledger; this row is how nobody forgets the post-dated one that
+/// falls due on Thursday. `cheque_date` is the date written on the cheque, and
+/// the daily reminder (`cheques.scheduler.ts`) works from it.
+model Cheque {
+  id                String    @id @default(uuid())
+  tenant_id         String
+  store_id          String?
+  /// ISSUED (we wrote it) | RECEIVED (a customer gave it to us)
+  direction         String    @default("ISSUED")
+  /// PENDING | DEPOSITED | CLEARED | BOUNCED | CANCELLED — see cheques.constants.ts
+  status            String    @default("PENDING")
+  bank_name         String
+  branch_name       String?
+  account_number    String?
+  cheque_number     String
+  /// The payee on an issued cheque; the drawer on a received one.
+  party_name        String
+  amount            Decimal   @db.Decimal(14, 2)
+  cheque_date       DateTime  @db.Date
+  /// Crossed "A/C Payee only" — printed as the two lines in the corner.
+  account_payee     Boolean   @default(true)
+  memo              String?
+  status_changed_at DateTime?
+  created_by        String?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, status, cheque_date])
+  @@index([tenant_id, direction, cheque_date])
+  @@map("cheques")
+}
+
+/// A licence, registration or certificate the business has to keep valid,
+/// under Tools → Documents: trade licence, TIN, BIN, fire licence, IRC and
+/// the rest, with the scanned copy and the date it runs out.
+///
+/// `storage_key` is the Cloudinary public id, kept beside the URL so the file
+/// can be destroyed with the row — the trap `VoucherAttachment` fell into.
+/// The daily expiry reminder (`business-documents.scheduler.ts`) fires on
+/// `remind_days_before`, 7, 1 and 0 days before `expiry_date`.
+model BusinessDocument {
+  id                 String    @id @default(uuid())
+  tenant_id          String
+  /// TRADE_LICENSE | TIN | BIN | FIRE_LICENSE | IRC | ERC | ENVIRONMENT | TRADEMARK | INSURANCE | OTHER
+  doc_type           String    @default("OTHER")
+  title              String
+  number             String?
+  issuing_authority  String?
+  issue_date         DateTime? @db.Date
+  /// Null for a document that never expires (a TIN certificate).
+  expiry_date        DateTime? @db.Date
+  remind_days_before Int       @default(30)
+  notes              String?
+  file_url           String?
+  file_name          String?
+  mime_type          String?
+  file_size          Int?
+  storage_key        String?
+  /// `raw` for a PDF, `image` for a photo — what Cloudinary needs to destroy it.
+  storage_type       String?
+  created_by         String?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, expiry_date])
+  @@map("business_documents")
 }

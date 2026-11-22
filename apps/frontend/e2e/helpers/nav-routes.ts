@@ -120,6 +120,11 @@ export const NAV_ROUTES: { path: string; label: string }[] = [
 
     // Tools
     { path: '/tools/notes', label: 'Notes' },
+    { path: '/tools/cheques', label: 'Cheques' },
+    { path: '/tools/price-checker', label: 'Price checker' },
+    { path: '/tools/documents', label: 'Documents' },
+    { path: '/tools/scan', label: 'Scan a bill' },
+    { path: '/tools/bijoy', label: 'Bijoy ↔ Unicode' },
 
     // Account settings — sidebar + settings quick links
     { path: '/settings', label: 'Settings' },

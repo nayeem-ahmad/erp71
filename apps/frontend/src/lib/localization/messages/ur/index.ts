@@ -17,6 +17,7 @@ import { chatMessages } from './chat';
 import { meetingsMessages } from './meetings';
 import { kpisMessages } from './kpis';
 import { notesMessages } from './notes';
+import { toolsMessages } from './tools';
 import { accountingVouchersUiMessages } from './accountingListUi/vouchers';
 import { accountingMastersUiMessages } from './accountingListUi/masters';
 import { accountingFinanceUiMessages } from './accountingListUi/finance';
@@ -48,4 +49,5 @@ export const urMessages = {
     meetings: meetingsMessages,
     kpis: kpisMessages,
     notes: notesMessages,
+    tools: toolsMessages,
 } as const;

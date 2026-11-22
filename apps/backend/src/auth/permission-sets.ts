@@ -207,3 +207,18 @@ export const BILLING_ADMIN: P[] = [P.MANAGE_USERS];
 export const API_KEY_ADMIN: P[] = [P.MANAGE_USERS];
 /** The chart-of-accounts names a payment method can point at. */
 export const PAYMENT_ACCOUNTS_READ: P[] = [...ACCOUNTING_READ, ...SETTINGS_ADMIN];
+
+// Tools -------------------------------------------------------------------------
+/** Tools → Cheques: whoever records payments, and whoever reads the books. */
+export const CHEQUE_READ: P[] = [P.CREATE_VOUCHER, P.VIEW_FINANCIAL_REPORTS];
+export const CHEQUE_WRITE: P[] = [P.CREATE_VOUCHER];
+/**
+ * Tools → Documents: the business's licences and registrations. Whoever
+ * administers the workspace's users or branches — the same people who would
+ * be the ones renewing a trade licence.
+ */
+export const BUSINESS_DOCUMENTS: P[] = [P.MANAGE_STORES, P.MANAGE_USERS];
+/** Tools → Price checker: price and stock only, the catalogue read. */
+export const PRICE_CHECK_READ: P[] = [P.VIEW_PRODUCT_CATALOG];
+/** Tools → Scan a bill: it fills the purchase or the expense form. */
+export const BILL_SCAN: P[] = [P.CREATE_PURCHASE, P.CREATE_VOUCHER];
