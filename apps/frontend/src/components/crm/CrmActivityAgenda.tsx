@@ -5,11 +5,11 @@ import Link from 'next/link';
 import { AlertTriangle, ClipboardList, Eye } from 'lucide-react';
 import { Input, StatusBadge, Switch, type StatusBadgeTone } from '@/components/ui';
 import {
-    activityDueDay,
     activityKindName,
     activityLabel,
     activityTarget,
     groupActivities,
+    isPlannedActivityOverdue,
     type ActivityGroupId,
     type CrmActivityListRow,
 } from '@/components/crm/crm-activity-layout';
@@ -141,8 +141,6 @@ export default function CrmActivityAgenda({
         undated: m.groups.undated,
     };
 
-    const today = tenantDateOnly();
-
     return (
         <div className="space-y-3">
             <Input
@@ -166,8 +164,7 @@ export default function CrmActivityAgenda({
                         {group.rows.map((row) => {
                             const target = activityTarget(row);
                             const kind = activityKindName(row);
-                            const dueDay = row.due_at ? activityDueDay(row.due_at) : null;
-                            const overdue = row.status === 'PLANNED' && !!dueDay && dueDay < today;
+                            const overdue = isPlannedActivityOverdue(row.status, row.due_at);
                             return (
                                 <div
                                     key={row.id}

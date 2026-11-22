@@ -2,7 +2,8 @@
 import { act, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { renderWithQueryClient } from '@/test-utils/query-client';
 import ActivitiesPage from './page';
-import { tenantDateOnly } from '@/lib/created-range';
+import { addCalendarDays, tenantDateOnly } from '@/lib/created-range';
+import { formatDate, setActiveTimeZone } from '@/lib/format';
 import { useTableViewStore } from '@/components/table';
 
 jest.mock('next/link', () => {
@@ -112,6 +113,37 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
             { userId: 'user-2', name: 'Rifat' },
         ]);
         api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
+    });
+    afterEach(() => setActiveTimeZone(undefined));
+
+    it('does not paint a plan due today as overdue after the scheduled hour has passed', async () => {
+        setActiveTimeZone('Asia/Dhaka');
+        const today = tenantDateOnly();
+        // UTC midnight of the workspace's today is 06:00 in Dhaka. Instant
+        // comparison would already be overdue for the rest of the day.
+        const dueAt = `${today}T00:00:00.000Z`;
+        api.getCrmActivities.mockResolvedValue(pageOf([{ ...activity, due_at: dueAt }]));
+
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        const due = screen.getByText(formatDate(dueAt));
+        expect(due.closest('span')?.className).not.toContain('text-red-600');
+        expect(screen.queryByTestId('alerttriangle-icon')).not.toBeInTheDocument();
+    });
+
+    it('paints a plan due yesterday as overdue', async () => {
+        setActiveTimeZone('Asia/Dhaka');
+        const yesterday = addCalendarDays(tenantDateOnly(), -1);
+        const dueAt = `${yesterday}T06:00:00.000Z`;
+        api.getCrmActivities.mockResolvedValue(pageOf([{ ...activity, due_at: dueAt }]));
+
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        const due = screen.getByText(formatDate(dueAt));
+        expect(due.closest('span')?.className).toContain('text-red-600');
+        expect(screen.getByTestId('alerttriangle-icon')).toBeInTheDocument();
     });
 
     it('opens on today, so the list is the day\'s agenda rather than everything ever planned', async () => {

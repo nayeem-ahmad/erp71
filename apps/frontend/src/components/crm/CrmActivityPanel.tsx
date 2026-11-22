@@ -8,6 +8,7 @@ import CrmActivityComposer from './CrmActivityComposer';
 import CrmMessageTemplatePicker from './CrmMessageTemplatePicker';
 import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
+import { isPlannedActivityOverdue } from '@/components/crm/crm-activity-layout';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { useCanApproveCrmActivity } from '@/lib/use-can-approve-crm-activity';
@@ -386,7 +387,7 @@ export default function CrmActivityPanel({
                             </div>
                         ) : (
                             planned.map((row) => {
-                                const overdue = Boolean(row.due_at) && new Date(row.due_at as string) < new Date();
+                                const overdue = isPlannedActivityOverdue(row.status, row.due_at);
                                 return (
                                     <div
                                         key={row.id}

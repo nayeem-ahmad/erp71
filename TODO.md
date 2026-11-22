@@ -2268,6 +2268,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Planned activities due today no longer show as overdue** — done 2026-11-22. The activities list, agenda and lead/customer panel compared `new Date(due_at) < new Date()`, so a plan due this morning (or stored at local midnight) turned red with the exclamation as soon as that instant passed, while the server, the summary tiles and the phone already treat overdue as "due before the workspace's today". New `isPlannedActivityOverdue` reads both instants on `Tenant.timezone` and compares calendar days. Tests: morning-due still today, local-midnight still today, UTC-midnight still today in Dhaka, yesterday overdue, list/panel UI.
+
 - [x] **Released `dev` → `main` (PR #1099) — project task pagination, suppliers Current Due, and the board due-today test flake.** Merge commit `2b8a778d`, 2026-11-22. Required checks green (Playwright skipped). Deploy to VPS run 44938948966 green. Live health reports `2b8a778d` with `db: ok`, `status: ok`, app HTTP 200. Did not `--delete-branch`. No schema change.
 
 - [x] **Board "due today" tests follow the workspace calendar** — done 2026-11-22. `matchesFilters` names today in `Tenant.timezone` (Asia/Dhaka by default). The tests built dates from the runner's local day, so they failed on GitHub after 18:00 UTC (Dhaka already tomorrow) and passed earlier the same SHA. They now use `tenantDateOnly`.

@@ -1,11 +1,59 @@
+import { setActiveTimeZone } from '@/lib/format';
 import {
     ACTIVITY_LAYOUT_KEY,
     classifyActivity,
     countExtraActivityFilters,
     groupActivities,
+    isPlannedActivityOverdue,
     readActivityLayout,
     writeActivityLayout,
 } from './crm-activity-layout';
+
+describe('isPlannedActivityOverdue', () => {
+    beforeEach(() => setActiveTimeZone('Asia/Dhaka'));
+    afterEach(() => setActiveTimeZone(undefined));
+
+    // 14:00 Dhaka on 22 Nov — afternoon, so any morning due instant has already
+    // passed if you compare timestamps raw.
+    const afternoon = new Date('2026-11-22T08:00:00.000Z');
+
+    it('does not call a plan due this morning overdue once the hour has passed', () => {
+        // 09:00 Dhaka = 03:00 UTC. Instant comparison would already be overdue.
+        expect(isPlannedActivityOverdue('PLANNED', '2026-11-22T03:00:00.000Z', afternoon)).toBe(false);
+    });
+
+    it('does not call a plan stored at local midnight overdue later the same day', () => {
+        // Dhaka midnight 22 Nov = 18:00 UTC on the 21st. The instant is in the
+        // past all day; the workspace calendar still reads "today".
+        expect(isPlannedActivityOverdue('PLANNED', '2026-11-21T18:00:00.000Z', afternoon)).toBe(false);
+    });
+
+    it('does not call a plan at UTC midnight overdue while it is still the workspace day', () => {
+        // UTC midnight 22 Nov is 06:00 in Dhaka — still today after 06:00.
+        expect(isPlannedActivityOverdue('PLANNED', '2026-11-22T00:00:00.000Z', afternoon)).toBe(false);
+    });
+
+    it('calls a plan due yesterday overdue', () => {
+        expect(isPlannedActivityOverdue('PLANNED', '2026-11-21T03:00:00.000Z', afternoon)).toBe(true);
+    });
+
+    it('does not call a plan due tomorrow overdue', () => {
+        expect(isPlannedActivityOverdue('PLANNED', '2026-11-23T03:00:00.000Z', afternoon)).toBe(false);
+    });
+
+    it('ignores logged work and rows with no due date', () => {
+        expect(isPlannedActivityOverdue('DONE', '2026-11-21T03:00:00.000Z', afternoon)).toBe(false);
+        expect(isPlannedActivityOverdue('PLANNED', null, afternoon)).toBe(false);
+    });
+
+    it('reads the due instant on the workspace clock, not UTC', () => {
+        // 17:00 UTC on the 25th is 23:00 in Dhaka: still the 25th at 22:00 local,
+        // and yesterday from the 26th. Same cases as the phone's isOverdue test.
+        const dueAt = '2026-09-25T17:00:00.000Z';
+        expect(isPlannedActivityOverdue('PLANNED', dueAt, new Date('2026-09-25T16:00:00.000Z'))).toBe(false);
+        expect(isPlannedActivityOverdue('PLANNED', dueAt, new Date('2026-09-26T03:00:00.000Z'))).toBe(true);
+    });
+});
 
 describe('classifyActivity', () => {
     const today = '2026-10-14';

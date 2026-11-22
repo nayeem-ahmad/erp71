@@ -97,6 +97,26 @@ export function activityDueDay(dueAt: string): string | null {
     return tenantDateOnly(parsed);
 }
 
+/**
+ * Planned and due before the start of the workspace's today — the same rule
+ * the server (`due_at < startOfZonedToday`) and the phone use.
+ *
+ * Instant comparison (`new Date(due) < new Date()`) marks a plan due this
+ * morning as overdue by the afternoon, and a plan stored at local midnight as
+ * overdue all day, because those instants have already passed. Overdue is a
+ * slipped calendar day on the workspace clock, not a slipped hour.
+ */
+export function isPlannedActivityOverdue(
+    status: string,
+    dueAt: string | null | undefined,
+    now: Date = new Date(),
+): boolean {
+    if (status !== 'PLANNED' || !dueAt) return false;
+    const dueDay = activityDueDay(dueAt);
+    if (!dueDay) return false;
+    return dueDay < tenantDateOnly(now);
+}
+
 export type ActivityGroupId = 'overdue' | 'today' | 'later' | 'earlier' | 'undated';
 
 const GROUP_ORDER: ActivityGroupId[] = ['overdue', 'today', 'later', 'earlier', 'undated'];

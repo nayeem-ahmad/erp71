@@ -31,6 +31,7 @@ import {
     activityLabel,
     activityTarget,
     agendaOrder,
+    isPlannedActivityOverdue,
     nearestTargetedIndex,
     readActivityLayout,
     writeActivityLayout,
@@ -495,7 +496,7 @@ export default function CrmActivitiesPage() {
                 const value = info.getValue();
                 if (!value) return '—';
                 const row = info.row.original;
-                const overdue = row.status === 'PLANNED' && new Date(value) < new Date();
+                const overdue = isPlannedActivityOverdue(row.status, value);
                 return (
                     <span className={`inline-flex items-center gap-1 ${overdue ? 'text-red-600' : ''}`}>
                         {overdue && <AlertTriangle className="h-3 w-3" />}
