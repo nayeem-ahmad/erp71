@@ -11,6 +11,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { useI18n } from '@/lib/i18n';
 import { Checkbox } from '@/components/ui';
+import { displayInventoryReasonLabel, INVENTORY_REASON_TYPE } from '@/lib/inventory-reason';
 
 export default function InventorySettingsPage() {
     const { t } = useI18n();
@@ -21,7 +22,7 @@ export default function InventorySettingsPage() {
     const [loading, setLoading] = useState(true);
     const [form, setForm] = useState<any>({});
     const [message, setMessage] = useState('');
-    const [reasonForm, setReasonForm] = useState<any>({ type: 'SHRINKAGE', code: '', label: '' });
+    const [reasonForm, setReasonForm] = useState<any>({ type: INVENTORY_REASON_TYPE.PRODUCT_LOST, code: '', label: '' });
 
     useEffect(() => {
         void loadAll();
@@ -75,10 +76,20 @@ export default function InventorySettingsPage() {
     };
 
     const handleCreateReason = async () => {
+        const code = String(reasonForm.code ?? '').trim();
+        const label = String(reasonForm.label ?? '').trim();
+        if (!code) {
+            setMessage(t.inventorySettings.reasonCodeRequired);
+            return;
+        }
+        if (!label) {
+            setMessage(t.inventorySettings.reasonLabelRequired);
+            return;
+        }
         try {
-            await api.createInventoryReason(reasonForm);
+            await api.createInventoryReason({ ...reasonForm, code, label });
             setMessage(t.inventorySettings.reasonCreated);
-            setReasonForm({ type: 'SHRINKAGE', code: '', label: '' });
+            setReasonForm({ type: INVENTORY_REASON_TYPE.PRODUCT_LOST, code: '', label: '' });
             await loadAll();
         } catch (error: any) {
             setMessage(error.message || t.inventorySettings.reasonCreateFailed);
@@ -103,6 +114,12 @@ export default function InventorySettingsPage() {
         defaultTransferSourceWarehouseId: t.inventorySettings.transferSourceWarehouse,
         defaultTransferDestinationWarehouseId: t.inventorySettings.transferDestinationWarehouse,
     };
+
+    const reasonTypeOptions = [
+        { value: INVENTORY_REASON_TYPE.PRODUCT_LOST, label: t.inventorySettings.shrinkage },
+        { value: INVENTORY_REASON_TYPE.PRODUCT_FOUND, label: t.inventorySettings.found },
+        { value: INVENTORY_REASON_TYPE.STOCK_TAKE, label: t.inventorySettings.discrepancy },
+    ];
 
     const alertRuleLabels: Record<string, string> = {
         defaultReorderLevel: t.inventorySettings.defaultReorderLevel,
@@ -235,31 +252,65 @@ export default function InventorySettingsPage() {
 
                 <section className="bg-white border border-gray-100 rounded-lg p-6 space-y-4">
                     <h2 className="font-bold text-lg">{t.inventorySettings.reasonCatalog}</h2>
+                    <p className="text-xs text-gray-500">{t.inventorySettings.reasonCatalogHelp}</p>
                     <div className="grid md:grid-cols-4 gap-4">
-                        <select value={reasonForm.type} onChange={(e) => setReasonForm((current: any) => ({ ...current, type: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                            <option value="SHRINKAGE">{t.inventorySettings.shrinkage}</option>
-                            <option value="FOUND">{t.inventorySettings.found}</option>
-                            <option value="DISCREPANCY">{t.inventorySettings.discrepancy}</option>
+                        <select
+                            id="reason-type"
+                            aria-label={t.inventorySettings.reasonType}
+                            value={reasonForm.type}
+                            onChange={(e) => setReasonForm((current: any) => ({ ...current, type: e.target.value }))}
+                            className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium"
+                        >
+                            {reasonTypeOptions.map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
                         </select>
-                        <input value={reasonForm.code} onChange={(e) => setReasonForm((current: any) => ({ ...current, code: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventorySettings.reasonCode} />
-                        <input value={reasonForm.label} onChange={(e) => setReasonForm((current: any) => ({ ...current, label: e.target.value }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" placeholder={t.inventorySettings.reasonLabel} />
+                        <input
+                            aria-label={t.inventorySettings.reasonCode}
+                            value={reasonForm.code}
+                            onChange={(e) => setReasonForm((current: any) => ({ ...current, code: e.target.value }))}
+                            className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium"
+                            placeholder={t.inventorySettings.reasonCode}
+                        />
+                        <input
+                            aria-label={t.inventorySettings.reasonLabel}
+                            value={reasonForm.label}
+                            onChange={(e) => setReasonForm((current: any) => ({ ...current, label: e.target.value }))}
+                            className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium"
+                            placeholder={t.inventorySettings.reasonLabel}
+                        />
                         <button onClick={() => void handleCreateReason()} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center shadow-lg shadow-sm">
                             <Plus className="w-4 h-4 me-2" /> {t.inventorySettings.addReason}
                         </button>
                     </div>
-                    <div className="grid gap-3">
-                        {reasons.map((reason) => (
-                            <div key={reason.id} className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
-                                <div>
-                                    <div className="text-sm font-bold text-gray-900">{reason.label}</div>
-                                    <div className="text-xs text-gray-500 font-bold uppercase tracking-widest">{reason.type} • {reason.code}</div>
+                    <div className="space-y-4">
+                        {reasonTypeOptions.map((option) => {
+                            const group = reasons.filter((reason) => reason.type === option.value);
+                            if (group.length === 0) return null;
+                            return (
+                                <div key={option.value} className="space-y-2">
+                                    <h3 className="text-xs font-semibold text-gray-500">{option.label}</h3>
+                                    <div className="grid gap-3">
+                                        {group.map((reason) => (
+                                            <div key={reason.id} className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
+                                                <div>
+                                                    <div className="text-sm font-semibold text-gray-900">
+                                                        {displayInventoryReasonLabel(reason, t.inventorySettings.unspecifiedReason)}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500">
+                                                        {reason.code?.trim() || '—'}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="text-xs font-medium text-gray-400">{reason.is_system ? t.inventorySettings.system : reason.is_active ? t.inventorySettings.active : t.inventorySettings.inactive}</div>
+                                                    {!reason.is_system ? <button onClick={() => void handleToggleReason(reason)} className="bg-white border border-gray-200 text-gray-700 px-3 py-2 rounded-lg text-xs font-semibold">{reason.is_active ? t.inventorySettings.deactivate : t.inventorySettings.activate}</button> : null}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <div className="text-xs font-bold text-gray-400">{reason.is_system ? t.inventorySettings.system : reason.is_active ? t.inventorySettings.active : t.inventorySettings.inactive}</div>
-                                    {!reason.is_system ? <button onClick={() => void handleToggleReason(reason)} className="bg-white border border-gray-200 text-gray-700 px-3 py-2 rounded-lg text-xs font-bold">{reason.is_active ? t.inventorySettings.deactivate : t.inventorySettings.activate}</button> : null}
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </section>
             </div>

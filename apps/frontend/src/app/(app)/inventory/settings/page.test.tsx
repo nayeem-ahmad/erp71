@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import InventorySettingsPage from './page';
 
 jest.mock('@/lib/api', () => ({
@@ -41,8 +41,9 @@ const mockSettings = {
 };
 
 const mockReasons = [
-    { id: 'rsn-1', type: 'SHRINKAGE', code: 'SHR', label: 'Stock Discrepancy', is_active: true },
-    { id: 'rsn-2', type: 'DAMAGE', code: 'DMG', label: 'Damaged', is_active: true },
+    { id: 'rsn-1', type: 'SHRINKAGE', code: 'THEFT', label: 'Theft', is_active: true },
+    { id: 'rsn-2', type: 'FOUND', code: 'MISCOUNT', label: 'Miscount', is_active: true },
+    { id: 'rsn-blank', type: 'SHRINKAGE', code: '5', label: '', is_active: true },
 ];
 
 function getApi() {
@@ -83,9 +84,36 @@ describe('InventorySettingsPage', () => {
     it('shows inventory reasons', async () => {
         render(<InventorySettingsPage />);
         await waitFor(() => {
-            expect(screen.getAllByText('Stock Discrepancy').length).toBeGreaterThan(0);
-            expect(screen.getAllByText('Damaged').length).toBeGreaterThan(0);
+            expect(screen.getAllByText('Theft').length).toBeGreaterThan(0);
+            expect(screen.getAllByText('Miscount').length).toBeGreaterThan(0);
         });
+    });
+
+    it('offers Product Lost and Product Found as the discrepancy types', async () => {
+        render(<InventorySettingsPage />);
+        await waitFor(() => expect(screen.getByText('Theft')).toBeInTheDocument());
+
+        const typeSelect = screen.getByLabelText(/reason type/i);
+        expect(within(typeSelect).getByRole('option', { name: 'Product Lost' })).toBeInTheDocument();
+        expect(within(typeSelect).getByRole('option', { name: 'Product Found' })).toBeInTheDocument();
+        expect(within(typeSelect).getByRole('option', { name: 'Stock take' })).toBeInTheDocument();
+        expect(within(typeSelect).queryByRole('option', { name: 'Stock Discrepancy' })).not.toBeInTheDocument();
+        expect(screen.queryByText('SHRINKAGE')).not.toBeInTheDocument();
+    });
+
+    it('shows a fallback label for a blank reason so the list is not empty', async () => {
+        render(<InventorySettingsPage />);
+        await waitFor(() => expect(screen.getAllByText('5').length).toBeGreaterThan(0));
+    });
+
+    it('does not create a reason with a blank code or label', async () => {
+        const api = getApi();
+        render(<InventorySettingsPage />);
+        await waitFor(() => expect(screen.getByRole('button', { name: /add reason/i })).toBeInTheDocument());
+
+        fireEvent.click(screen.getByRole('button', { name: /add reason/i }));
+
+        expect(api.createInventoryReason).not.toHaveBeenCalled();
     });
 
     it('shows reorder level field', async () => {

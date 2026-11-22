@@ -95,14 +95,23 @@ export class UpdateInventorySettingsDto {
     allowNegativeStock?: boolean;
 }
 
+export const INVENTORY_REASON_TYPES = ['SHRINKAGE', 'FOUND', 'DISCREPANCY'] as const;
+
 export class CreateInventoryReasonDto {
-    @IsString()
+    @Transform(trim)
+    @IsIn(INVENTORY_REASON_TYPES)
     type: string;
 
+    @Transform(trim)
     @IsString()
+    @MinLength(1, { message: 'Reason code is required.' })
+    @MaxLength(50)
     code: string;
 
+    @Transform(trim)
     @IsString()
+    @MinLength(1, { message: 'Reason label is required.' })
+    @MaxLength(120)
     label: string;
 
     @IsOptional()

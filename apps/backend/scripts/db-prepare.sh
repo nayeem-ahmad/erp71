@@ -550,6 +550,17 @@ step sync:lead-activity \
 step sync:found-reasons \
     npm run sync:found-reasons --workspace=@erp71/database
 
+# sync:inventory-reasons gives tenants their Product Lost (SHRINKAGE) and
+# stock-take (DISCREPANCY) catalogues, and labels blank custom rows so the
+# Stock Discrepancy picker is not an empty option. REQUIRED: seed.ts writes
+# these only at tenant creation, and unlike FOUND there was no boot-time
+# backfill — a workspace that saved a blank reason from settings (code and
+# label were not required) ends up with type SHRINKAGE rows that have nothing
+# to show. Additive per code, so a tenant that already has Theft keeps it;
+# blank labels become the code, or Unspecified. See prisma/sync-inventory-reasons.ts.
+step sync:inventory-reasons \
+    npm run sync:inventory-reasons --workspace=@erp71/database
+
 # sync:project-members puts each project's manager and creator on its team.
 # REQUIRED for any workspace that created a project before this ran: the task
 # Assignee picker offers a project's roster and nothing else, and projects used
