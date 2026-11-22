@@ -437,4 +437,29 @@ describe('InventoryShrinkagePage', () => {
 
         await waitFor(() => expect(screen.getByRole('heading', { name: 'Stock Discrepancy' })).toBeInTheDocument());
     });
+
+    it('offers Product Lost and Product Found as the two entry types', async () => {
+        await renderOpenForm();
+
+        const typeSelect = screen.getByLabelText(/^entry type/i);
+        expect(within(typeSelect).getByRole('option', { name: 'Product Lost' })).toBeInTheDocument();
+        expect(within(typeSelect).getByRole('option', { name: 'Product Found' })).toBeInTheDocument();
+        expect(within(typeSelect).queryByRole('option', { name: /stock lost/i })).not.toBeInTheDocument();
+    });
+
+    it('shows a fallback for a blank Product Lost reason instead of an empty option', async () => {
+        const api = getApi();
+        api.getInventoryReasons.mockResolvedValue([
+            { id: 'rsn-blank', type: 'SHRINKAGE', code: '5', label: '', is_active: true },
+            { id: 'rsn-empty', type: 'SHRINKAGE', code: '', label: '   ', is_active: true },
+            { id: 'rsn-found', type: 'FOUND', code: 'MISCOUNT', label: 'Miscount', is_active: true },
+        ]);
+
+        await renderOpenForm();
+
+        const reasonSelect = screen.getByLabelText(/^reason/i);
+        expect(within(reasonSelect).getByRole('option', { name: '5' })).toBeInTheDocument();
+        expect(within(reasonSelect).getByRole('option', { name: 'Unspecified' })).toBeInTheDocument();
+        expect(within(reasonSelect).queryByRole('option', { name: 'Miscount' })).not.toBeInTheDocument();
+    });
 });

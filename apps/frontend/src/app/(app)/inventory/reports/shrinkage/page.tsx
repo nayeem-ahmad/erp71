@@ -14,6 +14,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
 import { BranchFilter } from '@/components/ui';
 import { branchOrEmpty, handleBranchForbidden, useBranchBoundState, useBranchScope } from '@/lib/branch-scope';
+import { displayInventoryReasonLabel, INVENTORY_REASON_TYPE } from '@/lib/inventory-reason';
 
 interface ShrinkageSummaryRow {
     warehouseName: string;
@@ -109,7 +110,9 @@ export default function ShrinkageReportPage() {
     );
 
     const visibleReasons = useMemo(
-        () => reasons.filter((reason: any) => reason.type === (direction === 'FOUND' ? 'FOUND' : 'SHRINKAGE')),
+        () => reasons.filter((reason: any) =>
+            reason.type === (direction === 'FOUND' ? INVENTORY_REASON_TYPE.PRODUCT_FOUND : INVENTORY_REASON_TYPE.PRODUCT_LOST),
+        ),
         [reasons, direction],
     );
 
@@ -183,7 +186,10 @@ export default function ShrinkageReportPage() {
                 label: copy.columns.reason,
                 value: reasonId || null,
                 onChange: (v) => setReasonId(v ?? ''),
-                options: visibleReasons.map((reason: any) => ({ value: reason.id, label: reason.label })),
+                options: visibleReasons.map((reason: any) => ({
+                    value: reason.id,
+                    label: displayInventoryReasonLabel(reason, t.inventorySettings.unspecifiedReason),
+                })),
             },
             {
                 id: 'group',
