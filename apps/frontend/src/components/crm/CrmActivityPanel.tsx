@@ -9,6 +9,7 @@ import CrmMessageTemplatePicker from './CrmMessageTemplatePicker';
 import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { isPlannedActivityOverdue } from '@/components/crm/crm-activity-layout';
+import { activityHistoryParts, formatActivityMessage } from '@/components/crm/crm-activity-message';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { useCanApproveCrmActivity } from '@/lib/use-can-approve-crm-activity';
@@ -414,7 +415,11 @@ export default function CrmActivityPanel({
                                                     {row.due_at ? `${m.due} ${formatDateTime(row.due_at)}` : m.noDate}
                                                     {row.assignee ? ` · ${row.assignee.name || row.assignee.email}` : ''}
                                                 </p>
-                                                {row.notes && <p className="text-xs text-gray-400">{row.notes}</p>}
+                                                {row.notes && (
+                                                    <p className="mt-1 text-xs text-gray-500 whitespace-pre-wrap break-words">
+                                                        {formatActivityMessage(row.notes)}
+                                                    </p>
+                                                )}
                                             </div>
                                             <div className="flex flex-shrink-0 gap-1">
                                                 <Button size="sm" onClick={() => openComplete(row)} icon={<CheckCircle2 className="w-3.5 h-3.5" />}>
@@ -474,7 +479,10 @@ export default function CrmActivityPanel({
                                 <p className="text-sm">{m.noHistory}</p>
                             </div>
                         ) : (
-                            history.map((row) => (
+                            history.map((row) => {
+                                const parts = activityHistoryParts(row);
+                                const cancelled = row.status === 'CANCELLED' ? 'line-through' : '';
+                                return (
                                 <div
                                     key={row.id}
                                     data-activity-id={row.id}
@@ -493,16 +501,26 @@ export default function CrmActivityPanel({
                                                     <span className="text-xs text-gray-400">{m.cancelled}</span>
                                                 )}
                                             </div>
-                                            {/* A logged touch has no separate title, so the summary is the
-                                                headline; a completed plan keeps the subject it was scheduled under. */}
-                                            <p className={`text-sm text-gray-800 ${row.status === 'CANCELLED' ? 'line-through' : ''}`}>
-                                                {row.subject ?? row.summary}
-                                            </p>
-                                            {row.subject && row.summary && (
-                                                <p className="mt-0.5 text-xs text-gray-500">{row.summary}</p>
+                                            {/* Title stays a one-line label. The body is the message itself,
+                                                with line breaks kept, and notes that only repeat it are dropped. */}
+                                            {parts.title && (
+                                                <p className={`text-sm font-medium text-gray-800 ${cancelled}`}>
+                                                    {parts.title}
+                                                </p>
                                             )}
-                                            {row.outcome && <p className="mt-0.5 text-xs text-gray-500">{row.outcome}</p>}
-                                            {row.notes && <p className="mt-0.5 text-xs text-gray-500">{row.notes}</p>}
+                                            {parts.body && (
+                                                <p className={`${parts.title ? 'mt-1 text-sm text-gray-700' : 'text-sm text-gray-800'} whitespace-pre-wrap break-words ${cancelled}`}>
+                                                    {parts.body}
+                                                </p>
+                                            )}
+                                            {parts.outcome && (
+                                                <p className="mt-0.5 text-xs text-gray-500">{parts.outcome}</p>
+                                            )}
+                                            {parts.notes && (
+                                                <p className="mt-1 text-xs text-gray-500 whitespace-pre-wrap break-words">
+                                                    {parts.notes}
+                                                </p>
+                                            )}
                                             <p className="mt-0.5 text-xs text-gray-400">
                                                 {row.completed_at ? formatDateTime(row.completed_at) : ''}
                                             </p>
@@ -518,7 +536,8 @@ export default function CrmActivityPanel({
                                         )}
                                     </div>
                                 </div>
-                            ))
+                                );
+                            })
                         )}
                     </section>
                 </>

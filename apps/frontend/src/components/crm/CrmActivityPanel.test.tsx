@@ -101,6 +101,34 @@ describe('CrmActivityPanel', () => {
         expect(screen.getByText('Overdue')).toBeInTheDocument();
     });
 
+    it('keeps line breaks in a logged message instead of collapsing them', async () => {
+        api.getAllCrmActivities.mockResolvedValue([{
+            ...logged,
+            summary: 'Dear Karim,\\n\\nHere is the catalogue.',
+            outcome: null,
+            notes: null,
+        }]);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
+
+        const body = await screen.findByText((_, node) => node?.textContent === 'Dear Karim,\n\nHere is the catalogue.');
+        expect(body).toHaveClass('whitespace-pre-wrap');
+    });
+
+    it('does not repeat the message when notes only copy the summary', async () => {
+        const message = 'Dear Karim,\n\nHere is the catalogue.';
+        api.getAllCrmActivities.mockResolvedValue([{
+            ...logged,
+            subject: 'Quote follow-up',
+            summary: message,
+            outcome: null,
+            notes: message,
+        }]);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
+
+        expect(await screen.findByText('Quote follow-up')).toBeInTheDocument();
+        expect(screen.getAllByText((_, node) => node?.textContent === message)).toHaveLength(1);
+    });
+
     it('does not call a plan due today overdue after the scheduled hour has passed', async () => {
         setActiveTimeZone('Asia/Dhaka');
         const today = tenantDateOnly();
