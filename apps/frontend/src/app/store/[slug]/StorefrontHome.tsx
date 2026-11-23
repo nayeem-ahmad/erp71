@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { storefrontOrderRef } from '@erp71/shared-types';
 import DeliveryAddressFields, { deliveryPrefill } from '@/components/storefront/DeliveryAddressFields';
 import StorefrontHeader, { type StorefrontMenuLink } from '@/components/storefront/StorefrontHeader';
+import ChooseOptionsDialog, { cartProductForVariant, type StorefrontVariant } from '@/components/storefront/ChooseOptionsDialog';
 import StorefrontEnquiryForm from '@/components/storefront/StorefrontEnquiryForm';
 import { storefrontTheme, storefrontThemeStyle } from '@/lib/storefront/storefront-theme';
 import { formatBDT } from '@/lib/format';
@@ -38,6 +39,11 @@ interface Product {
     image_url: string | null;
     stock_quantity: number;
     group_name?: string;
+    /** A family card's variants: the shopper picks one in `ChooseOptionsDialog`. */
+    option_names?: string[];
+    variants?: StorefrontVariant[];
+    /** The variants do not all cost the same, so the price reads "From ৳X". */
+    price_varies?: boolean;
 }
 
 interface Category {
@@ -84,6 +90,7 @@ export default function StorefrontHome({ slug }: { slug: string }) {
     const { t } = useI18n();
     const m = t.storefront.public;
     const home = m.home;
+    const variantText = t.productVariants.storefront;
     const footer = m.footer;
     const enquiry = m.enquiry;
     const p = m.placeholders;
@@ -96,6 +103,7 @@ export default function StorefrontHome({ slug }: { slug: string }) {
     const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
     const [cart, setCart] = useState<CartItem[]>([]);
+    const [optionsFor, setOptionsFor] = useState<Product | null>(null);
     const [cartOpen, setCartOpen] = useState(false);
     const [checkoutOpen, setCheckoutOpen] = useState(false);
 
@@ -511,11 +519,15 @@ export default function StorefrontHome({ slug }: { slug: string }) {
                                                 <div className="absolute bottom-4 start-4 end-4 translate-y-0 opacity-100 md:translate-y-4 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100 transition-all duration-300">
                                                     <button
                                                         type="button"
-                                                        onClick={() => addToCart(product)}
+                                                        onClick={() => (product.variants?.length ? setOptionsFor(product) : addToCart(product))}
                                                         disabled={product.stock_quantity <= 0}
                                                         className="w-full bg-[color:var(--sf-accent)] text-[color:var(--sf-accent-foreground)] backdrop-blur font-semibold py-3 rounded-xl transition-opacity hover:opacity-90 disabled:opacity-40"
                                                     >
-                                                        {product.stock_quantity > 0 ? m.addToCart : m.outOfStock}
+                                                        {product.stock_quantity <= 0
+                                                            ? m.outOfStock
+                                                            : product.variants?.length
+                                                              ? variantText.chooseOptions
+                                                              : m.addToCart}
                                                     </button>
                                                 </div>
                                             </div>
@@ -524,7 +536,11 @@ export default function StorefrontHome({ slug }: { slug: string }) {
                                                 <div className="text-sm text-gray-500 mb-1.5 font-medium">{product.group_name || m.categoryFallback}</div>
                                                 <h3 className="font-bold text-gray-900 leading-snug mb-3 line-clamp-2">{product.name}</h3>
                                                 <div className="flex items-center gap-2 mt-auto pt-2 border-t border-gray-50">
-                                                    <span className="font-bold text-lg">{formatBDT(price)}</span>
+                                                    <span className="font-bold text-lg">
+                                                        {product.price_varies
+                                                            ? formatMessage(variantText.fromPrice, { price: formatBDT(price) })
+                                                            : formatBDT(price)}
+                                                    </span>
                                                     {onSale && (
                                                         <span className="text-sm text-gray-400 line-through">{formatOptionalPrice(product.compare_at_price)}</span>
                                                     )}
@@ -627,6 +643,14 @@ export default function StorefrontHome({ slug }: { slug: string }) {
                     </div>
                 </div>
             </footer>
+
+            {optionsFor && (
+                <ChooseOptionsDialog
+                    card={optionsFor}
+                    onClose={() => setOptionsFor(null)}
+                    onAdd={(variant) => addToCart(cartProductForVariant(optionsFor, variant))}
+                />
+            )}
 
             {cartOpen && (
                 <div className="fixed inset-0 z-50 flex justify-end">

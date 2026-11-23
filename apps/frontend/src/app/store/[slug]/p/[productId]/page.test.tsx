@@ -157,3 +157,47 @@ describe('PublicProductPage — API base', () => {
         expect(url.match(/\/api\/v1(\/|$)/g)?.length ?? 0).toBe(1);
     });
 });
+
+describe('PublicProductPage — variant families', () => {
+    const familyProduct = {
+        id: 'p-m',
+        name: 'Belt OAC M',
+        sku: 'B-M',
+        price: 500,
+        compare_at_price: null,
+        description: null,
+        image_url: null,
+        in_stock: true,
+        family: {
+            id: 'fam-1',
+            name: 'Belt OAC',
+            option_names: ['Size'],
+            variants: [
+                { id: 'p-s', label: 'S', option_values: { Size: 'S' }, in_stock: false },
+                { id: 'p-m', label: 'M', option_values: { Size: 'M' }, in_stock: true },
+                { id: 'p-l', label: 'L', option_values: { Size: 'L' }, in_stock: true },
+            ],
+        },
+    };
+
+    it("shows the family's name and links each size to its own variant page", async () => {
+        mockFetch.mockReturnValueOnce(okJson({ data: familyProduct }));
+        const html = await renderPage('shop', 'p-m');
+
+        expect(html).toContain('<h1 class="text-base font-semibold text-gray-900">Belt OAC</h1>');
+        expect(html).toContain('href="/store/shop/p/p-s"');
+        expect(html).toContain('href="/store/shop/p/p-l"');
+        const anchor = (id: string) => html.match(new RegExp(`<a[^>]*href="/store/shop/p/${id}"[^>]*>`))?.[0] ?? '';
+        expect(anchor('p-m')).toContain('aria-current="true"');
+        expect(anchor('p-s')).toContain('line-through');
+        expect(anchor('p-l')).not.toContain('line-through');
+    });
+
+    it('shows no option links for a product sold on its own', async () => {
+        mockFetch.mockReturnValueOnce(okJson({ data: { ...familyProduct, family: null } }));
+        const html = await renderPage('shop', 'p-m');
+
+        expect(html).toContain('Belt OAC M');
+        expect(html).not.toContain('/store/shop/p/p-s');
+    });
+});

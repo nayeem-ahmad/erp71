@@ -2457,6 +2457,42 @@ function paymentLayoutQuery(storeId: string, context: PaymentLayoutContext): str
     return new URLSearchParams({ storeId, context }).toString();
 }
 
+export type ProductFamilyMember = {
+    id: string;
+    name: string;
+    sku: string | null;
+    price: number;
+    image_url: string | null;
+    option_values: Record<string, string>;
+    stock_quantity: number;
+};
+
+export type ProductFamily = {
+    id: string;
+    name: string;
+    description: string | null;
+    image_url: string | null;
+    images_gallery: string[];
+    option_names: string[];
+    is_featured: boolean;
+    members: ProductFamilyMember[];
+};
+
+export type ProductFamilyInput = {
+    name: string;
+    description?: string;
+    imageUrl?: string;
+    isFeatured?: boolean;
+    optionNames: string[];
+    members: Array<{ productId: string; optionValues: Record<string, string> }>;
+};
+
+export type ProductFamilySuggestion = {
+    name: string;
+    optionName: string;
+    members: Array<{ productId: string; name: string; sku: string | null; price: number; value: string }>;
+};
+
 export const api = {
     /**
      * Every product as a flat array — for pickers, POS and id→product maps.
@@ -2527,6 +2563,21 @@ export const api = {
     deleteProduct: (id: string) => fetchWithAuth(`/products/${id}`, {
         method: 'DELETE',
     }),
+    /** Storefront variant families: products shown on the shop as one product in several sizes/colours. */
+    getProductFamily: (id: string): Promise<ProductFamily> => fetchWithAuth(`/product-families/${id}`),
+    getProductFamilySuggestions: (): Promise<ProductFamilySuggestion[]> => fetchWithAuth('/product-families/suggestions'),
+    createProductFamily: (data: ProductFamilyInput): Promise<ProductFamily> => fetchWithAuth('/product-families', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateProductFamily: (id: string, data: Partial<ProductFamilyInput>): Promise<ProductFamily> =>
+        fetchWithAuth(`/product-families/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deleteProductFamily: (id: string) => fetchWithAuth(`/product-families/${id}`, { method: 'DELETE' }),
     getProductGroups: () => fetchAllPages('/product-groups'),
     getProductGroup: (id: string) => fetchWithAuth(`/product-groups/${id}`),
     createProductGroup: (data: any) => fetchWithAuth('/product-groups', {

@@ -748,6 +748,9 @@ export class ProductsService {
         return {
             brand: true,
             group: true,
+            // Shown on the products list and the edit form, so staff can see a
+            // product is a storefront variant and open its family.
+            family: { select: { id: true, name: true, option_names: true } },
             subgroup: {
                 include: { group: true },
             },
