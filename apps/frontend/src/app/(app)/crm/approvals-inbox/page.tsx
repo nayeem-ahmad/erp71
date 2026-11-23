@@ -26,6 +26,7 @@ import {
     type ApprovalBucket,
     type ApprovalHistoryLine,
 } from '@/lib/approval-inbox';
+import { activityHistoryParts, formatActivityMessage } from '@/components/crm/crm-activity-message';
 
 interface InboxHistory {
     id: string;
@@ -496,22 +497,36 @@ export default function ApprovalsInboxPage() {
                         <section className="space-y-1">
                             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{m.panel.draft}</h3>
                             <p className="text-sm font-medium text-gray-900">{openItem.subject}</p>
-                            <p className="whitespace-pre-wrap text-sm text-gray-700">
-                                {openItem.notes?.trim() || m.panel.noDraft}
+                            <p className="whitespace-pre-wrap break-words text-sm text-gray-700">
+                                {formatActivityMessage(openItem.notes) || m.panel.noDraft}
                             </p>
                         </section>
                         <section className="space-y-2">
                             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{m.panel.history}</h3>
                             {openItem.history.length === 0 ? (
                                 <p className="text-sm text-gray-400">{m.noHistory}</p>
-                            ) : openItem.history.map((line) => (
+                            ) : openItem.history.map((line) => {
+                                const parts = activityHistoryParts(line);
+                                return (
                                 <div
                                     key={line.id}
                                     className={`rounded-lg border border-gray-100 p-3 ${line.status === 'CANCELLED' ? 'opacity-60' : ''}`}
                                 >
-                                    <p className="text-sm text-gray-800">{line.summary || line.subject}</p>
-                                    {line.subject && line.summary && (
-                                        <p className="mt-0.5 text-xs text-gray-500">{line.subject}</p>
+                                    {parts.title && (
+                                        <p className="text-sm font-medium text-gray-800">{parts.title}</p>
+                                    )}
+                                    {parts.body && (
+                                        <p className={`${parts.title ? 'mt-1 text-sm text-gray-700' : 'text-sm text-gray-800'} whitespace-pre-wrap break-words`}>
+                                            {parts.body}
+                                        </p>
+                                    )}
+                                    {parts.outcome && (
+                                        <p className="mt-0.5 text-xs text-gray-500">{parts.outcome}</p>
+                                    )}
+                                    {parts.notes && (
+                                        <p className="mt-1 text-xs text-gray-500 whitespace-pre-wrap break-words">
+                                            {parts.notes}
+                                        </p>
                                     )}
                                     <p className="mt-0.5 text-xs text-gray-400">
                                         {[line.channel_code, line.completed_at ? formatDate(line.completed_at) : '']
@@ -519,7 +534,8 @@ export default function ApprovalsInboxPage() {
                                             .join(' · ')}
                                     </p>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </section>
                         <div className="flex flex-wrap gap-2">
                             <Button
