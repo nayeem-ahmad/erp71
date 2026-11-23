@@ -85,6 +85,7 @@ export default function StockOnHandPage() {
     const [subgroupId, setSubgroupId] = useState('');
     const [brandId, setBrandId] = useState('');
     const [includeZeroStock, setIncludeZeroStock] = useState(false);
+    const [showWarehouseValues, setShowWarehouseValues] = useState(false);
     const [loading, setLoading] = useState(true);
     // A failed read used to leave the table empty and silent, which reads
     // exactly like "this shop holds no stock" — the one answer the report must
@@ -187,10 +188,13 @@ export default function StockOnHandPage() {
         // One quantity column per warehouse, in the order the backend returned
         // them (default warehouse first, then alphabetical, closed ones last).
         // Beyond the first two they collapse on mobile so the table still fits
-        // at 360px.
-        const perWarehouse = labelled.map((warehouse, index) => {
+        // at 360px. Warehouse values sit beside qty only when asked — they
+        // double the warehouse columns, so they stay off until the shop wants
+        // them.
+        const perWarehouse = labelled.flatMap((warehouse, index) => {
             const label = warehouseLabel(warehouse, labelled);
-            return columnHelper.accessor((row) => row.quantityByWarehouse[warehouse.id] ?? 0, {
+            const header = warehouse.is_active === false ? formatMessage(strings.closedWarehouse, { warehouse: label }) : label;
+            const qty = columnHelper.accessor((row) => row.quantityByWarehouse[warehouse.id] ?? 0, {
                 id: `warehouse:${warehouse.id}`,
                 // A plain string rather than a styled node, because this header
                 // is also what the CSV, Excel and PDF exports print — a closed
@@ -198,11 +202,28 @@ export default function StockOnHandPage() {
                 // rather than for truthiness: a frontend deployed ahead of the
                 // backend gets a payload without the flag at all, and marking
                 // every warehouse closed would be worse than marking none.
-                header: warehouse.is_active === false ? formatMessage(strings.closedWarehouse, { warehouse: label }) : label,
+                header,
                 cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
                 size: 110,
                 meta: { align: 'end', hideOnMobile: index > 1 },
             });
+            if (!showWarehouseValues) return [qty];
+            return [
+                qty,
+                columnHelper.accessor((row) => {
+                    const unitCost = row.averageUnitCost;
+                    const quantity = row.quantityByWarehouse[warehouse.id] ?? 0;
+                    return unitCost != null ? quantity * unitCost : 0;
+                }, {
+                    id: `warehouse-value:${warehouse.id}`,
+                    header: formatMessage(strings.warehouseValueColumn, { warehouse: header }),
+                    cell: (info) => (
+                        <span className="tabular-nums">{formatBDT(Number(info.getValue() || 0), { locale })}</span>
+                    ),
+                    size: 130,
+                    meta: { align: 'end', hideOnMobile: true },
+                }),
+            ];
         });
 
         return [
@@ -292,7 +313,7 @@ export default function StockOnHandPage() {
                 meta: { align: 'end' },
             }),
         ];
-    }, [strings, warehouseColumns, warehouses, locale]);
+    }, [strings, warehouseColumns, warehouses, locale, showWarehouseValues]);
 
     // Stock is counted per warehouse, so a scope with none of them has nothing
     // to report on — a different answer from "these shelves are bare", and the
@@ -352,6 +373,14 @@ export default function StockOnHandPage() {
                 pressed: includeZeroStock,
                 onChange: setIncludeZeroStock,
             },
+            {
+                id: 'showWarehouseValues',
+                type: 'toggle',
+                control: 'checkbox',
+                label: strings.showWarehouseValues,
+                pressed: showWarehouseValues,
+                onChange: setShowWarehouseValues,
+            },
         ],
         [
             t,
@@ -365,6 +394,7 @@ export default function StockOnHandPage() {
             brandId,
             brands,
             includeZeroStock,
+            showWarehouseValues,
         ],
     );
 

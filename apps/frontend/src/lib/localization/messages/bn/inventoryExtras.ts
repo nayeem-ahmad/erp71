@@ -451,6 +451,8 @@ export const inventoryExtrasMessages = {
                 allSubgroups: "সব সাবগ্রুপ",
                 allBrands: "সব ব্র্যান্ড",
                 showZeroStock: "শূন্য স্টকের পণ্যও দেখান",
+                showWarehouseValues: "গুদাম অনুযায়ী মূল্য দেখান",
+                warehouseValueColumn: "{warehouse} মূল্য",
                 uncategorized: "শ্রেণিবিহীন",
                 emptyMessage: "বর্তমান ফিল্টারে কোনো স্টক নেই",
                 closedWarehouse: "{warehouse} (বন্ধ)",

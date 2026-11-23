@@ -283,6 +283,11 @@ const TEXT_ALIGN_CLASS: Record<ColumnAlign, string> = {
     end: 'text-end tabular-nums whitespace-nowrap text-ellipsis',
 };
 
+/** String headers keep their full name for export; this is what hover can show. */
+function columnHeaderTitle(header: { column: { columnDef: { header?: unknown } } }): string | undefined {
+    return typeof header.column.columnDef.header === 'string' ? header.column.columnDef.header : undefined;
+}
+
 /**
  * The label and its sort control — identical whether the cell is draggable.
  * An end-aligned column puts the arrow before the label, so the label ends
@@ -291,13 +296,16 @@ const TEXT_ALIGN_CLASS: Record<ColumnAlign, string> = {
 function HeaderLabel({ header, align = 'start' }: { header: any; align?: ColumnAlign }) {
     const canSort = header.column.getCanSort();
     const sorted = header.column.getIsSorted();
+    const title = columnHeaderTitle(header);
 
     return (
         <button
+            type="button"
+            title={title}
             onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-            className={`flex items-center gap-1 ${align === 'end' ? 'flex-row-reverse' : ''} ${canSort ? 'cursor-pointer hover:text-gray-600' : ''}`}
+            className={`flex min-w-0 max-w-full items-center gap-1 ${align === 'end' ? 'flex-row-reverse' : ''} ${canSort ? 'cursor-pointer hover:text-gray-600' : ''}`}
         >
-            <span>
+            <span className="min-w-0 truncate">
                 {header.isPlaceholder
                     ? null
                     : flexRender(header.column.columnDef.header, header.getContext())}
@@ -385,11 +393,12 @@ function SortableHeader({
         <th
             ref={setNodeRef}
             data-column-id={header.column.id}
+            title={columnHeaderTitle(header)}
             style={{
                 ...style,
                 ...widthStyle,
             }}
-            className={`${headerClassName} ${TEXT_ALIGN_CLASS[align]}`}
+            className={`${headerClassName} ${TEXT_ALIGN_CLASS[align]} overflow-hidden`}
         >
             {floatingGrip ? (
                 <>
@@ -402,12 +411,12 @@ function SortableHeader({
                     >
                         <GripVertical className="w-2.5 h-3" />
                     </span>
-                    <div className={`flex items-center ${JUSTIFY_CLASS[align]}`}>
+                    <div className={`flex min-w-0 items-center ${JUSTIFY_CLASS[align]}`}>
                         <HeaderLabel header={header} align={align} />
                     </div>
                 </>
             ) : (
-                <div className={`flex items-center space-x-1 rtl:space-x-reverse ${JUSTIFY_CLASS[align]}`}>
+                <div className={`flex min-w-0 items-center space-x-1 rtl:space-x-reverse ${JUSTIFY_CLASS[align]}`}>
                     <span {...attributes} {...listeners} className="cursor-grab opacity-0 group-hover:opacity-40 transition-opacity">
                         <GripVertical className="w-3 h-3" />
                     </span>
@@ -441,13 +450,14 @@ function PinnedHeader({
     return (
         <th
             data-column-id={header.column.id}
+            title={columnHeaderTitle(header)}
             style={{
                 position: 'relative',
                 ...widthStyle,
             }}
-            className={`${headerClassName} ${TEXT_ALIGN_CLASS[align]}`}
+            className={`${headerClassName} ${TEXT_ALIGN_CLASS[align]} overflow-hidden`}
         >
-            <div className={`flex items-center ${JUSTIFY_CLASS[align]}`}>
+            <div className={`flex min-w-0 items-center ${JUSTIFY_CLASS[align]}`}>
                 <HeaderLabel header={header} align={align} />
             </div>
             <ResizeHandle header={header} onAutoFit={onAutoFit} />
