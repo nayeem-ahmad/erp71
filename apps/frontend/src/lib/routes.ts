@@ -234,6 +234,10 @@ export const routes = {
         documents: '/tools/documents',
         billScan: '/tools/scan',
         bijoy: '/tools/bijoy',
+        calculators: '/tools/calculators',
+        units: '/tools/units',
+        amountWords: '/tools/amount-in-words',
+        noteCounter: '/tools/note-counter',
     },
 
     meetings: {
