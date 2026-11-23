@@ -363,6 +363,11 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'tools.documents': { id: 'tools.documents', kind: 'link', icon: 'FolderLock', labelKey: 'sidebar.items.toolsDocuments', href: '/tools/documents' },
   'tools.bill-scan': { id: 'tools.bill-scan', kind: 'link', icon: 'ScanText', labelKey: 'sidebar.items.toolsBillScan', href: '/tools/scan' },
   'tools.bijoy': { id: 'tools.bijoy', kind: 'link', icon: 'Languages', labelKey: 'sidebar.items.toolsBijoy', href: '/tools/bijoy' },
+  // The 2026-11-23 helpers: pure browser arithmetic, nothing stored, so no tag.
+  'tools.calculators': { id: 'tools.calculators', kind: 'link', icon: 'Calculator', labelKey: 'sidebar.items.toolsCalculators', href: '/tools/calculators' },
+  'tools.unit-converter': { id: 'tools.unit-converter', kind: 'link', icon: 'Ruler', labelKey: 'sidebar.items.toolsUnitConverter', href: '/tools/units' },
+  'tools.amount-words': { id: 'tools.amount-words', kind: 'link', icon: 'SpellCheck', labelKey: 'sidebar.items.toolsAmountWords', href: '/tools/amount-in-words' },
+  'tools.note-counter': { id: 'tools.note-counter', kind: 'link', icon: 'Coins', labelKey: 'sidebar.items.toolsNoteCounter', href: '/tools/note-counter' },
   // Minutes moved from the rail's business apps to Tools on 2026-11-18. It is a
   // subgroup, not a module, because only links and subgroups render inside a
   // parent. The `VIEW_MEETINGS` tag replaces the APP_REGISTRY gate the module
@@ -700,6 +705,11 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
  * and `tools.bijoy`. New leaves, so a saved layout takes them with
  * `npx tsx prisma/sync-nav-layout.ts --nodes=tools.cheques,tools.price-checker,tools.documents,tools.bill-scan,tools.bijoy`
  * (also run from db-prepare) and needs no reset.
+ *
+ * The 2026-11-23 helpers added four more leaves under Tools, after Bijoy:
+ * `tools.calculators`, `tools.unit-converter`, `tools.amount-words` and
+ * `tools.note-counter`. New leaves again, merged by db-prepare's
+ * `sync:nav-tools-2026-11b`.
  */
 export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('dashboard', null, 0),
@@ -923,6 +933,10 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('tools.documents', 'tools', 6),
   layoutNode('tools.bill-scan', 'tools', 7),
   layoutNode('tools.bijoy', 'tools', 8),
+  layoutNode('tools.calculators', 'tools', 9),
+  layoutNode('tools.unit-converter', 'tools', 10),
+  layoutNode('tools.amount-words', 'tools', 11),
+  layoutNode('tools.note-counter', 'tools', 12),
   layoutNode('support', null, 17),
   layoutNode('admin', null, 18),
   layoutNode('admin.overview', 'admin', 0),
