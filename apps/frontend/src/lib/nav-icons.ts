@@ -96,6 +96,13 @@ import {
     Warehouse,
     StickyNote,
     Video,
+    ScanBarcode,
+    FolderLock,
+    ScanText,
+    Languages,
+    Ruler,
+    SpellCheck,
+    Coins,
     Wrench,
 } from 'lucide-react';
 
@@ -196,6 +203,13 @@ export const NAV_ICON_MAP: Record<string, LucideIcon> = {
     Menu,
     StickyNote,
     Video,
+    ScanBarcode,
+    FolderLock,
+    ScanText,
+    Languages,
+    Ruler,
+    SpellCheck,
+    Coins,
     Wrench,
 };
 

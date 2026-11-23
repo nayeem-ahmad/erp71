@@ -242,4 +242,5 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'SprintSnapshot', exempt: 'Daily burndown totals in hours.' },
     { model: 'SprintBurndownPoint', exempt: 'Burndown totals in hours, one per sprint change.' },
     { model: 'SprintTask', exempt: 'A task\'s stay in a sprint; remaining_at_close is hours.' },
+    { model: 'Cheque', exempt: 'Tools → Cheques is a register of the paper, not a payment: the money moves through the supplier or customer payment that records the cheque, which posts on its own.' },
 ];

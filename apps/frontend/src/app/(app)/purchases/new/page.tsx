@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Copy } from 'lucide-react';
+import { Copy, ScanText } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { toDatetimeLocal } from '@/lib/format';
@@ -11,6 +11,7 @@ import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { getWorkspaceItem } from '@/lib/session-store';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
+import { takePurchaseDraft } from '@/components/tools/bill-scan/purchase-draft';
 import PurchaseEntryLayout from '../components/PurchaseEntryLayout';
 import { usePurchaseEntry } from '../components/usePurchaseEntry';
 
@@ -22,7 +23,8 @@ import { usePurchaseEntry } from '../components/usePurchaseEntry';
  * `?productId=` seeds the first line, which is how the products list sends a
  * shopkeeper here to restock one item. `?from=products` sends them back there
  * afterwards instead of to the purchases list. `?duplicate=<id>` copies an
- * existing purchase onto a fresh screen.
+ * existing purchase onto a fresh screen. `?from=scan` opens the bill that
+ * Tools → Scan a bill read, for a person to check before posting.
  */
 function NewPurchasePageContent() {
     const { t } = useI18n();
@@ -31,13 +33,15 @@ function NewPurchasePageContent() {
     const seedProductId = searchParams.get('productId');
     const duplicatePurchaseId = searchParams.get('duplicate');
     const cameFromProducts = searchParams.get('from') === 'products';
+    const cameFromScan = searchParams.get('from') === 'scan';
     const returnHref = cameFromProducts ? routes.inventory.products : routes.purchases.list;
 
     const entry = usePurchaseEntry({ seedDefaultWarehouse: true });
-    const { addProductAtLastCost, loadPurchase } = entry;
+    const { addProductAtLastCost, loadPurchase, setSupplierDraft } = entry;
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [submitting, setSubmitting] = useState(false);
     const [duplicatedFrom, setDuplicatedFrom] = useState('');
+    const [scannedFrom, setScannedFrom] = useState<string | null>(null);
     const [transactionDate, setTransactionDate] = useState<string>(() => toDatetimeLocal(new Date()));
     // Seeded when the page opens. Until the operator picks a time, none is
     // sent and the server stamps the moment the bill posts — otherwise every
@@ -88,6 +92,17 @@ function NewPurchasePageContent() {
 
         return () => { cancelled = true; };
     }, [duplicatePurchaseId, loadPurchase, t.purchases.duplicateLoadFailed]);
+
+    // A bill read by Tools → Scan a bill. Taken from session storage once, so
+    // a reload opens an empty form rather than posting the scan twice.
+    useEffect(() => {
+        if (!cameFromScan) return;
+        const draft = takePurchaseDraft();
+        if (!draft) return;
+        loadPurchase(draft.purchase, { withPayments: false });
+        if (draft.newSupplier) setSupplierDraft(draft.newSupplier);
+        setScannedFrom(draft.label);
+    }, [cameFromScan, loadPurchase, setSupplierDraft]);
 
     const handleVoicePurchase = (result: VoiceEntryResult) => {
         let added = 0;
@@ -155,6 +170,11 @@ function NewPurchasePageContent() {
                 <div className="flex items-center gap-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
                     <Copy className="h-4 w-4 flex-shrink-0" />
                     <span>{t.purchases.duplicateBanner.replace('{number}', duplicatedFrom)}</span>
+                </div>
+            ) : scannedFrom !== null ? (
+                <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    <ScanText className="h-4 w-4 flex-shrink-0" />
+                    <span>{t.tools.billScan.draftBanner.replace('{bill}', scannedFrom)}</span>
                 </div>
             ) : undefined}
             onSubmit={handleSubmit}
