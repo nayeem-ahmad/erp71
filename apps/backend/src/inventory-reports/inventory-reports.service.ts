@@ -301,6 +301,7 @@ export class InventoryReportsService {
                 brand: { select: { id: true, name: true } },
                 group: { select: { id: true, name: true } },
                 subgroup: { select: { id: true, name: true } },
+                family: { select: { id: true, name: true } },
                 stocks: {
                     where: { warehouse_id: { in: warehouseIds } },
                     select: { warehouse_id: true, quantity: true },
@@ -346,6 +347,8 @@ export class InventoryReportsService {
                         brand: product.brand,
                         group: product.group,
                         subgroup: product.subgroup,
+                        // For the page's "Group variants" roll-up.
+                        family: product.family,
                     },
                     quantityByWarehouse,
                     totalQuantity,

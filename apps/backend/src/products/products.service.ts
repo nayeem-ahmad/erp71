@@ -69,77 +69,9 @@ export class ProductsService {
     async create(tenantId: string, dto: CreateProductDto, userId?: string) {
         await this.planEntitlements.assertProductQuota(tenantId);
         const result = await this.db.$transaction(async (tx) => {
-            const categoryIds = await this.validateCategorySelection(tx, tenantId, dto.groupId, dto.subgroupId);
-            if (dto.brandId) {
-                await this.validateBrand(tx, tenantId, dto.brandId);
-            }
-            const product = await tx.product.create({
-                data: {
-                    tenant_id: tenantId,
-                    name: dto.name,
-                    sku: dto.sku || null,
-                    type: dto.type ?? 'GOODS',
-                    price: dto.price,
-                    is_featured: dto.isFeatured ?? false,
-                    description: dto.description || null,
-                    images_gallery: dto.images_gallery ?? [],
-                    warranty_enabled: dto.warrantyEnabled ?? false,
-                    warranty_duration_days: dto.warrantyDurationDays ?? null,
-                    reorder_level: dto.reorderLevel ?? null,
-                    safety_stock: dto.safetyStock ?? null,
-                    lead_time_days: dto.leadTimeDays ?? null,
-                    image_url: dto.image_url,
-                    unit_type: dto.unitType ?? 'none',
-                    // Null, not 0: an unset rate inherits the workspace
-                    // default, while an explicit 0 is a zero-rated supply.
-                    vat_rate: dto.vatRate ?? null,
-                    sd_rate: dto.sdRate ?? null,
-                    brand_id: dto.brandId ?? null,
-                    group_id: categoryIds.groupId,
-                    subgroup_id: categoryIds.subgroupId,
-                },
-                include: this.productInclude(),
-            });
-
-            if (dto.type !== ProductTypeDto.SERVICE && (dto.initialStock ?? 0) > 0) {
-                const settings = await tx.inventorySettings.findUnique({
-                    where: { tenant_id: tenantId },
-                });
-                const warehouse = settings?.default_product_warehouse_id
-                    ? await assertWarehouseBelongsToTenant(tx, tenantId, settings.default_product_warehouse_id)
-                    : await ensureDefaultWarehouse(tx, tenantId);
-                await applyInventoryMovement(tx, {
-                    tenantId,
-                    productId: product.id,
-                    warehouseId: warehouse.id,
-                    quantityDelta: dto.initialStock ?? 0,
-                    movementType: 'INITIAL_STOCK',
-                    referenceType: 'PRODUCT',
-                    referenceId: product.id,
-                    // Opening stock seeds the weighted-average pool, so this has
-                    // to be what the goods cost. It used to pass dto.price — the
-                    // *selling* price — which started every new product's
-                    // average at retail and reported its first sales at zero
-                    // margin. Omitted when unknown: no basis beats a wrong one.
-                    unitCost: dto.cost,
-                });
-            } else if (dto.type !== ProductTypeDto.SERVICE && (dto.cost ?? 0) > 0) {
-                // A cost and no opening stock still means something: it is what
-                // the product is expected to cost, and it used to be dropped on
-                // the floor — the product sold uncosted until its first bill.
-                // Held as an opening cost against nothing on hand, so the first
-                // real receipt replaces it outright rather than blending with it.
-                await recordCostAdjustment(tx, {
-                    tenantId,
-                    productId: product.id,
-                    newCost: dto.cost!,
-                    note: 'Entered with the product',
-                    userId,
-                });
-            }
-
+            const productId = await this.createInTransaction(tx, tenantId, dto, userId);
             return tx.product.findFirst({
-                where: { id: product.id, tenant_id: tenantId },
+                where: { id: productId, tenant_id: tenantId },
                 include: this.productInclude(),
             });
         });
@@ -147,6 +79,120 @@ export class ProductsService {
         await this.priceListsService.addProductToAllActiveLists(tenantId, result!.id);
         await this.redis.invalidatePattern(`products:${tenantId}:`);
         return result;
+    }
+
+    /**
+     * Several products created all-or-nothing, each exactly as `create` would
+     * make it (opening stock, opening cost, price lists). `then` runs inside the
+     * same transaction with the new ids, so a caller can attach them to
+     * something — the variant generator groups them into a family — and have a
+     * failure there undo the products too. The plan quota is checked for the
+     * whole batch up front, not one product at a time.
+     */
+    async createMany<T>(
+        tenantId: string,
+        dtos: CreateProductDto[],
+        userId: string | undefined,
+        then: (tx: Prisma.TransactionClient, productIds: string[]) => Promise<T>,
+    ): Promise<{ productIds: string[]; result: T }> {
+        await this.planEntitlements.assertProductQuota(tenantId, dtos.length);
+        const { productIds, result } = await this.db.$transaction(
+            async (tx) => {
+                const ids: string[] = [];
+                for (const dto of dtos) {
+                    ids.push(await this.createInTransaction(tx, tenantId, dto, userId));
+                }
+                return { productIds: ids, result: await then(tx, ids) };
+            },
+            // A size run times a colour run is a few dozen products, each with
+            // its own stock movement — more than the default 5s allows.
+            { timeout: 60_000 },
+        );
+
+        for (const productId of productIds) {
+            await this.priceListsService.addProductToAllActiveLists(tenantId, productId);
+        }
+        await this.redis.invalidatePattern(`products:${tenantId}:`);
+        return { productIds, result };
+    }
+
+    /** The body of `create`, inside a transaction the caller owns. Returns the new id. */
+    private async createInTransaction(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        dto: CreateProductDto,
+        userId?: string,
+    ): Promise<string> {
+        const categoryIds = await this.validateCategorySelection(tx, tenantId, dto.groupId, dto.subgroupId);
+        if (dto.brandId) {
+            await this.validateBrand(tx, tenantId, dto.brandId);
+        }
+        const product = await tx.product.create({
+            data: {
+                tenant_id: tenantId,
+                name: dto.name,
+                sku: dto.sku || null,
+                type: dto.type ?? 'GOODS',
+                price: dto.price,
+                is_featured: dto.isFeatured ?? false,
+                description: dto.description || null,
+                images_gallery: dto.images_gallery ?? [],
+                warranty_enabled: dto.warrantyEnabled ?? false,
+                warranty_duration_days: dto.warrantyDurationDays ?? null,
+                reorder_level: dto.reorderLevel ?? null,
+                safety_stock: dto.safetyStock ?? null,
+                lead_time_days: dto.leadTimeDays ?? null,
+                image_url: dto.image_url,
+                unit_type: dto.unitType ?? 'none',
+                // Null, not 0: an unset rate inherits the workspace
+                // default, while an explicit 0 is a zero-rated supply.
+                vat_rate: dto.vatRate ?? null,
+                sd_rate: dto.sdRate ?? null,
+                brand_id: dto.brandId ?? null,
+                group_id: categoryIds.groupId,
+                subgroup_id: categoryIds.subgroupId,
+            },
+            include: this.productInclude(),
+        });
+
+        if (dto.type !== ProductTypeDto.SERVICE && (dto.initialStock ?? 0) > 0) {
+            const settings = await tx.inventorySettings.findUnique({
+                where: { tenant_id: tenantId },
+            });
+            const warehouse = settings?.default_product_warehouse_id
+                ? await assertWarehouseBelongsToTenant(tx, tenantId, settings.default_product_warehouse_id)
+                : await ensureDefaultWarehouse(tx, tenantId);
+            await applyInventoryMovement(tx, {
+                tenantId,
+                productId: product.id,
+                warehouseId: warehouse.id,
+                quantityDelta: dto.initialStock ?? 0,
+                movementType: 'INITIAL_STOCK',
+                referenceType: 'PRODUCT',
+                referenceId: product.id,
+                // Opening stock seeds the weighted-average pool, so this has
+                // to be what the goods cost. It used to pass dto.price — the
+                // *selling* price — which started every new product's
+                // average at retail and reported its first sales at zero
+                // margin. Omitted when unknown: no basis beats a wrong one.
+                unitCost: dto.cost,
+            });
+        } else if (dto.type !== ProductTypeDto.SERVICE && (dto.cost ?? 0) > 0) {
+            // A cost and no opening stock still means something: it is what
+            // the product is expected to cost, and it used to be dropped on
+            // the floor — the product sold uncosted until its first bill.
+            // Held as an opening cost against nothing on hand, so the first
+            // real receipt replaces it outright rather than blending with it.
+            await recordCostAdjustment(tx, {
+                tenantId,
+                productId: product.id,
+                newCost: dto.cost!,
+                note: 'Entered with the product',
+                userId,
+            });
+        }
+
+        return product.id;
     }
 
     async findAll(
@@ -748,6 +794,9 @@ export class ProductsService {
         return {
             brand: true,
             group: true,
+            // Shown on the products list and the edit form, so staff can see a
+            // product is a storefront variant and open its family.
+            family: { select: { id: true, name: true, option_names: true } },
             subgroup: {
                 include: { group: true },
             },

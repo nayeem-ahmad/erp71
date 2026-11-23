@@ -461,3 +461,58 @@ describe('StockOnHandPage', () => {
         );
     });
 });
+
+describe('StockOnHandPage — Group variants', () => {
+    const family = { id: 'fam-1', name: 'Belt OAC' };
+    const variantRow = (id: string, name: string, qty: Record<string, number>, cost: number) => {
+        const totalQuantity = Object.values(qty).reduce((a, b) => a + b, 0);
+        return {
+            product: { id, name, sku: id, sellingPrice: 500, brand: null, group: null, subgroup: null, family },
+            quantityByWarehouse: qty,
+            totalQuantity,
+            averageUnitCost: cost,
+            lastPurchasePrice: cost,
+            costBasis: 'WEIGHTED_AVERAGE',
+            totalStockValue: totalQuantity * cost,
+        };
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockBranchScope({ value: 'all' });
+        const { api } = require('@/lib/api');
+        api.getStockOnHand.mockResolvedValue({
+            ...mockReport,
+            rows: [
+                mockReport.rows[0],
+                variantRow('p-s', 'Belt OAC S', { 'wh-1': 2, 'wh-2': 1 }, 100),
+                variantRow('p-l', 'Belt OAC L', { 'wh-1': 1, 'wh-2': 0 }, 160),
+            ],
+        });
+        api.getInventoryWarehouses.mockResolvedValue([]);
+        api.getProductGroups.mockResolvedValue([]);
+        api.getProductSubgroups.mockResolvedValue([]);
+        api.getBrands.mockResolvedValue([]);
+    });
+
+    it('folds a family into one line, quantities summed per warehouse', async () => {
+        render(<StockOnHandPage />);
+        await waitFor(() => expect(screen.getByTestId('row-count')).toHaveTextContent('3'));
+
+        fireEvent.click(screen.getByLabelText('Group variants'));
+
+        expect(screen.getByTestId('row-count')).toHaveTextContent('2');
+        expect(screen.getByTestId('cell-1-product')).toHaveTextContent('Belt OAC2 variants');
+        expect(screen.getByTestId('cell-1-warehouse:wh-1')).toHaveTextContent('3');
+        expect(screen.getByTestId('cell-1-totalQuantity')).toHaveTextContent('4');
+    });
+
+    it('offers no toggle to a shop without variant families', async () => {
+        const { api } = require('@/lib/api');
+        api.getStockOnHand.mockResolvedValue(mockReport);
+        render(<StockOnHandPage />);
+        await waitFor(() => expect(screen.getByTestId('row-count')).toHaveTextContent('2'));
+        expect(screen.queryByLabelText('Group variants')).not.toBeInTheDocument();
+    });
+});
+

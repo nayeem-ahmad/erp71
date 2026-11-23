@@ -269,6 +269,9 @@ export class SalesReportsService {
                     include: {
                         group: true,
                         subgroup: true,
+                        // Lets the page add a product's sizes/colours up into
+                        // one line ("Group variants"); the rows stay per product.
+                        family: { select: { id: true, name: true } },
                     },
                 },
             },

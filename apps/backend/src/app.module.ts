@@ -54,6 +54,7 @@ import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { PurchaseQuotationsModule } from './purchase-quotations/purchase-quotations.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { ProductGroupsModule } from './product-groups/product-groups.module';
+import { ProductFamiliesModule } from './product-families/product-families.module';
 import { ProductSubgroupsModule } from './product-subgroups/product-subgroups.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { WarehouseTransfersModule } from './warehouse-transfers/warehouse-transfers.module';
@@ -223,6 +224,7 @@ import { Meet71Module } from './meet71/meet71.module';
         PurchaseQuotationsModule,
         AccountingModule,
         ProductGroupsModule,
+        ProductFamiliesModule,
         ProductSubgroupsModule,
         InventoryModule,
         WarehouseTransfersModule,

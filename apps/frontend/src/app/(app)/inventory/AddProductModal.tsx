@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { Camera, Bold, Italic, List, ListOrdered, Trash2 } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { variantLabel } from '@erp71/shared-types';
 import { Button, Field, Input } from '@/components/ui';
 import { api } from '@/lib/api';
 import { COMPOUND_UNIT_DEFS, CompoundUnitType } from '@/lib/compound-units';
@@ -31,10 +32,14 @@ interface AddProductModalProps {
     onSubmit: (product: any) => Promise<void> | void;
     showMerge?: boolean;
     onMergeClick?: () => void;
+    /** Opens the product's storefront variant family; shown only for a product in one. */
+    onEditVariants?: (familyId: string) => void;
 }
 
-export default function AddProductModal({ isOpen, onClose, mode = 'create', initialProduct = null, onSubmit, showMerge = false, onMergeClick }: AddProductModalProps) {
-    const { t } = useI18n();
+export default function AddProductModal({ isOpen, onClose, mode = 'create', initialProduct = null, onSubmit, showMerge = false, onMergeClick, onEditVariants }: AddProductModalProps) {
+    const { t, fmt } = useI18n();
+    const family: { id: string; name: string; option_names: string[] } | null =
+        mode === 'edit' ? (initialProduct?.family ?? null) : null;
     const [activeTab, setActiveTab] = useState<'basic' | 'storefront'>('basic');
     const [formData, setFormData] = useState({
         name: '',
@@ -233,6 +238,21 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
         <ModalShell size="xl" onBackdropClick={onClose}>
             <ModalHeader
                 title={mode === 'edit' ? t.addProductModal.editTitle : t.addProductModal.addTitle}
+                subtitle={
+                    family ? (
+                        <button
+                            type="button"
+                            onClick={() => onEditVariants?.(family.id)}
+                            disabled={!onEditVariants}
+                            className="text-blue-600 hover:underline disabled:text-gray-500 disabled:no-underline"
+                        >
+                            {fmt(t.productVariants.admin.variantOf, { name: family.name })}
+                            {initialProduct?.option_values
+                                ? ` · ${variantLabel(family.option_names, initialProduct.option_values)}`
+                                : ''}
+                        </button>
+                    ) : undefined
+                }
                 onClose={onClose}
             />
 

@@ -1087,6 +1087,7 @@ model Tenant {
   brands                     Brand[]
   products                   Product[]
   productGroups              ProductGroup[]
+  productFamilies            ProductFamily[]
   productSubgroups           ProductSubgroup[]
   productStocks              ProductStock[]
   productCosts               ProductCost[]
@@ -2081,6 +2082,32 @@ model Brand {
   @@index([tenant_id, deleted_at])
 }
 
+/// Products shown on the storefront as one product a shopper picks a size or
+/// colour of. Only the storefront reads it: every member stays a `Product` of
+/// its own — its own SKU, price, stock, cost and barcode — so sales, purchases,
+/// stock and reports keep working one SKU at a time. See
+/// `packages/shared-types/product-variants.ts`.
+model ProductFamily {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  name           String
+  description    String?
+  image_url      String?
+  images_gallery String[] @default([])
+  /// The axes a shopper chooses on, in display order: `["Size", "Color"]`.
+  /// Each member's values on them are in `Product.option_values`.
+  option_names   String[] @default([])
+  is_featured    Boolean  @default(false)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@index([tenant_id])
+  @@map("product_families")
+}
+
 enum ProductType {
   GOODS
   SERVICE
@@ -2128,6 +2155,12 @@ model Product {
   net_weight_kg     Decimal? @db.Decimal(12, 3)
   cbm               Decimal? @db.Decimal(12, 4)
 
+  /// The storefront family this product is a variant of, if any, and its
+  /// values on the family's axes: `{ "Size": "M", "Color": "Red" }`. Both
+  /// null for a product sold on its own. Sales and stock ignore them.
+  family_id     String?
+  option_values Json?
+
   created_at DateTime  @default(now())
   deleted_at DateTime?
 
@@ -2136,6 +2169,7 @@ model Product {
   brand                  Brand?                   @relation(fields: [brand_id], references: [id])
   group                  ProductGroup?            @relation(fields: [group_id], references: [id])
   subgroup               ProductSubgroup?         @relation(fields: [subgroup_id], references: [id])
+  family                 ProductFamily?           @relation(fields: [family_id], references: [id], onDelete: SetNull)
   stocks                 ProductStock[]
   cost                   ProductCost?
   costAdjustments        ProductCostAdjustment[]
@@ -2171,6 +2205,7 @@ model Product {
   @@index([tenant_id, subgroup_id])
   @@index([tenant_id, deleted_at])
   @@index([tenant_id, reorder_level])
+  @@index([family_id])
 }
 
 model ProductStock {

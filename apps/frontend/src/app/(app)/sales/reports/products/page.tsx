@@ -16,6 +16,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { BranchFilter, PageShell } from '@/components/ui';
 import { defaultReportPeriod, reportPeriodFilter, reportPeriodQuery } from '../report-period';
+import { rollUpSalesByProduct } from '@/lib/product-family-rollup';
 
 interface ProductRow {
     product: {
@@ -24,10 +25,14 @@ interface ProductRow {
         sku?: string | null;
         group?: { name: string } | null;
         subgroup?: { name: string } | null;
+        /** The storefront family the product is a size/colour of, for "Group variants". */
+        family?: { id: string; name: string } | null;
     };
     unitsSold: number;
     revenue: number;
     revenueShare: number;
+    /** Set on a "Group variants" row: how many of its products sold. */
+    variantCount?: number;
 }
 
 /** The group and subgroup chips' value for a product filed under neither. */
@@ -54,6 +59,7 @@ export default function SalesByProductPage() {
     const [subgroups, setSubgroups] = useState<string[]>([]);
     const [revenueFilter, setRevenueFilter] = useState<NumberCondition | null>(null);
     const [unitsFilter, setUnitsFilter] = useState<NumberCondition | null>(null);
+    const [groupVariants, setGroupVariants] = useState(false);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -91,6 +97,11 @@ export default function SalesByProductPage() {
         [rows, groups, subgroups, revenueFilter, unitsFilter, search],
     );
 
+    // Folded after filtering, so the chips still narrow by each product's own
+    // group and figures; only the lines the table shows are combined.
+    const displayed = useMemo(() => (groupVariants ? rollUpSalesByProduct(visible) : visible), [groupVariants, visible]);
+    const hasVariants = useMemo(() => rows.some((row) => row.product.family), [rows]);
+
     const totals = useMemo(
         () => ({
             revenue: visible.reduce((sum, row) => sum + row.revenue, 0),
@@ -105,6 +116,19 @@ export default function SalesByProductPage() {
             columnHelper.accessor((row) => row.product.name, {
                 id: 'product',
                 header: c.product,
+                cell: (info) => {
+                    const count = info.row.original.variantCount;
+                    return (
+                        <span>
+                            {info.getValue()}
+                            {count ? (
+                                <span className="block text-xs text-gray-500">
+                                    {formatMessage(t.productVariants.reports.variantsCount, { count })}
+                                </span>
+                            ) : null}
+                        </span>
+                    );
+                },
                 footer: () => c.total,
                 size: 240,
             }),
@@ -154,7 +178,7 @@ export default function SalesByProductPage() {
                 meta: { hideOnMobile: true },
             }),
         ],
-        [c, t.shared.dash, locale, totals],
+        [c, t.shared.dash, t.productVariants.reports.variantsCount, locale, totals],
     );
 
     const filters = useMemo<ListFilter[]>(
@@ -203,13 +227,27 @@ export default function SalesByProductPage() {
                 onChange: setUnitsFilter,
                 more: true,
             },
+            // Only for a shop that has variant families at all; elsewhere it
+            // would be a switch that does nothing.
+            ...(hasVariants
+                ? [
+                      {
+                          id: 'groupVariants',
+                          type: 'toggle' as const,
+                          control: 'checkbox' as const,
+                          label: t.productVariants.reports.groupVariants,
+                          pressed: groupVariants,
+                          onChange: setGroupVariants,
+                      },
+                  ]
+                : []),
         ],
-        [c, ui, period, rows, groups, subgroups, revenueFilter, unitsFilter],
+        [c, ui, period, rows, groups, subgroups, revenueFilter, unitsFilter, hasVariants, groupVariants, t.productVariants.reports.groupVariants],
     );
 
     const stats = useMemo(() => {
         const money = (value: number) => formatBDT(value, { locale, minimumFractionDigits: 0, maximumFractionDigits: 0 });
-        const top = visible.reduce<ProductRow | null>((best, row) => (!best || row.revenue > best.revenue ? row : best), null);
+        const top = displayed.reduce<ProductRow | null>((best, row) => (!best || row.revenue > best.revenue ? row : best), null);
         const items: ListStat[] = [
             { id: 'revenue', icon: <Wallet aria-hidden />, label: c.totalRevenue, value: money(totals.revenue) },
             { id: 'units', icon: <Boxes aria-hidden />, label: c.unitsSold, value: totals.units.toLocaleString(locale) },
@@ -223,7 +261,7 @@ export default function SalesByProductPage() {
             },
         ];
         return { items, loading, label: ui.statsLabel };
-    }, [visible, totals, loading, locale, c, ui, t.shared.dash]);
+    }, [visible, displayed, totals, loading, locale, c, ui, t.shared.dash]);
 
     return (
         <PageShell>
@@ -242,7 +280,7 @@ export default function SalesByProductPage() {
             <DataTable<ProductRow>
                 tableId="sales-by-product"
                 columns={columns}
-                data={visible}
+                data={displayed}
                 title={t.salesReports.products.productPerformance}
                 isLoading={loading}
                 emptyMessage={c.noSalesForFilter}

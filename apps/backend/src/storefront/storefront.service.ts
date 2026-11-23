@@ -10,6 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import { DatabaseService } from '../database/database.service';
 import { AuthCacheService } from '../database/auth-cache.service';
 import { PriceListsService } from '../price-lists/price-lists.service';
+import { buildStorefrontCards, countListings, sortVariants, toStorefrontVariant } from './storefront-catalog';
 import {
     PlaceOrderDto,
     CustomerSignupDto,
@@ -129,7 +130,7 @@ export class StorefrontService {
                             },
                         },
                     },
-                    select: { id: true },
+                    select: { id: true, family_id: true },
                 },
             },
         });
@@ -138,75 +139,36 @@ export class StorefrontService {
             id: cat.id,
             name: cat.name,
             image_url: cat.image_url,
-            count: cat.products.length,
+            count: countListings(cat.products),
         }));
 
-        // Fetch featured products (trending)
-        const trendingProducts = await this.db.product.findMany({
-            where: {
-                tenant_id: tenant.id,
-                is_featured: true,
-                deleted_at: null,
-                stocks: {
-                    some: {
-                        quantity: { gt: 0 },
-                    },
-                },
-            },
-            select: {
-                id: true,
-                name: true,
-                price: true,
-                compare_at_price: true,
-                image_url: true,
-                group: {
-                    select: { name: true },
-                },
-                stocks: {
-                    select: { quantity: true },
-                },
-            },
-            take: 8,
-        });
-
-        const trendingResolved = await this.priceListsService.getResolvedPricesForProducts(
-            tenant.id,
-            trendingProducts.map((p) => p.id),
-            priceList?.id,
-        );
-
-        const trending_products = trendingProducts.map((p) => {
-            const resolved = trendingResolved.get(p.id);
-            return {
-                id: p.id,
-                name: p.name,
-                selling_price: resolved?.sellingPrice ?? Number(p.price),
-                compare_at_price: resolved?.compareAtPrice ?? p.compare_at_price,
-                image_url: p.image_url,
-                group_name: p.group?.name || 'Uncategorized',
-                stock_quantity: p.stocks.reduce((sum, s) => sum + s.quantity, 0),
-            };
-        });
-
-        // Fetch all products for Shop page
+        // Every listing for the Shop page, and the featured ones for the home
+        // page's Trending row, from one query. In-stock products, plus every
+        // variant of a family: a family's sold-out sizes still show, greyed,
+        // in its picker. `buildStorefrontCards` folds each family into one card.
         const allProducts = await this.db.product.findMany({
             where: {
                 tenant_id: tenant.id,
                 deleted_at: null,
-                stocks: {
-                    some: {
-                        quantity: { gt: 0 },
-                    },
-                },
+                OR: [
+                    { stocks: { some: { quantity: { gt: 0 } } } },
+                    { family_id: { not: null } },
+                ],
             },
             select: {
                 id: true,
                 name: true,
+                sku: true,
                 price: true,
                 compare_at_price: true,
                 image_url: true,
+                is_featured: true,
+                option_values: true,
                 group: {
                     select: { name: true },
+                },
+                family: {
+                    select: { id: true, name: true, image_url: true, is_featured: true, option_names: true },
                 },
                 stocks: {
                     select: { quantity: true },
@@ -221,18 +183,8 @@ export class StorefrontService {
             priceList?.id,
         );
 
-        const all_products = allProducts.map((p) => {
-            const resolved = allResolved.get(p.id);
-            return {
-                id: p.id,
-                name: p.name,
-                selling_price: resolved?.sellingPrice ?? Number(p.price),
-                compare_at_price: resolved?.compareAtPrice ?? p.compare_at_price,
-                image_url: p.image_url,
-                group_name: p.group?.name || 'Uncategorized',
-                stock_quantity: p.stocks.reduce((sum, s) => sum + s.quantity, 0),
-            };
-        });
+        const all_products = buildStorefrontCards(allProducts, allResolved);
+        const trending_products = all_products.filter((card) => card.is_featured).slice(0, 8);
 
         // Folded into this response rather than fetched separately: the header
         // renders above the fold on every storefront page, and a second round
@@ -307,6 +259,12 @@ export class StorefrontService {
      * in-stock products, so a shared link can outlive availability, and a shopper
      * deserves to know before they order. How many units are left is inventory
      * data, not shopfront data.
+     *
+     * `productId` may be a product or a storefront family: a family answers
+     * with all its variants, and a product that is a variant answers with its
+     * family too, preselected on itself — so a link to one size opens the
+     * product with that size chosen. Variants follow the same rules: their own
+     * resolved price, and `in_stock`, never a quantity.
      */
     async getPublicProduct(slug: string, productId: string) {
         const tenant = await this.findEnabledTenant(slug);
@@ -323,15 +281,31 @@ export class StorefrontService {
                 image_url: true,
                 images_gallery: true,
                 unit_type: true,
+                family_id: true,
                 stocks: { select: { quantity: true } },
             },
         });
-        if (!product) throw new NotFoundException('Product not found');
+
+        const familyId = product?.family_id
+            ?? (product
+                ? null
+                : (await this.db.productFamily.findFirst({
+                    where: { id: productId, tenant_id: tenant.id },
+                    select: { id: true },
+                }))?.id ?? null);
+
+        if (!product && !familyId) throw new NotFoundException('Product not found');
 
         // No userId: this endpoint is unauthenticated, so the visitor gets the
         // storefront's default price list — the same one an anonymous shopper
         // sees on the shop page.
         const priceList = await this.resolvePriceListForUser(tenant.id);
+
+        if (familyId) {
+            return this.getPublicFamily(tenant.id, familyId, product?.id ?? null, priceList?.id);
+        }
+        if (!product) throw new NotFoundException('Product not found');
+
         const resolved = await this.priceListsService.getResolvedPricesForProducts(
             tenant.id,
             [product.id],
@@ -353,6 +327,91 @@ export class StorefrontService {
             images_gallery: product.images_gallery,
             unit_type: product.unit_type,
             in_stock: (product.stocks ?? []).some((s) => s.quantity > 0),
+            family: null,
+        };
+    }
+
+    /**
+     * A family's public page: its variants, and the one shown first — the
+     * product the link named, else the first in stock, else the first.
+     */
+    private async getPublicFamily(
+        tenantId: string,
+        familyId: string,
+        preferredVariantId: string | null,
+        priceListId: string | undefined,
+    ) {
+        const family = await this.db.productFamily.findFirst({
+            where: { id: familyId, tenant_id: tenantId },
+            select: {
+                id: true,
+                name: true,
+                description: true,
+                image_url: true,
+                images_gallery: true,
+                option_names: true,
+                products: {
+                    where: { deleted_at: null },
+                    select: {
+                        id: true,
+                        name: true,
+                        sku: true,
+                        price: true,
+                        compare_at_price: true,
+                        image_url: true,
+                        description: true,
+                        unit_type: true,
+                        option_values: true,
+                        stocks: { select: { quantity: true } },
+                    },
+                },
+            },
+        });
+        if (!family || family.products.length === 0) throw new NotFoundException('Product not found');
+
+        const resolved = await this.priceListsService.getResolvedPricesForProducts(
+            tenantId,
+            family.products.map((p) => p.id),
+            priceListId,
+        );
+        const variants = sortVariants(
+            family.option_names,
+            family.products.map((row) => toStorefrontVariant(row, family.option_names, resolved)),
+        );
+        const selected =
+            variants.find((v) => v.id === preferredVariantId)
+            ?? variants.find((v) => v.stock_quantity > 0)
+            ?? variants[0];
+        const selectedRow = family.products.find((p) => p.id === selected.id);
+
+        return {
+            id: selected.id,
+            name: selected.name,
+            sku: selected.sku,
+            price: selected.selling_price,
+            compare_at_price: selected.compare_at_price,
+            description: family.description ?? selectedRow?.description ?? null,
+            image_url: selected.image_url ?? family.image_url,
+            images_gallery: family.images_gallery,
+            unit_type: selectedRow?.unit_type ?? 'none',
+            in_stock: selected.stock_quantity > 0,
+            family: {
+                id: family.id,
+                name: family.name,
+                image_url: family.image_url,
+                option_names: family.option_names,
+                variants: variants.map((v) => ({
+                    id: v.id,
+                    name: v.name,
+                    sku: v.sku,
+                    label: v.label,
+                    option_values: v.option_values,
+                    price: v.selling_price,
+                    compare_at_price: v.compare_at_price,
+                    image_url: v.image_url,
+                    in_stock: v.stock_quantity > 0,
+                })),
+            },
         };
     }
 
