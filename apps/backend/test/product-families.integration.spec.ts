@@ -1,6 +1,7 @@
 import { DatabaseService } from '../src/database/database.service';
 import { ProductFamiliesService } from '../src/product-families/product-families.service';
 import { StorefrontService } from '../src/storefront/storefront.service';
+import { ProductsService } from '../src/products/products.service';
 
 jest.setTimeout(60_000);
 
@@ -13,11 +14,14 @@ jest.setTimeout(60_000);
 describe('product families (integration)', () => {
     const db = new DatabaseService();
     const redis = { invalidatePattern: jest.fn() };
-    const families = new ProductFamiliesService(db, redis as never);
     const priceLists = {
         resolvePriceListForCustomer: jest.fn().mockResolvedValue(null),
         getResolvedPricesForProducts: jest.fn().mockResolvedValue(new Map()),
+        addProductToAllActiveLists: jest.fn().mockResolvedValue(undefined),
     };
+    const planEntitlements = { assertProductQuota: jest.fn().mockResolvedValue(undefined) };
+    const productsService = new ProductsService(db, redis as never, priceLists as never, planEntitlements as never);
+    const families = new ProductFamiliesService(db, redis as never, productsService);
     const storefrontPages = { resolveMenu: jest.fn().mockResolvedValue([]) };
     const nothing = {} as never;
     const storefront = new StorefrontService(
@@ -148,5 +152,52 @@ describe('product families (integration)', () => {
         // M is out of stock, so sold on its own it is not listed.
         expect(shop.all_products.map((card) => card.name)).toEqual(['Belt OAC L', 'Belt OAC S', 'Cap']);
         expect(await db.productFamily.count({ where: { tenant_id: tenantId } })).toBe(0);
+    });
+
+    it('generates new sizes from a product, with stock and cost, in one family', async () => {
+        const family = await families.generate(tenantId, {
+            baseProductId: ids.cap,
+            name: 'Cap',
+            optionNames: ['Color'],
+            baseOptionValues: { Color: 'Red' },
+            variants: [
+                { optionValues: { Color: 'Blue' }, sku: `CAP-BLUE-${suffix}`, price: 120, initialStock: 3, cost: 60 },
+                { optionValues: { Color: 'Green' }, price: 110 },
+            ],
+        });
+
+        expect(family.option_names).toEqual(['Color']);
+        const byName = [...family.members].sort((a, b) => a.name.localeCompare(b.name));
+        expect(byName.map((m) => [m.name, m.option_values.Color])).toEqual([
+            ['Cap', 'Red'],
+            ['Cap Blue', 'Blue'],
+            ['Cap Green', 'Green'],
+        ]);
+        const blue = family.members.find((m) => m.name === 'Cap Blue');
+        expect(blue?.stock_quantity).toBe(3);
+        expect(blue?.price).toBe(120);
+        const blueCost = await db.productCost.findFirst({ where: { product_id: blue!.id } });
+        expect(Number(blueCost?.avg_cost)).toBe(60);
+        expect(planEntitlements.assertProductQuota).toHaveBeenCalledWith(tenantId, 2);
+    });
+
+    it('adds a colour to the existing family, and rolls everything back on a clash', async () => {
+        const before = await db.product.count({ where: { tenant_id: tenantId } });
+        await expect(
+            families.generate(tenantId, {
+                baseProductId: ids.cap,
+                variants: [
+                    { optionValues: { Color: 'Black' }, price: 100 },
+                    { optionValues: { Color: 'blue' }, price: 100 },
+                ],
+            }),
+        ).rejects.toThrow(/own combination/);
+        expect(await db.product.count({ where: { tenant_id: tenantId } })).toBe(before);
+
+        const family = await families.generate(tenantId, {
+            baseProductId: ids.cap,
+            variants: [{ optionValues: { Color: 'Black' }, price: 100 }],
+        });
+        expect(family.members).toHaveLength(4);
     });
 });

@@ -137,3 +137,32 @@ describe('SalesByProductPage', () => {
         expect(screen.getByRole('heading', { name: 'Sales by Product' })).toBeInTheDocument();
     });
 });
+
+describe('SalesByProductPage — Group variants', () => {
+    const family = { id: 'fam-1', name: 'Belt OAC' };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockBranchScope();
+        api().getSalesByProduct.mockResolvedValue({
+            summary: { totalRevenue: 10000, totalUnitsSold: 68, productCount: 4 },
+            rows: [
+                ROWS[0],
+                { product: { id: 'p-s', name: 'Belt OAC S', sku: 'B-S', group: null, subgroup: null, family }, unitsSold: 3, revenue: 1500, revenueShare: 15 },
+                { product: { id: 'p-l', name: 'Belt OAC L', sku: 'B-L', group: null, subgroup: null, family }, unitsSold: 2, revenue: 1300, revenueShare: 13 },
+            ],
+        });
+    });
+
+    it('adds a family\'s sizes into one line when asked', async () => {
+        render(<SalesByProductPage />);
+        expect(await screen.findByRole('cell', { name: 'Belt OAC S' })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Group variants' }));
+
+        expect(await screen.findByRole('cell', { name: /^Belt OAC\s*2 variants$/ })).toBeInTheDocument();
+        expect(screen.queryByRole('cell', { name: 'Belt OAC S' })).not.toBeInTheDocument();
+        expect(screen.getByRole('cell', { name: '5' })).toBeInTheDocument();
+    });
+});
+

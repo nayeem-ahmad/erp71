@@ -11,6 +11,7 @@ import AddProductModal from '../AddProductModal';
 import MergeProductModal from '../MergeProductModal';
 import GroupVariantsModal, { type VariantCandidate } from '../GroupVariantsModal';
 import VariantSuggestionsModal from '../VariantSuggestionsModal';
+import CreateVariantsModal, { type VariantBase } from '../CreateVariantsModal';
 import { variantLabel } from '@erp71/shared-types';
 import type { ProductFamilySuggestion } from '@/lib/api';
 import ProductRowActions from './ProductRowActions';
@@ -55,6 +56,7 @@ type VariantDialog =
     | { mode: 'create'; products: VariantCandidate[]; prefill?: { name: string; optionName: string; values: Record<string, string> } }
     | { mode: 'edit'; familyId: string }
     | { mode: 'suggestions' }
+    | { mode: 'generate'; base: VariantBase }
     | null;
 
 const columnHelper = createColumnHelper<Product>();
@@ -391,12 +393,13 @@ export default function InventoryPage() {
                         onEdit={() => openEditProduct(info.row.original)}
                         onMerge={() => openMergeProduct(info.row.original)}
                         onDelete={() => setPendingDelete(info.row.original)}
+                        onCreateVariants={() => setVariantDialog({ mode: 'generate', base: info.row.original })}
                     />
                 ),
                 enableSorting: false,
                 enableColumnFilter: false,
                 enableResizing: false,
-                size: 170,
+                size: 200,
             }),
         ],
         [t, fmt, locale, canMerge, colorful],
@@ -554,6 +557,11 @@ export default function InventoryPage() {
                     initialProduct={editingProduct}
                     onSubmit={handleUpdateProduct}
                     showMerge={canMerge}
+                    onEditVariants={(familyId) => {
+                        setIsEditModalOpen(false);
+                        setEditingProduct(null);
+                        setVariantDialog({ mode: 'edit', familyId });
+                    }}
                     onMergeClick={() => {
                         if (!editingProduct) return;
                         setIsEditModalOpen(false);
@@ -589,6 +597,14 @@ export default function InventoryPage() {
                     <GroupVariantsModal
                         mode="edit"
                         familyId={variantDialog.familyId}
+                        onClose={() => setVariantDialog(null)}
+                        onSaved={() => void loadProducts()}
+                        onAddVariants={(base) => setVariantDialog({ mode: 'generate', base })}
+                    />
+                )}
+                {variantDialog?.mode === 'generate' && (
+                    <CreateVariantsModal
+                        base={variantDialog.base}
                         onClose={() => setVariantDialog(null)}
                         onSaved={() => void loadProducts()}
                     />

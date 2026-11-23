@@ -6,6 +6,7 @@ describe('ProductFamiliesService', () => {
     const tenantId = 'tenant-1';
     let db: any;
     let redis: any;
+    let products: any;
     let service: ProductFamiliesService;
 
     const familyRecord = {
@@ -34,7 +35,15 @@ describe('ProductFamiliesService', () => {
         };
         db.$transaction = jest.fn((fn: (tx: unknown) => unknown) => fn(db));
         redis = { invalidatePattern: jest.fn() };
-        service = new ProductFamiliesService(db, redis);
+        // Runs the caller's grouping step with made-up ids, as the real
+        // createMany does inside its transaction.
+        products = {
+            createMany: jest.fn(async (_t: string, dtos: unknown[], _u: unknown, then: (tx: unknown, ids: string[]) => unknown) => {
+                const productIds = dtos.map((_, i) => `new-${i}`);
+                return { productIds, result: await then(db, productIds) };
+            }),
+        };
+        service = new ProductFamiliesService(db, redis, products);
     });
 
     describe('create', () => {
@@ -186,6 +195,114 @@ describe('ProductFamiliesService', () => {
                     ],
                 },
             ]);
+        });
+    });
+
+    describe('generate', () => {
+        const base = {
+            id: 'base',
+            name: 'Belt OAC',
+            type: 'GOODS',
+            sku: 'P1',
+            image_url: 'b.jpg',
+            brand_id: null,
+            group_id: 'g1',
+            subgroup_id: null,
+            reorder_level: null,
+            safety_stock: null,
+            lead_time_days: null,
+            warranty_enabled: false,
+            warranty_duration_days: null,
+            unit_type: 'pcs',
+            vat_rate: null,
+            sd_rate: null,
+            cost: { avg_cost: 300 },
+            family: null,
+        };
+
+        beforeEach(() => {
+            db.product.findFirst = jest.fn();
+            db.productFamily.findFirst.mockResolvedValue(familyRecord);
+        });
+
+        it('makes one product per combination from the base and groups them with it', async () => {
+            db.product.findFirst.mockResolvedValue(base);
+            db.product.findMany.mockResolvedValue([]); // no SKU clashes
+
+            await service.generate(tenantId, {
+                baseProductId: 'base',
+                optionNames: ['Size'],
+                baseOptionValues: { Size: 'M' },
+                variants: [
+                    { optionValues: { Size: 'L' }, sku: 'P1-L', price: 550, initialStock: 4 },
+                    { optionValues: { Size: 'XL' }, price: 600 },
+                ],
+            });
+
+            const dtos = products.createMany.mock.calls[0][1];
+            expect(dtos).toEqual([
+                expect.objectContaining({ name: 'Belt OAC L', sku: 'P1-L', price: 550, initialStock: 4, cost: 300, groupId: 'g1', image_url: 'b.jpg', unitType: 'pcs' }),
+                expect.objectContaining({ name: 'Belt OAC XL', sku: undefined, price: 600, initialStock: 0, cost: 300 }),
+            ]);
+            expect(db.productFamily.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ name: 'Belt OAC', option_names: ['Size'], image_url: 'b.jpg' }),
+            });
+            const claimed = db.product.updateMany.mock.calls.map((call: any[]) => [call[0].where.id, call[0].data.option_values]);
+            expect(claimed).toEqual([
+                ['base', { Size: 'M' }],
+                ['new-0', { Size: 'L' }],
+                ['new-1', { Size: 'XL' }],
+            ]);
+        });
+
+        it("adds to the base's family on its options and refuses a size it already has", async () => {
+            const family = {
+                id: 'fam-1',
+                name: 'Belt OAC',
+                option_names: ['Size'],
+                products: [{ id: 'base', option_values: { Size: 'M' } }],
+            };
+            db.product.findFirst.mockResolvedValue({ ...base, family });
+
+            await expect(
+                service.generate(tenantId, { baseProductId: 'base', variants: [{ optionValues: { Size: 'm' }, price: 1 }] }),
+            ).rejects.toThrow(/Each variant needs its own combination/);
+            expect(products.createMany).not.toHaveBeenCalled();
+        });
+
+        it('refuses a SKU already in use before making anything', async () => {
+            db.product.findFirst.mockResolvedValue(base);
+            db.product.findMany.mockResolvedValue([{ sku: 'P1-L' }]);
+
+            await expect(
+                service.generate(tenantId, {
+                    baseProductId: 'base',
+                    optionNames: ['Size'],
+                    variants: [{ optionValues: { Size: 'L' }, sku: 'P1-L', price: 1 }],
+                }),
+            ).rejects.toThrow('SKU already in use: P1-L.');
+            expect(products.createMany).not.toHaveBeenCalled();
+        });
+
+        it('refuses a service', async () => {
+            db.product.findFirst.mockResolvedValue({ ...base, type: 'SERVICE' });
+            await expect(
+                service.generate(tenantId, { baseProductId: 'base', optionNames: ['Size'], variants: [{ optionValues: { Size: 'L' }, price: 1 }] }),
+            ).rejects.toThrow(BadRequestException);
+        });
+    });
+
+    describe('optionValues', () => {
+        it('merges options across families case-insensitively, values in size order', async () => {
+            db.productFamily.findMany.mockResolvedValue([
+                { option_names: ['Size'], products: [{ option_values: { Size: 'XL' } }, { option_values: { Size: 'S' } }] },
+                {
+                    option_names: ['size', 'Color'],
+                    products: [{ option_values: { size: 'm', Color: 'Red' } }, { option_values: { size: 's', Color: 'Red' } }],
+                },
+            ]);
+
+            expect(await service.optionValues(tenantId)).toEqual({ Size: ['S', 'm', 'XL'], Color: ['Red'] });
         });
     });
 });

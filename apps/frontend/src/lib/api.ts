@@ -2487,6 +2487,14 @@ export type ProductFamilyInput = {
     members: Array<{ productId: string; optionValues: Record<string, string> }>;
 };
 
+export type GenerateVariantsInput = {
+    baseProductId: string;
+    name?: string;
+    optionNames?: string[];
+    baseOptionValues?: Record<string, string>;
+    variants: Array<{ optionValues: Record<string, string>; sku?: string; price: number; initialStock?: number }>;
+};
+
 export type ProductFamilySuggestion = {
     name: string;
     optionName: string;
@@ -2578,6 +2586,14 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     deleteProductFamily: (id: string) => fetchWithAuth(`/product-families/${id}`, { method: 'DELETE' }),
+    /** Options and values the shop already uses, offered as suggestions. */
+    getProductFamilyOptionValues: (): Promise<Record<string, string[]>> => fetchWithAuth('/product-families/option-values'),
+    /** "Create variants": new products from a base product, one per combination, grouped. */
+    generateProductVariants: (data: GenerateVariantsInput): Promise<ProductFamily> => fetchWithAuth('/product-families/generate', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     getProductGroups: () => fetchAllPages('/product-groups'),
     getProductGroup: (id: string) => fetchWithAuth(`/product-groups/${id}`),
     createProductGroup: (data: any) => fetchWithAuth('/product-groups', {

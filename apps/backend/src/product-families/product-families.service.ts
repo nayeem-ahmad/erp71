@@ -1,9 +1,18 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { suggestVariantFamilies, validateVariantFamily, type ValidatedVariantMember } from '@erp71/shared-types';
+import {
+    compareOptionValues,
+    normaliseOptionValues,
+    suggestVariantFamilies,
+    validateVariantFamily,
+    variantProductName,
+    type ValidatedVariantMember,
+} from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { RedisService } from '../cache/redis.service';
-import { CreateProductFamilyDto, UpdateProductFamilyDto } from './product-family.dto';
+import { ProductsService } from '../products/products.service';
+import { CreateProductDto, ProductTypeDto } from '../products/product.dto';
+import { CreateProductFamilyDto, GenerateVariantsDto, UpdateProductFamilyDto } from './product-family.dto';
 
 /** Enough to review in one sitting; the rest surface once these are dealt with. */
 const MAX_SUGGESTIONS = 100;
@@ -43,6 +52,7 @@ export class ProductFamiliesService {
     constructor(
         private readonly db: DatabaseService,
         private readonly redis: RedisService,
+        private readonly products: ProductsService,
     ) {}
 
     async findAll(tenantId: string) {
@@ -87,6 +97,40 @@ export class ProductFamiliesService {
                     value,
                 })),
             }));
+    }
+
+    /**
+     * Every option this shop already uses and its values — `{ Size: [S, M, L],
+     * Color: [Black, Red] }` — offered as suggestions when grouping or
+     * generating, so the same size is not spelt three ways. Read from the
+     * families themselves rather than kept as a separate list that could drift
+     * from them.
+     */
+    async optionValues(tenantId: string): Promise<Record<string, string[]>> {
+        const families = await this.db.productFamily.findMany({
+            where: { tenant_id: tenantId },
+            select: { option_names: true, products: { where: { deleted_at: null }, select: { option_values: true } } },
+        });
+        // Keyed case-insensitively; the first spelling seen names the option.
+        const byKey = new Map<string, { name: string; values: Map<string, string> }>();
+        for (const family of families) {
+            for (const name of family.option_names) {
+                const key = name.toLowerCase();
+                const entry = byKey.get(key) ?? { name, values: new Map<string, string>() };
+                byKey.set(key, entry);
+                for (const product of family.products) {
+                    const value = ((product.option_values ?? {}) as Record<string, unknown>)[name];
+                    if (typeof value === 'string' && value.trim() && !entry.values.has(value.toLowerCase())) {
+                        entry.values.set(value.toLowerCase(), value);
+                    }
+                }
+            }
+        }
+        const out: Record<string, string[]> = {};
+        for (const { name, values } of byKey.values()) {
+            out[name] = [...values.values()].sort(compareOptionValues);
+        }
+        return out;
     }
 
     async create(tenantId: string, dto: CreateProductFamilyDto) {
@@ -152,6 +196,113 @@ export class ProductFamiliesService {
 
         await this.invalidate(tenantId);
         return this.findOne(tenantId, id);
+    }
+
+    /**
+     * "Create variants": makes one product per new combination from a base
+     * product and groups them — into the base's family when it has one, else
+     * into a new family. Every new product copies the base's category, brand,
+     * unit, tax rates, warranty and photo, and gets its own name ("Belt OAC
+     * XL"), SKU, price and opening stock. All of it, products and grouping,
+     * happens in one transaction: a clash halfway leaves nothing behind.
+     */
+    async generate(tenantId: string, dto: GenerateVariantsDto, userId?: string) {
+        const base = await this.db.product.findFirst({
+            where: { id: dto.baseProductId, tenant_id: tenantId, deleted_at: null },
+            include: {
+                cost: { select: { avg_cost: true } },
+                family: {
+                    include: {
+                        products: { where: { deleted_at: null }, select: { id: true, option_values: true } },
+                    },
+                },
+            },
+        });
+        if (!base) throw new NotFoundException('Product not found');
+        if (base.type === ProductTypeDto.SERVICE) {
+            throw new BadRequestException('Variants are for goods; a service has no sizes to stock.');
+        }
+
+        const family = base.family;
+        const optionNamesInput = family ? family.option_names : (dto.optionNames ?? []);
+        const familyName = family ? family.name : this.requireName(dto.name ?? base.name);
+
+        // Members already there (the family's, or the base joining a new one)
+        // go through validation with the new ones, so a combination that
+        // already exists is caught as a duplicate rather than made twice.
+        const existing = family
+            ? family.products.map((p) => ({ productId: p.id, optionValues: (p.option_values ?? {}) as Record<string, string> }))
+            : dto.baseOptionValues
+              ? [{ productId: base.id, optionValues: dto.baseOptionValues }]
+              : [];
+        const placeholders = dto.variants.map((variant, index) => ({
+            productId: `new:${index}`,
+            optionValues: variant.optionValues,
+        }));
+        const validated = this.validate(optionNamesInput, [...existing, ...placeholders]);
+        const optionNames = validated.optionNames;
+
+        const skus = dto.variants.map((variant) => variant.sku?.trim()).filter((sku): sku is string => !!sku);
+        const repeated = skus.find((sku, index) => skus.indexOf(sku) !== index);
+        if (repeated) throw new BadRequestException(`SKU ${repeated} is used twice.`);
+        if (skus.length > 0) {
+            const taken = await this.db.product.findMany({
+                where: { tenant_id: tenantId, sku: { in: skus } },
+                select: { sku: true },
+            });
+            if (taken.length > 0) {
+                throw new BadRequestException(`SKU already in use: ${taken.map((p) => p.sku).join(', ')}.`);
+            }
+        }
+
+        const baseCost = base.cost ? Number(base.cost.avg_cost) : undefined;
+        const dtos: CreateProductDto[] = dto.variants.map((variant) => {
+            const values = normaliseOptionValues(optionNames, variant.optionValues);
+            return {
+                name: variantProductName(familyName, optionNames, values),
+                sku: variant.sku?.trim() || undefined,
+                type: ProductTypeDto.GOODS,
+                price: variant.price,
+                cost: variant.cost ?? (baseCost && baseCost > 0 ? baseCost : undefined),
+                initialStock: variant.initialStock ?? 0,
+                image_url: base.image_url ?? undefined,
+                brandId: base.brand_id ?? undefined,
+                groupId: base.group_id ?? undefined,
+                subgroupId: base.subgroup_id ?? undefined,
+                reorderLevel: base.reorder_level ?? undefined,
+                safetyStock: base.safety_stock ?? undefined,
+                leadTimeDays: base.lead_time_days ?? undefined,
+                warrantyEnabled: base.warranty_enabled,
+                warrantyDurationDays: base.warranty_duration_days ?? undefined,
+                unitType: base.unit_type,
+                vatRate: base.vat_rate != null ? Number(base.vat_rate) : null,
+                sdRate: base.sd_rate != null ? Number(base.sd_rate) : null,
+            };
+        });
+
+        const { result: familyId } = await this.products.createMany(tenantId, dtos, userId, async (tx, productIds) => {
+            const newMembers = validated.members
+                .filter((member) => member.productId.startsWith('new:'))
+                .map((member) => ({ ...member, productId: productIds[Number(member.productId.slice(4))] }));
+
+            if (family) {
+                await this.assignMembers(tx, tenantId, family.id, newMembers);
+                return family.id;
+            }
+            const created = await tx.productFamily.create({
+                data: {
+                    tenant_id: tenantId,
+                    name: familyName,
+                    image_url: base.image_url,
+                    option_names: optionNames,
+                },
+            });
+            const baseMember = validated.members.find((member) => member.productId === base.id);
+            await this.assignMembers(tx, tenantId, created.id, baseMember ? [baseMember, ...newMembers] : newMembers);
+            return created.id;
+        });
+
+        return this.findOne(tenantId, familyId);
     }
 
     /** Ungroups: every member goes back to being a product sold on its own. */

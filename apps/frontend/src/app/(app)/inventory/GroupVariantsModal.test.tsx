@@ -9,6 +9,7 @@ jest.mock('@/lib/api', () => ({
         createProductFamily: jest.fn(),
         updateProductFamily: jest.fn(),
         deleteProductFamily: jest.fn(),
+        getProductFamilyOptionValues: jest.fn().mockResolvedValue({ Size: ['S', 'M', 'L'] }),
     },
 }));
 jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }));
@@ -18,7 +19,10 @@ const belts = [
     { id: 'p-m', name: 'Belt OAC M', sku: 'P2', price: 500 },
 ];
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+    jest.clearAllMocks();
+    (api.getProductFamilyOptionValues as jest.Mock).mockResolvedValue({ Size: ['S', 'M', 'L'] });
+});
 
 describe('guessFromNames', () => {
     it('reads the shared name and a trailing size', () => {
@@ -51,6 +55,7 @@ describe('GroupVariantsModal', () => {
         expect(api.createProductFamily).toHaveBeenCalledWith({
             name: 'Belt OAC',
             description: '',
+            imageUrl: '',
             isFeatured: false,
             optionNames: ['Size'],
             members: [

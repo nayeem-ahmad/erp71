@@ -15,6 +15,8 @@ import { api, type ProductFamily } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
+import type { VariantBase } from './CreateVariantsModal';
+import { suggestedValuesFor, useVariantOptionValues } from './useVariantOptionValues';
 
 /** A product as the dialog lists it. */
 export type VariantCandidate = { id: string; name: string; sku?: string | null; price?: number | string | null };
@@ -35,6 +37,8 @@ type GroupVariantsModalProps =
           familyId: string;
           onClose: () => void;
           onSaved: () => void;
+          /** Opens "Create variants" on this family, from one of its products. */
+          onAddVariants?: (base: VariantBase) => void;
       };
 
 /** The words every name starts with: "Belt OAC S" and "Belt OAC M" share "Belt OAC". */
@@ -102,6 +106,9 @@ export default function GroupVariantsModal(props: GroupVariantsModalProps) {
     const [loading, setLoading] = useState(editing);
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
+    const [imageUrl, setImageUrl] = useState('');
+    const [loadedFamily, setLoadedFamily] = useState<ProductFamily | null>(null);
+    const suggestions = useVariantOptionValues();
     const [featured, setFeatured] = useState(false);
     const [optionsText, setOptionsText] = useState('Size');
     const [rows, setRows] = useState<Row[]>([]);
@@ -128,8 +135,10 @@ export default function GroupVariantsModal(props: GroupVariantsModalProps) {
         api.getProductFamily(familyId)
             .then((family) => {
                 if (cancelled) return;
+                setLoadedFamily(family);
                 setName(family.name);
                 setDescription(family.description ?? '');
+                setImageUrl(family.image_url ?? '');
                 setFeatured(family.is_featured);
                 setOptionsText(family.option_names.join(', '));
                 setRows(rowsFromFamily(family));
@@ -189,6 +198,7 @@ export default function GroupVariantsModal(props: GroupVariantsModalProps) {
             const body = {
                 name: name.trim(),
                 description: description.trim(),
+                imageUrl: imageUrl.trim(),
                 isFeatured: featured,
                 optionNames: check.optionNames,
                 members: check.members,
@@ -258,10 +268,33 @@ export default function GroupVariantsModal(props: GroupVariantsModalProps) {
                                     id="variant-family-options"
                                     value={optionsText}
                                     onChange={(event) => setOptionsText(event.target.value)}
+                                    list="variant-family-option-names"
                                     className="w-full min-h-touch"
                                 />
                             </Field>
+                            <datalist id="variant-family-option-names">
+                                {Object.keys(suggestions).map((option) => (
+                                    <option key={option} value={option} />
+                                ))}
+                            </datalist>
+                            {optionNames.map((option, index) => (
+                                <datalist key={option} id={`variant-family-values-${index}`}>
+                                    {suggestedValuesFor(suggestions, option).map((value) => (
+                                        <option key={value} value={value} />
+                                    ))}
+                                </datalist>
+                            ))}
                         </div>
+                        <Field label={m.imageUrl} hint={m.imageHint} htmlFor="variant-family-image">
+                            <Input
+                                id="variant-family-image"
+                                type="url"
+                                value={imageUrl}
+                                onChange={(event) => setImageUrl(event.target.value)}
+                                placeholder="https://"
+                                className="w-full min-h-touch"
+                            />
+                        </Field>
                         <Field label={m.description} htmlFor="variant-family-description">
                             <Textarea
                                 id="variant-family-description"
@@ -300,7 +333,7 @@ export default function GroupVariantsModal(props: GroupVariantsModalProps) {
                                                         .join(' · ')}
                                                 </span>
                                             </td>
-                                            {optionNames.map((option) => {
+                                            {optionNames.map((option, optionIndex) => {
                                                 const value = row.values[option] ?? '';
                                                 const cellError = !submitted
                                                     ? undefined
@@ -313,6 +346,7 @@ export default function GroupVariantsModal(props: GroupVariantsModalProps) {
                                                     <td key={option} className="min-w-[7rem] px-3 py-2 align-top">
                                                         <Input
                                                             aria-label={`${row.name} — ${option}`}
+                                                            list={`variant-family-values-${optionIndex}`}
                                                             value={value}
                                                             onChange={(event) => setValue(index, option, event.target.value)}
                                                             className="w-full min-h-touch"
@@ -355,6 +389,27 @@ export default function GroupVariantsModal(props: GroupVariantsModalProps) {
                         className="me-auto min-h-touch"
                     >
                         {m.ungroup}
+                    </Button>
+                )}
+                {props.mode === 'edit' && props.onAddVariants && loadedFamily && loadedFamily.members.length > 0 && (
+                    <Button
+                        variant="secondary"
+                        size="md"
+                        onClick={() => {
+                            const first = loadedFamily.members[0];
+                            props.onAddVariants?.({
+                                id: first.id,
+                                name: first.name,
+                                sku: first.sku,
+                                price: first.price,
+                                family: { id: loadedFamily.id, name: loadedFamily.name, option_names: loadedFamily.option_names },
+                                option_values: first.option_values,
+                            });
+                        }}
+                        disabled={saving}
+                        className="min-h-touch"
+                    >
+                        {m.addVariants}
                     </Button>
                 )}
                 <Button variant="secondary" size="md" onClick={props.onClose} disabled={saving} className="min-h-touch">

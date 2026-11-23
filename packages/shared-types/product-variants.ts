@@ -273,3 +273,53 @@ export function suggestVariantFamilies<T extends { id: string; name: string }>(
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
 }
+
+// ─── Generating variants ───────────────────────────────────────────────────
+
+/** Past this many combinations the generator refuses: it is a typo, not a size run. */
+export const MAX_VARIANT_COMBINATIONS = 100;
+
+/**
+ * Every combination of the given values, in axis order: Size [S, M] × Color
+ * [Red, Blue] → S/Red, S/Blue, M/Red, M/Blue. Blank and repeated values are
+ * dropped; an axis with no values yields nothing.
+ */
+export function variantCombinations(
+    optionNames: readonly string[],
+    valuesByOption: Record<string, readonly string[]>,
+): VariantOptionValues[] {
+    let combos: VariantOptionValues[] = [{}];
+    for (const name of optionNames) {
+        const values = normaliseOptionNames(valuesByOption[name] ?? []);
+        if (values.length === 0) return [];
+        const next: VariantOptionValues[] = [];
+        for (const combo of combos) {
+            for (const value of values) next.push({ ...combo, [name]: value });
+        }
+        combos = next;
+    }
+    return optionNames.length === 0 ? [] : combos;
+}
+
+/**
+ * A generated variant's product name: the family's name and its values,
+ * "Belt OAC XL" or "T-Shirt M Red" — the same shape staff already use, which
+ * the suggestions read back.
+ */
+export function variantProductName(baseName: string, optionNames: readonly string[], values: VariantOptionValues): string {
+    return collapse([baseName, ...optionNames.map((name) => values[name] ?? '')].join(' '));
+}
+
+/**
+ * A generated variant's SKU: the base SKU and the values, upper-cased, letters
+ * and digits only — "P00970" → "P00970-XL", "TS" → "TS-M-RED". Null when the
+ * base has no SKU, rather than inventing one.
+ */
+export function variantSku(baseSku: string | null | undefined, optionNames: readonly string[], values: VariantOptionValues): string | null {
+    const base = (baseSku ?? '').trim();
+    if (!base) return null;
+    const parts = optionNames
+        .map((name) => (values[name] ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, ''))
+        .filter(Boolean);
+    return [base, ...parts].join('-');
+}

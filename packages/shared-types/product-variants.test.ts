@@ -5,7 +5,10 @@ import {
     splitVariantName,
     suggestVariantFamilies,
     validateVariantFamily,
+    variantCombinations,
     variantLabel,
+    variantProductName,
+    variantSku,
 } from './product-variants';
 
 describe('normaliseOptionNames', () => {
@@ -127,5 +130,30 @@ describe('suggestVariantFamilies', () => {
             { id: '3', name: 'belt oac M' },
         ]);
         expect(suggestions[0].members.map((m) => m.product.id)).toEqual(['3', '1']);
+    });
+});
+
+describe('variantCombinations', () => {
+    it('crosses every axis in order and drops blanks and repeats', () => {
+        expect(variantCombinations(['Size', 'Color'], { Size: ['S', 'M', ' ', 's'], Color: ['Red', 'Blue'] })).toEqual([
+            { Size: 'S', Color: 'Red' },
+            { Size: 'S', Color: 'Blue' },
+            { Size: 'M', Color: 'Red' },
+            { Size: 'M', Color: 'Blue' },
+        ]);
+    });
+
+    it('yields nothing when an axis has no values', () => {
+        expect(variantCombinations(['Size', 'Color'], { Size: ['S'] })).toEqual([]);
+        expect(variantCombinations([], {})).toEqual([]);
+    });
+});
+
+describe('variantProductName / variantSku', () => {
+    it('names and codes a variant from its base', () => {
+        const values = { Size: 'XL', Color: 'Sky Blue' };
+        expect(variantProductName('Belt OAC', ['Size', 'Color'], values)).toBe('Belt OAC XL Sky Blue');
+        expect(variantSku('P00970', ['Size', 'Color'], values)).toBe('P00970-XL-SKYBLUE');
+        expect(variantSku(null, ['Size'], values)).toBeNull();
     });
 });
