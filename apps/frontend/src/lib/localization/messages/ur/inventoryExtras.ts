@@ -451,6 +451,8 @@ export const inventoryExtrasMessages = {
             "allSubgroups": "تمام ذیلی گروپ",
             "allBrands": "تمام برانڈز",
             "showZeroStock": "صفر اسٹاک والے پروڈکٹس شامل کریں",
+            "showWarehouseValues": "گودام کی مالیت دکھائیں",
+            "warehouseValueColumn": "{warehouse} مالیت",
             "uncategorized": "غیر درجہ بند",
             "emptyMessage": "موجودہ فلٹرز کے لیے کوئی دستیاب اسٹاک نہیں",
             "closedWarehouse": "{warehouse} (بند)",

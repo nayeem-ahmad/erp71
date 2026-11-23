@@ -451,6 +451,8 @@ export const inventoryExtrasMessages = {
             "allSubgroups": "كل المجموعات الفرعية",
             "allBrands": "كل العلامات التجارية",
             "showZeroStock": "تضمين المنتجات ذات المخزون الصفري",
+            "showWarehouseValues": "إظهار قيم المستودعات",
+            "warehouseValueColumn": "قيمة {warehouse}",
             "uncategorized": "بلا تصنيف",
             "emptyMessage": "لا يوجد مخزون متاح ضمن عوامل التصفية الحالية",
             "closedWarehouse": "{warehouse} (مغلق)",
