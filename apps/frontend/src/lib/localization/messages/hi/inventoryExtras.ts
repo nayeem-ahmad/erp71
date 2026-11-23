@@ -451,6 +451,8 @@ export const inventoryExtrasMessages = {
             "allSubgroups": "सभी उपसमूह",
             "allBrands": "सभी ब्रांड",
             "showZeroStock": "शून्य-स्टॉक उत्पाद शामिल करें",
+            "showWarehouseValues": "गोदाम मूल्य दिखाएँ",
+            "warehouseValueColumn": "{warehouse} मूल्य",
             "uncategorized": "अवर्गीकृत",
             "emptyMessage": "मौजूदा फ़िल्टरों के लिए कोई उपलब्ध स्टॉक नहीं",
             "closedWarehouse": "{warehouse} (बंद)",

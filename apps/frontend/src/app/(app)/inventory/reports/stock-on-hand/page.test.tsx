@@ -202,6 +202,43 @@ describe('StockOnHandPage', () => {
         });
     });
 
+    it('leaves per-warehouse value columns off until asked', async () => {
+        render(<StockOnHandPage />);
+        await waitFor(() => expect(screen.getByTestId('filter-showWarehouseValues-pressed')).toHaveTextContent('false'));
+        const headers = screen.getByTestId('column-headers').textContent ?? '';
+        expect(headers).not.toContain('Dhaka Main value');
+        expect(headers).not.toContain('Chattogram value');
+        expect(screen.queryByTestId('cell-0-warehouse-value:wh-1')).not.toBeInTheDocument();
+    });
+
+    it('shows each warehouse value next to its quantity when the option is on', async () => {
+        render(<StockOnHandPage />);
+        await waitFor(() => expect(screen.getByLabelText('Show warehouse values')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByLabelText('Show warehouse values'));
+
+        await waitFor(() => {
+            const headers = screen.getByTestId('column-headers').textContent ?? '';
+            expect(headers).toContain('Dhaka Main|Dhaka Main value|Chattogram|Chattogram value');
+        });
+        expect(screen.getByTestId('cell-0-warehouse-value:wh-1')).toHaveTextContent('৳ 16,350.00');
+        expect(screen.getByTestId('cell-0-warehouse-value:wh-2')).toHaveTextContent('৳ 10,900.00');
+        expect(screen.getByTestId('cell-1-warehouse-value:wh-1')).toHaveTextContent('৳ 0.00');
+        expect(screen.getByTestId('cell-1-warehouse-value:wh-2')).toHaveTextContent('৳ 0.00');
+    });
+
+    it('does not refetch when warehouse values are shown', async () => {
+        const { api } = require('@/lib/api');
+        render(<StockOnHandPage />);
+        await waitFor(() => expect(api.getStockOnHand).toHaveBeenCalled());
+        const calls = api.getStockOnHand.mock.calls.length;
+
+        fireEvent.click(screen.getByLabelText('Show warehouse values'));
+
+        await waitFor(() => expect(screen.getByTestId('filter-showWarehouseValues-pressed')).toHaveTextContent('true'));
+        expect(api.getStockOnHand).toHaveBeenCalledTimes(calls);
+    });
+
     it('formats last purchase price and sales price, and shows a dash when nothing was purchased', async () => {
         render(<StockOnHandPage />);
         await waitFor(() => expect(screen.getByTestId('cell-0-lastPurchasePrice')).toHaveTextContent('৳ 480.00'));

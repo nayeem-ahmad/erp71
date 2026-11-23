@@ -451,6 +451,8 @@ export const inventoryExtrasMessages = {
             "allSubgroups": "Tous les sous-groupes",
             "allBrands": "Toutes les marques",
             "showZeroStock": "Inclure les produits à stock nul",
+            "showWarehouseValues": "Afficher les valeurs par entrepôt",
+            "warehouseValueColumn": "Valeur {warehouse}",
             "uncategorized": "Non classé",
             "emptyMessage": "Aucun stock disponible pour les filtres actuels",
             "closedWarehouse": "{warehouse} (fermé)",

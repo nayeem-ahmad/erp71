@@ -451,6 +451,8 @@ export const inventoryExtrasMessages = {
                 allSubgroups: "Semua Subkumpulan",
                 allBrands: "Semua Jenama",
                 showZeroStock: "Sertakan produk tanpa stok",
+                showWarehouseValues: "Tunjukkan nilai gudang",
+                warehouseValueColumn: "Nilai {warehouse}",
                 uncategorized: "Tanpa Kategori",
                 emptyMessage: "Tiada stok untuk penapis semasa",
                 closedWarehouse: "{warehouse} (ditutup)",

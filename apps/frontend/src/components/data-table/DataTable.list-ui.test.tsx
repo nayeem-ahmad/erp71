@@ -112,6 +112,26 @@ describe('DataTable resize grip', () => {
         expect(screen.getByRole('columnheader', { name: 'Name' })).toBeInTheDocument();
     });
 
+    it('clips a long header to the column and keeps the full name on hover', () => {
+        const long = 'Dhaka Main Godown — Press Club Branch';
+        render(
+            <DataTable
+                {...props}
+                viewOptions
+                columns={[
+                    { accessorKey: 'name', header: long, id: 'name', size: 80, meta: { align: 'end' } },
+                    { accessorKey: 'amount', header: 'Amount', id: 'amount' },
+                ]}
+            />,
+        );
+
+        const header = screen.getByRole('columnheader', { name: long });
+        expect(header).toHaveClass('overflow-hidden');
+        expect(header).toHaveAttribute('title', long);
+        const label = header.querySelector('button span');
+        expect(label).toHaveClass('truncate');
+    });
+
     it('fits a column to its content on a double-click', () => {
         (naturalColumnWidth as jest.Mock).mockReturnValue(212);
         const { container } = render(<DataTable {...props} viewOptions />);
