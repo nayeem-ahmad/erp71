@@ -202,6 +202,43 @@ describe('StockOnHandPage', () => {
         });
     });
 
+    it('leaves per-warehouse value columns off until asked', async () => {
+        render(<StockOnHandPage />);
+        await waitFor(() => expect(screen.getByTestId('filter-showWarehouseValues-pressed')).toHaveTextContent('false'));
+        const headers = screen.getByTestId('column-headers').textContent ?? '';
+        expect(headers).not.toContain('Dhaka Main value');
+        expect(headers).not.toContain('Chattogram value');
+        expect(screen.queryByTestId('cell-0-warehouse-value:wh-1')).not.toBeInTheDocument();
+    });
+
+    it('shows each warehouse value next to its quantity when the option is on', async () => {
+        render(<StockOnHandPage />);
+        await waitFor(() => expect(screen.getByLabelText('Show warehouse values')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByLabelText('Show warehouse values'));
+
+        await waitFor(() => {
+            const headers = screen.getByTestId('column-headers').textContent ?? '';
+            expect(headers).toContain('Dhaka Main|Dhaka Main value|Chattogram|Chattogram value');
+        });
+        expect(screen.getByTestId('cell-0-warehouse-value:wh-1')).toHaveTextContent('৳ 16,350.00');
+        expect(screen.getByTestId('cell-0-warehouse-value:wh-2')).toHaveTextContent('৳ 10,900.00');
+        expect(screen.getByTestId('cell-1-warehouse-value:wh-1')).toHaveTextContent('৳ 0.00');
+        expect(screen.getByTestId('cell-1-warehouse-value:wh-2')).toHaveTextContent('৳ 0.00');
+    });
+
+    it('does not refetch when warehouse values are shown', async () => {
+        const { api } = require('@/lib/api');
+        render(<StockOnHandPage />);
+        await waitFor(() => expect(api.getStockOnHand).toHaveBeenCalled());
+        const calls = api.getStockOnHand.mock.calls.length;
+
+        fireEvent.click(screen.getByLabelText('Show warehouse values'));
+
+        await waitFor(() => expect(screen.getByTestId('filter-showWarehouseValues-pressed')).toHaveTextContent('true'));
+        expect(api.getStockOnHand).toHaveBeenCalledTimes(calls);
+    });
+
     it('formats last purchase price and sales price, and shows a dash when nothing was purchased', async () => {
         render(<StockOnHandPage />);
         await waitFor(() => expect(screen.getByTestId('cell-0-lastPurchasePrice')).toHaveTextContent('৳ 480.00'));
@@ -424,3 +461,58 @@ describe('StockOnHandPage', () => {
         );
     });
 });
+
+describe('StockOnHandPage — Group variants', () => {
+    const family = { id: 'fam-1', name: 'Belt OAC' };
+    const variantRow = (id: string, name: string, qty: Record<string, number>, cost: number) => {
+        const totalQuantity = Object.values(qty).reduce((a, b) => a + b, 0);
+        return {
+            product: { id, name, sku: id, sellingPrice: 500, brand: null, group: null, subgroup: null, family },
+            quantityByWarehouse: qty,
+            totalQuantity,
+            averageUnitCost: cost,
+            lastPurchasePrice: cost,
+            costBasis: 'WEIGHTED_AVERAGE',
+            totalStockValue: totalQuantity * cost,
+        };
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockBranchScope({ value: 'all' });
+        const { api } = require('@/lib/api');
+        api.getStockOnHand.mockResolvedValue({
+            ...mockReport,
+            rows: [
+                mockReport.rows[0],
+                variantRow('p-s', 'Belt OAC S', { 'wh-1': 2, 'wh-2': 1 }, 100),
+                variantRow('p-l', 'Belt OAC L', { 'wh-1': 1, 'wh-2': 0 }, 160),
+            ],
+        });
+        api.getInventoryWarehouses.mockResolvedValue([]);
+        api.getProductGroups.mockResolvedValue([]);
+        api.getProductSubgroups.mockResolvedValue([]);
+        api.getBrands.mockResolvedValue([]);
+    });
+
+    it('folds a family into one line, quantities summed per warehouse', async () => {
+        render(<StockOnHandPage />);
+        await waitFor(() => expect(screen.getByTestId('row-count')).toHaveTextContent('3'));
+
+        fireEvent.click(screen.getByLabelText('Group variants'));
+
+        expect(screen.getByTestId('row-count')).toHaveTextContent('2');
+        expect(screen.getByTestId('cell-1-product')).toHaveTextContent('Belt OAC2 variants');
+        expect(screen.getByTestId('cell-1-warehouse:wh-1')).toHaveTextContent('3');
+        expect(screen.getByTestId('cell-1-totalQuantity')).toHaveTextContent('4');
+    });
+
+    it('offers no toggle to a shop without variant families', async () => {
+        const { api } = require('@/lib/api');
+        api.getStockOnHand.mockResolvedValue(mockReport);
+        render(<StockOnHandPage />);
+        await waitFor(() => expect(screen.getByTestId('row-count')).toHaveTextContent('2'));
+        expect(screen.queryByLabelText('Group variants')).not.toBeInTheDocument();
+    });
+});
+

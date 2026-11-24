@@ -2234,3 +2234,4 @@ export * from './record-history';
 export * from './payment-layout';
 export * from './kpis';
 export * from './tools';
+export * from './product-variants';

@@ -87,6 +87,9 @@ describe('StorefrontService', () => {
                 upsert: jest.fn(),
                 count: jest.fn(),
             },
+            productFamily: {
+                findFirst: jest.fn(),
+            },
             storefrontOrder: {
                 findUnique: jest.fn(),
                 findFirst: jest.fn(),
@@ -212,34 +215,31 @@ describe('StorefrontService', () => {
                     id: 'cat-1',
                     name: 'Electronics',
                     image_url: 'elec.jpg',
-                    products: [{ id: 'p1' }, { id: 'p2' }],
+                    products: [{ id: 'p1', family_id: null }, { id: 'p2', family_id: null }],
                 },
             ]);
-            db.product.findMany
-                .mockResolvedValueOnce([
-                    // trending
-                    {
-                        id: 'p1',
-                        name: 'Phone',
-                        price: 100,
-                        compare_at_price: 120,
-                        image_url: 'phone.jpg',
-                        group: { name: 'Electronics' },
-                        stocks: [{ quantity: 5 }, { quantity: 3 }],
-                    },
-                ])
-                .mockResolvedValueOnce([
-                    // all products
-                    {
-                        id: 'p2',
-                        name: 'Tablet',
-                        price: 200,
-                        compare_at_price: null,
-                        image_url: null,
-                        group: null,
-                        stocks: [{ quantity: 2 }],
-                    },
-                ]);
+            db.product.findMany.mockResolvedValueOnce([
+                {
+                    id: 'p1',
+                    name: 'Phone',
+                    price: 100,
+                    compare_at_price: 120,
+                    image_url: 'phone.jpg',
+                    is_featured: true,
+                    group: { name: 'Electronics' },
+                    stocks: [{ quantity: 5 }, { quantity: 3 }],
+                },
+                {
+                    id: 'p2',
+                    name: 'Tablet',
+                    price: 200,
+                    compare_at_price: null,
+                    image_url: null,
+                    is_featured: false,
+                    group: null,
+                    stocks: [{ quantity: 2 }],
+                },
+            ]);
 
             const result = await service.getStorefront(slug);
 
@@ -248,8 +248,40 @@ describe('StorefrontService', () => {
             expect(result.categories[0].count).toBe(2);
             expect(result.trending_products).toHaveLength(1);
             expect(result.trending_products[0].stock_quantity).toBe(8);
+            expect(result.all_products).toHaveLength(2);
+            expect(result.all_products[1].group_name).toBe('Uncategorized');
+        });
+
+        it('shows a family of variants as one card and counts it once in its category', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            const family = { id: 'fam-1', name: 'Belt OAC', image_url: null, is_featured: false, option_names: ['Size'] };
+            db.productGroup.findMany.mockResolvedValue([
+                {
+                    id: 'cat-1',
+                    name: 'Belts',
+                    image_url: null,
+                    products: [{ id: 'p-s', family_id: 'fam-1' }, { id: 'p-m', family_id: 'fam-1' }],
+                },
+            ]);
+            db.product.findMany.mockResolvedValueOnce([
+                { id: 'p-l', name: 'Belt OAC L', price: 600, compare_at_price: null, image_url: null, group: { name: 'Belts' }, stocks: [], option_values: { Size: 'L' }, family },
+                { id: 'p-m', name: 'Belt OAC M', price: 500, compare_at_price: null, image_url: 'm.jpg', group: { name: 'Belts' }, stocks: [{ quantity: 2 }], option_values: { Size: 'M' }, family },
+                { id: 'p-s', name: 'Belt OAC S', price: 500, compare_at_price: null, image_url: null, group: { name: 'Belts' }, stocks: [{ quantity: 1 }], option_values: { Size: 'S' }, family },
+            ]);
+
+            const result = await service.getStorefront(slug);
+
+            expect(result.categories[0].count).toBe(1);
             expect(result.all_products).toHaveLength(1);
-            expect(result.all_products[0].group_name).toBe('Uncategorized');
+            const card = result.all_products[0];
+            expect(card.id).toBe('fam-1');
+            expect(card.name).toBe('Belt OAC');
+            expect(card.selling_price).toBe(500);
+            expect(card.price_varies).toBe(true);
+            expect(card.stock_quantity).toBe(3);
+            expect(card.image_url).toBe('m.jpg');
+            expect(card.variants?.map((v) => v.label)).toEqual(['S', 'M', 'L']);
+            expect(card.variants?.[2].stock_quantity).toBe(0);
         });
 
         it('carries the storefront logo and its name preference to the shopper', async () => {
@@ -282,26 +314,17 @@ describe('StorefrontService', () => {
             expect(result.tenant.loyalty_min_redeem).toBe(100);
         });
 
-        it('uses Uncategorized when product has no group (trending)', async () => {
+        it('leaves out a family none of whose variants is in stock', async () => {
             db.tenant.findFirst.mockResolvedValue(mockTenant);
             db.productGroup.findMany.mockResolvedValue([]);
-            db.product.findMany
-                .mockResolvedValueOnce([
-                    {
-                        id: 'p1',
-                        name: 'Item',
-                        price: 50,
-                        compare_at_price: null,
-                        image_url: null,
-                        group: null,
-                        stocks: [],
-                    },
-                ])
-                .mockResolvedValueOnce([]);
+            const family = { id: 'fam-1', name: 'Cap', image_url: null, is_featured: true, option_names: ['Color'] };
+            db.product.findMany.mockResolvedValueOnce([
+                { id: 'p1', name: 'Cap Red', price: 50, compare_at_price: null, image_url: null, group: null, stocks: [], option_values: { Color: 'Red' }, family },
+            ]);
 
             const result = await service.getStorefront(slug);
-            expect(result.trending_products[0].group_name).toBe('Uncategorized');
-            expect(result.trending_products[0].stock_quantity).toBe(0);
+            expect(result.all_products).toHaveLength(0);
+            expect(result.trending_products).toHaveLength(0);
         });
     });
 
@@ -325,6 +348,7 @@ describe('StorefrontService', () => {
             'image_url',
             'images_gallery',
             'unit_type',
+            'family_id',
             'stocks',
         ];
 
@@ -339,6 +363,7 @@ describe('StorefrontService', () => {
             'images_gallery',
             'unit_type',
             'in_stock',
+            'family',
         ];
 
         const mockProductRow = {
@@ -472,6 +497,75 @@ describe('StorefrontService', () => {
             const result = await service.getPublicProduct(slug, productId);
 
             expect(result.in_stock).toBe(false);
+        });
+
+        describe('variant families', () => {
+            const familyRow = {
+                id: 'fam-1',
+                name: 'Belt OAC',
+                description: 'Contoured belt',
+                image_url: 'belt.jpg',
+                images_gallery: [],
+                option_names: ['Size'],
+                products: [
+                    { id: 'p-m', name: 'Belt OAC M', sku: 'B-M', price: 500, compare_at_price: null, image_url: null, description: null, unit_type: 'pcs', option_values: { Size: 'M' }, stocks: [{ quantity: 0 }] },
+                    { id: 'p-s', name: 'Belt OAC S', sku: 'B-S', price: 450, compare_at_price: null, image_url: 's.jpg', description: null, unit_type: 'pcs', option_values: { Size: 'S' }, stocks: [{ quantity: 2 }] },
+                ],
+            };
+
+            it('opens a family by its id on the first in-stock variant', async () => {
+                db.tenant.findFirst.mockResolvedValue(mockTenant);
+                db.product.findFirst.mockResolvedValue(null);
+                db.productFamily.findFirst
+                    .mockResolvedValueOnce({ id: 'fam-1' })
+                    .mockResolvedValueOnce(familyRow);
+                priceListsService.getResolvedPricesForProducts.mockResolvedValue(new Map());
+
+                const result = await service.getPublicProduct(slug, 'fam-1');
+
+                expect(result.id).toBe('p-s');
+                expect(result.price).toBe(450);
+                expect(result.family?.name).toBe('Belt OAC');
+                expect(result.family?.variants.map((v) => v.label)).toEqual(['S', 'M']);
+                expect(result.family?.variants[1].in_stock).toBe(false);
+                expect(db.productFamily.findFirst).toHaveBeenCalledWith(
+                    expect.objectContaining({ where: { id: 'fam-1', tenant_id: mockTenant.id } }),
+                );
+            });
+
+            it('opens a variant link with that variant chosen, sold out or not', async () => {
+                db.tenant.findFirst.mockResolvedValue(mockTenant);
+                db.product.findFirst.mockResolvedValue({ ...mockProductRow, id: 'p-m', family_id: 'fam-1' });
+                db.productFamily.findFirst.mockResolvedValueOnce(familyRow);
+                priceListsService.getResolvedPricesForProducts.mockResolvedValue(new Map());
+
+                const result = await service.getPublicProduct(slug, 'p-m');
+
+                expect(result.id).toBe('p-m');
+                expect(result.in_stock).toBe(false);
+                expect(result.description).toBe('Contoured belt');
+            });
+
+            it('never exposes a variant stock quantity', async () => {
+                db.tenant.findFirst.mockResolvedValue(mockTenant);
+                db.product.findFirst.mockResolvedValue(null);
+                db.productFamily.findFirst
+                    .mockResolvedValueOnce({ id: 'fam-1' })
+                    .mockResolvedValueOnce(familyRow);
+                priceListsService.getResolvedPricesForProducts.mockResolvedValue(new Map());
+
+                const result = await service.getPublicProduct(slug, 'fam-1');
+
+                expect(JSON.stringify(result)).not.toContain('quantity');
+            });
+
+            it('404s an id that is neither a product nor a family', async () => {
+                db.tenant.findFirst.mockResolvedValue(mockTenant);
+                db.product.findFirst.mockResolvedValue(null);
+                db.productFamily.findFirst.mockResolvedValue(null);
+
+                await expect(service.getPublicProduct(slug, 'nope')).rejects.toThrow(NotFoundException);
+            });
         });
 
         describe('price resolution', () => {

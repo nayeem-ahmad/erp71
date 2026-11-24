@@ -1,6 +1,6 @@
 'use client';
 
-import { GitMerge, Pencil, ShoppingBasket, Trash2, Truck } from 'lucide-react';
+import { CopyPlus, GitMerge, Pencil, ShoppingBasket, Trash2, Truck } from 'lucide-react';
 import { RowActions, RowActionButton } from '@/components/table';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
@@ -11,6 +11,8 @@ type ProductRowActionsProps = {
     onEdit: () => void;
     onMerge: () => void;
     onDelete: () => void;
+    /** "Create variants": new sizes/colours made from this product. */
+    onCreateVariants?: () => void;
 };
 
 export default function ProductRowActions({
@@ -19,6 +21,7 @@ export default function ProductRowActions({
     onEdit,
     onMerge,
     onDelete,
+    onCreateVariants,
 }: ProductRowActionsProps) {
     const { t } = useI18n();
 
@@ -36,6 +39,9 @@ export default function ProductRowActions({
                 label={t.inventory.actions.transferHistory}
                 href={`/inventory/transfers?productId=${product.id}`}
             />
+            {onCreateVariants && (
+                <RowActionButton icon={<CopyPlus />} label={t.productVariants.admin.createVariants} onClick={onCreateVariants} />
+            )}
             {canMerge && (
                 <RowActionButton icon={<GitMerge />} label={t.inventory.actions.mergeInto} onClick={onMerge} />
             )}

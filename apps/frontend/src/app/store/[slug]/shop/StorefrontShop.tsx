@@ -7,6 +7,7 @@ import { AlertCircle, CheckCircle, Minus, Package, Plus, Search, ShoppingCart, S
 import { storefrontOrderRef } from '@erp71/shared-types';
 import DeliveryAddressFields, { deliveryPrefill } from '@/components/storefront/DeliveryAddressFields';
 import StorefrontHeader, { type StorefrontMenuLink } from '@/components/storefront/StorefrontHeader';
+import ChooseOptionsDialog, { cartProductForVariant, type StorefrontVariant } from '@/components/storefront/ChooseOptionsDialog';
 import { storefrontTheme, storefrontThemeStyle } from '@/lib/storefront/storefront-theme';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -27,6 +28,11 @@ interface Product {
     image_url: string | null;
     stock_quantity: number;
     group_name?: string;
+    /** A family card's variants: the shopper picks one in `ChooseOptionsDialog`. */
+    option_names?: string[];
+    variants?: StorefrontVariant[];
+    /** The variants do not all cost the same, so the price reads "From ৳X". */
+    price_varies?: boolean;
 }
 
 interface Category {
@@ -70,6 +76,7 @@ export default function StorefrontShop({ slug }: { slug: string }) {
     const { t, fmt } = useI18n();
     const m = t.storefront.public;
     const shop = m.shop;
+    const variantText = t.productVariants.storefront;
     const footer = m.footer;
     const p = m.placeholders;
     const pathname = usePathname();
@@ -84,6 +91,7 @@ export default function StorefrontShop({ slug }: { slug: string }) {
     const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
     const [cart, setCart] = useState<CartItem[]>([]);
+    const [optionsFor, setOptionsFor] = useState<Product | null>(null);
     const [cartOpen, setCartOpen] = useState(false);
     const [checkoutOpen, setCheckoutOpen] = useState(false);
 
@@ -265,7 +273,14 @@ export default function StorefrontShop({ slug }: { slug: string }) {
             filteredProducts = filteredProducts.filter((product) => {
                 const productName = product.name.toLowerCase();
                 const groupName = (product.group_name || '').toLowerCase();
-                return productName.includes(normalizedQuery) || groupName.includes(normalizedQuery);
+                // A family's card is found by any of its variants' names too, so
+                // searching "OAC XL" still finds the belt it is a size of.
+                const variantNames = (product.variants ?? [])
+                    .map((variant) => `${variant.name} ${variant.label}`.toLowerCase())
+                    .join(' ');
+                return productName.includes(normalizedQuery)
+                    || groupName.includes(normalizedQuery)
+                    || variantNames.includes(normalizedQuery);
             });
         }
 
@@ -622,18 +637,31 @@ export default function StorefrontShop({ slug }: { slug: string }) {
                                                     <div className="text-xs text-gray-500 mb-1 font-medium truncate">{product.group_name || m.categoryFallback}</div>
                                                     <h3 className="text-sm font-semibold text-gray-900 leading-snug mb-2 line-clamp-2">{product.name}</h3>
                                                     <div className="flex flex-wrap items-baseline gap-x-2 mt-auto">
-                                                        <span className="font-bold text-sm">{formatBDT(price)}</span>
+                                                        <span className="font-bold text-sm">
+                                                            {product.price_varies
+                                                                ? formatMessage(variantText.fromPrice, { price: formatBDT(price) })
+                                                                : formatBDT(price)}
+                                                        </span>
                                                         {onSale && (
                                                             <span className="text-xs text-gray-400 line-through">{formatOptionalPrice(product.compare_at_price)}</span>
                                                         )}
                                                     </div>
+                                                    {product.variants?.length ? (
+                                                        <p className="mt-1 text-xs text-gray-500">
+                                                            {formatMessage(variantText.optionsCount, { count: product.variants.length })}
+                                                        </p>
+                                                    ) : null}
                                                     <button
                                                         type="button"
-                                                        onClick={() => addToCart(product)}
+                                                        onClick={() => (product.variants?.length ? setOptionsFor(product) : addToCart(product))}
                                                         disabled={product.stock_quantity <= 0}
                                                         className="mt-2.5 inline-flex min-h-touch items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition-colors disabled:bg-gray-300"
                                                     >
-                                                        {product.stock_quantity > 0 ? m.addToCart : m.outOfStock}
+                                                        {product.stock_quantity <= 0
+                                                            ? m.outOfStock
+                                                            : product.variants?.length
+                                                              ? variantText.chooseOptions
+                                                              : m.addToCart}
                                                     </button>
                                                 </div>
                                             </article>
@@ -654,6 +682,14 @@ export default function StorefrontShop({ slug }: { slug: string }) {
                     </Link>
                 </div>
             </footer>
+
+            {optionsFor && (
+                <ChooseOptionsDialog
+                    card={optionsFor}
+                    onClose={() => setOptionsFor(null)}
+                    onAdd={(variant) => addToCart(cartProductForVariant(optionsFor, variant))}
+                />
+            )}
 
             {cartOpen && (
                 <div className="fixed inset-0 z-50 flex justify-end">

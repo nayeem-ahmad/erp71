@@ -15,6 +15,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { BranchFilter } from '@/components/ui';
 import { branchOrEmpty, handleBranchForbidden, useBranchBoundState, useBranchScope } from '@/lib/branch-scope';
+import { rollUpStockOnHand } from '@/lib/product-family-rollup';
 
 type CostBasis = 'WEIGHTED_AVERAGE' | 'LATEST_COST' | 'UNCOSTED';
 
@@ -28,8 +29,14 @@ interface StockOnHandRow {
         brand?: { id: string; name: string } | null;
         group?: { id: string; name: string } | null;
         subgroup?: { id: string; name: string } | null;
+        /** The storefront family the product is a size/colour of, for "Group variants". */
+        family?: { id: string; name: string } | null;
     };
     quantityByWarehouse: Record<string, number>;
+    /** Set on a "Group variants" row: each warehouse's value, summed from its products. */
+    valueByWarehouse?: Record<string, number>;
+    /** Set on a "Group variants" row: how many products it adds up. */
+    variantCount?: number;
     totalQuantity: number;
     averageUnitCost: number | null;
     /** Supplier unit price on the newest posted purchase. Null when there is no bill. */
@@ -65,6 +72,7 @@ const columnHelper = createColumnHelper<StockOnHandRow>();
 export default function StockOnHandPage() {
     const { t, locale } = useI18n();
     const strings = t.inventoryReports.stockOnHand;
+    const variantText = t.productVariants.reports;
     const listUi = t.inventoryReports.listUi;
     const branch = useBranchScope();
     const [rows, setRows] = useState<StockOnHandRow[]>([]);
@@ -85,6 +93,8 @@ export default function StockOnHandPage() {
     const [subgroupId, setSubgroupId] = useState('');
     const [brandId, setBrandId] = useState('');
     const [includeZeroStock, setIncludeZeroStock] = useState(false);
+    const [showWarehouseValues, setShowWarehouseValues] = useState(false);
+    const [groupVariants, setGroupVariants] = useState(false);
     const [loading, setLoading] = useState(true);
     // A failed read used to leave the table empty and silent, which reads
     // exactly like "this shop holds no stock" — the one answer the report must
@@ -187,10 +197,13 @@ export default function StockOnHandPage() {
         // One quantity column per warehouse, in the order the backend returned
         // them (default warehouse first, then alphabetical, closed ones last).
         // Beyond the first two they collapse on mobile so the table still fits
-        // at 360px.
-        const perWarehouse = labelled.map((warehouse, index) => {
+        // at 360px. Warehouse values sit beside qty only when asked — they
+        // double the warehouse columns, so they stay off until the shop wants
+        // them.
+        const perWarehouse = labelled.flatMap((warehouse, index) => {
             const label = warehouseLabel(warehouse, labelled);
-            return columnHelper.accessor((row) => row.quantityByWarehouse[warehouse.id] ?? 0, {
+            const header = warehouse.is_active === false ? formatMessage(strings.closedWarehouse, { warehouse: label }) : label;
+            const qty = columnHelper.accessor((row) => row.quantityByWarehouse[warehouse.id] ?? 0, {
                 id: `warehouse:${warehouse.id}`,
                 // A plain string rather than a styled node, because this header
                 // is also what the CSV, Excel and PDF exports print — a closed
@@ -198,15 +211,50 @@ export default function StockOnHandPage() {
                 // rather than for truthiness: a frontend deployed ahead of the
                 // backend gets a payload without the flag at all, and marking
                 // every warehouse closed would be worse than marking none.
-                header: warehouse.is_active === false ? formatMessage(strings.closedWarehouse, { warehouse: label }) : label,
+                header,
                 cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
                 size: 110,
                 meta: { align: 'end', hideOnMobile: index > 1 },
             });
+            if (!showWarehouseValues) return [qty];
+            return [
+                qty,
+                columnHelper.accessor((row) => {
+                    if (row.valueByWarehouse) return row.valueByWarehouse[warehouse.id] ?? 0;
+                    const unitCost = row.averageUnitCost;
+                    const quantity = row.quantityByWarehouse[warehouse.id] ?? 0;
+                    return unitCost != null ? quantity * unitCost : 0;
+                }, {
+                    id: `warehouse-value:${warehouse.id}`,
+                    header: formatMessage(strings.warehouseValueColumn, { warehouse: header }),
+                    cell: (info) => (
+                        <span className="tabular-nums">{formatBDT(Number(info.getValue() || 0), { locale })}</span>
+                    ),
+                    size: 130,
+                    meta: { align: 'end', hideOnMobile: true },
+                }),
+            ];
         });
 
         return [
-            columnHelper.accessor((row) => row.product.name, { id: 'product', header: strings.columns.product, size: 220 }),
+            columnHelper.accessor((row) => row.product.name, {
+                id: 'product',
+                header: strings.columns.product,
+                cell: (info) => {
+                    const count = info.row.original.variantCount;
+                    return (
+                        <span>
+                            {info.getValue()}
+                            {count ? (
+                                <span className="block text-xs text-gray-500">
+                                    {formatMessage(variantText.variantsCount, { count })}
+                                </span>
+                            ) : null}
+                        </span>
+                    );
+                },
+                size: 220,
+            }),
             columnHelper.accessor((row) => row.product.sku || '-', {
                 id: 'sku',
                 header: strings.columns.sku,
@@ -292,7 +340,7 @@ export default function StockOnHandPage() {
                 meta: { align: 'end' },
             }),
         ];
-    }, [strings, warehouseColumns, warehouses, locale]);
+    }, [strings, variantText, warehouseColumns, warehouses, locale, showWarehouseValues]);
 
     // Stock is counted per warehouse, so a scope with none of them has nothing
     // to report on — a different answer from "these shelves are bare", and the
@@ -302,6 +350,10 @@ export default function StockOnHandPage() {
         : warehouseColumns.length === 0
             ? strings.noWarehouses
             : strings.emptyMessage;
+
+    // The report stays per product; "Group variants" folds its rows on the page.
+    const hasVariants = useMemo(() => rows.some((row) => row.product.family), [rows]);
+    const displayed = useMemo(() => (groupVariants ? rollUpStockOnHand(rows) : rows), [groupVariants, rows]);
 
     const filters = useMemo<ListFilter[]>(
         () => [
@@ -352,6 +404,27 @@ export default function StockOnHandPage() {
                 pressed: includeZeroStock,
                 onChange: setIncludeZeroStock,
             },
+            {
+                id: 'showWarehouseValues',
+                type: 'toggle',
+                control: 'checkbox',
+                label: strings.showWarehouseValues,
+                pressed: showWarehouseValues,
+                onChange: setShowWarehouseValues,
+            },
+            // Only for a shop with variant families; elsewhere it would do nothing.
+            ...(hasVariants
+                ? [
+                      {
+                          id: 'groupVariants',
+                          type: 'toggle' as const,
+                          control: 'checkbox' as const,
+                          label: variantText.groupVariants,
+                          pressed: groupVariants,
+                          onChange: setGroupVariants,
+                      },
+                  ]
+                : []),
         ],
         [
             t,
@@ -365,6 +438,10 @@ export default function StockOnHandPage() {
             brandId,
             brands,
             includeZeroStock,
+            showWarehouseValues,
+            hasVariants,
+            groupVariants,
+            variantText,
         ],
     );
 
@@ -438,7 +515,7 @@ export default function StockOnHandPage() {
             <DataTable<StockOnHandRow>
                 tableId="inventory-stock-on-hand"
                 columns={columns}
-                data={rows}
+                data={displayed}
                 title={strings.title}
                 isLoading={loading}
                 emptyMessage={emptyMessage}

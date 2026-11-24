@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect, useMemo } from 'react';
-import { Package, Plus, Upload } from 'lucide-react';
+import { Layers, Package, Plus, Upload, Wand2 } from 'lucide-react';
 import { api, fetchWithAuth } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -9,6 +9,11 @@ import { isOwner, hasPermission } from '@/lib/permissions';
 import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import AddProductModal from '../AddProductModal';
 import MergeProductModal from '../MergeProductModal';
+import GroupVariantsModal, { type VariantCandidate } from '../GroupVariantsModal';
+import VariantSuggestionsModal from '../VariantSuggestionsModal';
+import CreateVariantsModal, { type VariantBase } from '../CreateVariantsModal';
+import { variantLabel } from '@erp71/shared-types';
+import type { ProductFamilySuggestion } from '@/lib/api';
 import ProductRowActions from './ProductRowActions';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable, createdAtColumn, type ListFilter } from '@/components/data-table';
@@ -41,7 +46,18 @@ interface Product {
     description?: string | null;
     images_gallery?: string[] | null;
     created_at: string;
+    /** Set when the storefront shows this product as a size/colour of another. */
+    family?: { id: string; name: string; option_names: string[] } | null;
+    option_values?: Record<string, string> | null;
 }
+
+/** Which grouping dialog is open, if any. */
+type VariantDialog =
+    | { mode: 'create'; products: VariantCandidate[]; prefill?: { name: string; optionName: string; values: Record<string, string> } }
+    | { mode: 'edit'; familyId: string }
+    | { mode: 'suggestions' }
+    | { mode: 'generate'; base: VariantBase }
+    | null;
 
 const columnHelper = createColumnHelper<Product>();
 
@@ -75,6 +91,8 @@ export default function InventoryPage() {
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [stockStatus, setStockStatus] = useState<string | null>(null);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
+    const [variantDialog, setVariantDialog] = useState<VariantDialog>(null);
+    const [clearSelectionSignal, setClearSelectionSignal] = useState(0);
 
     // Debounce typing so each keystroke doesn't fire a query
     useEffect(() => {
@@ -207,6 +225,43 @@ export default function InventoryPage() {
         }
     };
 
+    const reviewSuggestion = (suggestion: ProductFamilySuggestion) => {
+        setVariantDialog({
+            mode: 'create',
+            products: suggestion.members.map((member) => ({
+                id: member.productId,
+                name: member.name,
+                sku: member.sku,
+                price: member.price,
+            })),
+            prefill: {
+                name: suggestion.name,
+                optionName: suggestion.optionName,
+                values: Object.fromEntries(suggestion.members.map((member) => [member.productId, member.value])),
+            },
+        });
+    };
+
+    const bulkActions = useMemo(
+        () => [
+            {
+                label: t.productVariants.admin.groupAsVariants,
+                icon: <Layers className="w-4 h-4" />,
+                onClick: (rows: Product[]) => {
+                    if (rows.length < 2) {
+                        toast.info(t.productVariants.admin.needTwo);
+                        return;
+                    }
+                    setVariantDialog({
+                        mode: 'create',
+                        products: rows.map((row) => ({ id: row.id, name: row.name, sku: row.sku, price: row.price })),
+                    });
+                },
+            },
+        ],
+        [t],
+    );
+
     const columns: ColumnDef<Product, any>[] = useMemo(
         () => [
             columnHelper.accessor('name', {
@@ -222,7 +277,22 @@ export default function InventoryPage() {
                                     product.name.slice(0, 2)
                                 )}
                             </div>
-                            <span className="truncate">{product.name}</span>
+                            <div className="min-w-0">
+                                <span className="block truncate">{product.name}</span>
+                                {product.family && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setVariantDialog({ mode: 'edit', familyId: product.family!.id })}
+                                        className="block max-w-full truncate text-xs text-blue-600 hover:underline"
+                                        title={t.productVariants.admin.editVariants}
+                                    >
+                                        {fmt(t.productVariants.admin.variantOf, { name: product.family.name })}
+                                        {product.option_values
+                                            ? ` · ${variantLabel(product.family.option_names, product.option_values)}`
+                                            : ''}
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     );
                 },
@@ -323,15 +393,16 @@ export default function InventoryPage() {
                         onEdit={() => openEditProduct(info.row.original)}
                         onMerge={() => openMergeProduct(info.row.original)}
                         onDelete={() => setPendingDelete(info.row.original)}
+                        onCreateVariants={() => setVariantDialog({ mode: 'generate', base: info.row.original })}
                     />
                 ),
                 enableSorting: false,
                 enableColumnFilter: false,
                 enableResizing: false,
-                size: 170,
+                size: 200,
             }),
         ],
-        [t, locale, canMerge, colorful],
+        [t, fmt, locale, canMerge, colorful],
     );
 
     // Server-side equivalents of the old client-side filter presets. They must be sent to
@@ -436,9 +507,23 @@ export default function InventoryPage() {
                             disabled={isImporting}
                             icon={<Upload className="w-4 h-4" />}
                         />
+                        <Button
+                            variant="secondary"
+                            onClick={() => setVariantDialog({ mode: 'suggestions' })}
+                            icon={<Wand2 className="w-4 h-4" />}
+                            aria-label={t.productVariants.admin.suggestions}
+                            title={t.productVariants.admin.suggestions}
+                        />
                     </div>
 
                     <div className="hidden md:flex flex-wrap items-center justify-end gap-3">
+                        <Button
+                            variant="secondary"
+                            onClick={() => setVariantDialog({ mode: 'suggestions' })}
+                            icon={<Wand2 className="w-4 h-4" />}
+                        >
+                            {t.productVariants.admin.suggestions}
+                        </Button>
                         <Button
                             variant="secondary"
                             onClick={() => csvInputRef.current?.click()}
@@ -472,6 +557,11 @@ export default function InventoryPage() {
                     initialProduct={editingProduct}
                     onSubmit={handleUpdateProduct}
                     showMerge={canMerge}
+                    onEditVariants={(familyId) => {
+                        setIsEditModalOpen(false);
+                        setEditingProduct(null);
+                        setVariantDialog({ mode: 'edit', familyId });
+                    }}
                     onMergeClick={() => {
                         if (!editingProduct) return;
                         setIsEditModalOpen(false);
@@ -488,6 +578,38 @@ export default function InventoryPage() {
                     />
                 )}
 
+                {variantDialog?.mode === 'suggestions' && (
+                    <VariantSuggestionsModal onClose={() => setVariantDialog(null)} onReview={reviewSuggestion} />
+                )}
+                {variantDialog?.mode === 'create' && (
+                    <GroupVariantsModal
+                        mode="create"
+                        products={variantDialog.products}
+                        prefill={variantDialog.prefill}
+                        onClose={() => setVariantDialog(null)}
+                        onSaved={() => {
+                            setClearSelectionSignal((n) => n + 1);
+                            void loadProducts();
+                        }}
+                    />
+                )}
+                {variantDialog?.mode === 'edit' && (
+                    <GroupVariantsModal
+                        mode="edit"
+                        familyId={variantDialog.familyId}
+                        onClose={() => setVariantDialog(null)}
+                        onSaved={() => void loadProducts()}
+                        onAddVariants={(base) => setVariantDialog({ mode: 'generate', base })}
+                    />
+                )}
+                {variantDialog?.mode === 'generate' && (
+                    <CreateVariantsModal
+                        base={variantDialog.base}
+                        onClose={() => setVariantDialog(null)}
+                        onSaved={() => void loadProducts()}
+                    />
+                )}
+
                 <DataTable<Product>
                     tableId="products"
                     columns={columns}
@@ -501,6 +623,10 @@ export default function InventoryPage() {
                     filters={filters}
                     viewOptions
                     serverPagination={serverPagination}
+                    enableRowSelection
+                    getRowId={(row) => row.id}
+                    bulkActions={bulkActions}
+                    clearSelectionSignal={clearSelectionSignal}
                 />
 
                 <ConfirmDialog
