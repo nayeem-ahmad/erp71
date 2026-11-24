@@ -223,6 +223,10 @@ export default function StorefrontPaymentsPage() {
                                         <option value="sandbox">Sandbox (testing)</option>
                                         <option value="live">Live</option>
                                     </select>
+                                    <p className="mt-1 text-xs text-gray-400">
+                                        Sandbox and live credentials are not interchangeable — use the
+                                        credentials issued for the mode selected here.
+                                    </p>
                                 </div>
 
                                 {gateway.credential_fields.map((field) => (
