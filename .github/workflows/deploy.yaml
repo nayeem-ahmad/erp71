@@ -155,7 +155,7 @@ jobs:
 
   test-e2e:
     name: E2E Tests (Playwright)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Playwright does not support ubuntu-latest (26.04) yet
     # E2E is slow and environment-sensitive — run only when a PR is labeled run-e2e.
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e')
     env:
