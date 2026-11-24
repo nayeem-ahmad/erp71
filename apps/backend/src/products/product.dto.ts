@@ -1,4 +1,5 @@
-import { IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 import { TAKE_FIELDS, type TakeField } from './products.merge';
 
@@ -7,6 +8,30 @@ const COMPOUND_UNIT_TYPES = ['none', 'ft_in', 'dozen_pcs', 'kg_g', 'lb_oz', 'm_c
 export enum ProductTypeDto {
     GOODS = 'GOODS',
     SERVICE = 'SERVICE',
+}
+
+/**
+ * Shows the product on the storefront as a size/colour of others: join the
+ * variant group `familyId`, or start one named `newFamilyName` on
+ * `optionNames`. `optionValues` is this product's own: `{ Size: 'M' }`.
+ */
+export class ProductVariantAssignmentDto {
+    @IsOptional()
+    @IsUUID()
+    familyId?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    newFamilyName?: string;
+
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    optionNames?: string[];
+
+    @IsObject()
+    optionValues: Record<string, string>;
 }
 
 export class CreateProductDto {
@@ -122,6 +147,12 @@ export class CreateProductDto {
     @IsArray()
     @IsString({ each: true })
     images_gallery?: string[];
+
+    /** Group the product as a storefront variant, in the same save. */
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => ProductVariantAssignmentDto)
+    variant?: ProductVariantAssignmentDto;
 }
 
 export class UpdateProductDto {
@@ -222,6 +253,17 @@ export class UpdateProductDto {
     @IsArray()
     @IsString({ each: true })
     images_gallery?: string[];
+
+    /** Group the product as a storefront variant, in the same save. */
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => ProductVariantAssignmentDto)
+    variant?: ProductVariantAssignmentDto;
+
+    /** Take the product out of its storefront variant group. Ignored when `variant` is sent. */
+    @IsOptional()
+    @IsBoolean()
+    leaveVariantGroup?: boolean;
 }
 
 export class MergeProductDto {

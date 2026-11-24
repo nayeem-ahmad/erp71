@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ExternalLink, Globe, Save } from 'lucide-react';
+import Link from 'next/link';
 import { fetchWithAuth } from '@/lib/api';
 import {
     Alert,
@@ -151,6 +152,12 @@ export default function StorefrontSettingsPage() {
                     actions={
                         loading ? null : (
                             <>
+                                <Link
+                                    href="/storefront/payments"
+                                    className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                                >
+                                    Online payments
+                                </Link>
                                 {saveSuccess && (
                                     <span role="status" className="text-xs font-medium text-success-text">
                                         {m.savedExclaim}

@@ -10,6 +10,7 @@ jest.mock('@/lib/api', () => ({
         updateProductFamily: jest.fn(),
         deleteProductFamily: jest.fn(),
         getProductFamilyOptionValues: jest.fn().mockResolvedValue({ Size: ['S', 'M', 'L'] }),
+        getProductsPaged: jest.fn(),
     },
 }));
 jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }));
@@ -103,4 +104,46 @@ describe('GroupVariantsModal', () => {
         await waitFor(() => expect(api.deleteProductFamily).toHaveBeenCalledWith('fam-1'));
         expect(onSaved).toHaveBeenCalled();
     });
+
+    it('finds products in no group and adds them, their size read from the name', async () => {
+        (api.getProductFamily as jest.Mock).mockResolvedValue({
+            id: 'fam-1',
+            name: 'Belt OAC',
+            description: null,
+            image_url: null,
+            images_gallery: [],
+            option_names: ['Size'],
+            is_featured: false,
+            members: [{ id: 'p-s', name: 'Belt OAC S', sku: 'P1', price: 500, image_url: null, option_values: { Size: 'S' }, stock_quantity: 1 }],
+        });
+        (api.getProductsPaged as jest.Mock).mockResolvedValue({
+            items: [
+                { id: 'p-s', name: 'Belt OAC S', sku: 'P1', price: 500 },
+                { id: 'p-xl', name: 'Belt OAC XL', sku: 'P3', price: 650 },
+            ],
+        });
+        (api.updateProductFamily as jest.Mock).mockResolvedValue({});
+        render(<GroupVariantsModal mode="edit" familyId="fam-1" onClose={() => {}} onSaved={() => {}} />);
+
+        fireEvent.change(await screen.findByLabelText('Add products'), { target: { value: 'belt' } });
+        await waitFor(() =>
+            expect(api.getProductsPaged).toHaveBeenCalledWith({ search: 'belt', ungrouped: true, limit: 10 }),
+        );
+        // The group's own S is not offered again.
+        const xl = await screen.findByText('Belt OAC XL');
+        expect(screen.getAllByText('Belt OAC S')).toHaveLength(1);
+        fireEvent.click(xl.closest('li')!.querySelector('button')!);
+
+        expect(screen.getByLabelText('Belt OAC XL — Size')).toHaveValue('XL');
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        await waitFor(() =>
+            expect(api.updateProductFamily).toHaveBeenCalledWith('fam-1', expect.objectContaining({
+                members: [
+                    { productId: 'p-s', optionValues: { Size: 'S' } },
+                    { productId: 'p-xl', optionValues: { Size: 'XL' } },
+                ],
+            })),
+        );
+    });
 });
+

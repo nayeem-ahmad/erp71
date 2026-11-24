@@ -76,6 +76,16 @@ export class PlaceOrderDto {
     @IsInt()
     @Min(0)
     pointsToRedeem?: number;
+
+    /**
+     * `CASH_ON_DELIVERY`, or the code of a gateway the shop has switched on.
+     * Omitted keeps the historical behaviour — the order is placed unpaid and
+     * collected on delivery.
+     */
+    @IsOptional()
+    @IsString()
+    @MaxLength(40)
+    paymentMethod?: string;
 }
 
 export class UpdateOrderStatusDto {

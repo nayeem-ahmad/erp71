@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { MessageSquare, Mail, Landmark, Cog, ChevronRight, Sparkles, LayoutList, BadgePercent, MessageCircle, Megaphone, ToggleLeft, PackagePlus, Bot, Share2, Lightbulb, Rocket } from 'lucide-react';
+import { MessageSquare, Mail, Landmark, Cog, ChevronRight, Sparkles, LayoutList, BadgePercent, MessageCircle, Megaphone, ToggleLeft, PackagePlus, Bot, Share2, Lightbulb, Rocket, CreditCard } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { PageShell } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
@@ -56,6 +56,14 @@ export default function PlatformSettingsIndexPage() {
                     description: m.sections.payments.description,
                     color: 'text-blue-700',
                     bg: 'bg-primary-light',
+                },
+                {
+                    href: '/admin/platform-settings/storefront-payments',
+                    icon: CreditCard,
+                    label: 'Storefront payment providers',
+                    description: 'Gateways shops can connect their own merchant accounts to. Add a hosted-redirect provider without a deploy.',
+                    color: 'text-indigo-600',
+                    bg: 'bg-indigo-50',
                 },
             ],
         },

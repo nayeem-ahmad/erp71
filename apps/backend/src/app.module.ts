@@ -78,6 +78,7 @@ import { FeedbackAutomationModule } from './feedback-automation/feedback-automat
 import { ContactModule } from './contact/contact.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { StorefrontModule } from './storefront/storefront.module';
+import { StorefrontPaymentsModule } from './storefront-payments/storefront-payments.module';
 import { StorefrontPagesModule } from './storefront-pages/storefront-pages.module';
 import { StorefrontEnquiriesModule } from './storefront-enquiries/storefront-enquiries.module';
 import { TenantsModule } from './tenants/tenants.module';
@@ -249,6 +250,7 @@ import { Meet71Module } from './meet71/meet71.module';
         ContactModule,
         ApiKeysModule,
         StorefrontModule,
+        StorefrontPaymentsModule,
         StorefrontPagesModule,
         StorefrontEnquiriesModule,
         TenantsModule,

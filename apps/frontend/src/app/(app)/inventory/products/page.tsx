@@ -12,6 +12,7 @@ import MergeProductModal from '../MergeProductModal';
 import GroupVariantsModal, { type VariantCandidate } from '../GroupVariantsModal';
 import VariantSuggestionsModal from '../VariantSuggestionsModal';
 import CreateVariantsModal, { type VariantBase } from '../CreateVariantsModal';
+import AssignVariantModal from '../AssignVariantModal';
 import { variantLabel } from '@erp71/shared-types';
 import type { ProductFamilySuggestion } from '@/lib/api';
 import ProductRowActions from './ProductRowActions';
@@ -32,6 +33,7 @@ interface Product {
     id: string;
     name: string;
     sku?: string | null;
+    type?: 'GOODS' | 'SERVICE';
     price: string | number;
     is_featured?: boolean;
     image_url?: string | null;
@@ -57,6 +59,7 @@ type VariantDialog =
     | { mode: 'edit'; familyId: string }
     | { mode: 'suggestions' }
     | { mode: 'generate'; base: VariantBase }
+    | { mode: 'assign'; product: { id: string; name: string } }
     | null;
 
 const columnHelper = createColumnHelper<Product>();
@@ -277,27 +280,55 @@ export default function InventoryPage() {
                                     product.name.slice(0, 2)
                                 )}
                             </div>
-                            <div className="min-w-0">
-                                <span className="block truncate">{product.name}</span>
-                                {product.family && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setVariantDialog({ mode: 'edit', familyId: product.family!.id })}
-                                        className="block max-w-full truncate text-xs text-blue-600 hover:underline"
-                                        title={t.productVariants.admin.editVariants}
-                                    >
-                                        {fmt(t.productVariants.admin.variantOf, { name: product.family.name })}
-                                        {product.option_values
-                                            ? ` · ${variantLabel(product.family.option_names, product.option_values)}`
-                                            : ''}
-                                    </button>
-                                )}
-                            </div>
+                            <span className="truncate">{product.name}</span>
                         </div>
                     );
                 },
                 size: 240,
             }),
+            // The storefront variant group: its name opens the group, and a
+            // product in none offers to join or start one. Text for sorting and
+            // export is the group and this product's options.
+            columnHelper.accessor(
+                (row) =>
+                    row.family
+                        ? `${row.family.name}${row.option_values ? ` · ${variantLabel(row.family.option_names, row.option_values)}` : ''}`
+                        : '',
+                {
+                    id: 'variant',
+                    header: t.productVariants.admin.variantColumn,
+                    cell: (info) => {
+                        const product = info.row.original;
+                        if (product.family) {
+                            const family = product.family;
+                            return (
+                                <button
+                                    type="button"
+                                    onClick={() => setVariantDialog({ mode: 'edit', familyId: family.id })}
+                                    className="block max-w-full truncate text-start text-blue-600 hover:underline"
+                                    title={t.productVariants.admin.editVariants}
+                                >
+                                    {info.getValue()}
+                                </button>
+                            );
+                        }
+                        if (product.type === 'SERVICE') return <span className="text-gray-400">-</span>;
+                        return (
+                            <button
+                                type="button"
+                                onClick={() => setVariantDialog({ mode: 'assign', product: { id: product.id, name: product.name } })}
+                                className="text-xs text-gray-500 hover:text-blue-600 hover:underline"
+                            >
+                                {t.productVariants.admin.setVariant}
+                            </button>
+                        );
+                    },
+                    enableSorting: false,
+                    enableColumnFilter: false,
+                    size: 180,
+                    meta: { hideOnMobile: true },
+                },
+            ),
             columnHelper.accessor('sku', {
                 header: t.inventory.columns.sku,
                 cell: (info) => info.getValue() || '-',
@@ -402,7 +433,7 @@ export default function InventoryPage() {
                 size: 200,
             }),
         ],
-        [t, fmt, locale, canMerge, colorful],
+        [t, locale, canMerge, colorful],
     );
 
     // Server-side equivalents of the old client-side filter presets. They must be sent to
@@ -600,6 +631,13 @@ export default function InventoryPage() {
                         onClose={() => setVariantDialog(null)}
                         onSaved={() => void loadProducts()}
                         onAddVariants={(base) => setVariantDialog({ mode: 'generate', base })}
+                    />
+                )}
+                {variantDialog?.mode === 'assign' && (
+                    <AssignVariantModal
+                        product={variantDialog.product}
+                        onClose={() => setVariantDialog(null)}
+                        onSaved={() => void loadProducts()}
                     />
                 )}
                 {variantDialog?.mode === 'generate' && (

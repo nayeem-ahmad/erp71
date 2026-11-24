@@ -122,6 +122,12 @@ interface CreateSaleOptions {
      * milestone or the hours it billed), never apart from it.
      */
     onCreated?: (tx: any, sale: { id: string }) => Promise<void>;
+    /**
+     * False for a sale raised by a system that already applied the customer's
+     * loyalty points itself — the storefront credits points when the order is
+     * placed, so billing the same order as a sale must not credit them again.
+     */
+    awardLoyalty?: boolean;
 }
 
 /**
@@ -426,7 +432,7 @@ export class SalesService {
             await this.markQuotationConverted(tx, tenantId, source.quotationId);
             if (options.onCreated) await options.onCreated(tx, sale);
 
-            return this.applySalePostings(tx, tenantId, userId, dto, sale, prep);
+            return this.applySalePostings(tx, tenantId, userId, dto, sale, prep, options);
         });
 
         // Fire-and-forget receipt (after transaction commits)
@@ -876,6 +882,7 @@ export class SalesService {
         dto: CreateSaleDto,
         sale: any,
         prep: Awaited<ReturnType<SalesService['prepareSale']>>,
+        options: CreateSaleOptions = {},
     ) {
         const {
             warehouses,
@@ -1006,14 +1013,16 @@ export class SalesService {
                 ? creditCustomerDueBalance
                 : Number(customerBefore?.due_balance ?? 0);
 
-            loyaltyResult = await recordSaleLoyalty(
-                tx,
-                tenantId,
-                dto.customerId,
-                sale.id,
-                preLoyaltyTotal,
-                loyaltyPreview,
-            );
+            loyaltyResult = options.awardLoyalty === false
+                ? { ...loyaltyPreview, pointsEarned: 0 }
+                : await recordSaleLoyalty(
+                    tx,
+                    tenantId,
+                    dto.customerId,
+                    sale.id,
+                    preLoyaltyTotal,
+                    loyaltyPreview,
+                );
         }
 
         if (balanceDue > 0.005 && dto.customerId) {

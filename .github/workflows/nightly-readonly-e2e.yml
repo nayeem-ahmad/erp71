@@ -31,7 +31,7 @@ permissions:
 jobs:
   readonly-e2e:
     name: Read-only E2E against production
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Playwright does not support ubuntu-latest (26.04) yet
     env:
       PLAYWRIGHT_BASE_URL: ${{ vars.PROD_BASE_URL || 'https://app.erp71.com' }}
       E2E_API_URL: ${{ vars.PROD_API_URL || 'https://api.erp71.com' }}
@@ -108,7 +108,7 @@ jobs:
 
   mobile-responsive-e2e:
     name: Mobile viewport smoke against production
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Playwright does not support ubuntu-latest (26.04) yet
     env:
       PLAYWRIGHT_BASE_URL: ${{ vars.PROD_BASE_URL || 'https://app.erp71.com' }}
       E2E_API_URL: ${{ vars.PROD_API_URL || 'https://api.erp71.com' }}
