@@ -13,7 +13,7 @@ jest.setTimeout(60_000);
  */
 describe('product families (integration)', () => {
     const db = new DatabaseService();
-    const redis = { invalidatePattern: jest.fn() };
+    const redis = { invalidatePattern: jest.fn(), get: jest.fn().mockResolvedValue(null), set: jest.fn() };
     const priceLists = {
         resolvePriceListForCustomer: jest.fn().mockResolvedValue(null),
         getResolvedPricesForProducts: jest.fn().mockResolvedValue(new Map()),
@@ -200,4 +200,54 @@ describe('product families (integration)', () => {
         });
         expect(family.members).toHaveLength(4);
     });
+
+    describe('a product joining or leaving a group from the product form', () => {
+        let shirtFamilyId: string;
+        let shirtM: string;
+
+        it('creates a product as the first variant of a new group', async () => {
+            const created = await productsService.create(tenantId, {
+                name: 'Shirt S',
+                price: 400,
+                variant: { newFamilyName: 'Shirt', optionNames: ['Size'], optionValues: { Size: 'S' } },
+            });
+            expect(created?.family?.name).toBe('Shirt');
+            expect(created?.option_values).toEqual({ Size: 'S' });
+            shirtFamilyId = created!.family!.id;
+        });
+
+        it('lets an existing product join it, and refuses a size it already has without saving the rest', async () => {
+            const product = await productsService.create(tenantId, { name: 'Shirt M', price: 420 });
+            shirtM = product!.id;
+
+            await expect(
+                productsService.update(tenantId, shirtM, {
+                    name: 'Renamed',
+                    variant: { familyId: shirtFamilyId, optionValues: { Size: 's' } },
+                }),
+            ).rejects.toThrow(/own combination/);
+            expect((await db.product.findUnique({ where: { id: shirtM } }))?.name).toBe('Shirt M');
+
+            const joined = await productsService.update(tenantId, shirtM, {
+                variant: { familyId: shirtFamilyId, optionValues: { Size: 'M' } },
+            });
+            expect(joined?.family?.id).toBe(shirtFamilyId);
+        });
+
+        it('lists only ungrouped products when asked', async () => {
+            const page = await productsService.findAll(tenantId, { timezone: 'Asia/Dhaka', ungrouped: true, search: 'Shirt', limit: 50 });
+            expect(page.items.map((p: { name: string }) => p.name)).toEqual([]);
+        });
+
+        it('removes the group once its last product leaves', async () => {
+            const first = await db.product.findFirst({ where: { tenant_id: tenantId, family_id: shirtFamilyId, id: { not: shirtM } } });
+            await productsService.update(tenantId, shirtM, { leaveVariantGroup: true });
+            expect((await db.product.findUnique({ where: { id: shirtM } }))?.family_id).toBeNull();
+            expect(await db.productFamily.count({ where: { id: shirtFamilyId } })).toBe(1);
+
+            await productsService.update(tenantId, first!.id, { leaveVariantGroup: true });
+            expect(await db.productFamily.count({ where: { id: shirtFamilyId } })).toBe(0);
+        });
+    });
 });
+

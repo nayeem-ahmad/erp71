@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import {
     normaliseOptionNames,
     splitVariantName,
@@ -116,6 +116,8 @@ export default function GroupVariantsModal(props: GroupVariantsModalProps) {
     const [submitted, setSubmitted] = useState(false);
     const [saving, setSaving] = useState(false);
     const [confirmUngroup, setConfirmUngroup] = useState(false);
+    const [productSearch, setProductSearch] = useState('');
+    const [productHits, setProductHits] = useState<VariantCandidate[] | null>(null);
 
     const createProducts = props.mode === 'create' ? props.products : null;
     const createPrefill = props.mode === 'create' ? props.prefill : undefined;
@@ -177,6 +179,43 @@ export default function GroupVariantsModal(props: GroupVariantsModalProps) {
     };
 
     const removeRow = (index: number) => setRows((prev) => prev.filter((_, i) => i !== index));
+
+    // "Add products": products in no group yet, searched as staff type. Rows
+    // already in the dialog are left out of the results.
+    useEffect(() => {
+        const term = productSearch.trim();
+        if (!term) {
+            setProductHits(null);
+            return;
+        }
+        let cancelled = false;
+        const timer = setTimeout(() => {
+            api.getProductsPaged({ search: term, ungrouped: true, limit: 10 })
+                .then((page: { items?: VariantCandidate[] }) => {
+                    if (!cancelled) setProductHits(Array.isArray(page?.items) ? page.items : []);
+                })
+                .catch(() => {
+                    if (!cancelled) setProductHits([]);
+                });
+        }, 300);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [productSearch]);
+
+    const addProduct = (product: VariantCandidate) => {
+        const split = splitVariantName(product.name);
+        const option = split ? optionNames.find((name) => name.toLowerCase() === split.axis.toLowerCase()) : undefined;
+        setProductSearch('');
+        setRows((prev) =>
+            prev.some((row) => row.productId === product.id)
+                ? prev
+                : [...prev, ...rowsFromCandidates([product], option ?? optionNames[0] ?? 'Size', option && split ? { [product.id]: split.value } : {})],
+        );
+    };
+
+    const visibleHits = (productHits ?? []).filter((hit) => !rows.some((row) => row.productId === hit.id));
 
     const save = async () => {
         setSubmitted(true);
@@ -309,6 +348,41 @@ export default function GroupVariantsModal(props: GroupVariantsModalProps) {
                             {m.featured}
                         </label>
 
+                        <div className="space-y-2">
+                            <Field label={m.addProducts} htmlFor="variant-family-add-products">
+                                <Input
+                                    id="variant-family-add-products"
+                                    value={productSearch}
+                                    onChange={(event) => setProductSearch(event.target.value)}
+                                    placeholder={m.searchProducts}
+                                    className="w-full min-h-touch"
+                                />
+                            </Field>
+                            {productHits !== null &&
+                                (visibleHits.length === 0 ? (
+                                    <p className="text-xs text-gray-500">{m.noMatches}</p>
+                                ) : (
+                                    <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                                        {visibleHits.map((hit) => (
+                                            <li key={hit.id} className="flex items-center gap-3 px-3 py-1.5">
+                                                <div className="min-w-0 flex-1">
+                                                    <span className="block truncate text-sm text-gray-900">{hit.name}</span>
+                                                    {hit.sku ? <span className="block truncate text-xs text-gray-500">{hit.sku}</span> : null}
+                                                </div>
+                                                <Button
+                                                    variant="secondary"
+                                                    onClick={() => addProduct(hit)}
+                                                    icon={<Plus className="h-4 w-4" />}
+                                                    className="min-h-touch"
+                                                >
+                                                    {m.add}
+                                                </Button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ))}
+                        </div>
+
                         <div className="overflow-x-auto rounded-lg border border-gray-200">
                             <table className="w-full text-sm">
                                 <thead className="bg-gray-50 text-xs text-gray-500">
@@ -375,6 +449,7 @@ export default function GroupVariantsModal(props: GroupVariantsModalProps) {
                                 </tbody>
                             </table>
                         </div>
+
                     </>
                 )}
             </div>

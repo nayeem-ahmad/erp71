@@ -28,6 +28,7 @@ import {
     type RateHistoryType,
 } from './rate-history';
 import { ACTIVE_PURCHASE } from '../purchases/purchase-status';
+import { assignProductToFamily, removeProductFromFamily } from '../product-families/family-membership';
 
 const CACHE_TTL = 60; // seconds
 
@@ -192,6 +193,10 @@ export class ProductsService {
             });
         }
 
+        if (dto.variant) {
+            await assignProductToFamily(tx, tenantId, product.id, dto.variant);
+        }
+
         return product.id;
     }
 
@@ -201,6 +206,8 @@ export class ProductsService {
             groupId?: string;
             subgroupId?: string;
             uncategorized?: boolean;
+            /** Only products in no storefront variant group — the "add products" search. */
+            ungrouped?: boolean;
             search?: string;
             stockStatus?: string;
             page?: number;
@@ -472,33 +479,44 @@ export class ProductsService {
             await this.validateBrand(txLike(this.db), tenantId, dto.brandId);
         }
 
-        const result = await this.db.product.update({
-            where: { id },
-            data: {
-                ...(dto.name !== undefined ? { name: dto.name } : {}),
-                ...(dto.sku !== undefined ? { sku: dto.sku || null } : {}),
-                ...(dto.type !== undefined ? { type: dto.type } : {}),
-                ...(dto.price !== undefined ? { price: dto.price } : {}),
-                ...(dto.isFeatured !== undefined ? { is_featured: dto.isFeatured } : {}),
-                ...(dto.description !== undefined ? { description: dto.description || null } : {}),
-                ...(dto.images_gallery !== undefined ? { images_gallery: dto.images_gallery } : {}),
-                ...(dto.warrantyEnabled !== undefined ? { warranty_enabled: dto.warrantyEnabled } : {}),
-                ...(dto.warrantyDurationDays !== undefined
-                    ? { warranty_duration_days: dto.warrantyDurationDays }
-                    : {}),
-                ...(dto.reorderLevel !== undefined ? { reorder_level: dto.reorderLevel } : {}),
-                ...(dto.safetyStock !== undefined ? { safety_stock: dto.safetyStock } : {}),
-                ...(dto.leadTimeDays !== undefined ? { lead_time_days: dto.leadTimeDays } : {}),
-                ...(dto.image_url !== undefined ? { image_url: dto.image_url || null } : {}),
-                ...(dto.unitType !== undefined ? { unit_type: dto.unitType } : {}),
-                ...(dto.vatRate !== undefined ? { vat_rate: dto.vatRate } : {}),
-                ...(dto.sdRate !== undefined ? { sd_rate: dto.sdRate } : {}),
-                ...(dto.brandId !== undefined ? { brand_id: dto.brandId || null } : {}),
-                ...(dto.groupId !== undefined ? { group_id: categoryIds.groupId } : {}),
-                ...(dto.subgroupId !== undefined ? { subgroup_id: categoryIds.subgroupId } : {}),
-            },
-            include: this.productInclude(),
-        });
+        const data = {
+            ...(dto.name !== undefined ? { name: dto.name } : {}),
+            ...(dto.sku !== undefined ? { sku: dto.sku || null } : {}),
+            ...(dto.type !== undefined ? { type: dto.type } : {}),
+            ...(dto.price !== undefined ? { price: dto.price } : {}),
+            ...(dto.isFeatured !== undefined ? { is_featured: dto.isFeatured } : {}),
+            ...(dto.description !== undefined ? { description: dto.description || null } : {}),
+            ...(dto.images_gallery !== undefined ? { images_gallery: dto.images_gallery } : {}),
+            ...(dto.warrantyEnabled !== undefined ? { warranty_enabled: dto.warrantyEnabled } : {}),
+            ...(dto.warrantyDurationDays !== undefined
+                ? { warranty_duration_days: dto.warrantyDurationDays }
+                : {}),
+            ...(dto.reorderLevel !== undefined ? { reorder_level: dto.reorderLevel } : {}),
+            ...(dto.safetyStock !== undefined ? { safety_stock: dto.safetyStock } : {}),
+            ...(dto.leadTimeDays !== undefined ? { lead_time_days: dto.leadTimeDays } : {}),
+            ...(dto.image_url !== undefined ? { image_url: dto.image_url || null } : {}),
+            ...(dto.unitType !== undefined ? { unit_type: dto.unitType } : {}),
+            ...(dto.vatRate !== undefined ? { vat_rate: dto.vatRate } : {}),
+            ...(dto.sdRate !== undefined ? { sd_rate: dto.sdRate } : {}),
+            ...(dto.brandId !== undefined ? { brand_id: dto.brandId || null } : {}),
+            ...(dto.groupId !== undefined ? { group_id: categoryIds.groupId } : {}),
+            ...(dto.subgroupId !== undefined ? { subgroup_id: categoryIds.subgroupId } : {}),
+        };
+
+        // Grouping as a storefront variant rides the same save, all or nothing:
+        // a refused size must not leave the rest of the edit half-applied.
+        const result = dto.variant || dto.leaveVariantGroup
+            ? await this.db.$transaction(async (tx) => {
+                  await tx.product.update({ where: { id }, data });
+                  if (dto.variant) await assignProductToFamily(tx, tenantId, id, dto.variant);
+                  else await removeProductFromFamily(tx, tenantId, id);
+                  return tx.product.findFirst({ where: { id, tenant_id: tenantId }, include: this.productInclude() });
+              })
+            : await this.db.product.update({
+                  where: { id },
+                  data,
+                  include: this.productInclude(),
+              });
 
         await this.redis.invalidatePattern(`products:${tenantId}:`);
         return result;
@@ -625,6 +643,7 @@ export class ProductsService {
             groupId?: string;
             subgroupId?: string;
             uncategorized?: boolean;
+            ungrouped?: boolean;
             search?: string;
             stockStatus?: string;
             createdFrom?: string;
@@ -639,6 +658,7 @@ export class ProductsService {
             tenant_id: tenantId,
             deleted_at: null,
             ...(created ? { created_at: created } : {}),
+            ...(filters?.ungrouped ? { family_id: null } : {}),
             ...(filters?.uncategorized
                 ? { group_id: null, subgroup_id: null }
                 : {
