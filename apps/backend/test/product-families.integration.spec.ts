@@ -38,6 +38,9 @@ describe('product families (integration)', () => {
         nothing,
         nothing,
         nothing,
+        // The payment catalog and the order billing are not exercised here.
+        { listEnabledForShopper: jest.fn().mockResolvedValue([]) } as never,
+        { billOrder: jest.fn().mockResolvedValue({ saleId: null }) } as never,
     );
 
     const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
