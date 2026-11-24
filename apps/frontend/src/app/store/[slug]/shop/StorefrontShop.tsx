@@ -57,7 +57,19 @@ interface StorefrontData {
     categories: Category[];
     all_products: Product[];
     menu_links?: StorefrontMenuLink[];
+    /** Cash on delivery, plus any gateway the shop has switched on. */
+    payment_methods?: PaymentOption[];
 }
+
+interface PaymentOption {
+    code: string;
+    name: string;
+    logo_url?: string | null;
+    description?: string | null;
+}
+
+const CASH_ON_DELIVERY = 'CASH_ON_DELIVERY';
+const DEFAULT_PAYMENT_METHODS: PaymentOption[] = [{ code: CASH_ON_DELIVERY, name: 'Cash on delivery' }];
 
 interface CartItem {
     product: Product;
@@ -101,6 +113,7 @@ export default function StorefrontShop({ slug }: { slug: string }) {
     const [notes, setNotes] = useState('');
     const [deliveryAddress, setDeliveryAddress] = useState('');
     const [deliveryArea, setDeliveryArea] = useState('');
+    const [paymentMethod, setPaymentMethod] = useState(CASH_ON_DELIVERY);
     const [submitting, setSubmitting] = useState(false);
     const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
     const [orderError, setOrderError] = useState<string | null>(null);
@@ -347,6 +360,7 @@ export default function StorefrontShop({ slug }: { slug: string }) {
         ? Math.min(loyaltyPoints * redeemRate, cartTotal)
         : 0;
     const finalTotal = cartTotal - pointsDiscount;
+    const paymentOptions = data?.payment_methods?.length ? data.payment_methods : DEFAULT_PAYMENT_METHODS;
 
     const handleCheckout = async (event: React.SyntheticEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -368,6 +382,7 @@ export default function StorefrontShop({ slug }: { slug: string }) {
                     deliveryAddress: deliveryAddress.trim() || undefined,
                     deliveryArea: deliveryArea.trim() || undefined,
                     pointsToRedeem: applyPoints && loyaltyEligible ? loyaltyPoints : undefined,
+                    paymentMethod,
                     items: cart.map((item) => ({
                         productId: item.product.id,
                         quantity: item.quantity,
@@ -381,7 +396,32 @@ export default function StorefrontShop({ slug }: { slug: string }) {
                 throw new Error(json.message || m.orderFailed);
             }
 
-            setOrderSuccess(json.data?.id || json.id || 'SUCCESS');
+            const orderId: string | null = json.data?.id || json.id || null;
+
+            // An online method: the order is placed first, then the shopper is
+            // handed to their own gateway. The order stays UNPAID until the
+            // gateway's callback confirms the money.
+            if (paymentMethod !== CASH_ON_DELIVERY && orderId) {
+                const payResponse = await fetch(`${API_BASE}/storefront/${slug}/orders/${orderId}/pay`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ providerCode: paymentMethod, customerEmail }),
+                });
+                const payJson = await payResponse.json();
+                if (!payResponse.ok) {
+                    throw new Error(payJson.message || m.orderFailed);
+                }
+                const redirectUrl = payJson.data?.redirectUrl || payJson.redirectUrl;
+                if (!redirectUrl) {
+                    throw new Error(m.orderFailed);
+                }
+                setCart([]);
+                setCheckoutOpen(false);
+                globalThis.location.assign(redirectUrl);
+                return;
+            }
+
+            setOrderSuccess(orderId || 'SUCCESS');
             setCart([]);
             setCheckoutOpen(false);
             setApplyPoints(false);
@@ -862,6 +902,37 @@ export default function StorefrontShop({ slug }: { slug: string }) {
                                         🏆 {formatMessage(m.earnPoints, { points: Math.floor(finalTotal * data.tenant.loyalty_earn_rate) })}
                                     </p>
                                 )}
+
+                                <div className="space-y-3">
+                                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mt-6 mb-2">
+                                        Payment method
+                                    </h3>
+                                    {paymentOptions.map((option) => (
+                                        <label
+                                            key={option.code}
+                                            className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                                                paymentMethod === option.code
+                                                    ? 'border-blue-500 bg-blue-50/50'
+                                                    : 'border-gray-200 hover:border-gray-300'
+                                            }`}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="payment-method"
+                                                value={option.code}
+                                                checked={paymentMethod === option.code}
+                                                onChange={() => setPaymentMethod(option.code)}
+                                                className="mt-0.5 h-4 w-4 accent-blue-600"
+                                            />
+                                            <span className="text-sm">
+                                                <span className="block font-semibold text-gray-800">{option.name}</span>
+                                                {option.description && (
+                                                    <span className="block text-gray-500 mt-0.5">{option.description}</span>
+                                                )}
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
 
                                 <div className="space-y-4">
                                     <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mt-6 mb-2">{m.customerDetails}</h3>

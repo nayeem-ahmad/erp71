@@ -37,7 +37,10 @@ import {
     getMobileCountryOption,
     isStorefrontOrderStatus,
     STOREFRONT_ORDER_STATUSES,
+    CASH_ON_DELIVERY,
 } from '@erp71/shared-types';
+import { PaymentProviderCatalogService } from '../storefront-payments/payment-provider-catalog.service';
+import { StorefrontOrderBillingService } from '../storefront-payments/storefront-order-billing.service';
 import * as bcrypt from 'bcrypt';
 
 /**
@@ -105,6 +108,8 @@ export class StorefrontService {
         private readonly passwordReset: PasswordResetService,
         private readonly email: EmailService,
         private readonly sms: SmsService,
+        private readonly paymentCatalog: PaymentProviderCatalogService,
+        private readonly orderBilling: StorefrontOrderBillingService,
     ) {}
 
     async getStorefront(slug: string, userId?: string) {
@@ -213,6 +218,10 @@ export class StorefrontService {
             trending_products,
             all_products,
             menu_links,
+            payment_methods: [
+                { code: CASH_ON_DELIVERY, name: 'Cash on delivery' },
+                ...(await this.paymentCatalog.listEnabledForShopper(tenant.id).catch(() => [])),
+            ],
         };
     }
 
@@ -532,6 +541,17 @@ export class StorefrontService {
 
         // Every web order belongs to the online branch (created on the first one).
         const onlineStoreId = await this.onlineBranch.ensure(tenant.id);
+
+        const paymentMethod = dto.paymentMethod?.trim() || CASH_ON_DELIVERY;
+        let onlinePayment = false;
+        if (paymentMethod !== CASH_ON_DELIVERY) {
+            const enabled = await this.paymentCatalog.listEnabledForShopper(tenant.id);
+            if (!enabled.some((provider) => provider.code === paymentMethod)) {
+                throw new BadRequestException('The selected payment method is not available for this shop.');
+            }
+            onlinePayment = true;
+        }
+
         const order = await this.db.$transaction(async (tx) => {
             const created = await tx.storefrontOrder.create({
                 data: {
@@ -545,6 +565,9 @@ export class StorefrontService {
                     deliveryArea: dto.deliveryArea ?? null,
                     totalAmount,
                     status: 'PENDING',
+                    payment_method: paymentMethod,
+                    payment_status: 'UNPAID',
+                    payment_provider: onlinePayment ? paymentMethod : null,
                     customerUserId: userId ?? null,
                     items: {
                         create: dto.items.map((item) => ({
@@ -686,6 +709,13 @@ export class StorefrontService {
             data: { status },
             include: { items: { include: { product: { select: { id: true, name: true } } } } },
         });
+
+        // A delivered cash-on-delivery order is a sale: the goods left and the
+        // money came in. An online-paid one was already billed at payment, so
+        // this is a no-op for it.
+        if (status === 'DELIVERED') {
+            await this.orderBilling.billOrder(tenantId, orderId, 'delivered');
+        }
 
         // Only a real move is news to the shopper — re-saving the same status
         // must not send a second "confirmed". Moving an order back to PENDING

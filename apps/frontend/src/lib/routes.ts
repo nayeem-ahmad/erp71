@@ -413,6 +413,7 @@ export const routes = {
             sms: '/admin/platform-settings/sms',
             whatsapp: '/admin/platform-settings/whatsapp',
             payments: '/admin/platform-settings/payments',
+            storefrontPayments: '/admin/platform-settings/storefront-payments',
             ai: '/admin/platform-settings/ai',
             navigation: '/admin/platform-settings/navigation',
             plans: '/admin/platform-settings/plans',

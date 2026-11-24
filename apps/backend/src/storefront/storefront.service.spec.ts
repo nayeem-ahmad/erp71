@@ -12,6 +12,8 @@ import { OnlineBranchService } from '../stores/online-branch.service';
 import { PasswordResetService } from '../password-reset/password-reset.service';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
+import { PaymentProviderCatalogService } from '../storefront-payments/payment-provider-catalog.service';
+import { StorefrontOrderBillingService } from '../storefront-payments/storefront-order-billing.service';
 import { JwtService } from '@nestjs/jwt';
 import {
     BadRequestException,
@@ -52,6 +54,8 @@ describe('StorefrontService', () => {
     let passwordResetService: { requestReset: jest.Mock };
     let emailService: { sendStorefrontOrderUpdate: jest.Mock };
     let smsService: { sendStorefrontOrderUpdate: jest.Mock };
+    let paymentCatalog: { listEnabledForShopper: jest.Mock };
+    let orderBilling: { billOrder: jest.Mock };
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -172,6 +176,8 @@ describe('StorefrontService', () => {
         passwordResetService = { requestReset: jest.fn().mockResolvedValue(undefined) };
         emailService = { sendStorefrontOrderUpdate: jest.fn().mockResolvedValue(undefined) };
         smsService = { sendStorefrontOrderUpdate: jest.fn().mockResolvedValue({ sent: true }) };
+        paymentCatalog = { listEnabledForShopper: jest.fn().mockResolvedValue([]) };
+        orderBilling = { billOrder: jest.fn().mockResolvedValue({ saleId: null }) };
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 StorefrontService,
@@ -188,6 +194,8 @@ describe('StorefrontService', () => {
                 { provide: PasswordResetService, useValue: passwordResetService },
                 { provide: EmailService, useValue: emailService },
                 { provide: SmsService, useValue: smsService },
+                { provide: PaymentProviderCatalogService, useValue: paymentCatalog },
+                { provide: StorefrontOrderBillingService, useValue: orderBilling },
             ],
         }).compile();
 

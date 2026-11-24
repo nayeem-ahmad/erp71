@@ -25,9 +25,47 @@
 - Standard: BDT 999
 - Premium: BDT 1499
 
+### Storefront payments (each shop's own merchant account)
+
+- **Purpose:** To let a shopper pay for a web order directly into the **shop's own**
+  merchant account. ERP71 is never the merchant of record and never settles funds.
+- **Where the pieces live:**
+  - `StorefrontPaymentProvider` — the platform-admin-managed catalog
+    (`Admin → Platform settings → Storefront payment providers`).
+  - `TenantStorefrontGateway` — one row per shop per provider. Credentials are
+    AES-256-GCM encrypted at rest (`platform-settings/crypto.util`) and masked on read.
+  - `StorefrontPayment` — one attempt per order. `(providerCode, providerPaymentId)`
+    is unique, which makes replayed callbacks idempotent.
+- **Public endpoints:** `POST /storefront/:slug/orders/:orderId/pay` opens the
+  session; `POST|GET /storefront/:slug/payments/:providerCode/callback` settles it;
+  `GET /storefront/:slug/payments/:paymentId` is the return page's status read.
+  The tenant is always resolved from `:slug`, so callbacks cannot cross shops.
+- **Adapters:**
+  - `SSLCOMMERZ` — built-in, reads the shop's `store_id` / `store_password`.
+  - `HOSTED_REDIRECT` — driven entirely by the provider row's `config` JSON
+    (`initiate_url`, `field_map`, `validation_url`, dot-path response mapping).
+    A gateway that follows the standard "form POST → hosted page → callback with a
+    reference → server-to-server validate" shape is onboarded from the admin panel
+    with no deploy.
+  - A protocol that needs a bespoke handshake (bKash's token grant/execute flow,
+    Nagad's signed requests) still needs its own adapter class.
+- **Accounting:** once money is real — a verified online payment, or a delivered
+  cash-on-delivery order — `StorefrontOrderBillingService` bills the order as an
+  ordinary `Sale` through `SalesService.create`: stock leaves a warehouse, the
+  tender gets its account, and `autoPostFromRules` writes the Dr <tender> /
+  Cr revenue voucher. Two deliberate details: the sale is attributed to a
+  physical branch (the owner of the tenant's default sales warehouse) because
+  the virtual online branch holds no stock, and loyalty is not re-awarded
+  (`awardLoyalty: false`) because the storefront credited points when the order
+  was placed. `StorefrontOrder.sale_id` makes billing happen exactly once.
+
 ### bKash Payment Gateway API
 
 - **Purpose:** To securely process online payments from customers for orders placed on the e-commerce storefront.
+- **Status:** Not built. bKash's token-grant + `payment/create` + `payment/execute`
+  handshake needs a dedicated adapter; it is not expressible as a `HOSTED_REDIRECT`
+  row. Once the adapter exists, the provider is added from the admin catalog and
+  each shop supplies its own merchant credentials — no per-shop code.
 - **Documentation:** To be provided. The exact implementation will depend on the official developer documentation from bKash.
 - **Base URL(s):** Will include a sandbox URL for testing and a production URL for live payments.
 - **Authentication:** Typically via an App Key and App Secret provided by bKash. These will be stored securely as environment variables on the backend.

@@ -1278,6 +1278,8 @@ model Tenant {
   blogSettings               TenantBlogSettings?
   storefrontPages            StorefrontPage[]
   storefrontMenuLinks        StorefrontMenuLink[]
+  storefrontGateways         TenantStorefrontGateway[]
+  storefrontPayments         StorefrontPayment[]
   boards                     Board[]
   boardSlugHistory           BoardSlugHistory[]
   projectCodeHistory         ProjectCodeHistory[]
@@ -5864,12 +5866,30 @@ model StorefrontOrder {
   customerUserId  String?
   /// Always the tenant's online branch (`Tenant.online_store_id`).
   store_id        String
+  /// `CASH_ON_DELIVERY` or the `code` of a StorefrontPaymentProvider.
+  payment_method  String?
+  /// One of `STOREFRONT_PAYMENT_STATUSES` in `@erp71/shared-types`.
+  payment_status  String                @default("UNPAID")
+  /// The provider code that took the money, kept after a catalog rename/delete.
+  payment_provider String?
+  /// The provider's own transaction reference, for support and reconciliation.
+  gateway_payment_id String?
+  paid_at         DateTime?
+  /// The Sale this order was billed as, once the money is real — on a verified
+  /// online payment, or on delivery of a cash-on-delivery order. Plain column,
+  /// not a relation: a sale outlives the order and vice versa, and the unique
+  /// index is what makes billing happen exactly once.
+  sale_id         String?               @unique
+  /// A short lease taken before the Sale is built, so a payment callback and a
+  /// delivery cannot both bill the same order. Cleared when billing finishes.
+  billing_claimed_at DateTime?
   created_at      DateTime              @default(now())
   updated_at      DateTime              @updatedAt
 
   tenant       Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customerUser User?  @relation(fields: [customerUserId], references: [id], onDelete: SetNull)
   store        Store  @relation(fields: [store_id], references: [id], onDelete: Restrict)
+  payments     StorefrontPayment[]
 
   @@index([tenantId])
   @@index([store_id])
@@ -5892,6 +5912,85 @@ model StorefrontOrderItem {
 
   @@index([orderId])
   @@index([productId])
+}
+
+/// One payment gateway the platform offers to shops, defined from the admin
+/// console rather than in code. A provider whose protocol matches its `adapter`
+/// can be added, renamed, paused or re-pointed without a deploy.
+model StorefrontPaymentProvider {
+  id          String   @id @default(uuid())
+  /// Stable identifier stored on orders; never change it once money has moved.
+  code        String   @unique
+  name        String
+  description String?
+  logo_url    String?
+  /// See `PAYMENT_PROVIDER_ADAPTERS` in `@erp71/shared-types`.
+  adapter     String   @default("HOSTED_REDIRECT")
+  currency    String   @default("BDT")
+  is_active   Boolean  @default(true)
+  sort_order  Int      @default(0)
+  /// `PaymentProviderCredentialField[]` — what the shop must supply.
+  credential_fields Json @default("[]")
+  /// Adapter-specific configuration (URLs, field maps). Never holds secrets.
+  config      Json     @default("{}")
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  gateways TenantStorefrontGateway[]
+
+  @@index([is_active, sort_order])
+}
+
+/// A shop's own merchant account with one provider. Credentials are AES-256-GCM
+/// encrypted with `platform-settings/crypto.util`; the gateway session is opened
+/// with these, so money settles into the shop's account, not the platform's.
+model TenantStorefrontGateway {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  provider_id String
+  enabled     Boolean  @default(false)
+  mode        String   @default("sandbox")
+  /// JSON object keyed by the provider's `credential_fields[*].key`.
+  credentials Json     @default("{}")
+  /// Set only after a live/sandbox test call succeeds against these values.
+  verified_at DateTime?
+  last_error  String?
+  last_error_at DateTime?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  tenant   Tenant                     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  provider StorefrontPaymentProvider  @relation(fields: [provider_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, provider_id])
+  @@index([tenant_id, enabled])
+}
+
+/// One attempt to collect money for one order. The provider's transaction id is
+/// unique per provider, which is what makes a replayed callback harmless.
+model StorefrontPayment {
+  id                String   @id @default(cuid())
+  tenantId          String
+  orderId           String
+  providerCode      String
+  /// The gateway's own reference; doubles as the `tran_id` we send it.
+  providerPaymentId String
+  amount            Decimal  @db.Decimal(12, 2)
+  currency          String   @default("BDT")
+  /// One of `STOREFRONT_PAYMENT_STATUSES`.
+  status            String   @default("PENDING")
+  mode              String   @default("sandbox")
+  raw               Json?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  order  StorefrontOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenant Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([providerCode, providerPaymentId])
+  @@index([orderId])
+  @@index([tenantId, status])
+  @@map("storefront_payments")
 }
 
 model DeliveryOrder {
