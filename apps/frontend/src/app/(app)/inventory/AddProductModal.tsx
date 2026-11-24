@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import { Camera, Bold, Italic, List, ListOrdered, Trash2 } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { variantLabel } from '@erp71/shared-types';
-import { Button, Field, Input } from '@/components/ui';
+import { checkVariantChoice, emptyVariantChoice, type VariantChoice } from '@/lib/variant-choice';
+import VariantAssignmentFields from './VariantAssignmentFields';
+import { useProductFamilies } from './useProductFamilies';
+import { Alert, Button, Checkbox, Field, Input } from '@/components/ui';
 import { api } from '@/lib/api';
 import { COMPOUND_UNIT_DEFS, CompoundUnitType } from '@/lib/compound-units';
 import { useI18n } from '@/lib/i18n';
@@ -40,6 +43,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
     const { t, fmt } = useI18n();
     const family: { id: string; name: string; option_names: string[] } | null =
         mode === 'edit' ? (initialProduct?.family ?? null) : null;
+    const { families } = useProductFamilies(isOpen && !family);
     const [activeTab, setActiveTab] = useState<'basic' | 'storefront'>('basic');
     const [formData, setFormData] = useState({
         name: '',
@@ -71,6 +75,12 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
         images_gallery: [] as string[],
     });
     const [loading, setLoading] = useState(false);
+    // The save's own failure, shown in the form — it used to go to the console
+    // only, so a refused save looked like a button that did nothing.
+    const [submitError, setSubmitError] = useState('');
+    const [variantChoice, setVariantChoice] = useState<VariantChoice>(emptyVariantChoice);
+    const [variantError, setVariantError] = useState<{ field: 'group' | 'name' | 'values'; message: string } | null>(null);
+    const [leaveVariantGroup, setLeaveVariantGroup] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [uploadingGallery, setUploadingGallery] = useState(false);
     const [brands, setBrands] = useState<any[]>([]);
@@ -152,6 +162,10 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
             });
         }
         setActiveTab('basic');
+        setSubmitError('');
+        setVariantChoice(emptyVariantChoice());
+        setVariantError(null);
+        setLeaveVariantGroup(false);
     }, [isOpen, mode, initialProduct]);
 
     const filteredSubgroups = useMemo(
@@ -198,6 +212,19 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setSubmitError('');
+        // A product already in a group keeps it (or leaves it); one in none may
+        // join or start one, checked here so a clash shows beside its field.
+        const variantCheck: ReturnType<typeof checkVariantChoice> =
+            family || formData.type === 'SERVICE'
+                ? { ok: true }
+                : checkVariantChoice(variantChoice, families, initialProduct?.id);
+        if ('error' in variantCheck) {
+            setVariantError({ field: variantCheck.field, message: variantCheck.error });
+            setActiveTab('storefront');
+            return;
+        }
+        setVariantError(null);
         setLoading(true);
         try {
             const parseOptionalInt = (value: string) => (value === '' ? undefined : parseInt(value, 10));
@@ -225,10 +252,13 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                 sdRate: formData.sdRate === '' ? null : parseFloat(formData.sdRate),
                 description: formData.description || undefined,
                 images_gallery: formData.images_gallery,
+                ...('variant' in variantCheck && variantCheck.variant ? { variant: variantCheck.variant } : {}),
+                ...(family && leaveVariantGroup ? { leaveVariantGroup: true } : {}),
             });
             onClose();
         } catch (error) {
             console.error('Failed to add product', error);
+            setSubmitError(error instanceof Error && error.message ? error.message : t.common.error);
         } finally {
             setLoading(false);
         }
@@ -290,6 +320,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                 </div>
 
                 <div className="space-y-6 overflow-y-auto px-6 py-6 flex-1 min-h-[350px]">
+                    {submitError && <Alert tone="danger">{submitError}</Alert>}
                     {activeTab === 'basic' ? (
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                             {/* Left Column: Basic Info & Categories */}
@@ -611,6 +642,50 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                         </div>
                     ) : (
                         <div className="space-y-6">
+                            {formData.type !== 'SERVICE' && (
+                                <section className="space-y-2 rounded-lg border border-gray-200 p-4">
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-gray-900">{t.productVariants.admin.variantSection}</h4>
+                                        <p className="text-xs text-gray-500">{t.productVariants.admin.variantSectionHelper}</p>
+                                    </div>
+                                    {family ? (
+                                        <div className="space-y-2">
+                                            <div className="flex flex-wrap items-center gap-2 text-sm text-gray-800">
+                                                <span>
+                                                    {fmt(t.productVariants.admin.variantOf, { name: family.name })}
+                                                    {initialProduct?.option_values
+                                                        ? ` · ${variantLabel(family.option_names, initialProduct.option_values)}`
+                                                        : ''}
+                                                </span>
+                                                {onEditVariants && (
+                                                    <Button type="button" variant="secondary" onClick={() => onEditVariants(family.id)}>
+                                                        {t.productVariants.admin.editGroup}
+                                                    </Button>
+                                                )}
+                                            </div>
+                                            <label className="flex min-h-touch items-center gap-2 text-sm text-gray-700">
+                                                <Checkbox
+                                                    checked={leaveVariantGroup}
+                                                    onChange={(event) => setLeaveVariantGroup(event.target.checked)}
+                                                />
+                                                {t.productVariants.admin.removeFromGroup}
+                                            </label>
+                                            {leaveVariantGroup && (
+                                                <p className="text-xs text-gray-500">{t.productVariants.admin.removeFromGroupHint}</p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <VariantAssignmentFields
+                                            productName={formData.name}
+                                            productId={initialProduct?.id}
+                                            families={families}
+                                            value={variantChoice}
+                                            onChange={setVariantChoice}
+                                            error={variantError}
+                                        />
+                                    )}
+                                </section>
+                            )}
                             {/* Featured toggle card */}
                             <div className="bg-blue-50/30 rounded-lg p-5 border border-blue-100 flex items-center justify-between">
                                 <div>

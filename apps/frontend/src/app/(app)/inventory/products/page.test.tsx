@@ -112,6 +112,18 @@ jest.mock('../MergeProductModal', () => ({
         ) : null,
 }));
 
+jest.mock('../AssignVariantModal', () => ({
+    __esModule: true,
+    default: ({ product }: { product: { name: string } }) => <div data-testid="assign-variant-modal">{product.name}</div>,
+}));
+
+jest.mock('../GroupVariantsModal', () => ({
+    __esModule: true,
+    default: (props: { mode: string; familyId?: string }) => (
+        <div data-testid="group-variants-modal">{props.mode}:{props.familyId}</div>
+    ),
+}));
+
 // What the page hands the table — its toolbar filters, search, View options.
 let mockTableProps: any = null;
 jest.mock('@/components/data-table', () => ({
@@ -474,4 +486,42 @@ describe('InventoryPage', () => {
         expect(screen.getByTestId('add-product-modal-edit')).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Merge into…' })).not.toBeInTheDocument();
     });
+
+    describe('Variant column', () => {
+        const variantCell = (row: unknown) => {
+            const column = mockTableProps.columns.find((c: { id?: string }) => c.id === 'variant');
+            const value = column.accessorFn(row);
+            return render(<>{column.cell({ row: { original: row }, getValue: () => value })}</>);
+        };
+
+        it('links a grouped product to its group, with its own options', async () => {
+            render(<InventoryPage />);
+            await waitFor(() => expect(mockTableProps?.columns).toBeTruthy());
+            const view = variantCell({
+                ...mockProducts[0],
+                family: { id: 'fam-1', name: 'Belt OAC', option_names: ['Size'] },
+                option_values: { Size: 'M' },
+            });
+
+            fireEvent.click(within(view.container).getByRole('button', { name: 'Belt OAC · M' }));
+            expect(await screen.findByTestId('group-variants-modal')).toHaveTextContent('edit:fam-1');
+        });
+
+        it('offers a product in no group to join or start one', async () => {
+            render(<InventoryPage />);
+            await waitFor(() => expect(mockTableProps?.columns).toBeTruthy());
+            const view = variantCell(mockProducts[1]);
+
+            fireEvent.click(within(view.container).getByRole('button', { name: 'Set variant group' }));
+            expect(await screen.findByTestId('assign-variant-modal')).toHaveTextContent('Widget B');
+        });
+
+        it('offers nothing for a service', async () => {
+            render(<InventoryPage />);
+            await waitFor(() => expect(mockTableProps?.columns).toBeTruthy());
+            const view = variantCell({ ...mockProducts[1], type: 'SERVICE' });
+            expect(within(view.container).queryByRole('button')).not.toBeInTheDocument();
+        });
+    });
 });
+

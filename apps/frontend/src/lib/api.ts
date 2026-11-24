@@ -2523,6 +2523,8 @@ export const api = {
         groupId?: string;
         subgroupId?: string;
         uncategorized?: boolean;
+        /** Only products in no storefront variant group. */
+        ungrouped?: boolean;
         search?: string;
         stockStatus?: string;
         page?: number;
@@ -2537,6 +2539,7 @@ export const api = {
         if (params?.groupId) query.set('groupId', params.groupId);
         if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
         if (params?.uncategorized) query.set('uncategorized', 'true');
+        if (params?.ungrouped) query.set('ungrouped', 'true');
         if (params?.search) query.set('search', params.search);
         if (params?.stockStatus) query.set('stockStatus', params.stockStatus);
         if (params?.page) query.set('page', String(params.page));
@@ -2572,6 +2575,7 @@ export const api = {
         method: 'DELETE',
     }),
     /** Storefront variant families: products shown on the shop as one product in several sizes/colours. */
+    getProductFamilies: (): Promise<ProductFamily[]> => fetchWithAuth('/product-families'),
     getProductFamily: (id: string): Promise<ProductFamily> => fetchWithAuth(`/product-families/${id}`),
     getProductFamilySuggestions: (): Promise<ProductFamilySuggestion[]> => fetchWithAuth('/product-families/suggestions'),
     createProductFamily: (data: ProductFamilyInput): Promise<ProductFamily> => fetchWithAuth('/product-families', {
