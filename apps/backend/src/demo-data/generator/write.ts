@@ -486,7 +486,10 @@ export class DemoWriter {
                 const qty = rng.weighted([1, 2, 3, 5, 10], [55, 25, 12, 5, 3]);
                 // Ensure stock; reorder if the line can't be satisfied.
                 await this.reorderIfNeeded(tx, date, product, store);
-                const onHand = product.stock.get(store.warehouseId) ?? 0;
+                // Less what this basket has already taken: a product picked
+                // twice used to be checked against the full shelf both times,
+                // and the sale then failed for selling more than was there.
+                const onHand = (product.stock.get(store.warehouseId) ?? 0) - (chosen.get(product.id) ?? 0);
                 const sellable = Math.min(qty, onHand);
                 if (sellable <= 0) continue;
                 chosen.set(product.id, (chosen.get(product.id) ?? 0) + sellable);
