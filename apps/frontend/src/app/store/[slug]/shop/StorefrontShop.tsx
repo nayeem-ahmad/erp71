@@ -84,6 +84,17 @@ function formatOptionalPrice(value: string | number | null | undefined) {
     return value === null || value === undefined ? null : formatBDT(toNumber(value));
 }
 
+/**
+ * The API's error envelope is `{ error: { code, message } }`, not `{ message }`.
+ * Reading the wrong key made every checkout failure look identical ("Failed to
+ * place order") whatever had actually gone wrong.
+ */
+function apiErrorMessage(body: any, fallback: string, status: number): string {
+    const message = body?.error?.message ?? body?.message;
+    if (typeof message === "string" && message.trim()) return message;
+    return `${fallback} (HTTP ${status})`;
+}
+
 export default function StorefrontShop({ slug }: { slug: string }) {
     const { t, fmt } = useI18n();
     const m = t.storefront.public;
@@ -114,6 +125,17 @@ export default function StorefrontShop({ slug }: { slug: string }) {
     const [deliveryAddress, setDeliveryAddress] = useState('');
     const [deliveryArea, setDeliveryArea] = useState('');
     const [paymentMethod, setPaymentMethod] = useState(CASH_ON_DELIVERY);
+    /**
+     * An order already created for an online payment whose gateway session
+     * could not be opened. Retrying reuses it instead of placing a second,
+     * identical order the shop would then have to cancel.
+     */
+    const [pendingPaymentOrder, setPendingPaymentOrder] = useState<{
+        id: string;
+        email: string;
+        signature: string;
+        method: string;
+    } | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
     const [orderError, setOrderError] = useState<string | null>(null);
@@ -371,32 +393,42 @@ export default function StorefrontShop({ slug }: { slug: string }) {
             const headers: Record<string, string> = { 'Content-Type': 'application/json' };
             if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
 
-            const response = await fetch(`${API_BASE}/storefront/${slug}/orders`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    customerName,
-                    customerEmail,
-                    customerPhone: customerPhone || undefined,
-                    notes: notes || undefined,
-                    deliveryAddress: deliveryAddress.trim() || undefined,
-                    deliveryArea: deliveryArea.trim() || undefined,
-                    pointsToRedeem: applyPoints && loyaltyEligible ? loyaltyPoints : undefined,
-                    paymentMethod,
-                    items: cart.map((item) => ({
-                        productId: item.product.id,
-                        quantity: item.quantity,
-                    })),
-                }),
-            });
+            const signature = cart.map((item) => `${item.product.id}:${item.quantity}`).join('|');
+            const normalizedEmail = customerEmail.trim().toLowerCase();
+            const reusableOrderId = pendingPaymentOrder
+                && pendingPaymentOrder.email === normalizedEmail
+                && pendingPaymentOrder.signature === signature
+                && pendingPaymentOrder.method === paymentMethod
+                ? pendingPaymentOrder.id
+                : null;
 
-            const json = await response.json();
+            let orderId: string | null = reusableOrderId;
+            if (!orderId) {
+                const response = await fetch(`${API_BASE}/storefront/${slug}/orders`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        customerName,
+                        customerEmail,
+                        customerPhone: customerPhone || undefined,
+                        notes: notes || undefined,
+                        deliveryAddress: deliveryAddress.trim() || undefined,
+                        deliveryArea: deliveryArea.trim() || undefined,
+                        pointsToRedeem: applyPoints && loyaltyEligible ? loyaltyPoints : undefined,
+                        paymentMethod,
+                        items: cart.map((item) => ({
+                            productId: item.product.id,
+                            quantity: item.quantity,
+                        })),
+                    }),
+                });
 
-            if (!response.ok) {
-                throw new Error(json.message || m.orderFailed);
+                const json = await response.json().catch(() => null);
+                if (!response.ok) {
+                    throw new Error(apiErrorMessage(json, m.orderFailed, response.status));
+                }
+                orderId = json?.data?.id || json?.id || null;
             }
-
-            const orderId: string | null = json.data?.id || json.id || null;
 
             // An online method: the order is placed first, then the shopper is
             // handed to their own gateway. The order stays UNPAID until the
@@ -407,20 +439,26 @@ export default function StorefrontShop({ slug }: { slug: string }) {
                     headers,
                     body: JSON.stringify({ providerCode: paymentMethod, customerEmail }),
                 });
-                const payJson = await payResponse.json();
+                const payJson = await payResponse.json().catch(() => null);
                 if (!payResponse.ok) {
-                    throw new Error(payJson.message || m.orderFailed);
+                    // Keep the order so a retry reopens the gateway session
+                    // instead of placing a second order for the same cart.
+                    setPendingPaymentOrder({ id: orderId, email: normalizedEmail, signature, method: paymentMethod });
+                    throw new Error(apiErrorMessage(payJson, m.orderFailed, payResponse.status));
                 }
-                const redirectUrl = payJson.data?.redirectUrl || payJson.redirectUrl;
+                const redirectUrl = payJson?.data?.redirectUrl || payJson?.redirectUrl;
                 if (!redirectUrl) {
-                    throw new Error(m.orderFailed);
+                    setPendingPaymentOrder({ id: orderId, email: normalizedEmail, signature, method: paymentMethod });
+                    throw new Error(m.checkoutError);
                 }
+                setPendingPaymentOrder(null);
                 setCart([]);
                 setCheckoutOpen(false);
                 globalThis.location.assign(redirectUrl);
                 return;
             }
 
+            setPendingPaymentOrder(null);
             setOrderSuccess(orderId || 'SUCCESS');
             setCart([]);
             setCheckoutOpen(false);

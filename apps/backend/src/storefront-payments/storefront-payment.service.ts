@@ -111,11 +111,15 @@ export class StorefrontPaymentService {
 
             return { paymentId: payment.id, redirectUrl: result.redirectUrl };
         } catch (error) {
+            const reason = (error as Error)?.message ?? 'Payment could not be started.';
+            this.logger.warn(
+                `Could not start ${providerCode} payment for order ${order.id} (${tenant.name}): ${reason}`,
+            );
             await this.db.storefrontPayment.update({
                 where: { id: payment.id },
                 data: { status: 'FAILED' },
             });
-            await this.catalog.recordGatewayError(tenant.id, providerCode, (error as Error)?.message ?? 'Payment could not be started.');
+            await this.catalog.recordGatewayError(tenant.id, providerCode, reason);
             throw error;
         }
     }
