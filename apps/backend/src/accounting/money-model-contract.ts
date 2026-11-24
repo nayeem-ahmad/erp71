@@ -84,6 +84,7 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'PurchaseQuotationItem', exempt: 'Line item of a quotation — not an economic event.' },
     { model: 'QuotationItem', exempt: 'Line item of a quotation — not an economic event.' },
     { model: 'StorefrontOrderItem', exempt: 'Line item of a pending storefront order.' },
+    { model: 'StorefrontPayment', exempt: 'One gateway attempt for a storefront order; a verified payment bills the order as a Sale, which posts.' },
     { model: 'PriceListItem', exempt: 'Catalog pricing line, not a transaction.' },
     { model: 'InventoryShrinkageItem', exempt: 'Line item; periodic inventory posts nothing for stock loss.' },
     { model: 'ProductionJobCost', exempt: 'Cost line of a ProductionJob; periodic inventory reclassification.' },
