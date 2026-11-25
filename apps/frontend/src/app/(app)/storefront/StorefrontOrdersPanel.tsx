@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { ShoppingBag } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { fetchWithAuth, type Paginated } from '@/lib/api';
+import { fetchPaginated, fetchWithAuth } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
@@ -61,7 +61,10 @@ export default function StorefrontOrdersPanel({ storeId, onShopBranch = false }:
         enabled: !onShopBranch,
         fetch: ({ page, limit }) => {
             const branchQuery = storeId ? `&storeId=${encodeURIComponent(storeId)}` : '';
-            return fetchWithAuth(`/storefront/orders?page=${page}&limit=${limit}${branchQuery}`) as Promise<Paginated<StorefrontOrder>>;
+            // fetchPaginated, not fetchWithAuth: the interceptor moves `items`
+            // into `data` and the real total into `meta`, and `fetchWithAuth`
+            // drops `meta` — which left this table permanently empty.
+            return fetchPaginated<StorefrontOrder>(`/storefront/orders?page=${page}&limit=${limit}${branchQuery}`);
         },
     });
 
