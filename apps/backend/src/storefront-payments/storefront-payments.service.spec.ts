@@ -63,6 +63,35 @@ describe('PaymentProviderCatalogService', () => {
         service = new PaymentProviderCatalogService(db);
     });
 
+    it('replaces the legacy merchant-facing checkout copy once', async () => {
+        const legacy = provider({
+            description:
+                'Cards, bKash, Nagad and bank payments through your own SSLCommerz merchant account.',
+        });
+        db.storefrontPaymentProvider.findUnique.mockResolvedValue(legacy);
+        db.storefrontPaymentProvider.update.mockResolvedValue({
+            ...legacy,
+            description: 'Pay securely by card, bKash, Nagad or bank transfer.',
+        });
+
+        await service.bootstrapDefaults();
+
+        expect(db.storefrontPaymentProvider.update).toHaveBeenCalledWith({
+            where: { id: 'provider-1' },
+            data: { description: 'Pay securely by card, bKash, Nagad or bank transfer.' },
+        });
+    });
+
+    it('does not overwrite a description an operator has written', async () => {
+        db.storefrontPaymentProvider.findUnique.mockResolvedValue(
+            provider({ description: 'Pay with card or mobile wallet.' }),
+        );
+
+        await service.bootstrapDefaults();
+
+        expect(db.storefrontPaymentProvider.update).not.toHaveBeenCalled();
+    });
+
     it('keeps the stored secret when the form sends the mask back', async () => {
         db.storefrontPaymentProvider.findUnique.mockResolvedValue(provider());
         db.tenantStorefrontGateway.findUnique.mockResolvedValue(gateway());

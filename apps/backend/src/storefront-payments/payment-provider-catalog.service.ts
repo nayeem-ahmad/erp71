@@ -23,6 +23,12 @@ import {
 
 export const SECRET_MASK = '••••••••';
 
+/** Shown to shoppers at checkout: what they can pay with, not how the shop is set up. */
+const SSLCOMMERZ_DESCRIPTION = 'Pay securely by card, bKash, Nagad or bank transfer.';
+/** The merchant-facing wording the first release shipped; replaced on startup. */
+const LEGACY_SSLCOMMERZ_DESCRIPTION =
+    'Cards, bKash, Nagad and bank payments through your own SSLCommerz merchant account.';
+
 interface ProviderRow {
     id: string;
     code: string;
@@ -86,26 +92,40 @@ export class PaymentProviderCatalogService implements OnModuleInit {
 
     constructor(private readonly db: DatabaseService) {}
 
-    /**
-     * SSLCommerz ships enabled as the first provider, so a shop that switches
-     * online payment on has something to configure. Created once; an operator's
-     * later edits are never overwritten.
-     */
     async onModuleInit() {
         await this.bootstrapDefaults().catch((error) => {
             this.logger.warn(`Could not seed the default payment provider: ${error?.message ?? error}`);
         });
     }
 
+    /**
+     * SSLCommerz ships enabled as the first provider, so a shop that switches
+     * online payment on has something to configure. Created once; an operator's
+     * later edits are never overwritten.
+     *
+     * The description is shown to *shoppers* under the payment option, so it
+     * says what they can pay with — not how the shop's merchant account works.
+     */
     async bootstrapDefaults() {
         const existing = await this.db.storefrontPaymentProvider.findUnique({ where: { code: 'sslcommerz' } });
-        if (existing) return existing;
+        if (existing) {
+            // The first release shipped merchant-facing copy to the checkout.
+            // Replace exactly that string; any wording an operator has chosen
+            // since is left alone.
+            if (existing.description === LEGACY_SSLCOMMERZ_DESCRIPTION) {
+                return this.db.storefrontPaymentProvider.update({
+                    where: { id: existing.id },
+                    data: { description: SSLCOMMERZ_DESCRIPTION },
+                });
+            }
+            return existing;
+        }
 
         return this.db.storefrontPaymentProvider.create({
             data: {
                 code: 'sslcommerz',
                 name: 'SSLCommerz',
-                description: 'Cards, bKash, Nagad and bank payments through your own SSLCommerz merchant account.',
+                description: SSLCOMMERZ_DESCRIPTION,
                 adapter: 'SSLCOMMERZ',
                 currency: 'BDT',
                 is_active: true,
