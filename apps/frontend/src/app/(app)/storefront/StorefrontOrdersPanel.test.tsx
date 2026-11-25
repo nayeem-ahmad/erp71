@@ -5,7 +5,7 @@ jest.mock('@/lib/i18n', () => {
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import StorefrontOrdersPanel from './StorefrontOrdersPanel';
-import { fetchWithAuth } from '@/lib/api';
+import { fetchPaginated, fetchWithAuth } from '@/lib/api';
 
 // Desktop width, where the secondary columns (items, delivery address) show.
 jest.mock('@/hooks/useMediaQuery', () => ({
@@ -15,24 +15,25 @@ jest.mock('@/hooks/useMediaQuery', () => ({
 
 jest.mock('@/lib/api', () => ({
     fetchWithAuth: jest.fn(),
+    fetchPaginated: jest.fn(),
 }));
 
 describe('StorefrontOrdersPanel', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        (fetchWithAuth as jest.Mock).mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 0 });
+        (fetchPaginated as jest.Mock).mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 0 });
     });
 
     it('lists the web orders of the branch the page shows', async () => {
         render(<StorefrontOrdersPanel storeId="online-store" />);
 
         await waitFor(() => {
-            expect(fetchWithAuth).toHaveBeenCalledWith('/storefront/orders?page=1&limit=20&storeId=online-store');
+            expect(fetchPaginated).toHaveBeenCalledWith('/storefront/orders?page=1&limit=20&storeId=online-store');
         });
     });
 
     it('shows the web orders in the standard table and changes a status in place', async () => {
-        (fetchWithAuth as jest.Mock).mockImplementation((url: string) =>
+        (fetchPaginated as jest.Mock).mockImplementation((url: string) =>
             url.startsWith('/storefront/orders?')
                 ? Promise.resolve({
                       items: [
@@ -77,6 +78,6 @@ describe('StorefrontOrdersPanel', () => {
         render(<StorefrontOrdersPanel storeId="store-1" onShopBranch />);
 
         expect(screen.getByText(/Web orders belong to the Online Store branch/)).toBeInTheDocument();
-        expect(fetchWithAuth).not.toHaveBeenCalled();
+        expect(fetchPaginated).not.toHaveBeenCalled();
     });
 });

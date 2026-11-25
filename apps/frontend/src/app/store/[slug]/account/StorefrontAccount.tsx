@@ -62,6 +62,16 @@ function unwrap<T>(json: any): T {
     return (json && typeof json === 'object' && 'data' in json ? json.data : json) as T;
 }
 
+/**
+ * `TransformInterceptor` lifts a paginated result's `{ items, total, page,
+ * limit, pages }` into `{ data: items, meta: { pages, … } }`, so the page count
+ * lives beside the rows rather than inside them.
+ */
+function unwrapPages(json: any): number {
+    const pages = json?.meta?.pages ?? json?.pages;
+    return typeof pages === 'number' && pages > 0 ? pages : 1;
+}
+
 function sessionKey(slug: string) {
     return `storefront_customer_${slug}`;
 }
@@ -114,7 +124,7 @@ export default function StorefrontAccount({ slug, shop }: { slug: string; shop: 
             }
             const json = await response.json().catch(() => null);
             if (!response.ok) throw new Error(json?.error?.message || json?.message || a.loadFailed);
-            return unwrap<any>(json);
+            return json;
         },
         [slug, endSession, a.loadFailed],
     );
@@ -123,10 +133,11 @@ export default function StorefrontAccount({ slug, shop }: { slug: string; shop: 
         async (token: string, nextPage: number) => {
             setLoadingOrders(true);
             try {
-                const result = await authFetch(`/customer/orders?page=${nextPage}&limit=${PAGE_SIZE}`, token);
-                setOrders((previous) => (nextPage === 1 ? result.items : [...previous, ...result.items]));
+                const json = await authFetch(`/customer/orders?page=${nextPage}&limit=${PAGE_SIZE}`, token);
+                const items = unwrap<AccountOrder[]>(json);
+                setOrders((previous) => (nextPage === 1 ? items : [...previous, ...items]));
                 setPage(nextPage);
-                setPages(result.pages ?? 1);
+                setPages(unwrapPages(json));
             } finally {
                 setLoadingOrders(false);
             }
@@ -147,7 +158,8 @@ export default function StorefrontAccount({ slug, shop }: { slug: string; shop: 
         if (!stored) return;
 
         authFetch('/customer/me', stored.access_token)
-            .then((result: Profile) => {
+            .then((json) => {
+                const result = unwrap<Profile>(json);
                 setProfile(result);
                 setName(result.name ?? '');
                 setPhone(result.phone ?? '');
@@ -178,11 +190,11 @@ export default function StorefrontAccount({ slug, shop }: { slug: string; shop: 
         setSaving(true);
         setSaveMessage(null);
         try {
-            const updated: Profile = await authFetch('/customer/me', session.access_token, {
+            const updated = unwrap<Profile>(await authFetch('/customer/me', session.access_token, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: name.trim(), phone: phone.trim(), address: address.trim() }),
-            });
+            }));
             setProfile(updated);
             setName(updated.name ?? '');
             setPhone(updated.phone ?? '');
