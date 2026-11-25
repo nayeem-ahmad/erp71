@@ -58,6 +58,15 @@ function json(body: unknown, status = 200) {
     return Promise.resolve({ ok: status < 400, status, json: async () => ({ data: body }) } as Response);
 }
 
+/** What TransformInterceptor emits for a paginated result: rows in `data`, totals in `meta`. */
+function paginated(items: unknown[], pages = 1) {
+    return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: items, meta: { total: items.length, page: 1, limit: 10, pages } }),
+    } as Response);
+}
+
 function signIn() {
     localStorage.setItem(
         'storefront_customer_dhaka-mart',
@@ -82,9 +91,7 @@ describe('StorefrontAccount', () => {
     it('shows the shopper\'s orders with their reference, status and delivery address', async () => {
         signIn();
         mockFetch.mockImplementation((url: string) =>
-            url.includes('/customer/orders')
-                ? json({ items: [ORDER], total: 1, page: 1, limit: 10, pages: 1 })
-                : json(PROFILE),
+            url.includes('/customer/orders') ? paginated([ORDER]) : json(PROFILE),
         );
 
         render(<StorefrontAccount slug="dhaka-mart" shop={SHOP} />);
@@ -107,7 +114,7 @@ describe('StorefrontAccount', () => {
     it('saves edited details and keeps the stored session in step', async () => {
         signIn();
         mockFetch.mockImplementation((url: string, init?: RequestInit) => {
-            if (url.includes('/customer/orders')) return json({ items: [], total: 0, page: 1, limit: 10, pages: 1 });
+            if (url.includes('/customer/orders')) return paginated([]);
             if (init?.method === 'PATCH') {
                 return json({ ...PROFILE, ...JSON.parse(String(init.body)) });
             }
