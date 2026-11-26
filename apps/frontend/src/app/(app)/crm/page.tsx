@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { UserPlus, Users, Megaphone, ListChecks, MessageSquare, SlidersHorizontal, Contact, Sparkles, Inbox, TrendingUp, Clock, Hourglass, Activity, Filter, Ban, Crown, PhoneCall, Cake } from 'lucide-react';
+import { UserPlus, Users, Megaphone, ListChecks, MessageSquare, SlidersHorizontal, Contact, Sparkles, Inbox, TrendingUp, Clock, Hourglass, Activity, Filter, ArrowRightLeft, Ban, Crown, PhoneCall, Cake } from 'lucide-react';
 import ModuleHub, { type HubSectionConfig } from '@/components/ModuleHub';
 import CrmDashboard from '@/components/dashboard/CrmDashboard';
 import { useI18n } from '@/lib/i18n';
@@ -59,6 +59,7 @@ export default function CrmHubPage() {
                     { href: routes.crm.reports.activitySummary, key: 'activitySummary', icon: Activity, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
                     { href: routes.crm.reports.campaigns, key: 'campaigns', icon: Megaphone, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
                     { href: routes.crm.reports.leadFunnel, key: 'leadFunnel', icon: Filter, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
+                    { href: routes.crm.reports.leadMovement, key: 'leadMovement', icon: ArrowRightLeft, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
                     { href: routes.crm.reports.lostLeads, key: 'lostLeads', icon: Ban, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
                     { href: routes.crm.reports.rfm, key: 'rfm', icon: Crown, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
                     { href: routes.crm.reports.contactCoverage, key: 'contactCoverage', icon: PhoneCall, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
