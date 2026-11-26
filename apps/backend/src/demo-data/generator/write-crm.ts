@@ -241,6 +241,9 @@ export class CrmWriter {
         const converted = status === 'CONVERTED' && this.world.customers.length > 0
             ? rng.pick(this.world.customers)
             : null;
+        const closedAt = closed
+            ? this.world.clampToWindow(new Date(date.getTime() + rng.int(1, 20) * 86400000))
+            : null;
 
         const lead = await tx.lead.create({
             data: {
@@ -274,7 +277,7 @@ export class CrmWriter {
                 created_by: this.world.userId,
                 last_contacted_at: status === 'NEW' ? null : date,
                 last_activity_at: date,
-                closed_at: closed ? this.world.clampToWindow(new Date(date.getTime() + rng.int(1, 20) * 86400000)) : null,
+                closed_at: closedAt,
                 converted_customer_id: converted?.id ?? null,
                 created_at: date,
                 updated_at: date,
@@ -282,6 +285,36 @@ export class CrmWriter {
         });
         this.leadIds.push(lead.id);
         this.counts.leads++;
+
+        // Demo inserts the lead already in its final stage: create landing at
+        // created_at (NEW when closed, else the open status); close hop at closed_at.
+        const createTo = closed ? 'NEW' : status;
+        await tx.leadStatusEvent.create({
+            data: {
+                tenant_id: tenantId,
+                lead_id: lead.id,
+                from_status_id: null,
+                from_lifecycle: null,
+                to_status_id: this.leadStatusIds.get(createTo) ?? null,
+                to_lifecycle: createTo,
+                created_by: this.world.userId,
+                created_at: date,
+            },
+        });
+        if (closedAt) {
+            await tx.leadStatusEvent.create({
+                data: {
+                    tenant_id: tenantId,
+                    lead_id: lead.id,
+                    from_status_id: this.leadStatusIds.get('NEW') ?? null,
+                    from_lifecycle: 'NEW',
+                    to_status_id: this.leadStatusIds.get(status) ?? null,
+                    to_lifecycle: status,
+                    created_by: this.world.userId,
+                    created_at: closedAt,
+                },
+            });
+        }
 
         // Anything past NEW has been spoken to at least once.
         if (status !== 'NEW') {

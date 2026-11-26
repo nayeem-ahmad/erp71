@@ -55,6 +55,7 @@ import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.s
 import { AssetsService } from '../assets/assets.service';
 import { CrmPhotosService } from '../crm-photos/crm-photos.service';
 import { LeadStatusResolver, ResolvedStage } from './lead-status.resolver';
+import { recordLeadStatusChange } from './lead-status-event.util';
 import { STAGE_OPTION_SELECT, stageCounts } from './lead-stages.util';
 import { LeadTaxonomyKind } from '../crm-lead-taxonomy/lead-taxonomy.dto';
 import {
@@ -637,7 +638,7 @@ export class CrmLeadsService {
                     },
                     null,
                 );
-            return tx.lead.create({
+            const created = await tx.lead.create({
                 data: {
                     tenant_id: tenantId,
                     name: dto.name,
@@ -676,6 +677,14 @@ export class CrmLeadsService {
                 },
                 include: leadIncludes,
             });
+            await recordLeadStatusChange(tx, {
+                tenantId,
+                leadId: created.id,
+                from: null,
+                to: { id: stage.id, lifecycle: stage.lifecycle },
+                actorId: userId,
+            });
+            return created;
         });
 
         // The opening next step becomes a PLANNED activity, and the rollup
@@ -981,11 +990,20 @@ export class CrmLeadsService {
                 );
                 Object.assign(data, leadLinkFields(link));
             }
-            return tx.lead.update({
+            const result = await tx.lead.update({
                 where: { id },
                 data,
                 include: leadIncludes,
             });
+            if (stage) {
+                await recordLeadStatusChange(tx, {
+                    tenantId,
+                    leadId: id,
+                    from: { id: existing.status_id, lifecycle: existing.status },
+                    to: { id: stage.id, lifecycle: stage.lifecycle },
+                });
+            }
+            return result;
         });
 
         // After the row, not before: a failed delete here leaves a stray file,
@@ -1323,6 +1341,16 @@ export class CrmLeadsService {
                     } as any,
                     select: { id: true },
                 });
+                await recordLeadStatusChange(this.db, {
+                    tenantId,
+                    leadId: created.id,
+                    from: null,
+                    to: {
+                        id: row.stage?.id ?? seededStageId(LeadStatus.NEW),
+                        lifecycle: row.stage?.lifecycle ?? LeadStatus.NEW,
+                    },
+                    actorId: null,
+                });
 
                 await this.seedOpeningActivity(
                     tenantId,
@@ -1342,12 +1370,13 @@ export class CrmLeadsService {
                 // before stage names were exported, or hand-typed) must not pull
                 // the lead off the tenant's own stage on every upsert.
                 let stage = row.stage;
-                if (stage?.seeded) {
-                    const current = await this.db.lead.findUnique({
+                let current: { status: string; status_id: string | null } | null = null;
+                if (stage !== undefined) {
+                    current = await this.db.lead.findUnique({
                         where: { id },
-                        select: { status: true },
+                        select: { status: true, status_id: true },
                     });
-                    if (current?.status === stage.lifecycle) stage = undefined;
+                    if (stage.seeded && current?.status === stage.lifecycle) stage = undefined;
                 }
                 await this.db.lead.update({
                     where: { id },
@@ -1400,6 +1429,16 @@ export class CrmLeadsService {
                             : {}),
                     } as any,
                 });
+
+                if (stage !== undefined && current && stage.id !== current.status_id) {
+                    await recordLeadStatusChange(this.db, {
+                        tenantId,
+                        leadId: id,
+                        from: { id: current.status_id, lifecycle: current.status },
+                        to: { id: stage.id, lifecycle: stage.lifecycle },
+                        actorId: null,
+                    });
+                }
 
                 // An upsert import is a bulk sync that re-runs over unchanged
                 // rows. Seeding unconditionally would add one duplicate activity
@@ -1472,17 +1511,24 @@ export class CrmLeadsService {
 
         await this.closeOutPlannedActivities(tenantId, id);
 
+        const convertedStage = await this.statuses.seeded(tenantId, LeadStatus.CONVERTED);
         const updatedLead = await this.db.lead.update({
             where: { id },
             data: {
                 status: LeadStatus.CONVERTED,
-                status_id: (await this.statuses.seeded(tenantId, LeadStatus.CONVERTED)).id,
+                status_id: convertedStage.id,
                 converted_customer_id: customer.id,
                 closed_at: new Date(),
                 score: 100,
                 ...CLEARED_ROLLUP,
             },
             include: leadIncludes,
+        });
+        await recordLeadStatusChange(this.db, {
+            tenantId,
+            leadId: id,
+            from: { id: lead.status_id, lifecycle: lead.status },
+            to: { id: convertedStage.id, lifecycle: convertedStage.lifecycle },
         });
 
         // The person behind the deal, and only when they are not already a customer.

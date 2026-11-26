@@ -55,6 +55,9 @@ describe('StorefrontEnquiriesService', () => {
                 create: jest.fn().mockResolvedValue({ id: 'contact-new', organization_id: null }),
                 update: jest.fn(),
             },
+            leadStatusEvent: {
+                create: jest.fn().mockResolvedValue({}),
+            },
         };
         taxonomy = { fallbackSource: jest.fn().mockResolvedValue({ id: 'src-other', code: 'OTHER' }) };
 
@@ -108,6 +111,23 @@ describe('StorefrontEnquiriesService', () => {
             created_by: null,
         });
         expect(conversation.summary).toContain(ENQUIRY.message);
+    });
+
+    it('createLead writes a NEW landing with created_by: null', async () => {
+        await service.submit(SLUG, { ...ENQUIRY });
+
+        expect(db.leadStatusEvent.create).toHaveBeenCalledTimes(1);
+        expect(db.leadStatusEvent.create.mock.calls[0][0].data).toEqual(
+            expect.objectContaining({
+                tenant_id: TENANT,
+                lead_id: 'lead-new',
+                from_status_id: null,
+                from_lifecycle: null,
+                to_status_id: 'st-new',
+                to_lifecycle: 'NEW',
+                created_by: null,
+            }),
+        );
     });
 
     it('appends to the lead a repeat enquirer already has, and creates no second lead', async () => {

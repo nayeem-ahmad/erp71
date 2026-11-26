@@ -492,6 +492,7 @@ export const coreMessages = {
             crmRfm: "Nilai pelanggan (RFM)",
 
             crmLeadFunnel: "Funnel petunjuk",
+            crmLeadMovement: "Pergerakan petunjuk",
 
             crmLostLeads: "Petunjuk hilang",
 

@@ -416,6 +416,14 @@ step sync:document-sequences \
 step sync:lead-taxonomy \
     npm run sync:lead-taxonomy --workspace=@erp71/database
 
+# sync:lead-status-events backfills a closed-at landing for won/lost leads that
+# predate LeadStatusEvent, so the movement report is not empty for past periods.
+# After sync:lead-taxonomy because that script fills status_id. Idempotent: a
+# lead that already has any event is left alone. Guarded on information_schema
+# so a missing table is a no-op. See prisma/sync-lead-status-events.ts.
+step sync:lead-status-events \
+    npm run sync:lead-status-events --workspace=@erp71/database
+
 # sync:crm-activities mirrors LeadConversation / CustomerInteraction / CrmFollowUp
 # into the unified CrmActivity table and materialises Lead.next_step as a planned
 # activity where it is not already a duplicate. It runs AFTER sync:lead-taxonomy

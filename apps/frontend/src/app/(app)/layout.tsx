@@ -664,6 +664,7 @@ function AppShell({ children }: DashboardLayoutProps) {
             routes.crm.reports.contactCoverage,
             routes.crm.reports.rfm,
             routes.crm.reports.leadFunnel,
+            routes.crm.reports.leadMovement,
             routes.crm.reports.lostLeads,
             routes.crm.reports.followUpCompliance,
         ];

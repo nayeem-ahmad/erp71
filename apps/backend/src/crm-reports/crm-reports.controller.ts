@@ -18,8 +18,9 @@ import { CrmBirthdaysService } from './crm-birthdays.service';
 import { CrmContactCoverageService } from './crm-contact-coverage.service';
 import { CrmRfmService } from './crm-rfm.service';
 import { CrmLeadFunnelService } from './crm-lead-funnel.service';
+import { CrmLeadMovementService } from './crm-lead-movement.service';
 import { CrmLostLeadsService } from './crm-lost-leads.service';
-import { GetBirthdaysDto } from './crm-reports.dto';
+import { GetBirthdaysDto, GetLeadMovementDto } from './crm-reports.dto';
 
 @Controller('crm/reports')
 @UseGuards(JwtAuthGuard, StorePermissionGuard, SubscriptionAccessGuard)
@@ -38,6 +39,7 @@ export class CrmReportsController {
         private readonly rfmService: CrmRfmService,
         private readonly leadFunnelService: CrmLeadFunnelService,
         private readonly lostLeadsService: CrmLostLeadsService,
+        private readonly leadMovementService: CrmLeadMovementService,
     ) {}
 
     private ownerScope(tenant: TenantContext, query: CrmDashboardQueryDto): string | undefined {
@@ -141,6 +143,21 @@ export class CrmReportsController {
             tenant.timezone,
             { from: query.from, to: query.to },
             this.ownerScope(tenant, query),
+        );
+    }
+
+    /**
+     * Distinct leads that changed stage in the window, counted once at the
+     * furthest visible stage. `mine` is the session user, never a client id.
+     */
+    @Get('lead-movement')
+    @RequireStorePermission(StorePermission.VIEW_LEADS)
+    leadMovement(@Tenant() tenant: TenantContext, @Query() query: GetLeadMovementDto) {
+        return this.leadMovementService.report(
+            tenant.tenantId,
+            tenant.timezone,
+            query,
+            query.mine ? tenant.userId : undefined,
         );
     }
 

@@ -5,6 +5,7 @@ import { DatabaseService } from '../database/database.service';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
 import { coerceLegacySource } from '../crm-lead-taxonomy/lead-taxonomy.util';
 import { computeLeadScore, DEFAULT_SOURCE_WEIGHT } from '../crm-leads/lead-scoring.util';
+import { recordLeadStatusChange } from '../crm-leads/lead-status-event.util';
 import { StorefrontEnquiryDto } from './storefront-enquiries.dto';
 
 /**
@@ -297,6 +298,13 @@ export class StorefrontEnquiriesService {
                 created_by: null,
             },
             select: { id: true },
+        });
+        await recordLeadStatusChange(this.db, {
+            tenantId,
+            leadId: lead.id,
+            from: null,
+            to: { id: newStage?.id ?? null, lifecycle: LeadStatus.NEW },
+            actorId: null,
         });
 
         // The message goes on the timeline rather than into `remarks`, so the

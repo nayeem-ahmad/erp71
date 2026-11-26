@@ -384,8 +384,12 @@ export default function CrmListPanel({
                         {inUseCount > 0 && (
                             <>
                                 <p className="text-sm text-gray-700">
-                                    {(hasIcon ? m.delete.inUseActivities : m.delete.inUse)
-                                        .replace('{count}', String(inUseCount))}
+                                    {(isStatuses
+                                        ? m.delete.inUseHistory
+                                        : hasIcon
+                                            ? m.delete.inUseActivities
+                                            : m.delete.inUse
+                                    ).replace('{count}', String(inUseCount))}
                                 </p>
                                 <Field label={m.delete.reassignLabel} required>
                                     <Select value={reassignTo} onChange={(e) => setReassignTo(e.target.value)}>
