@@ -50,6 +50,7 @@ import type {
     ContactCoverageReport,
     RfmReport,
     LeadFunnelReport,
+    LeadMovementReport,
     LostLeadsReport,
 } from '@/components/crm/reports/types';
 import type { DailyReport } from '@/lib/daily-report';
@@ -3689,6 +3690,16 @@ export const api = {
     getCrmActivitySummaryReport: dashboardWindowFetcher<CrmActivitySummaryReport>('/crm/reports/activity-summary'),
     getCrmCampaignPerformance: dashboardWindowFetcher<CampaignPerformanceReport>('/crm/reports/campaigns'),
     getCrmLeadFunnel: dashboardWindowFetcher<LeadFunnelReport>('/crm/reports/lead-funnel'),
+    getCrmLeadMovement: (p?: {
+        from?: string; to?: string; mine?: boolean; statusIds?: readonly string[];
+    }): Promise<LeadMovementReport> => {
+        const query = new URLSearchParams();
+        if (p?.from) query.set('from', p.from);
+        if (p?.to) query.set('to', p.to);
+        if (p?.mine) query.set('mine', 'true');
+        if (p?.statusIds?.length) query.set('statusIds', p.statusIds.join(','));
+        return fetchWithAuth(`/crm/reports/lead-movement${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     getCrmLostLeads: dashboardWindowFetcher<LostLeadsReport>('/crm/reports/lost-leads'),
     // Snapshots: no window, so they are not on the shared window fetcher.
     getCrmBirthdays: (p?: { days?: number }): Promise<BirthdaysReport> => {

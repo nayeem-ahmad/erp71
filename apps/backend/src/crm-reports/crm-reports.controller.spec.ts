@@ -16,6 +16,7 @@ describe('CrmReportsController', () => {
     let rfmService: { report: jest.Mock };
     let leadFunnelService: { report: jest.Mock };
     let lostLeadsService: { report: jest.Mock };
+    let leadMovementService: { report: jest.Mock };
 
     const tenant = { tenantId: 'tenant-1', userId: 'user-1', timezone: 'UTC' } as any;
 
@@ -34,6 +35,7 @@ describe('CrmReportsController', () => {
         rfmService = { report: jest.fn().mockResolvedValue({ rows: [], by_segment: [], totals: {} }) };
         leadFunnelService = { report: jest.fn().mockResolvedValue({ months: [], rows: [], totals: {} }) };
         lostLeadsService = { report: jest.fn().mockResolvedValue({ rows: [], by_reason: [], totals: {} }) };
+        leadMovementService = { report: jest.fn().mockResolvedValue({ stages: [], totals: {} }) };
 
         controller = new CrmReportsController(
             leadSourceService as any,
@@ -47,6 +49,7 @@ describe('CrmReportsController', () => {
             rfmService as any,
             leadFunnelService as any,
             lostLeadsService as any,
+            leadMovementService as any,
         );
     });
 
@@ -59,6 +62,7 @@ describe('CrmReportsController', () => {
         expect(perms('scorecard')).toEqual([StorePermission.VIEW_LEADS]);
         expect(perms('leadAging')).toEqual([StorePermission.VIEW_LEADS]);
         expect(perms('leadFunnel')).toEqual([StorePermission.VIEW_LEADS]);
+        expect(perms('leadMovement')).toEqual([StorePermission.VIEW_LEADS]);
         expect(perms('lostLeads')).toEqual([StorePermission.VIEW_LEADS]);
 
         expect(perms('followUpCompliance')).toEqual([StorePermission.VIEW_CRM_INTERACTIONS]);
@@ -125,5 +129,25 @@ describe('CrmReportsController', () => {
 
         await controller.lostLeads(tenant, { mine: true } as any);
         expect(lostLeadsService.report).toHaveBeenCalledWith('tenant-1', { mine: true }, 'UTC', 'user-1');
+    });
+
+    it('scopes lead movement to the session user and forwards statusIds', async () => {
+        expect(perms('leadMovement')).toEqual([StorePermission.VIEW_LEADS]);
+
+        await controller.leadMovement(tenant, { mine: true, statusIds: ['st-new'] } as any);
+        expect(leadMovementService.report).toHaveBeenCalledWith(
+            'tenant-1',
+            'UTC',
+            { mine: true, statusIds: ['st-new'] },
+            'user-1',
+        );
+
+        await controller.leadMovement(tenant, { statusIds: ['st-new'] } as any);
+        expect(leadMovementService.report).toHaveBeenCalledWith(
+            'tenant-1',
+            'UTC',
+            { statusIds: ['st-new'] },
+            undefined,
+        );
     });
 });

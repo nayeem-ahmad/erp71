@@ -215,6 +215,7 @@ export const routes = {
             contactCoverage: '/crm/reports/contact-coverage',
             rfm: '/crm/reports/rfm',
             leadFunnel: '/crm/reports/lead-funnel',
+            leadMovement: '/crm/reports/lead-movement',
             lostLeads: '/crm/reports/lost-leads',
             followUpCompliance: '/crm/reports/follow-up-compliance',
             coldCustomers: '/crm/reports/cold-customers',
