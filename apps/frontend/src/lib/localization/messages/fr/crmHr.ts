@@ -405,6 +405,7 @@ export const crmHrMessages = {
                 action: "Supprimer",
                 body: "Supprimer « {name} » ?",
                 inUse: "{count} piste(s) l'utilisent encore. Choisissez où déplacer ces pistes.",
+                inUseHistory: "{count} piste(s) ou enregistrement(s) de mouvement l'utilisent encore. Choisissez où les déplacer.",
                 inUseConversations: "{count} échange(s) l'utilisent encore. Choisissez où les déplacer.",
                 inUseActivities: "{count} activité(s) l'utilisent encore. Choisissez où les déplacer.",
                 reassignLabel: "Les déplacer vers",

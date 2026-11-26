@@ -70,6 +70,20 @@ describe('CrmListPanel — statuses', () => {
         expect(options).toEqual(['Choose a replacement…', 'New', 'Contacted']);
     });
 
+    // Usage can be history-only (no live lead on the stage). The picker must
+    // still appear, and the copy must not claim those rows are live leads.
+    it('offers a replacement for events-only usage and uses the history copy', async () => {
+        api.getLeadTaxonomyUsage.mockResolvedValue({ 'st-neg': 1 });
+        render(<CrmListPanel kind="statuses" canManage />);
+
+        fireEvent.click(within(await rowOf('Negotiation')).getByRole('button', { name: 'Delete' }));
+
+        expect(await screen.findByRole('combobox')).toBeInTheDocument();
+        expect(
+            screen.getByText('1 lead(s) or movement record(s) still use it. Pick where those should move.'),
+        ).toBeInTheDocument();
+    });
+
     it('reorders a stage by renumbering the whole list', async () => {
         api.updateLeadTaxonomy.mockResolvedValue({});
         render(<CrmListPanel kind="statuses" canManage />);

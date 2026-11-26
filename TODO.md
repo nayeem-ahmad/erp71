@@ -465,6 +465,7 @@ Rule: an `Employee` is the person HR pays, a `User` is a login; each can exist w
 - [ ] **`lost_reason` is still free text.** The Lost leads report names the ten most common reasons and folds the rest into one row, which is a workaround, not a fix — a pick-list would make the grouping real.
 - [ ] **There is no lead deal value,** so no pipeline-value or forecast report is possible.
 - [ ] **There is no time-in-stage report.** Stage landings are in `LeadStatusEvent` as of the Lead movement report (2026-11-26); duration spent in a stage is still unbuilt.
+- [ ] **Lead movement — parked after the 2026-11-26 review.** Clearing the stages picker snaps back to all active; fold same-`createdAt` test input order; extra `parseStatusIds` cases; `hi`/`ur` `movedStat` and `es` `columns.leads` copy; demo closed-lead CONVERTED-only hops; `LeadStatusEvent.created_by` is null on `update()`/`convert()` (those methods have no `userId`); events-only hide of Contacted is untested.
 - [ ] **Lead and activity reports cannot filter by branch** until CRM `store_id` is enforced (Phase 5). Customers going cold does filter, because it is sales data.
 - [ ] **Scorecard revenue follows the current owner,** not the owner at the time of conversion — owner history is not recorded.
 
@@ -2293,7 +2294,7 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
-- [x] **Lead movement report** — CRM › Reports counts distinct leads that changed stage in the period, once each at the furthest visible stage (Lost as its own outcome). Spec `docs/superpowers/specs/2026-11-26-lead-movement-report-design.md`. — done 2026-11-26
+- [x] **Lead movement report** — CRM › Reports counts distinct leads that changed stage in the period, once each at the furthest visible stage (Lost as its own outcome). Spec `docs/superpowers/specs/2026-11-26-lead-movement-report-design.md`. CRM Setup `usage()` now takes the larger of live leads and `LeadStatusEvent` hops so a custom stage with history but no live lead still opens the reassign picker. — done 2026-11-26
 
 - [x] **Release: product variant assignment on the Products page, demo-generator and nightly-E2E fixes, storefront online payments** (`fa270a6`) — done 2026-11-24. PR #1111 `dev` → `main` merged after its CI passed on `6ab4d34` (Lint, Dependency Audit, Test Backend, Test Frontend, Catalog harvest, Build; Playwright skipped as configured). The first two CI runs failed for real reasons, both fixed before release: (1) the random demo-generator oversell in `tenant-backup.integration.spec.ts`, fixed in #1112; (2) the storefront-payments commit `d7598b2` added `StorefrontService` constructor dependencies that `product-families.integration.spec.ts` builds by hand, fixed in `6ab4d34`. Deploy to VPS ran automatically: `prisma db push` applied the storefront-payments schema, and the health check verified the live commit was `fa270a6` (`status: ok`, `db: ok`).
 

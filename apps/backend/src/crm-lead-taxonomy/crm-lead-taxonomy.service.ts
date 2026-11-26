@@ -123,6 +123,12 @@ export class CrmLeadTaxonomyService {
     /**
      * Usage counts per row, for the CRM Setup screen. Returned as a map so the
      * list + usage pair costs two queries rather than one per row.
+     *
+     * Statuses also count `LeadStatusEvent` hops (`from_status_id` OR
+     * `to_status_id`) and take the larger of live leads and events, so a custom
+     * stage with history but no live lead still opens the reassign picker.
+     * Other kinds stay live-consumer-only. System-stage event counts are
+     * included; hide does not rewrite those FKs.
      */
     async usage(tenantId: string, kind: LeadTaxonomyKind): Promise<Record<string, number>> {
         const { table, fk } = this.consumer(kind);
@@ -136,7 +142,40 @@ export class CrmLeadTaxonomyService {
             const id = row[fk];
             if (id) out[id] = row._count._all;
         }
+        if (kind === LeadTaxonomyKind.STATUS) {
+            await this.mergeStatusEventUsage(tenantId, out);
+        }
         return out;
+    }
+
+    /**
+     * Two groupBys rather than one per stage: hops name this stage as from,
+     * to, or both. Adding the two counts double-counts a hop whose from and
+     * to are the same id, which a real movement never is.
+     */
+    private async mergeStatusEventUsage(tenantId: string, out: Record<string, number>) {
+        const fromGrouped = await this.db.leadStatusEvent.groupBy({
+            by: ['from_status_id'],
+            where: { tenant_id: tenantId, from_status_id: { not: null } },
+            _count: { _all: true },
+        });
+        const toGrouped = await this.db.leadStatusEvent.groupBy({
+            by: ['to_status_id'],
+            where: { tenant_id: tenantId, to_status_id: { not: null } },
+            _count: { _all: true },
+        });
+        const eventCounts: Record<string, number> = {};
+        for (const row of fromGrouped) {
+            const id = row.from_status_id;
+            if (id) eventCounts[id] = (eventCounts[id] ?? 0) + row._count._all;
+        }
+        for (const row of toGrouped) {
+            const id = row.to_status_id;
+            if (id) eventCounts[id] = (eventCounts[id] ?? 0) + row._count._all;
+        }
+        for (const [id, n] of Object.entries(eventCounts)) {
+            out[id] = Math.max(out[id] ?? 0, n);
+        }
     }
 
     private async assertNameFree(
@@ -382,9 +421,15 @@ export class CrmLeadTaxonomyService {
 
         if (blocking > 0) {
             if (!reassignTo) {
+                // Events-only blocks are history, not live leads — saying
+                // "lead(s)" would send the admin looking for a lead that isn't there.
+                const blockingNoun =
+                    kind === LeadTaxonomyKind.STATUS && inUse === 0 && eventsInUse > 0
+                        ? 'movement record'
+                        : noun;
                 throw new ConflictException({
                     message:
-                        `${this.label(kind)} "${row.name}" is used by ${blocking} ${noun}(s). ` +
+                        `${this.label(kind)} "${row.name}" is used by ${blocking} ${blockingNoun}(s). ` +
                         'Choose a replacement to move them to.',
                     inUse: blocking,
                     requiresReassign: true,

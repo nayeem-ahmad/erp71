@@ -405,6 +405,7 @@ export const crmHrMessages = {
                 action: 'حذف',
                 body: 'حذف "{name}"؟',
                 inUse: 'ما زال {count} عميل محتمل يستخدمه. اختر إلى أين تنتقل تلك السجلات.',
+                inUseHistory: 'ما زال {count} عميل محتمل أو سجل حركة يستخدمه. اختر إلى أين تنتقل تلك السجلات.',
                 inUseConversations: 'ما زالت {count} محادثة تستخدمه. اختر إلى أين تنتقل.',
                 inUseActivities: 'ما زال {count} نشاط يستخدمه. اختر إلى أين تنتقل.',
                 reassignLabel: 'انقلها إلى',

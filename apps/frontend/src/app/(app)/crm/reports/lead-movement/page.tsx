@@ -109,7 +109,7 @@ function CrmLeadMovementPage() {
             header: copy.columns.share,
             cell: (info) => formatRate(info.getValue(), locale, dash),
             size: 90,
-            meta: { align: 'end' },
+            meta: { align: 'end', hideOnMobile: true },
         }),
     ], [copy, locale, dash, totals, t.accountingShared.totals]);
 

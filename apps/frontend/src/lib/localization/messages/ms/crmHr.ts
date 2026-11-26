@@ -405,6 +405,7 @@ export const crmHrMessages = {
                 action: 'Padam',
                 body: 'Padam "{name}"?',
                 inUse: '{count} prospek masih menggunakannya. Pilih ke mana prospek itu perlu dipindahkan.',
+                inUseHistory: '{count} prospek atau rekod pergerakan masih menggunakannya. Pilih ke mana ia perlu dipindahkan.',
                 inUseConversations: '{count} perbualan masih menggunakannya. Pilih ke mana ia perlu dipindahkan.',
                 inUseActivities: '{count} aktiviti masih menggunakannya. Pilih ke mana ia perlu dipindahkan.',
                 reassignLabel: 'Pindahkan ke',

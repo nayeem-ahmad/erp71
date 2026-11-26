@@ -405,6 +405,7 @@ export const crmHrMessages = {
                 action: "Eliminar",
                 body: "¿Eliminar «{name}»?",
                 inUse: "{count} oportunidad(es) todavía lo usan. Elige a dónde deben moverse.",
+                inUseHistory: "{count} oportunidad(es) o registro(s) de movimiento todavía lo usan. Elige a dónde deben moverse.",
                 inUseConversations: "{count} conversación(es) todavía lo usan. Elige a dónde deben moverse.",
                 inUseActivities: "{count} actividad(es) todavía lo usan. Elige a dónde deben moverse.",
                 reassignLabel: "Moverlas a",

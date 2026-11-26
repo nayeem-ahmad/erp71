@@ -405,6 +405,7 @@ export const crmHrMessages = {
                 action: 'Delete',
                 body: 'Delete "{name}"?',
                 inUse: '{count} lead(s) still use it. Pick where those leads should move.',
+                inUseHistory: '{count} lead(s) or movement record(s) still use it. Pick where those should move.',
                 inUseConversations: '{count} conversation(s) still use it. Pick where those should move.',
                 inUseActivities: '{count} activity(ies) still use it. Pick where those should move.',
                 reassignLabel: 'Move those to',
