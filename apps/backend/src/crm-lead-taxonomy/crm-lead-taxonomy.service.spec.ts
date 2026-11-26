@@ -604,6 +604,27 @@ describe('CrmLeadTaxonomyService', () => {
             expect(db.leadStatusOption.delete).toHaveBeenCalledWith({ where: { id: negotiation.id } });
         });
 
+        // System stages deactivate rather than delete, so hops can keep the
+        // surviving id. Rewriting them would turn a hide into a history edit.
+        it('does not rewrite event FKs when hiding Contacted', async () => {
+            db.leadStatusOption.findFirst
+                .mockResolvedValueOnce(contacted)
+                .mockResolvedValueOnce(negotiation);
+            db.lead.count.mockResolvedValue(3);
+            db.leadStatusEvent.count.mockResolvedValue(5);
+
+            await service.remove('tenant-1', LeadTaxonomyKind.STATUS, contacted.id, negotiation.id);
+
+            expect(db.lead.updateMany).toHaveBeenCalled();
+            expect(db.leadStatusEvent.updateMany).not.toHaveBeenCalled();
+            expect(db.leadStatusEvent.create).not.toHaveBeenCalled();
+            expect(db.leadStatusOption.delete).not.toHaveBeenCalled();
+            expect(db.leadStatusOption.update).toHaveBeenCalledWith({
+                where: { id: contacted.id },
+                data: { is_active: false },
+            });
+        });
+
         it.each(['CONVERTED', 'LOST'])(
             'refuses to move open leads onto a %s stage — closing a lead is a deliberate act',
             async (lifecycle) => {

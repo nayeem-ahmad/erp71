@@ -365,10 +365,12 @@ export class CrmLeadTaxonomyService {
                       where: { tenant_id: tenantId, channel_id: id },
                   })
                 : 0;
-        // Events that named this stage are in-use too: deleting the option would
-        // SetNull their FKs and the movement report would lose the hop.
+        // Events that named this stage are in-use only when the option will
+        // actually be deleted. System stages deactivate; their id survives and
+        // SetNull never fires, so hops can keep pointing at Contacted/Qualified
+        // after a hide.
         const eventsInUse =
-            kind === LeadTaxonomyKind.STATUS
+            kind === LeadTaxonomyKind.STATUS && !row.is_system
                 ? await this.db.leadStatusEvent.count({
                       where: {
                           tenant_id: tenantId,
@@ -416,9 +418,10 @@ export class CrmLeadTaxonomyService {
                 });
             }
 
-            if (kind === LeadTaxonomyKind.STATUS) {
-                // Rewrite history onto the surviving stage. Do not insert a
-                // landing dated now — a setup tidy-up is not mass movement.
+            if (kind === LeadTaxonomyKind.STATUS && !row.is_system) {
+                // Rewrite history onto the surviving stage. Hide-only system
+                // rows keep their FKs — the option still exists. Do not insert
+                // a landing dated now — a setup tidy-up is not mass movement.
                 await this.db.leadStatusEvent.updateMany({
                     where: { tenant_id: tenantId, to_status_id: id },
                     data: { to_status_id: target.id, to_lifecycle: target.lifecycle },
