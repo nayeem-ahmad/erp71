@@ -460,10 +460,11 @@ Rule: an `Employee` is the person HR pays, a `User` is a login; each can exist w
 ### CRM reports — follow-ups (2026-11-16)
 
 - [ ] **Run `sync:nav-layout --nodes=crm.reports,crm.reports.lead-sources,crm.reports.scorecard,crm.reports.lead-aging,crm.reports.activity-summary,crm.reports.campaigns,crm.reports.lead-funnel,crm.reports.lost-leads,crm.reports.rfm,crm.reports.contact-coverage,crm.reports.birthdays,crm.reports.follow-up-compliance,crm.reports.cold-customers` against production** after deploy, dry run first. Saved custom sidebars keep the old tree verbatim, so a tenant who rearranged CRM before this release will not see the Reports subgroup.
+- [ ] **After deploy, `npx tsx packages/database/prisma/sync-nav-layout.ts --nodes=crm.reports.lead-movement`** for custom sidebars. Saved layouts keep the old tree verbatim, so a tenant who rearranged CRM before this leaf will not see Lead movement until the node is merged in. Dry-run first.
 - [x] **All twelve proposed CRM reports are now built.** The last six — Campaign performance, Lead funnel by arrival month, Lost leads, RFM, Contact coverage, Upcoming birthdays — shipped 2026-11-16, alongside Lead aging and Activity summary. The "activity register" proposal needed no report: the Activities list already is that flat log.
 - [ ] **`lost_reason` is still free text.** The Lost leads report names the ten most common reasons and folds the rest into one row, which is a workaround, not a fix — a pick-list would make the grouping real.
 - [ ] **There is no lead deal value,** so no pipeline-value or forecast report is possible.
-- [ ] **Status changes are not recorded,** so there is no time-in-stage report.
+- [ ] **There is no time-in-stage report.** Stage landings are in `LeadStatusEvent` as of the Lead movement report (2026-11-26); duration spent in a stage is still unbuilt.
 - [ ] **Lead and activity reports cannot filter by branch** until CRM `store_id` is enforced (Phase 5). Customers going cold does filter, because it is sales data.
 - [ ] **Scorecard revenue follows the current owner,** not the owner at the time of conversion — owner history is not recorded.
 
@@ -2291,6 +2292,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 - [ ] **Note counter: link to the cashier session.** "Should be in the drawer" is typed by hand. Opening the counter from a cashier session (or the day report) with the expected cash filled in would make the over/short check one tap.
 
 ## COMPLETED
+
+- [x] **Lead movement report** — CRM › Reports counts distinct leads that changed stage in the period, once each at the furthest visible stage (Lost as its own outcome). Spec `docs/superpowers/specs/2026-11-26-lead-movement-report-design.md`. — done 2026-11-26
 
 - [x] **Release: product variant assignment on the Products page, demo-generator and nightly-E2E fixes, storefront online payments** (`fa270a6`) — done 2026-11-24. PR #1111 `dev` → `main` merged after its CI passed on `6ab4d34` (Lint, Dependency Audit, Test Backend, Test Frontend, Catalog harvest, Build; Playwright skipped as configured). The first two CI runs failed for real reasons, both fixed before release: (1) the random demo-generator oversell in `tenant-backup.integration.spec.ts`, fixed in #1112; (2) the storefront-payments commit `d7598b2` added `StorefrontService` constructor dependencies that `product-families.integration.spec.ts` builds by hand, fixed in `6ab4d34`. Deploy to VPS ran automatically: `prisma db push` applied the storefront-payments schema, and the health check verified the live commit was `fa270a6` (`status: ok`, `db: ok`).
 
