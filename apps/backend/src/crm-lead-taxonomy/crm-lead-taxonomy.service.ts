@@ -365,7 +365,18 @@ export class CrmLeadTaxonomyService {
                       where: { tenant_id: tenantId, channel_id: id },
                   })
                 : 0;
-        const blocking = Math.max(inUse, legacyInUse);
+        // Events that named this stage are in-use too: deleting the option would
+        // SetNull their FKs and the movement report would lose the hop.
+        const eventsInUse =
+            kind === LeadTaxonomyKind.STATUS
+                ? await this.db.leadStatusEvent.count({
+                      where: {
+                          tenant_id: tenantId,
+                          OR: [{ from_status_id: id }, { to_status_id: id }],
+                      },
+                  })
+                : 0;
+        const blocking = Math.max(inUse, legacyInUse, eventsInUse);
 
         if (blocking > 0) {
             if (!reassignTo) {
@@ -402,6 +413,19 @@ export class CrmLeadTaxonomyService {
                 await this.db.leadConversation.updateMany({
                     where: { tenant_id: tenantId, channel_id: id },
                     data: { channel_id: target.id, type: target.code },
+                });
+            }
+
+            if (kind === LeadTaxonomyKind.STATUS) {
+                // Rewrite history onto the surviving stage. Do not insert a
+                // landing dated now — a setup tidy-up is not mass movement.
+                await this.db.leadStatusEvent.updateMany({
+                    where: { tenant_id: tenantId, to_status_id: id },
+                    data: { to_status_id: target.id, to_lifecycle: target.lifecycle },
+                });
+                await this.db.leadStatusEvent.updateMany({
+                    where: { tenant_id: tenantId, from_status_id: id },
+                    data: { from_status_id: target.id, from_lifecycle: target.lifecycle },
                 });
             }
         }

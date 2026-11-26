@@ -87,6 +87,11 @@ describe('CrmLeadTaxonomyService', () => {
                 updateMany: jest.fn(),
                 groupBy: jest.fn().mockResolvedValue([]),
             },
+            leadStatusEvent: {
+                count: jest.fn().mockResolvedValue(0),
+                updateMany: jest.fn(),
+                create: jest.fn(),
+            },
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -555,6 +560,47 @@ describe('CrmLeadTaxonomyService', () => {
                 where: { tenant_id: 'tenant-1', status_id: negotiation.id },
                 data: { status_id: contacted.id, status: 'CONTACTED' },
             });
+            expect(db.leadStatusOption.delete).toHaveBeenCalledWith({ where: { id: negotiation.id } });
+        });
+
+        // Events pointing at the row count as in-use even when no live lead sits
+        // on it, so a tidy-up cannot drop history without a replacement.
+        it('refuses to delete a custom status that has events and no reassignTo', async () => {
+            db.leadStatusOption.findFirst.mockResolvedValue(negotiation);
+            db.lead.count.mockResolvedValue(0);
+            db.leadStatusEvent.count.mockResolvedValue(1);
+
+            const err = await service
+                .remove('tenant-1', LeadTaxonomyKind.STATUS, negotiation.id)
+                .then(
+                    () => {
+                        throw new Error('expected ConflictException');
+                    },
+                    (e) => e,
+                );
+            expect(err).toBeInstanceOf(ConflictException);
+            expect(err.getResponse()).toMatchObject({ requiresReassign: true });
+            expect(db.leadStatusOption.delete).not.toHaveBeenCalled();
+        });
+
+        // Rewriting FKs is not a new landing — a setup tidy-up must not look
+        // like mass movement today.
+        it('rewrites event FKs onto the replacement and does not insert', async () => {
+            db.leadStatusOption.findFirst.mockResolvedValueOnce(negotiation).mockResolvedValueOnce(contacted);
+            db.lead.count.mockResolvedValue(3);
+            db.leadStatusEvent.count.mockResolvedValue(2);
+
+            await service.remove('tenant-1', LeadTaxonomyKind.STATUS, negotiation.id, contacted.id);
+
+            expect(db.leadStatusEvent.updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', to_status_id: negotiation.id },
+                data: { to_status_id: contacted.id, to_lifecycle: 'CONTACTED' },
+            });
+            expect(db.leadStatusEvent.updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', from_status_id: negotiation.id },
+                data: { from_status_id: contacted.id, from_lifecycle: 'CONTACTED' },
+            });
+            expect(db.leadStatusEvent.create).not.toHaveBeenCalled();
             expect(db.leadStatusOption.delete).toHaveBeenCalledWith({ where: { id: negotiation.id } });
         });
 
