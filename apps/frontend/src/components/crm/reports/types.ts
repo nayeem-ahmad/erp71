@@ -283,6 +283,28 @@ export type LeadFunnelReport = {
     };
 };
 
+export type MovementStageMeta = {
+    id: string;
+    code: string;
+    name: string;
+    lifecycle: string;
+    is_system: boolean;
+    is_active: boolean;
+    sort_order: number;
+};
+
+export type LeadMovementStageRow = MovementStageMeta & {
+    count: number;
+    share_pct: number | null;
+};
+
+export type LeadMovementReport = {
+    filters: { from: string; to: string; mine: boolean; status_ids: string[] };
+    available_stages: MovementStageMeta[];
+    stages: LeadMovementStageRow[];
+    totals: { moved: number; converted: number; lost: number; conversion_pct: number | null };
+};
+
 export type LostLeadRow = {
     lead_id: string;
     name: string;

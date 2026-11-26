@@ -238,6 +238,7 @@ describe('nav-resolver', () => {
             '/crm/reports/cold-customers',
             '/crm/reports/campaigns',
             '/crm/reports/lead-funnel',
+            '/crm/reports/lead-movement',
             '/crm/reports/lost-leads',
             '/crm/reports/rfm',
             '/crm/reports/contact-coverage',

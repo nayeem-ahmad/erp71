@@ -492,6 +492,7 @@ export const coreMessages = {
             crmRfm: "قيمة العميل (RFM)",
 
             crmLeadFunnel: "مسار العملاء المحتملين",
+            crmLeadMovement: "حركة العملاء المحتملين",
 
             crmLostLeads: "العملاء المحتملون المفقودون",
 

@@ -87,6 +87,12 @@ describe('CrmLeadTaxonomyService', () => {
                 updateMany: jest.fn(),
                 groupBy: jest.fn().mockResolvedValue([]),
             },
+            leadStatusEvent: {
+                count: jest.fn().mockResolvedValue(0),
+                updateMany: jest.fn(),
+                create: jest.fn(),
+                groupBy: jest.fn().mockResolvedValue([]),
+            },
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -545,6 +551,32 @@ describe('CrmLeadTaxonomyService', () => {
             );
         });
 
+        // Events pointing at the row are in-use for the Setup picker even when
+        // no live lead sits on it — otherwise delete 409s with no combobox.
+        it('counts status events as usage when no live lead sits on the stage', async () => {
+            db.lead.groupBy.mockResolvedValue([]);
+            db.leadStatusEvent.groupBy.mockImplementation(async ({ by }: { by: string[] }) => {
+                if (by[0] === 'from_status_id') {
+                    return [{ from_status_id: 'st-neg', _count: { _all: 3 } }];
+                }
+                return [];
+            });
+
+            expect(await service.usage('tenant-1', LeadTaxonomyKind.STATUS)).toEqual({ 'st-neg': 3 });
+        });
+
+        it('takes the larger of live leads and status events', async () => {
+            db.lead.groupBy.mockResolvedValue([{ status_id: 'st-neg', _count: { _all: 4 } }]);
+            db.leadStatusEvent.groupBy.mockImplementation(async ({ by }: { by: string[] }) => {
+                if (by[0] === 'to_status_id') {
+                    return [{ to_status_id: 'st-neg', _count: { _all: 2 } }];
+                }
+                return [];
+            });
+
+            expect(await service.usage('tenant-1', LeadTaxonomyKind.STATUS)).toEqual({ 'st-neg': 4 });
+        });
+
         it('moves leads to the replacement stage and its lifecycle together', async () => {
             db.leadStatusOption.findFirst.mockResolvedValueOnce(negotiation).mockResolvedValueOnce(contacted);
             db.lead.count.mockResolvedValue(3);
@@ -556,6 +588,70 @@ describe('CrmLeadTaxonomyService', () => {
                 data: { status_id: contacted.id, status: 'CONTACTED' },
             });
             expect(db.leadStatusOption.delete).toHaveBeenCalledWith({ where: { id: negotiation.id } });
+        });
+
+        // Events pointing at the row count as in-use even when no live lead sits
+        // on it, so a tidy-up cannot drop history without a replacement.
+        it('refuses to delete a custom status that has events and no reassignTo', async () => {
+            db.leadStatusOption.findFirst.mockResolvedValue(negotiation);
+            db.lead.count.mockResolvedValue(0);
+            db.leadStatusEvent.count.mockResolvedValue(1);
+
+            const err = await service
+                .remove('tenant-1', LeadTaxonomyKind.STATUS, negotiation.id)
+                .then(
+                    () => {
+                        throw new Error('expected ConflictException');
+                    },
+                    (e) => e,
+                );
+            expect(err).toBeInstanceOf(ConflictException);
+            expect(err.getResponse()).toMatchObject({ requiresReassign: true });
+            expect((err.getResponse() as { message: string }).message).toMatch(/movement record/);
+            expect((err.getResponse() as { message: string }).message).not.toMatch(/lead\(s\)/);
+            expect(db.leadStatusOption.delete).not.toHaveBeenCalled();
+        });
+
+        // Rewriting FKs is not a new landing — a setup tidy-up must not look
+        // like mass movement today.
+        it('rewrites event FKs onto the replacement and does not insert', async () => {
+            db.leadStatusOption.findFirst.mockResolvedValueOnce(negotiation).mockResolvedValueOnce(contacted);
+            db.lead.count.mockResolvedValue(3);
+            db.leadStatusEvent.count.mockResolvedValue(2);
+
+            await service.remove('tenant-1', LeadTaxonomyKind.STATUS, negotiation.id, contacted.id);
+
+            expect(db.leadStatusEvent.updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', to_status_id: negotiation.id },
+                data: { to_status_id: contacted.id, to_lifecycle: 'CONTACTED' },
+            });
+            expect(db.leadStatusEvent.updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', from_status_id: negotiation.id },
+                data: { from_status_id: contacted.id, from_lifecycle: 'CONTACTED' },
+            });
+            expect(db.leadStatusEvent.create).not.toHaveBeenCalled();
+            expect(db.leadStatusOption.delete).toHaveBeenCalledWith({ where: { id: negotiation.id } });
+        });
+
+        // System stages deactivate rather than delete, so hops can keep the
+        // surviving id. Rewriting them would turn a hide into a history edit.
+        it('does not rewrite event FKs when hiding Contacted', async () => {
+            db.leadStatusOption.findFirst
+                .mockResolvedValueOnce(contacted)
+                .mockResolvedValueOnce(negotiation);
+            db.lead.count.mockResolvedValue(3);
+            db.leadStatusEvent.count.mockResolvedValue(5);
+
+            await service.remove('tenant-1', LeadTaxonomyKind.STATUS, contacted.id, negotiation.id);
+
+            expect(db.lead.updateMany).toHaveBeenCalled();
+            expect(db.leadStatusEvent.updateMany).not.toHaveBeenCalled();
+            expect(db.leadStatusEvent.create).not.toHaveBeenCalled();
+            expect(db.leadStatusOption.delete).not.toHaveBeenCalled();
+            expect(db.leadStatusOption.update).toHaveBeenCalledWith({
+                where: { id: contacted.id },
+                data: { is_active: false },
+            });
         });
 
         it.each(['CONVERTED', 'LOST'])(

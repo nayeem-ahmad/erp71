@@ -12,6 +12,7 @@ import { CrmBirthdaysService } from './crm-birthdays.service';
 import { CrmContactCoverageService } from './crm-contact-coverage.service';
 import { CrmRfmService } from './crm-rfm.service';
 import { CrmLeadFunnelService } from './crm-lead-funnel.service';
+import { CrmLeadMovementService } from './crm-lead-movement.service';
 import { CrmLostLeadsService } from './crm-lost-leads.service';
 
 @Module({
@@ -28,6 +29,7 @@ import { CrmLostLeadsService } from './crm-lost-leads.service';
         CrmRfmService,
         CrmLeadFunnelService,
         CrmLostLeadsService,
+        CrmLeadMovementService,
         StorePermissionGuard,
         SubscriptionAccessGuard,
     ],
@@ -43,6 +45,7 @@ import { CrmLostLeadsService } from './crm-lost-leads.service';
         CrmRfmService,
         CrmLeadFunnelService,
         CrmLostLeadsService,
+        CrmLeadMovementService,
     ],
 })
 export class CrmReportsModule {}

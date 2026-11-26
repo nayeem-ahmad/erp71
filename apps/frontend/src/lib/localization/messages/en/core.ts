@@ -483,6 +483,7 @@ export const coreMessages = {
             crmContactCoverage: "Contact coverage",
             crmRfm: "Customer value (RFM)",
             crmLeadFunnel: "Lead funnel",
+            crmLeadMovement: "Lead movement",
             crmLostLeads: "Lost leads",
             salesSettings: 'Sales Settings',
             printTemplates: 'Print Header',

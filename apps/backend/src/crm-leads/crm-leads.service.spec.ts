@@ -108,6 +108,9 @@ describe('CrmLeadsService', () => {
             customer: {
                 findFirst: jest.fn(),
             },
+            leadStatusEvent: {
+                create: jest.fn().mockResolvedValue({}),
+            },
         };
         customersService = {
             create: jest.fn(),
@@ -264,6 +267,170 @@ describe('CrmLeadsService', () => {
 
             await service.convert('tenant-1', 'lead-1');
             expect(db.crmContact.update).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('lead status events', () => {
+        it('create() writes a create landing', async () => {
+            db.lead.findFirst.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-9' });
+
+            await service.create('tenant-1', 'user-1', { name: 'Karim' } as any, 'Asia/Dhaka');
+
+            expect(db.leadStatusEvent.create).toHaveBeenCalledTimes(1);
+            expect(db.leadStatusEvent.create.mock.calls[0][0].data).toEqual(
+                expect.objectContaining({
+                    tenant_id: 'tenant-1',
+                    lead_id: 'lead-9',
+                    from_status_id: null,
+                    from_lifecycle: null,
+                    to_status_id: 'st-new',
+                    to_lifecycle: 'NEW',
+                    created_by: 'user-1',
+                }),
+            );
+        });
+
+        it('update() writes when the stage changes', async () => {
+            db.lead.findFirst.mockResolvedValue({
+                id: 'lead-1',
+                tenant_id: 'tenant-1',
+                status: LeadStatus.NEW,
+                status_id: 'st-new',
+                lost_reason: null,
+                priority: 'MEDIUM',
+                last_contacted_at: null,
+                next_step_date: null,
+                source_id: 'src-other',
+            });
+            db.lead.update.mockResolvedValue({ id: 'lead-1' });
+
+            await service.update('tenant-1', 'lead-1', { status_id: 'st-neg' } as any);
+
+            expect(db.leadStatusEvent.create).toHaveBeenCalledTimes(1);
+            expect(db.leadStatusEvent.create.mock.calls[0][0].data).toEqual(
+                expect.objectContaining({
+                    tenant_id: 'tenant-1',
+                    lead_id: 'lead-1',
+                    from_status_id: 'st-new',
+                    from_lifecycle: 'NEW',
+                    to_status_id: 'st-neg',
+                    to_lifecycle: 'QUALIFIED',
+                }),
+            );
+        });
+
+        it('update() writes none when the stage is unchanged', async () => {
+            db.lead.findFirst.mockResolvedValue({
+                id: 'lead-1',
+                tenant_id: 'tenant-1',
+                status: LeadStatus.NEW,
+                status_id: 'st-new',
+                lost_reason: null,
+                priority: 'MEDIUM',
+                last_contacted_at: null,
+                next_step_date: null,
+                source_id: 'src-other',
+            });
+            db.lead.update.mockResolvedValue({ id: 'lead-1' });
+
+            await service.update('tenant-1', 'lead-1', { name: 'Renamed' } as any);
+
+            expect(db.leadStatusEvent.create).not.toHaveBeenCalled();
+        });
+
+        it('convert() writes a CONVERTED landing', async () => {
+            db.lead.findFirst.mockResolvedValueOnce({
+                id: 'lead-1',
+                tenant_id: 'tenant-1',
+                name: 'Jane Doe',
+                mobile: '01700000000',
+                email: 'jane@example.com',
+                address: 'Dhaka',
+                status: LeadStatus.QUALIFIED,
+                status_id: 'st-qual',
+            });
+            db.customer.findFirst.mockResolvedValueOnce(null);
+            customersService.create.mockResolvedValueOnce({ id: 'cust-1' });
+            db.lead.update.mockResolvedValueOnce({ id: 'lead-1', status: LeadStatus.CONVERTED });
+
+            await service.convert('tenant-1', 'lead-1');
+
+            expect(db.leadStatusEvent.create).toHaveBeenCalledTimes(1);
+            expect(db.leadStatusEvent.create.mock.calls[0][0].data).toEqual(
+                expect.objectContaining({
+                    tenant_id: 'tenant-1',
+                    lead_id: 'lead-1',
+                    from_status_id: 'st-qual',
+                    from_lifecycle: 'QUALIFIED',
+                    to_status_id: 'st-won',
+                    to_lifecycle: 'CONVERTED',
+                }),
+            );
+        });
+
+        it('import create writes a create landing with from_* null', async () => {
+            taxonomyService.list.mockImplementation(async (_t: string, kind: string) =>
+                kind === 'statuses' ? STAGES : [],
+            );
+            db.lead.findFirst.mockResolvedValueOnce(null);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-10' });
+
+            await service.importRows('tenant-1', [{ name: 'Alice', mobile: '01800000001' }], 'skip', 'Asia/Dhaka');
+
+            expect(db.leadStatusEvent.create).toHaveBeenCalledTimes(1);
+            expect(db.leadStatusEvent.create.mock.calls[0][0].data).toEqual(
+                expect.objectContaining({
+                    tenant_id: 'tenant-1',
+                    lead_id: 'lead-10',
+                    from_status_id: null,
+                    from_lifecycle: null,
+                    to_status_id: 'st-new',
+                    to_lifecycle: 'NEW',
+                    created_by: null,
+                }),
+            );
+        });
+
+        it('import update writes when the stage changes', async () => {
+            taxonomyService.list.mockImplementation(async (_t: string, kind: string) =>
+                kind === 'statuses' ? STAGES : [],
+            );
+            db.lead.findFirst.mockResolvedValueOnce(existingByMobile('01800000002'));
+            db.lead.findUnique.mockResolvedValue({ status: 'NEW', status_id: 'st-new' });
+            db.lead.update.mockResolvedValueOnce({ id: 'lead-existing' });
+
+            await service.importRows(
+                'tenant-1',
+                [{ name: 'Bob', mobile: '01800000002', status: 'negotiation' }],
+                'upsert',
+                'Asia/Dhaka',
+            );
+
+            expect(db.leadStatusEvent.create).toHaveBeenCalledTimes(1);
+            expect(db.leadStatusEvent.create.mock.calls[0][0].data).toEqual(
+                expect.objectContaining({
+                    tenant_id: 'tenant-1',
+                    lead_id: 'lead-existing',
+                    from_status_id: 'st-new',
+                    from_lifecycle: 'NEW',
+                    to_status_id: 'st-neg',
+                    to_lifecycle: 'QUALIFIED',
+                    created_by: null,
+                }),
+            );
+        });
+
+        it('import update writes none when the stage is unchanged', async () => {
+            taxonomyService.list.mockImplementation(async (_t: string, kind: string) =>
+                kind === 'statuses' ? STAGES : [],
+            );
+            db.lead.findFirst.mockResolvedValueOnce(existingByMobile('01800000002'));
+            db.lead.update.mockResolvedValueOnce({ id: 'lead-existing' });
+
+            await service.importRows('tenant-1', [{ name: 'Bob', mobile: '01800000002' }], 'upsert', 'Asia/Dhaka');
+
+            expect(db.leadStatusEvent.create).not.toHaveBeenCalled();
         });
     });
 

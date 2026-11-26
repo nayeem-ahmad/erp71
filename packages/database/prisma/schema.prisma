@@ -510,6 +510,7 @@ model User {
   assignedLeads                     Lead[]                      @relation("LeadAssignee")
   nextStepAssignedLeads             Lead[]                      @relation("LeadNextStepAssignee")
   createdLeads                      Lead[]                      @relation("LeadCreator")
+  leadStatusEventsCreated           LeadStatusEvent[]           @relation("LeadStatusEventCreator")
   assignedCrmContacts               CrmContact[]                @relation("CrmContactAssignee")
   createdCrmContacts                CrmContact[]                @relation("CrmContactCreator")
   crmContactAttachments             CrmContactAttachment[]      @relation("CrmContactAttachmentCreator")
@@ -1182,6 +1183,7 @@ model Tenant {
   leadSourceOptions          LeadSourceOption[]
   leadCategoryOptions        LeadCategoryOption[]
   leadStatusOptions          LeadStatusOption[]
+  leadStatusEvents           LeadStatusEvent[]
   conversationChannels       ConversationChannel[]
   crmContacts                CrmContact[]
   organizations              Organization[]
@@ -3778,6 +3780,7 @@ model Lead {
   sourceOption       LeadSourceOption?      @relation(fields: [source_id], references: [id], onDelete: Restrict)
   categoryOption     LeadCategoryOption?    @relation(fields: [category_id], references: [id], onDelete: Restrict)
   statusOption       LeadStatusOption?      @relation(fields: [status_id], references: [id], onDelete: Restrict)
+  statusEvents       LeadStatusEvent[]
   conversations      LeadConversation[]
   crmFollowUps       CrmFollowUp[]
   crmActivities      CrmActivity[]
@@ -3853,12 +3856,40 @@ model LeadStatusOption {
   created_at DateTime   @default(now())
   updated_at DateTime   @updatedAt
 
-  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  leads  Lead[]
+  tenant     Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  leads      Lead[]
+  fromEvents LeadStatusEvent[] @relation("LeadStatusEventFrom")
+  toEvents   LeadStatusEvent[] @relation("LeadStatusEventTo")
 
   @@unique([tenant_id, code])
   @@unique([tenant_id, name])
   @@index([tenant_id, is_active, sort_order])
+}
+
+/// One row per real pipeline landing. The Lead movement report folds these, not
+/// current `Lead.status_id`. `to_lifecycle` stays even if the custom stage is
+/// later deleted (`SetNull` on the option FKs).
+model LeadStatusEvent {
+  id             String      @id @default(uuid())
+  tenant_id      String
+  lead_id        String
+  from_status_id String?
+  to_status_id   String?
+  from_lifecycle LeadStatus?
+  to_lifecycle   LeadStatus
+  created_by     String?
+  created_at     DateTime    @default(now())
+
+  tenant     Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  lead       Lead              @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  fromStatus LeadStatusOption? @relation("LeadStatusEventFrom", fields: [from_status_id], references: [id], onDelete: SetNull)
+  toStatus   LeadStatusOption? @relation("LeadStatusEventTo", fields: [to_status_id], references: [id], onDelete: SetNull)
+  creator    User?             @relation("LeadStatusEventCreator", fields: [created_by], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, created_at])
+  @@index([tenant_id, lead_id, created_at])
+  @@index([tenant_id, to_status_id, created_at])
+  @@map("lead_status_events")
 }
 
 /// Tenant-editable lead categories. Replaces the `LeadCategory` enum.

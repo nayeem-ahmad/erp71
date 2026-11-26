@@ -492,6 +492,7 @@ export const coreMessages = {
             crmRfm: "Kundenwert (RFM)",
 
             crmLeadFunnel: "Lead-Trichter",
+            crmLeadMovement: "Lead-Bewegung",
 
             crmLostLeads: "Verlorene Leads",
 
